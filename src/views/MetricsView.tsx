@@ -138,22 +138,6 @@ function ChartCard({
   );
 }
 
-function groupCount(
-  items: RangeAppt[],
-  idOf: (a: RangeAppt) => number | null,
-  nameOf: (a: RangeAppt) => string
-): (string | number)[][] {
-  const m = new Map<string, { name: string; count: number }>();
-  for (const a of items) {
-    const id = idOf(a);
-    const key = id != null ? `id:${id}` : `n:${nameOf(a)}`;
-    const e = m.get(key);
-    if (e) e.count++;
-    else m.set(key, { name: nameOf(a), count: 1 });
-  }
-  return [...m.values()].sort((a, b) => b.count - a.count).map((e) => [e.name, e.count]);
-}
-
 interface TipEntry {
   dataKey?: string | number;
   value?: number;
@@ -340,35 +324,41 @@ export function MetricsView() {
     });
   }
 
+  // Explore shows the aggregated values that build each chart (per-month series).
   function exploreDiscovery() {
     setExplore({
-      title: "Discovery calls",
-      columns: ["Date", "Prospect", "Type", "Outcome"],
-      rows: discovery.map((a) => {
-        const o = outcomes.get(a.id);
-        return [a.date ?? "—", a.clientName, a.category === "discoveryPhone" ? "phone" : "zoom", o ? OUTCOME_LABELS[o] : "—"];
-      }),
+      title: "Discovery calls — chart data",
+      columns: ["Month", "Phone", "Zoom", "Total"],
+      rows: data.map((d) => [d.month, d.Phone, d.Zoom, d.Phone + d.Zoom]),
     });
   }
   function exploreMeetings() {
-    setExplore({
-      title: "Mentee meetings",
-      columns: ["Date", "Prospect", "Meeting type"],
-      rows: selectedMentoring.map((a) => [a.date ?? "—", a.clientName, a.name]),
-    });
+    if (meetingsMode === "compare") {
+      setExplore({
+        title: "Mentee meetings by type — chart data",
+        columns: ["Month", ...selectedTypeList.map(shortType)],
+        rows: compareData.map((r) => [r.month as string, ...selectedTypeList.map((n) => (r[n] as number) ?? 0)]),
+      });
+    } else {
+      setExplore({
+        title: "Mentee meetings — chart data",
+        columns: ["Month", "Meetings"],
+        rows: data.map((d) => [d.month, d.Meetings]),
+      });
+    }
   }
   function exploreMentees() {
     setExplore({
-      title: "Active mentees",
-      columns: ["Mentee", "Meetings"],
-      rows: groupCount(selectedMentoring, (a) => a.clientId, (a) => a.clientName),
+      title: "Active mentees — chart data",
+      columns: ["Month", "Active mentees"],
+      rows: data.map((d) => [d.month, d.Mentees]),
     });
   }
   function exploreMentors() {
     setExplore({
-      title: "Mentors",
-      columns: ["Mentor", "Meetings"],
-      rows: groupCount(selectedMentoring, (a) => a.coachId, (a) => a.coachName),
+      title: "Mentors — chart data",
+      columns: ["Month", "Mentors"],
+      rows: data.map((d) => [d.month, d.Mentors]),
     });
   }
 
