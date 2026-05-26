@@ -62,13 +62,8 @@ export const MENTOR_COACH_ID_WHITELIST: number[] = [];
 // rather than guessing. Set GRADUATION_RULE to a function later to enable it.
 export const GRADUATION_RULE: null = null;
 
-// --- Budget governance defaults (overridable by env; cap also via /api/settings) ---
-export const BUDGET_DEFAULTS = {
-  planDailyLimit: numEnv("CA_PLAN_DAILY_LIMIT", 600),
-  capPct: numEnv("HJG_DAILY_CAP_PCT", 5),
-  snapshotTtlSeconds: numEnv("SNAPSHOT_TTL_SECONDS", 3600),
-  tz: strEnv("BUDGET_TZ", "America/Chicago"),
-};
+// Budget governance now lives in lib/budget.ts, sourced from the app_settings
+// table (ca_plan_daily_limit, daily_cap_pct) with env fallbacks.
 
 // --- CoachAccountable function names (centralized so they're easy to correct) ---
 // Offering.getAll is confirmed in the docs. The submissions function name is
@@ -82,15 +77,3 @@ export const CA_FN = {
   offeringGetAll: "Offering.getAll",
   offeringGetSubmissions: "Offering.getSubmissions", // UNCONFIRMED name
 };
-
-function numEnv(key: string, fallback: number): number {
-  const v = process.env[key];
-  if (v === undefined || v === "") return fallback;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function strEnv(key: string, fallback: string): string {
-  const v = process.env[key];
-  return v === undefined || v === "" ? fallback : v;
-}

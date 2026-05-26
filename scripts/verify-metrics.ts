@@ -7,7 +7,7 @@
 
 import { computeMonthlyMetrics } from "../lib/metrics";
 import { computeFunnelReport } from "../lib/funnel";
-import { spendOne, setCap, getCap, getUsedToday, BudgetExhaustedError } from "../lib/budget";
+import { BudgetTracker, BudgetExhaustedError } from "../lib/budget";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types";
 
 let failures = 0;
@@ -135,24 +135,30 @@ eq(report.sales.totalRevenue, 2700, "sales total revenue");
 eq(report.sales.byOffering[0].offeringName, "12-Week Mentoring", "top offering by revenue");
 eq(report.sales.revenueByMonth[2], 2400, "March revenue");
 
-console.log("[4] budget circuit breaker");
-await runBudgetChecks();
-async function runBudgetChecks() {
-  await setCap(2);
-  const { capDaily } = await getCap();
-  eq(capDaily, 2, "cap override applied");
-  eq(await getUsedToday(), 0, "counter starts at 0");
-  await spendOne();
-  await spendOne();
-  eq(await getUsedToday(), 2, "two calls counted");
+console.log("[4] budget circuit breaker (BudgetTracker)");
+{
+  const tracker = new BudgetTracker(2, 0); // cap 2, nothing used yet today
+  tracker.spend();
+  tracker.spend();
+  eq(tracker.callsMade, 2, "two calls counted");
   let blocked = false;
   try {
-    await spendOne();
+    tracker.spend();
   } catch (e) {
     blocked = e instanceof BudgetExhaustedError;
   }
   assert(blocked, "third call blocked at cap (BudgetExhaustedError)");
-  await setCap(null); // reset override
+
+  // A new run must account for calls already made today by earlier runs.
+  const carried = new BudgetTracker(5, 4); // cap 5, 4 already used today
+  carried.spend();
+  let blockedCarried = false;
+  try {
+    carried.spend();
+  } catch (e) {
+    blockedCarried = e instanceof BudgetExhaustedError;
+  }
+  assert(blockedCarried, "tracker blocks once today's prior usage + this run hit the cap");
 }
 
 console.log("");

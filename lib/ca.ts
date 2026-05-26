@@ -1,12 +1,12 @@
 // CoachAccountable API client. READ-ONLY: only *.getAll / *.getTypes /
-// *.getSubmissions are called. Every network call is reserved against the daily
-// budget via spendOne() first, so there is no path to CA that bypasses the cap.
+// *.getSubmissions are called. A spend() hook fires immediately before every
+// wire call, so the caller (the sync job) can enforce a hard daily call cap.
+// There is no path to CA that bypasses spend().
 
-import { spendOne } from "./budget";
 import { CA_FN } from "./config";
 import type {
   CAAppointment,
-  CAClient,
+  CAClient as CAClientEntity,
   CACoach,
   CAOffering,
   CAOfferingSubmission,
@@ -29,6 +29,8 @@ export class CredentialsMissingError extends Error {
   }
 }
 
+export type SpendFn = () => void; // throws (e.g. BudgetExhaustedError) to abort
+
 type ParamValue = string | number | boolean | undefined;
 
 function credentials(): { id: string; key: string } {
@@ -36,54 +38,6 @@ function credentials(): { id: string; key: string } {
   const key = process.env.CA_API_KEY;
   if (!id || !key) throw new CredentialsMissingError();
   return { id, key };
-}
-
-// One budgeted POST to CA. Returns the data payload (result, falling back to
-// return). The exact payload key is documented inconsistently; both are handled.
-async function caCall<T>(fn: string, params: Record<string, ParamValue> = {}): Promise<T> {
-  const { id, key } = credentials();
-
-  await spendOne(); // reserve budget BEFORE the call; throws if cap reached
-
-  const body = new URLSearchParams();
-  body.set("APIID", id);
-  body.set("APIKey", key);
-  body.set("a", fn);
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined) continue;
-    body.set(k, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
-  }
-
-  let res: Response;
-  try {
-    res = await fetch(CA_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-  } catch (e) {
-    throw new CAError(-1, "Failed to reach CoachAccountable", String(e));
-  }
-
-  if (!res.ok) {
-    throw new CAError(-1, `CoachAccountable HTTP ${res.status}`, { httpStatus: res.status });
-  }
-
-  const json = (await res.json()) as {
-    error?: number;
-    message?: string;
-    result?: unknown;
-    return?: unknown;
-  };
-
-  if (typeof json.error === "number" && json.error !== 0) {
-    // Never include credentials; CA's message is safe to surface.
-    throw new CAError(json.error, json.message || "CoachAccountable API error", {
-      caCode: json.error,
-    });
-  }
-
-  return (json.result ?? json.return) as T;
 }
 
 function asArray<T>(payload: unknown): T[] {
@@ -95,64 +49,110 @@ function asArray<T>(payload: unknown): T[] {
   return [];
 }
 
-// NOTE: pagination scheme is unconfirmed (see SPEC.md s7/s20.6). These currently
-// issue a single call. If CA paginates, add the loop HERE — it's the one place
-// that touches the wire — and remember each page costs one budget unit.
-export async function getCoaches(includeInactive = true): Promise<CACoach[]> {
-  return asArray<CACoach>(await caCall(CA_FN.coachGetAll, { includeInactive }));
+export function hasCaCredentials(): boolean {
+  return Boolean(process.env.CA_API_ID && process.env.CA_API_KEY);
 }
 
-export async function getClients(
-  includeInactive = true,
-  coachId?: number
-): Promise<CAClient[]> {
-  return asArray<CAClient>(
-    await caCall(CA_FN.clientGetAll, { includeInactive, CoachID: coachId })
-  );
-}
+export class CAClient {
+  // spend defaults to a no-op so the client can be used without a budget guard
+  // (e.g. tests); the sync job always passes a real tracker hook.
+  constructor(private spend: SpendFn = () => {}) {}
 
-export async function getAppointments(opts: {
-  dateFrom: string;
-  dateTo: string;
-  coachId?: number;
-  clientId?: number;
-  includeCanceled?: boolean;
-  includePending?: boolean;
-}): Promise<CAAppointment[]> {
-  return asArray<CAAppointment>(
-    await caCall(CA_FN.appointmentGetAll, {
-      dateFrom: opts.dateFrom,
-      dateTo: opts.dateTo,
-      CoachID: opts.coachId,
-      ClientID: opts.clientId,
-      includeCanceled: opts.includeCanceled,
-      includePending: opts.includePending,
-    })
-  );
-}
+  private async call<T>(fn: string, params: Record<string, ParamValue> = {}): Promise<T> {
+    const { id, key } = credentials();
 
-export async function getAppointmentTypes(coachId: number): Promise<CAAppointmentType[]> {
-  return asArray<CAAppointmentType>(
-    await caCall(CA_FN.appointmentGetTypes, { CoachID: coachId })
-  );
-}
+    this.spend(); // reserve budget BEFORE the call; throws if the cap is reached
 
-export async function getOfferings(): Promise<CAOffering[]> {
-  return asArray<CAOffering>(await caCall(CA_FN.offeringGetAll, {}));
-}
+    const body = new URLSearchParams();
+    body.set("APIID", id);
+    body.set("APIKey", key);
+    body.set("a", fn);
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined) continue;
+      body.set(k, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
+    }
 
-export async function getOfferingSubmissions(opts: {
-  dateFrom?: string;
-  dateTo?: string;
-  clientId?: number;
-  offeringId?: number;
-} = {}): Promise<CAOfferingSubmission[]> {
-  return asArray<CAOfferingSubmission>(
-    await caCall(CA_FN.offeringGetSubmissions, {
-      dateFrom: opts.dateFrom,
-      dateTo: opts.dateTo,
-      ClientID: opts.clientId,
-      OfferingID: opts.offeringId,
-    })
-  );
+    let res: Response;
+    try {
+      res = await fetch(CA_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+    } catch (e) {
+      throw new CAError(-1, "Failed to reach CoachAccountable", String(e));
+    }
+
+    if (!res.ok) {
+      throw new CAError(-1, `CoachAccountable HTTP ${res.status}`, { httpStatus: res.status });
+    }
+
+    const json = (await res.json()) as {
+      error?: number;
+      message?: string;
+      result?: unknown;
+      return?: unknown;
+    };
+
+    if (typeof json.error === "number" && json.error !== 0) {
+      // Never include credentials; CA's message is safe to surface.
+      throw new CAError(json.error, json.message || "CoachAccountable API error", {
+        caCode: json.error,
+      });
+    }
+
+    return (json.result ?? json.return) as T;
+  }
+
+  // NOTE: pagination scheme is unconfirmed (see SPEC.md s7/s20.6). These currently
+  // issue a single call. If CA paginates, add the loop HERE — it's the one place
+  // that touches the wire — and remember each page must call spend() too.
+  async getCoaches(includeInactive = true): Promise<CACoach[]> {
+    return asArray<CACoach>(await this.call(CA_FN.coachGetAll, { includeInactive }));
+  }
+
+  async getClients(includeInactive = true, coachId?: number): Promise<CAClientEntity[]> {
+    return asArray<CAClientEntity>(await this.call(CA_FN.clientGetAll, { includeInactive, CoachID: coachId }));
+  }
+
+  async getAppointments(opts: {
+    dateFrom: string;
+    dateTo: string;
+    coachId?: number;
+    clientId?: number;
+    includeCanceled?: boolean;
+    includePending?: boolean;
+  }): Promise<CAAppointment[]> {
+    return asArray<CAAppointment>(
+      await this.call(CA_FN.appointmentGetAll, {
+        dateFrom: opts.dateFrom,
+        dateTo: opts.dateTo,
+        CoachID: opts.coachId,
+        ClientID: opts.clientId,
+        includeCanceled: opts.includeCanceled,
+        includePending: opts.includePending,
+      })
+    );
+  }
+
+  async getAppointmentTypes(coachId: number): Promise<CAAppointmentType[]> {
+    return asArray<CAAppointmentType>(await this.call(CA_FN.appointmentGetTypes, { CoachID: coachId }));
+  }
+
+  async getOfferings(): Promise<CAOffering[]> {
+    return asArray<CAOffering>(await this.call(CA_FN.offeringGetAll, {}));
+  }
+
+  async getOfferingSubmissions(
+    opts: { dateFrom?: string; dateTo?: string; clientId?: number; offeringId?: number } = {}
+  ): Promise<CAOfferingSubmission[]> {
+    return asArray<CAOfferingSubmission>(
+      await this.call(CA_FN.offeringGetSubmissions, {
+        dateFrom: opts.dateFrom,
+        dateTo: opts.dateTo,
+        ClientID: opts.clientId,
+        OfferingID: opts.offeringId,
+      })
+    );
+  }
 }

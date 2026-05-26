@@ -126,3 +126,116 @@ export interface FunnelReport {
     warnings: string[];
   };
 }
+
+// --- Database row shapes (Postgres mirror + HJG-owned tables) ---
+// Mirror tables: written only by the sync job (service role); read by everyone.
+
+export interface CaCoachRow {
+  id: number;
+  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  is_active: boolean | null;
+  synced_at?: string;
+}
+
+export interface CaClientRow {
+  id: number;
+  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  is_active: boolean | null;
+  is_excluded: boolean;
+  synced_at?: string;
+}
+
+export interface CaAppointmentRow {
+  id: number;
+  coach_id: number | null;
+  client_id: number | null;
+  engagement_id: number | null;
+  name: string;
+  category: AppointmentCategory;
+  status: string;
+  start_raw: string | null;
+  start_date: string | null; // YYYY-MM-DD (account-local)
+  start_year: number | null;
+  start_month: number | null; // 1..12
+  synced_at?: string;
+}
+
+export interface CaOfferingRow {
+  id: number;
+  name: string;
+  synced_at?: string;
+}
+
+export interface CaOfferingSubmissionRow {
+  id: number;
+  offering_id: number | null;
+  client_id: number | null;
+  client_invoice_id: number | null;
+  offering_name: string | null;
+  client_name: string | null;
+  client_email: string | null;
+  amount_paid: number;
+  tracking_data: string | null;
+  date_added_raw: string | null;
+  date_added: string | null;
+  date_year: number | null;
+  date_month: number | null;
+  synced_at?: string;
+}
+
+export type SyncTrigger = "manual" | "scheduled";
+export type SyncStatus = "running" | "success" | "error";
+
+export interface SyncRunRow {
+  id: string;
+  trigger: SyncTrigger;
+  status: SyncStatus;
+  started_at: string;
+  finished_at: string | null;
+  calls_made: number;
+  records_synced: number;
+  error: string | null;
+}
+
+// HJG-owned tables (edited by signed-in staff).
+
+export type CadenceTier = "4x" | "2x" | "1x" | "graduated";
+export type DiscoveryOutcomeValue = "converted" | "not_converted" | "pending" | "no_show";
+
+export interface GraduationRow {
+  id: string;
+  client_id: number;
+  graduated_on: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiscoveryOutcomeRow {
+  id: string;
+  client_id: number;
+  appointment_id: number | null;
+  outcome: DiscoveryOutcomeValue;
+  follow_up_on: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CadenceStatusRow {
+  id: string;
+  client_id: number;
+  tier: CadenceTier;
+  effective_from: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
