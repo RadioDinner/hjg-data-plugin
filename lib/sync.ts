@@ -118,13 +118,13 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
   const ca = new CAClient(() => tracker.spend());
 
   let records = 0;
+  let warning: string | null = null;
   try {
-    // Sequential to keep call accounting clean and avoid bursts toward the cap.
+    // Core data, sequential to keep call accounting clean. A failure here is a
+    // real error (the dashboard's headline metrics depend on it).
     const coaches = await ca.getCoaches(true);
     const clients = await ca.getClients(true);
     const appointments = await ca.getAppointments({ dateFrom: from, dateTo: to });
-    const offerings = await ca.getOfferings();
-    const submissions = await ca.getOfferingSubmissions({ dateFrom: from, dateTo: to });
 
     const coachRows: CaCoachRow[] = coaches.map((c) => ({
       id: c.ID,
@@ -165,32 +165,44 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       };
     });
 
-    const offeringRows: CaOfferingRow[] = offerings.map((o) => ({ id: o.ID, name: o.name }));
-
-    const submissionRows: CaOfferingSubmissionRow[] = submissions.map((s) => {
-      const dp = dateParts(s.dateAdded);
-      return {
-        id: s.ID,
-        offering_id: s.OfferingID ?? null,
-        client_id: s.ClientID ?? null,
-        client_invoice_id: s.ClientInvoiceID ?? null,
-        offering_name: s.offeringName ?? null,
-        client_name: s.clientName ?? null,
-        client_email: s.clientEmail ?? null,
-        amount_paid: Number(s.amountPaid) || 0,
-        tracking_data: s.trackingData ?? null,
-        date_added_raw: s.dateAdded ?? null,
-        date_added: dp.date,
-        date_year: dp.year,
-        date_month: dp.month,
-      };
-    });
-
     records += await chunkedUpsert(admin, "ca_coaches", coachRows);
     records += await chunkedUpsert(admin, "ca_clients", clientRows);
     records += await chunkedUpsert(admin, "ca_appointments", apptRows);
-    records += await chunkedUpsert(admin, "ca_offerings", offeringRows);
-    records += await chunkedUpsert(admin, "ca_offering_submissions", submissionRows);
+
+    // Offerings/submissions feed only the sales panel, and the submissions
+    // function name is unconfirmed (SPEC.md s7). Best-effort: a failure here
+    // leaves the core sync intact and is reported as a warning, not a failure.
+    // Budget exhaustion is the exception — it's a hard stop, so it propagates.
+    try {
+      const offerings = await ca.getOfferings();
+      const submissions = await ca.getOfferingSubmissions({ dateFrom: from, dateTo: to });
+
+      const offeringRows: CaOfferingRow[] = offerings.map((o) => ({ id: o.ID, name: o.name }));
+      const submissionRows: CaOfferingSubmissionRow[] = submissions.map((s) => {
+        const dp = dateParts(s.dateAdded);
+        return {
+          id: s.ID,
+          offering_id: s.OfferingID ?? null,
+          client_id: s.ClientID ?? null,
+          client_invoice_id: s.ClientInvoiceID ?? null,
+          offering_name: s.offeringName ?? null,
+          client_name: s.clientName ?? null,
+          client_email: s.clientEmail ?? null,
+          amount_paid: Number(s.amountPaid) || 0,
+          tracking_data: s.trackingData ?? null,
+          date_added_raw: s.dateAdded ?? null,
+          date_added: dp.date,
+          date_year: dp.year,
+          date_month: dp.month,
+        };
+      });
+
+      records += await chunkedUpsert(admin, "ca_offerings", offeringRows);
+      records += await chunkedUpsert(admin, "ca_offering_submissions", submissionRows);
+    } catch (e) {
+      if (e instanceof BudgetExhaustedError) throw e;
+      warning = `Offerings/submissions skipped: ${sanitizeError(e)}`;
+    }
 
     await admin
       .from("sync_runs")
@@ -199,10 +211,11 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         finished_at: new Date().toISOString(),
         calls_made: tracker.callsMade,
         records_synced: records,
+        error: warning,
       })
       .eq("id", runId);
 
-    return { runId, status: "success", callsMade: tracker.callsMade, recordsSynced: records, years };
+    return { runId, status: "success", callsMade: tracker.callsMade, recordsSynced: records, years, error: warning ?? undefined };
   } catch (e) {
     const error = sanitizeError(e);
     await admin
