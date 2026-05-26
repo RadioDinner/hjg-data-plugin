@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  fetchLastSyncedAt,
   fetchOutcomesByAppointment,
   fetchRangeAppointments,
   type DiscoveryOutcomeValue,
@@ -24,7 +25,13 @@ const AXIS = "#94a3b8";
 const GRID = "#1e293b";
 const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
 const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b" };
+const PALETTE = ["#38bdf8", "#34d399", "#a78bfa", "#f59e0b", "#f472b6", "#22d3ee", "#fb7185", "#a3e635"];
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function shortType(name: string): string {
+  const n = name.replace(/^\*\s*/, "").trim();
+  return n.length > 26 ? `${n.slice(0, 26)}…` : n;
+}
 
 const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
   converted: "Converted",
@@ -175,6 +182,8 @@ export function MetricsView() {
   const [appts, setAppts] = useState<RangeAppt[]>([]);
   const [outcomes, setOutcomes] = useState<Map<number, DiscoveryOutcomeValue>>(new Map());
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
+  const [meetingsMode, setMeetingsMode] = useState<"total" | "compare">("total");
+  const [lastSync, setLastSync] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -207,6 +216,18 @@ export function MetricsView() {
     };
   }, [from, to]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchLastSyncedAt()
+      .then((t) => {
+        if (!cancelled) setLastSync(t);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function applyPreset(key: PresetKey) {
     const r = presetRange(key);
     setFrom(r.from);
@@ -230,37 +251,64 @@ export function MetricsView() {
 
   const buckets = useMemo(() => monthBuckets(from, to), [from, to]);
 
-  const data = useMemo(() => {
-    const byMonth = new Map<string, RangeAppt[]>();
+  const byMonth = useMemo(() => {
+    const m = new Map<string, RangeAppt[]>();
     for (const a of appts) {
       if (!a.date) continue;
       const k = a.date.slice(0, 7);
-      let arr = byMonth.get(k);
+      let arr = m.get(k);
       if (!arr) {
         arr = [];
-        byMonth.set(k, arr);
+        m.set(k, arr);
       }
       arr.push(a);
     }
-    return buckets.map((b) => {
-      const items = byMonth.get(b.key) ?? [];
-      let phone = 0;
-      let zoom = 0;
-      const mentees = new Set<number>();
-      const mentors = new Set<number>();
-      let meetings = 0;
-      for (const a of items) {
-        if (a.category === "discoveryPhone") phone++;
-        else if (a.category === "discoveryZoom") zoom++;
-        else if (a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))) {
-          meetings++;
-          mentees.add(a.clientId ?? -1);
-          mentors.add(a.coachId ?? -1);
+    return m;
+  }, [appts]);
+
+  const data = useMemo(
+    () =>
+      buckets.map((b) => {
+        const items = byMonth.get(b.key) ?? [];
+        let phone = 0;
+        let zoom = 0;
+        const mentees = new Set<number>();
+        const mentors = new Set<number>();
+        let meetings = 0;
+        for (const a of items) {
+          if (a.category === "discoveryPhone") phone++;
+          else if (a.category === "discoveryZoom") zoom++;
+          else if (a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))) {
+            meetings++;
+            mentees.add(a.clientId ?? -1);
+            mentors.add(a.coachId ?? -1);
+          }
         }
-      }
-      return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
-    });
-  }, [appts, buckets, selectedTypes]);
+        return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
+      }),
+    [byMonth, buckets, selectedTypes]
+  );
+
+  const selectedTypeList = useMemo(
+    () => meetingTypes.filter((t) => selectedTypes?.has(t.name)).map((t) => t.name),
+    [meetingTypes, selectedTypes]
+  );
+
+  const compareData = useMemo(
+    () =>
+      buckets.map((b) => {
+        const items = byMonth.get(b.key) ?? [];
+        const row: Record<string, number | string> = { month: b.label };
+        for (const n of selectedTypeList) row[n] = 0;
+        for (const a of items) {
+          if (a.category === "mentoring" && selectedTypes?.has(a.name)) {
+            row[a.name] = ((row[a.name] as number) ?? 0) + 1;
+          }
+        }
+        return row;
+      }),
+    [byMonth, buckets, selectedTypeList, selectedTypes]
+  );
 
   const kpis = {
     discoveryTotal: discovery.length,
@@ -348,6 +396,53 @@ export function MetricsView() {
     </div>
   );
 
+  const meetingsExtra = (
+    <div>
+      <div className="seg" style={{ marginBottom: 12 }}>
+        <button
+          className={`seg__btn ${meetingsMode === "total" ? "seg__btn--active" : ""}`}
+          onClick={() => setMeetingsMode("total")}
+        >
+          Total
+        </button>
+        <button
+          className={`seg__btn ${meetingsMode === "compare" ? "seg__btn--active" : ""}`}
+          onClick={() => setMeetingsMode("compare")}
+        >
+          Compare types
+        </button>
+      </div>
+      {meetingsMode === "compare" && (
+        <p className="view__hint" style={{ marginTop: 0 }}>
+          Each checked type below is drawn as its own bar — check just the ones you want to compare.
+        </p>
+      )}
+      {typeFilter}
+    </div>
+  );
+
+  const meetingsChart =
+    meetingsMode === "total" ? (
+      <BarChart data={data}>
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey="month" {...axisProps} />
+        <YAxis allowDecimals={false} width={28} {...axisProps} />
+        <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+        <Bar dataKey="Meetings" fill={C.meetings} radius={[4, 4, 0, 0]} />
+      </BarChart>
+    ) : (
+      <BarChart data={compareData}>
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey="month" {...axisProps} />
+        <YAxis allowDecimals={false} width={28} {...axisProps} />
+        <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        {selectedTypeList.map((n, i) => (
+          <Bar key={n} dataKey={n} name={shortType(n)} fill={PALETTE[i % PALETTE.length]} radius={[4, 4, 0, 0]} />
+        ))}
+      </BarChart>
+    );
+
   return (
     <section>
       <div className="range">
@@ -391,6 +486,12 @@ export function MetricsView() {
         </div>
       </div>
 
+      {lastSync && (
+        <p className="view__hint" style={{ marginTop: 4 }}>
+          Data as of {new Date(lastSync).toLocaleString()} — re-sync on the Admin tab to refresh.
+        </p>
+      )}
+
       {error && <div className="notice notice--warn">{error}</div>}
 
       {!ready && loading ? (
@@ -433,14 +534,8 @@ export function MetricsView() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Mentee meetings" extra={typeFilter} onExplore={exploreMeetings}>
-              <BarChart data={data}>
-                <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="month" {...axisProps} />
-                <YAxis allowDecimals={false} width={28} {...axisProps} />
-                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                <Bar dataKey="Meetings" fill={C.meetings} radius={[4, 4, 0, 0]} />
-              </BarChart>
+            <ChartCard title="Mentee meetings" extra={meetingsExtra} onExplore={exploreMeetings}>
+              {meetingsChart}
             </ChartCard>
           </div>
 

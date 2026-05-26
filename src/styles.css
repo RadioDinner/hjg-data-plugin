@@ -184,6 +184,13 @@ body {
 .chip--active { background: var(--accent); color: #03283a; border-color: var(--accent); font-weight: 600; }
 .field--inline { flex-direction: row; align-items: center; gap: 8px; }
 
+/* --- segmented toggle --- */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg__btn { background: var(--panel-2); color: var(--muted); border: none; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+.seg__btn:hover { color: var(--text); }
+.seg__btn--active { background: var(--accent); color: #03283a; font-weight: 600; }
+.seg__btn + .seg__btn { border-left: 1px solid var(--line); }
+
 /* --- card header (title + explore) --- */
 .card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; }
 .card__head h2 { margin: 0; }

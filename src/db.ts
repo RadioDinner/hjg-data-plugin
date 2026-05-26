@@ -216,6 +216,18 @@ export async function fetchOutcomesByAppointment(apptIds: number[]): Promise<Map
   return out;
 }
 
+// Timestamp of the most recent successful sync (data freshness).
+export async function fetchLastSyncedAt(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("sync_runs")
+    .select("finished_at")
+    .eq("status", "success")
+    .order("finished_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0]?.finished_at as string | undefined) ?? null;
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
