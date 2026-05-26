@@ -170,6 +170,43 @@ async function pageAppts(
   return out;
 }
 
+// Discovery appointments counted by SIGNUP date (date_added), falling back to
+// the scheduled date when date_added isn't populated yet (e.g. before a re-sync
+// backfills it), so the metric is never blank during the transition.
+async function pageDiscovery(
+  from: string,
+  to: string
+): Promise<{ id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
+  const pageSize = 1000;
+  const out: { id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_appointments")
+      .select("id,category,name,client_id,coach_id,start_date,date_added")
+      .in("category", ["discoveryPhone", "discoveryZoom"])
+      .eq("status", "A")
+      .or(
+        `and(date_added.gte.${from},date_added.lte.${to}),and(date_added.is.null,start_date.gte.${from},start_date.lte.${to})`
+      )
+      .order("id", { ascending: true })
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as Record<string, unknown>[];
+    for (const r of batch) {
+      out.push({
+        id: r.id as number,
+        category: r.category as ApptCategory,
+        name: r.name as string,
+        date: ((r.date_added as string | null) ?? (r.start_date as string | null)) ?? null,
+        client_id: (r.client_id as number | null) ?? null,
+        coach_id: (r.coach_id as number | null) ?? null,
+      });
+    }
+    if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
 // Appointments that count within [from, to] (inclusive, YYYY-MM-DD), status
 // active, placeholder/group clients excluded, enriched with prospect/mentor
 // names. Mentee meetings are counted by the SCHEDULED date; discovery calls are
@@ -178,7 +215,7 @@ async function pageAppts(
 export async function fetchRangeAppointments(from: string, to: string): Promise<RangeAppt[]> {
   const [mentoring, discovery] = await Promise.all([
     pageAppts(["mentoring"], "start_date", from, to),
-    pageAppts(["discoveryPhone", "discoveryZoom"], "date_added", from, to),
+    pageDiscovery(from, to),
   ]);
   const rows = [...mentoring, ...discovery];
 
