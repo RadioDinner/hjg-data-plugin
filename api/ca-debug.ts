@@ -3,7 +3,8 @@ import { withApi } from "../lib/http.js";
 
 // TEMPORARY diagnostic. Makes one read-only CoachAccountable call and returns
 // the raw response shape so we can confirm how list data is nested. Remove once
-// the sync parser is confirmed. Requires a signed-in session.
+// the sync parser is confirmed. auth:"none" so it can be opened directly in a
+// browser — DELETE this file once debugging is done.
 //   /api/ca-debug                      -> Coach.getAll
 //   /api/ca-debug?fn=Client.getAll
 //   /api/ca-debug?fn=Appointment.getAll&dateFrom=2026-01-01&dateTo=2026-12-31
@@ -72,5 +73,5 @@ export default withApi(
       rawTruncated: text.slice(0, 6000),
     });
   },
-  { auth: "user", cacheTtl: 0 }
+  { auth: "none", cacheTtl: 0 }
 );
