@@ -11,24 +11,20 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fetchReport, type Report } from "../api";
 import {
-  fetchDiscoveryCalls,
-  fetchMentoringAppointments,
-  type DiscoveryCall,
+  fetchOutcomesByAppointment,
+  fetchRangeAppointments,
   type DiscoveryOutcomeValue,
-  type MeetingAppt,
+  type RangeAppt,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { num, pct } from "../format";
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
-
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
 const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
-const C = { phone: "#38bdf8", zoom: "#34d399", total: "#64748b", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b" };
+const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b" };
+const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
   converted: "Converted",
@@ -38,6 +34,73 @@ const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
 };
 
 const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
+
+const PRESETS = [
+  { key: "this_month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "this_quarter", label: "This quarter" },
+  { key: "last_quarter", label: "Last quarter" },
+  { key: "this_year", label: "This year" },
+  { key: "last_12", label: "Last 12 mo" },
+  { key: "all", label: "All" },
+] as const;
+
+type PresetKey = (typeof PRESETS)[number]["key"];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function presetRange(key: PresetKey): { from: string; to: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  switch (key) {
+    case "this_month":
+      return { from: ymd(new Date(y, m, 1)), to: ymd(now) };
+    case "last_month":
+      return { from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) };
+    case "this_quarter": {
+      const qs = Math.floor(m / 3) * 3;
+      return { from: ymd(new Date(y, qs, 1)), to: ymd(now) };
+    }
+    case "last_quarter": {
+      const qs = Math.floor(m / 3) * 3;
+      return { from: ymd(new Date(y, qs - 3, 1)), to: ymd(new Date(y, qs, 0)) };
+    }
+    case "this_year":
+      return { from: ymd(new Date(y, 0, 1)), to: ymd(now) };
+    case "last_12":
+      return { from: ymd(new Date(y, m - 11, 1)), to: ymd(now) };
+    case "all":
+      // Only the last three years are synced, so "all" spans that window.
+      return { from: `${y - 2}-01-01`, to: ymd(now) };
+  }
+}
+
+function monthBuckets(from: string, to: string): { key: string; label: string }[] {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  if (!fy || !ty || fy > ty || (fy === ty && fm > tm)) return [];
+  const multiYear = fy !== ty;
+  const out: { key: string; label: string }[] = [];
+  let y = fy;
+  let mo = fm;
+  while (y < ty || (y === ty && mo <= tm)) {
+    const label = SHORT[mo - 1] + (multiYear ? ` ’${String(y).slice(2)}` : "");
+    out.push({ key: `${y}-${pad2(mo)}`, label });
+    mo++;
+    if (mo > 12) {
+      mo = 1;
+      y++;
+    }
+    if (out.length > 60) break; // safety
+  }
+  return out;
+}
 
 function ChartCard({
   title,
@@ -68,11 +131,10 @@ function ChartCard({
   );
 }
 
-// Group mentoring appointments by mentee or mentor into [name, count] rows.
 function groupCount(
-  items: MeetingAppt[],
-  idOf: (a: MeetingAppt) => number | null,
-  nameOf: (a: MeetingAppt) => string
+  items: RangeAppt[],
+  idOf: (a: RangeAppt) => number | null,
+  nameOf: (a: RangeAppt) => string
 ): (string | number)[][] {
   const m = new Map<string, { name: string; count: number }>();
   for (const a of items) {
@@ -89,7 +151,6 @@ interface TipEntry {
   dataKey?: string | number;
   value?: number;
 }
-
 function DiscoveryTooltip({ active, payload, label }: { active?: boolean; payload?: TipEntry[]; label?: string }) {
   if (!active || !payload || payload.length === 0) return null;
   const get = (k: string) => Number(payload.find((p) => p.dataKey === k)?.value ?? 0);
@@ -105,12 +166,16 @@ function DiscoveryTooltip({ active, payload, label }: { active?: boolean; payloa
   );
 }
 
+const INITIAL = presetRange("this_year");
+
 export function MetricsView() {
-  const [year, setYear] = useState(CURRENT_YEAR);
-  const [report, setReport] = useState<Report | null>(null);
-  const [calls, setCalls] = useState<DiscoveryCall[]>([]);
-  const [meetingAppts, setMeetingAppts] = useState<MeetingAppt[]>([]);
+  const [from, setFrom] = useState(INITIAL.from);
+  const [to, setTo] = useState(INITIAL.to);
+  const [preset, setPreset] = useState<PresetKey | "custom">("this_year");
+  const [appts, setAppts] = useState<RangeAppt[]>([]);
+  const [outcomes, setOutcomes] = useState<Map<number, DiscoveryOutcomeValue>>(new Map());
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [explore, setExplore] = useState<{ title: string; columns: string[]; rows: (string | number)[][] } | null>(
@@ -121,13 +186,15 @@ export function MetricsView() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([fetchReport(year), fetchDiscoveryCalls(year), fetchMentoringAppointments(year)])
-      .then(([r, c, m]) => {
+    fetchRangeAppointments(from, to)
+      .then(async (rows) => {
+        const discoveryIds = rows.filter((a) => a.category !== "mentoring").map((a) => a.id);
+        const out = await fetchOutcomesByAppointment(discoveryIds);
         if (cancelled) return;
-        setReport(r);
-        setCalls(c);
-        setMeetingAppts(m);
-        setSelectedTypes(new Set(m.map((a) => a.name)));
+        setAppts(rows);
+        setOutcomes(out);
+        setSelectedTypes(new Set(rows.filter((a) => a.category === "mentoring").map((a) => a.name)));
+        setReady(true);
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -138,57 +205,83 @@ export function MetricsView() {
     return () => {
       cancelled = true;
     };
-  }, [year]);
+  }, [from, to]);
 
-  const end = report ? Math.min(12, Math.max(1, report.metrics.meta.endMonth)) : 0;
-  const labels = report ? report.metrics.shortMonths.slice(0, end) : [];
+  function applyPreset(key: PresetKey) {
+    const r = presetRange(key);
+    setFrom(r.from);
+    setTo(r.to);
+    setPreset(key);
+  }
+
+  const mentoring = useMemo(() => appts.filter((a) => a.category === "mentoring"), [appts]);
+  const discovery = useMemo(() => appts.filter((a) => a.category !== "mentoring"), [appts]);
 
   const meetingTypes = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const a of meetingAppts) counts.set(a.name, (counts.get(a.name) ?? 0) + 1);
+    for (const a of mentoring) counts.set(a.name, (counts.get(a.name) ?? 0) + 1);
     return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [meetingAppts]);
+  }, [mentoring]);
 
-  const meetingsData = labels.map((month, i) => {
-    let count = 0;
-    for (const a of meetingAppts) {
-      if (a.month === i + 1 && (!selectedTypes || selectedTypes.has(a.name))) count++;
-    }
-    return { month, Meetings: count };
-  });
+  const selectedMentoring = useMemo(
+    () => mentoring.filter((a) => !selectedTypes || selectedTypes.has(a.name)),
+    [mentoring, selectedTypes]
+  );
 
-  const discoveryData = report
-    ? labels.map((month, i) => ({
-        month,
-        Phone: report.metrics.discoveryPhone[i],
-        Zoom: report.metrics.discoveryZoom[i],
-      }))
-    : [];
-  const menteesData = report ? labels.map((month, i) => ({ month, Mentees: report.metrics.activeMentees[i] })) : [];
-  const mentorsData = report ? labels.map((month, i) => ({ month, Mentors: report.metrics.activeMentors[i] })) : [];
+  const buckets = useMemo(() => monthBuckets(from, to), [from, to]);
 
-  const sum = (a: number[]) => a.slice(0, end).reduce((x, y) => x + y, 0);
-  const kpis = report
-    ? {
-        discoveryTotal: sum(report.metrics.discoveryPhone) + sum(report.metrics.discoveryZoom),
-        meetingsTotal: meetingsData.reduce((x, d) => x + d.Meetings, 0),
-        latestMentees: report.metrics.activeMentees[end - 1] ?? 0,
-        latestMentors: report.metrics.activeMentors[end - 1] ?? 0,
+  const data = useMemo(() => {
+    const byMonth = new Map<string, RangeAppt[]>();
+    for (const a of appts) {
+      if (!a.date) continue;
+      const k = a.date.slice(0, 7);
+      let arr = byMonth.get(k);
+      if (!arr) {
+        arr = [];
+        byMonth.set(k, arr);
       }
-    : null;
+      arr.push(a);
+    }
+    return buckets.map((b) => {
+      const items = byMonth.get(b.key) ?? [];
+      let phone = 0;
+      let zoom = 0;
+      const mentees = new Set<number>();
+      const mentors = new Set<number>();
+      let meetings = 0;
+      for (const a of items) {
+        if (a.category === "discoveryPhone") phone++;
+        else if (a.category === "discoveryZoom") zoom++;
+        else if (a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))) {
+          meetings++;
+          mentees.add(a.clientId ?? -1);
+          mentors.add(a.coachId ?? -1);
+        }
+      }
+      return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
+    });
+  }, [appts, buckets, selectedTypes]);
+
+  const kpis = {
+    discoveryTotal: discovery.length,
+    meetingsTotal: selectedMentoring.length,
+    mentees: new Set(selectedMentoring.map((a) => a.clientId ?? -1)).size,
+    mentors: new Set(selectedMentoring.map((a) => a.coachId ?? -1)).size,
+  };
 
   const conv = useMemo(() => {
     const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
     let recorded = 0;
-    for (const c of calls) {
-      if (c.outcome) {
-        counts[c.outcome]++;
+    for (const a of discovery) {
+      const o = outcomes.get(a.id);
+      if (o) {
+        counts[o]++;
         recorded++;
       }
     }
-    const total = calls.length;
+    const total = discovery.length;
     return { total, counts, notRecorded: total - recorded, rate: total > 0 ? counts.converted / total : null };
-  }, [calls]);
+  }, [discovery, outcomes]);
 
   function toggleType(name: string) {
     setSelectedTypes((prev) => {
@@ -199,43 +292,37 @@ export function MetricsView() {
     });
   }
 
-  const selectedMeetings = meetingAppts.filter((a) => !selectedTypes || selectedTypes.has(a.name));
-
   function exploreDiscovery() {
     setExplore({
-      title: `Discovery calls — ${year}`,
+      title: "Discovery calls",
       columns: ["Date", "Prospect", "Type", "Outcome"],
-      rows: calls.map((c) => [
-        c.date ?? "—",
-        c.prospect,
-        c.type,
-        c.outcome ? OUTCOME_LABELS[c.outcome] : "—",
-      ]),
+      rows: discovery.map((a) => {
+        const o = outcomes.get(a.id);
+        return [a.date ?? "—", a.clientName, a.category === "discoveryPhone" ? "phone" : "zoom", o ? OUTCOME_LABELS[o] : "—"];
+      }),
     });
   }
   function exploreMeetings() {
     setExplore({
-      title: `Mentee meetings — ${year}`,
+      title: "Mentee meetings",
       columns: ["Date", "Prospect", "Meeting type"],
-      rows: selectedMeetings.map((a) => [a.date ?? "—", a.clientName, a.name]),
+      rows: selectedMentoring.map((a) => [a.date ?? "—", a.clientName, a.name]),
     });
   }
   function exploreMentees() {
     setExplore({
-      title: `Active mentees — ${year}`,
+      title: "Active mentees",
       columns: ["Mentee", "Meetings"],
-      rows: groupCount(selectedMeetings, (a) => a.clientId, (a) => a.clientName),
+      rows: groupCount(selectedMentoring, (a) => a.clientId, (a) => a.clientName),
     });
   }
   function exploreMentors() {
     setExplore({
-      title: `Mentors — ${year}`,
+      title: "Mentors",
       columns: ["Mentor", "Meetings"],
-      rows: groupCount(selectedMeetings, (a) => a.coachId, (a) => a.coachName),
+      rows: groupCount(selectedMentoring, (a) => a.coachId, (a) => a.coachName),
     });
   }
-
-  const warnings = report?.meta.warnings ?? [];
 
   const typeFilter = (
     <div className="type-filter">
@@ -256,67 +343,84 @@ export function MetricsView() {
             <span className="muted">{t.count}</span>
           </label>
         ))}
-        {meetingTypes.length === 0 && <span className="muted">No mentoring appointments for {year}.</span>}
+        {meetingTypes.length === 0 && <span className="muted">No mentoring appointments in this range.</span>}
       </div>
     </div>
   );
 
   return (
     <section>
-      <div className="view__controls">
-        <label className="year-select">
-          Year
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {YEARS.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </label>
-        {report && (
-          <span className="topbar__user">Data as of {new Date(report.meta.computedAt).toLocaleString()}</span>
-        )}
+      <div className="range">
+        <div className="range__presets">
+          {PRESETS.map((p) => (
+            <button
+              key={p.key}
+              className={`chip ${preset === p.key ? "chip--active" : ""}`}
+              onClick={() => applyPreset(p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="range__dates">
+          <label className="field field--inline">
+            <span>From</span>
+            <input
+              type="date"
+              value={from}
+              max={to}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setPreset("custom");
+              }}
+            />
+          </label>
+          <label className="field field--inline">
+            <span>To</span>
+            <input
+              type="date"
+              value={to}
+              min={from}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setPreset("custom");
+              }}
+            />
+          </label>
+          {loading && <span className="muted">Loading…</span>}
+        </div>
       </div>
 
       {error && <div className="notice notice--warn">{error}</div>}
-      {warnings.includes("no_sync_yet") && (
-        <div className="notice notice--info">No sync has run yet — open the Admin tab and click “Sync now”.</div>
-      )}
-      {warnings.includes("uncategorized_appointment_types_present") && (
-        <div className="notice notice--warn">
-          Some appointment types weren’t recognized and were left out of the counts. Tell me the names and I’ll add them.
-        </div>
-      )}
 
-      {loading && !report ? (
+      {!ready && loading ? (
         <div className="loading">Loading…</div>
-      ) : kpis ? (
+      ) : (
         <>
           <section className="card">
             <div className="stat-row">
               <div className="stat">
                 <span className="stat__value">{num(kpis.discoveryTotal)}</span>
-                <span className="stat__label">Discovery calls (YTD)</span>
+                <span className="stat__label">Discovery calls</span>
               </div>
               <div className="stat">
                 <span className="stat__value">{num(kpis.meetingsTotal)}</span>
-                <span className="stat__label">Mentee meetings (YTD)</span>
+                <span className="stat__label">Mentee meetings</span>
               </div>
               <div className="stat">
-                <span className="stat__value">{num(kpis.latestMentees)}</span>
-                <span className="stat__label">Active mentees (latest)</span>
+                <span className="stat__value">{num(kpis.mentees)}</span>
+                <span className="stat__label">Active mentees</span>
               </div>
               <div className="stat">
-                <span className="stat__value">{num(kpis.latestMentors)}</span>
-                <span className="stat__label">Mentors (latest)</span>
+                <span className="stat__value">{num(kpis.mentors)}</span>
+                <span className="stat__label">Mentors</span>
               </div>
             </div>
           </section>
 
           <div style={{ marginTop: 18 }}>
             <ChartCard title="Discovery calls" onExplore={exploreDiscovery}>
-              <BarChart data={discoveryData}>
+              <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -330,7 +434,7 @@ export function MetricsView() {
 
           <div style={{ marginTop: 18 }}>
             <ChartCard title="Mentee meetings" extra={typeFilter} onExplore={exploreMeetings}>
-              <BarChart data={meetingsData}>
+              <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -342,7 +446,7 @@ export function MetricsView() {
 
           <div className="grid" style={{ marginTop: 18 }}>
             <ChartCard title="Active mentees" onExplore={exploreMentees}>
-              <LineChart data={menteesData}>
+              <LineChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -352,7 +456,7 @@ export function MetricsView() {
             </ChartCard>
 
             <ChartCard title="Mentors" onExplore={exploreMentors}>
-              <BarChart data={mentorsData}>
+              <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -381,7 +485,7 @@ export function MetricsView() {
             </div>
           </section>
         </>
-      ) : null}
+      )}
 
       {explore && <ExploreModal {...explore} onClose={() => setExplore(null)} />}
     </section>

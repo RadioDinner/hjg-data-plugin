@@ -118,42 +118,44 @@ export async function setDiscoveryOutcome(
   }
 }
 
-// --- Mentee meetings (individual mentoring appointments, for type filtering) ---
+// --- Appointments in a date range (powers the Metrics dashboard) ---
 
-export interface MeetingAppt {
+export type ApptCategory = "mentoring" | "discoveryPhone" | "discoveryZoom";
+
+export interface RangeAppt {
   id: number;
+  category: ApptCategory;
   name: string;
-  month: number | null;
-  date: string | null;
+  date: string | null; // YYYY-MM-DD (account-local)
   clientId: number | null;
   clientName: string;
   coachId: number | null;
   coachName: string;
 }
 
-// Mentoring-category appointments for a year (status active), with placeholder /
-// group clients excluded — the same population the menteeMeetings count uses,
-// but kept per-row (with prospect/mentor names) so the dashboard can break them
-// down by type and drill into the raw rows.
-export async function fetchMentoringAppointments(year: number): Promise<MeetingAppt[]> {
+// Mentoring + discovery appointments whose account-local date falls within
+// [from, to] (inclusive, YYYY-MM-DD), status active, placeholder/group clients
+// excluded, enriched with prospect/mentor names.
+export async function fetchRangeAppointments(from: string, to: string): Promise<RangeAppt[]> {
   const pageSize = 1000;
   const rows: {
     id: number;
+    category: ApptCategory;
     name: string;
-    start_month: number | null;
     start_date: string | null;
     client_id: number | null;
     coach_id: number | null;
   }[] = [];
-  for (let from = 0; ; from += pageSize) {
+  for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
-      .select("id,name,start_month,start_date,client_id,coach_id")
-      .eq("category", "mentoring")
-      .eq("start_year", year)
+      .select("id,category,name,start_date,client_id,coach_id")
+      .in("category", ["mentoring", "discoveryPhone", "discoveryZoom"])
       .eq("status", "A")
+      .gte("start_date", from)
+      .lte("start_date", to)
       .order("start_date", { ascending: true })
-      .range(from, from + pageSize - 1);
+      .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as typeof rows;
     rows.push(...batch);
@@ -183,14 +185,35 @@ export async function fetchMentoringAppointments(year: number): Promise<MeetingA
     .filter((r) => r.client_id == null || !clientMap.get(r.client_id)?.is_excluded)
     .map((r) => ({
       id: r.id,
+      category: r.category,
       name: r.name,
-      month: r.start_month,
       date: r.start_date,
       clientId: r.client_id,
-      clientName: (r.client_id != null ? clientMap.get(r.client_id)?.name : null) ?? (r.client_id != null ? `#${r.client_id}` : "Unknown"),
+      clientName:
+        (r.client_id != null ? clientMap.get(r.client_id)?.name : null) ??
+        (r.client_id != null ? `#${r.client_id}` : "Unknown"),
       coachId: r.coach_id,
       coachName: (r.coach_id != null ? coachMap.get(r.coach_id) : null) ?? (r.coach_id != null ? `#${r.coach_id}` : "Unknown"),
     }));
+}
+
+// Recorded outcomes for the given appointment ids, keyed by appointment id.
+export async function fetchOutcomesByAppointment(apptIds: number[]): Promise<Map<number, DiscoveryOutcomeValue>> {
+  const out = new Map<number, DiscoveryOutcomeValue>();
+  const chunk = 200;
+  for (let i = 0; i < apptIds.length; i += chunk) {
+    const slice = apptIds.slice(i, i + chunk);
+    if (!slice.length) break;
+    const { data, error } = await supabase
+      .from("discovery_outcomes")
+      .select("appointment_id,outcome")
+      .in("appointment_id", slice);
+    if (error) throw new Error(error.message);
+    for (const o of (data ?? []) as { appointment_id: number | null; outcome: DiscoveryOutcomeValue }[]) {
+      if (o.appointment_id != null) out.set(o.appointment_id, o.outcome);
+    }
+  }
+  return out;
 }
 
 // --- Raw data viewer ---
