@@ -1,44 +1,24 @@
 // Browser-side data access. The dashboard reads the CA mirror and reads/writes
-// the HJG-owned tables directly via supabase-js; row-level security enforces
-// that only signed-in staff can touch them.
+// discovery outcomes directly via supabase-js; row-level security enforces that
+// only signed-in staff can touch them.
 
 import { supabase } from "./lib/supabase";
 
-export interface ClientOption {
-  id: number;
-  name: string | null;
-  is_excluded: boolean;
-}
-
-export interface Graduation {
-  id: string;
-  client_id: number;
-  graduated_on: string;
-  notes: string | null;
-  created_at: string;
-}
-
 export type DiscoveryOutcomeValue = "converted" | "not_converted" | "pending" | "no_show";
 
-export interface DiscoveryOutcome {
-  id: string;
-  client_id: number;
-  appointment_id: number | null;
-  outcome: DiscoveryOutcomeValue;
-  follow_up_on: string | null;
+// A discovery-call appointment pulled from the CA mirror, joined with whatever
+// outcome staff have recorded against it.
+export interface DiscoveryCall {
+  appointmentId: number;
+  clientId: number | null;
+  prospect: string;
+  type: "phone" | "zoom" | "other";
+  date: string | null; // YYYY-MM-DD (account-local)
+  month: number | null;
+  outcomeId: string | null;
+  outcome: DiscoveryOutcomeValue | null;
+  followUpOn: string | null;
   notes: string | null;
-  created_at: string;
-}
-
-export type CadenceTier = "4x" | "2x" | "1x" | "graduated";
-
-export interface CadenceEntry {
-  id: string;
-  client_id: number;
-  tier: CadenceTier;
-  effective_from: string;
-  notes: string | null;
-  created_at: string;
 }
 
 export interface SyncRun {
@@ -52,101 +32,129 @@ export interface SyncRun {
   error: string | null;
 }
 
-export interface AppSetting {
-  key: string;
-  value: number | null;
-}
-
-function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
+function err<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
   return (res.data ?? ([] as unknown)) as T;
 }
 
-// --- CA mirror (read-only) ---
+// --- Discovery calls (mirror appointments + recorded outcomes) ---
 
-export async function fetchClients(includeExcluded = false): Promise<ClientOption[]> {
-  let q = supabase.from("ca_clients").select("id,name,is_excluded").order("name", { ascending: true });
-  if (!includeExcluded) q = q.eq("is_excluded", false);
-  return unwrap<ClientOption[]>(await q);
-}
-
-// --- Graduations ---
-
-export async function listGraduations(): Promise<Graduation[]> {
-  return unwrap<Graduation[]>(
-    await supabase.from("graduations").select("*").order("graduated_on", { ascending: false })
-  );
-}
-
-export async function addGraduation(
-  createdBy: string,
-  row: { client_id: number; graduated_on: string; notes: string | null }
-): Promise<void> {
-  const { error } = await supabase.from("graduations").insert({ ...row, created_by: createdBy });
-  if (error) throw new Error(error.message);
-}
-
-export async function deleteGraduation(id: string): Promise<void> {
-  const { error } = await supabase.from("graduations").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-}
-
-// --- Discovery outcomes ---
-
-export async function listDiscoveryOutcomes(): Promise<DiscoveryOutcome[]> {
-  return unwrap<DiscoveryOutcome[]>(
-    await supabase.from("discovery_outcomes").select("*").order("created_at", { ascending: false })
-  );
-}
-
-export async function addDiscoveryOutcome(
-  createdBy: string,
-  row: {
-    client_id: number;
-    outcome: DiscoveryOutcomeValue;
-    follow_up_on: string | null;
-    notes: string | null;
-  }
-): Promise<void> {
-  const { error } = await supabase.from("discovery_outcomes").insert({ ...row, created_by: createdBy });
-  if (error) throw new Error(error.message);
-}
-
-export async function deleteDiscoveryOutcome(id: string): Promise<void> {
-  const { error } = await supabase.from("discovery_outcomes").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-}
-
-// --- Cadence status (append-only history) ---
-
-export async function listCadence(): Promise<CadenceEntry[]> {
-  return unwrap<CadenceEntry[]>(
+export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]> {
+  const appts = err<
+    { id: number; client_id: number | null; category: string; start_date: string | null; start_month: number | null }[]
+  >(
     await supabase
-      .from("cadence_status_log")
-      .select("*")
-      .order("effective_from", { ascending: false })
-      .order("created_at", { ascending: false })
+      .from("ca_appointments")
+      .select("id,client_id,category,start_date,start_month")
+      .in("category", ["discoveryPhone", "discoveryZoom"])
+      .eq("start_year", year)
+      .eq("status", "A")
+      .order("start_date", { ascending: false })
   );
+
+  const clientIds = [...new Set(appts.map((a) => a.client_id).filter((x): x is number => x != null))];
+  const clientRows = clientIds.length
+    ? err<{ id: number; name: string | null; is_excluded: boolean }[]>(
+        await supabase.from("ca_clients").select("id,name,is_excluded").in("id", clientIds)
+      )
+    : [];
+  const clientMap = new Map(clientRows.map((c) => [c.id, c]));
+
+  const apptIds = appts.map((a) => a.id);
+  const outcomeRows = apptIds.length
+    ? err<
+        { id: string; appointment_id: number; outcome: DiscoveryOutcomeValue; follow_up_on: string | null; notes: string | null }[]
+      >(
+        await supabase
+          .from("discovery_outcomes")
+          .select("id,appointment_id,outcome,follow_up_on,notes")
+          .in("appointment_id", apptIds)
+      )
+    : [];
+  const outcomeMap = new Map(outcomeRows.map((o) => [o.appointment_id, o]));
+
+  const calls: DiscoveryCall[] = [];
+  for (const a of appts) {
+    const client = a.client_id != null ? clientMap.get(a.client_id) : undefined;
+    if (client?.is_excluded) continue; // skip placeholder / group "clients"
+    const o = outcomeMap.get(a.id);
+    calls.push({
+      appointmentId: a.id,
+      clientId: a.client_id,
+      prospect: client?.name ?? (a.client_id != null ? `#${a.client_id}` : "Unknown"),
+      type: a.category === "discoveryPhone" ? "phone" : a.category === "discoveryZoom" ? "zoom" : "other",
+      date: a.start_date,
+      month: a.start_month,
+      outcomeId: o?.id ?? null,
+      outcome: o?.outcome ?? null,
+      followUpOn: o?.follow_up_on ?? null,
+      notes: o?.notes ?? null,
+    });
+  }
+  return calls;
 }
 
-export async function addCadence(
+export async function setDiscoveryOutcome(
   createdBy: string,
-  row: { client_id: number; tier: CadenceTier; effective_from: string; notes: string | null }
+  call: { appointmentId: number; clientId: number; existingId: string | null },
+  values: { outcome: DiscoveryOutcomeValue; followUpOn: string | null; notes: string | null }
 ): Promise<void> {
-  const { error } = await supabase.from("cadence_status_log").insert({ ...row, created_by: createdBy });
+  if (call.existingId) {
+    const { error } = await supabase
+      .from("discovery_outcomes")
+      .update({ outcome: values.outcome, follow_up_on: values.followUpOn, notes: values.notes })
+      .eq("id", call.existingId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("discovery_outcomes").insert({
+      appointment_id: call.appointmentId,
+      client_id: call.clientId,
+      outcome: values.outcome,
+      follow_up_on: values.followUpOn,
+      notes: values.notes,
+      created_by: createdBy,
+    });
+    if (error) throw new Error(error.message);
+  }
+}
+
+// --- Raw data viewer ---
+
+export const RAW_TABLES = [
+  "ca_appointments",
+  "ca_clients",
+  "ca_coaches",
+  "ca_offerings",
+  "ca_offering_submissions",
+  "discovery_outcomes",
+  "sync_runs",
+] as const;
+
+export type RawTable = (typeof RAW_TABLES)[number];
+
+export async function fetchTable(
+  table: RawTable,
+  limit = 100
+): Promise<{ rows: Record<string, unknown>[]; total: number }> {
+  const { data, error, count } = await supabase
+    .from(table)
+    .select("*", { count: "exact" })
+    .limit(limit);
   if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return { rows, total: count ?? rows.length };
 }
 
 // --- Sync runs + settings (Admin) ---
 
 export async function listSyncRuns(limit = 10): Promise<SyncRun[]> {
-  return unwrap<SyncRun[]>(
+  return err<SyncRun[]>(
     await supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(limit)
   );
 }
 
 export async function fetchSettings(): Promise<Record<string, number | null>> {
-  const rows = unwrap<AppSetting[]>(await supabase.from("app_settings").select("key,value"));
+  const rows = err<{ key: string; value: number | null }[]>(await supabase.from("app_settings").select("key,value"));
   const out: Record<string, number | null> = {};
   for (const r of rows) out[r.key] = (r.value as number | null) ?? null;
   return out;

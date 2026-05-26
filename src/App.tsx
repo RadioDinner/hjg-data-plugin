@@ -1,25 +1,23 @@
 import { useState } from "react";
 import { useAuth, signOut } from "./auth";
 import { Login } from "./components/Login";
-import { ReportsView } from "./views/ReportsView";
-import { GraduationsView } from "./views/GraduationsView";
+import { MetricsView } from "./views/MetricsView";
 import { DiscoveryView } from "./views/DiscoveryView";
-import { CadenceView } from "./views/CadenceView";
+import { RawDataView } from "./views/RawDataView";
 import { AdminView } from "./views/AdminView";
 
-type Tab = "reports" | "graduations" | "discovery" | "cadence" | "admin";
+type Tab = "metrics" | "discovery" | "raw" | "admin";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "reports", label: "Reports" },
-  { key: "graduations", label: "Graduations" },
+  { key: "metrics", label: "Metrics" },
   { key: "discovery", label: "Discovery" },
-  { key: "cadence", label: "Cadence" },
+  { key: "raw", label: "Raw data" },
   { key: "admin", label: "Admin" },
 ];
 
 export function App() {
   const { user, loading } = useAuth();
-  const [tab, setTab] = useState<Tab>("reports");
+  const [tab, setTab] = useState<Tab>("metrics");
 
   if (loading) return <div className="loading">Loading…</div>;
   if (!user) return <Login />;
@@ -29,7 +27,7 @@ export function App() {
       <header className="topbar">
         <div className="topbar__title">
           <h1>Data Hub</h1>
-          <span className="topbar__subtitle">Mentoring metrics &amp; records</span>
+          <span className="topbar__subtitle">Discovery &amp; conversion metrics</span>
         </div>
         <div className="topbar__controls">
           <span className="topbar__user">{user.email}</span>
@@ -52,10 +50,9 @@ export function App() {
       </nav>
 
       <div className="view">
-        {tab === "reports" && <ReportsView />}
-        {tab === "graduations" && <GraduationsView />}
+        {tab === "metrics" && <MetricsView />}
         {tab === "discovery" && <DiscoveryView />}
-        {tab === "cadence" && <CadenceView />}
+        {tab === "raw" && <RawDataView />}
         {tab === "admin" && <AdminView />}
       </div>
 

@@ -1,13 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import {
-  addDiscoveryOutcome,
-  deleteDiscoveryOutcome,
-  listDiscoveryOutcomes,
-  type DiscoveryOutcome,
+  fetchDiscoveryCalls,
+  setDiscoveryOutcome,
+  type DiscoveryCall,
   type DiscoveryOutcomeValue,
 } from "../db";
-import { useClients } from "./shared";
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 const OUTCOMES: { value: DiscoveryOutcomeValue; label: string }[] = [
   { value: "converted", label: "Converted" },
@@ -16,140 +17,162 @@ const OUTCOMES: { value: DiscoveryOutcomeValue; label: string }[] = [
   { value: "no_show", label: "No show" },
 ];
 
-const OUTCOME_LABEL: Record<string, string> = Object.fromEntries(OUTCOMES.map((o) => [o.value, o.label]));
+function DiscoveryRow({
+  call,
+  userId,
+  onSaved,
+  onError,
+}: {
+  call: DiscoveryCall;
+  userId: string;
+  onSaved: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [outcome, setOutcome] = useState<DiscoveryOutcomeValue | "">(call.outcome ?? "");
+  const [followUp, setFollowUp] = useState(call.followUpOn ?? "");
+  const [notes, setNotes] = useState(call.notes ?? "");
+  const [saving, setSaving] = useState(false);
 
-export function DiscoveryView() {
-  const { user } = useAuth();
-  const { clients, nameOf, error: clientsError } = useClients();
-  const [rows, setRows] = useState<DiscoveryOutcome[]>([]);
-  const [clientId, setClientId] = useState<number | "">("");
-  const [outcome, setOutcome] = useState<DiscoveryOutcomeValue>("pending");
-  const [followUp, setFollowUp] = useState("");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const dirty =
+    (call.outcome ?? "") !== outcome ||
+    (call.followUpOn ?? "") !== followUp ||
+    (call.notes ?? "") !== notes;
+  const canSave = outcome !== "" && call.clientId != null && dirty && !saving;
 
-  async function load() {
+  async function save() {
+    if (outcome === "" || call.clientId == null) return;
+    setSaving(true);
     try {
-      setRows(await listDiscoveryOutcomes());
+      await setDiscoveryOutcome(
+        userId,
+        { appointmentId: call.appointmentId, clientId: call.clientId, existingId: call.outcomeId },
+        { outcome, followUpOn: followUp || null, notes: notes || null }
+      );
+      onSaved();
     } catch (e) {
-      setError(String(e));
-    }
-  }
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (clientId === "" || !user) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await addDiscoveryOutcome(user.id, {
-        client_id: Number(clientId),
-        outcome,
-        follow_up_on: followUp || null,
-        notes: notes || null,
-      });
-      setClientId("");
-      setOutcome("pending");
-      setFollowUp("");
-      setNotes("");
-      await load();
-    } catch (e) {
-      setError(String(e));
-    }
-    setBusy(false);
-  }
-
-  async function remove(id: string) {
-    if (!confirm("Delete this discovery outcome?")) return;
-    try {
-      await deleteDiscoveryOutcome(id);
-      await load();
-    } catch (e) {
-      setError(String(e));
+      onError(String(e));
+      setSaving(false);
     }
   }
 
   return (
-    <section className="card">
-      <h2>Discovery outcomes</h2>
-      <p className="view__hint">Record what happened after a discovery call — whether the prospect converted.</p>
-
-      <form className="entry" onSubmit={submit}>
-        <label className="field">
-          <span>Prospect</span>
-          <select value={clientId} onChange={(e) => setClientId(e.target.value === "" ? "" : Number(e.target.value))} required>
-            <option value="">Select…</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name ?? `#${c.id}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Outcome</span>
-          <select value={outcome} onChange={(e) => setOutcome(e.target.value as DiscoveryOutcomeValue)}>
-            {OUTCOMES.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Follow up on</span>
-          <input type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
-        </label>
-        <label className="field field--grow">
-          <span>Notes</span>
-          <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
-        </label>
-        <button className="btn btn--primary" disabled={busy || clientId === ""}>
-          {busy ? "Saving…" : "Add"}
+    <tr>
+      <td>{call.date ?? "—"}</td>
+      <td>{call.prospect}</td>
+      <td className="muted">{call.type}</td>
+      <td>
+        <select value={outcome} onChange={(e) => setOutcome(e.target.value as DiscoveryOutcomeValue | "")}>
+          <option value="">—</option>
+          {OUTCOMES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <input type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
+      </td>
+      <td>
+        <input
+          type="text"
+          value={notes}
+          placeholder="Notes"
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </td>
+      <td className="num">
+        <button className="btn btn--primary btn--sm" onClick={save} disabled={!canSave}>
+          {saving ? "Saving…" : call.outcomeId ? "Update" : "Save"}
         </button>
-      </form>
+      </td>
+    </tr>
+  );
+}
 
-      {(error || clientsError) && <div className="notice notice--warn">{error || clientsError}</div>}
+export function DiscoveryView() {
+  const { user } = useAuth();
+  const [year, setYear] = useState(CURRENT_YEAR);
+  const [calls, setCalls] = useState<DiscoveryCall[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-      <div className="table-scroll">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Prospect</th>
-              <th>Outcome</th>
-              <th>Follow up</th>
-              <th>Notes</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{nameOf(r.client_id)}</td>
-                <td>{OUTCOME_LABEL[r.outcome] ?? r.outcome}</td>
-                <td className="muted">{r.follow_up_on ?? "—"}</td>
-                <td className="muted">{r.notes ?? "—"}</td>
-                <td className="num">
-                  <button className="btn btn--danger btn--sm" onClick={() => remove(r.id)}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      setCalls(await fetchDiscoveryCalls(year));
+    } catch (e) {
+      setError(String(e));
+    }
+    setLoading(false);
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year]);
+
+  return (
+    <section className="card">
+      <h2>Discovery calls</h2>
+      <p className="view__hint">
+        Every discovery call synced from CoachAccountable. Record the outcome of each one; those outcomes drive the
+        conversion funnel on the Metrics tab.
+      </p>
+
+      <div className="view__controls">
+        <label className="year-select">
+          Year
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted">
-                  No discovery outcomes recorded yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </select>
+        </label>
+        <span className="topbar__user">{calls.length} calls</span>
       </div>
+
+      {error && <div className="notice notice--warn">{error}</div>}
+
+      {loading ? (
+        <div className="loading">Loading…</div>
+      ) : (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Prospect</th>
+                <th>Type</th>
+                <th>Outcome</th>
+                <th>Follow up</th>
+                <th>Notes</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {calls.map((c) => (
+                <DiscoveryRow
+                  key={c.appointmentId}
+                  call={c}
+                  userId={user?.id ?? ""}
+                  onSaved={load}
+                  onError={setError}
+                />
+              ))}
+              {calls.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="muted">
+                    No discovery calls for {year}. Run a sync on the Admin tab if you expect some.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
