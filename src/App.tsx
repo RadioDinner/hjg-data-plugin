@@ -28,7 +28,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="topbar__title">
-          <h1>HJG Data Hub</h1>
+          <h1>Data Hub</h1>
           <span className="topbar__subtitle">Mentoring metrics &amp; records</span>
         </div>
         <div className="topbar__controls">

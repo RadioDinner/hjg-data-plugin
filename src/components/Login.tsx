@@ -20,7 +20,7 @@ export function Login() {
   return (
     <div className="auth">
       <form className="auth__card" onSubmit={submit}>
-        <h1>HJG Data Hub</h1>
+        <h1>Data Hub</h1>
         <p className="auth__sub">Sign in to continue</p>
         {!supabaseConfigured && (
           <div className="notice notice--warn">
