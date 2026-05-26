@@ -101,7 +101,9 @@ export class CAClient {
       });
     }
 
-    return (json.result ?? json.return) as T;
+    // CoachAccountable returns the payload in `return`; `result` is a status
+    // word (e.g. "loaded"). Prefer `return`, falling back to `result`.
+    return (json.return ?? json.result) as T;
   }
 
   // NOTE: pagination scheme is unconfirmed (see SPEC.md s7/s20.6). These currently
