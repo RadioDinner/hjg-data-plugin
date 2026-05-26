@@ -175,6 +175,15 @@ body {
 /* --- entry forms --- */
 .entry { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
 
+/* --- meeting-type filter --- */
+.type-filter { margin-bottom: 14px; }
+.type-filter__head { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 8px; }
+.type-filter__items { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.type-filter__item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
+.type-filter__item input { accent-color: var(--accent); }
+.linkbtn { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 0; }
+.linkbtn:hover { text-decoration: underline; }
+
 /* --- status pills --- */
 .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); }
 .pill--success { background: #052e2b; border-color: #047857; color: #6ee7b7; }

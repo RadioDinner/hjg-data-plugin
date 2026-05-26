@@ -12,7 +12,13 @@ import {
   YAxis,
 } from "recharts";
 import { fetchReport, type Report } from "../api";
-import { fetchDiscoveryCalls, type DiscoveryCall, type DiscoveryOutcomeValue } from "../db";
+import {
+  fetchDiscoveryCalls,
+  fetchMentoringAppointments,
+  type DiscoveryCall,
+  type DiscoveryOutcomeValue,
+  type MeetingAppt,
+} from "../db";
 import { num, pct } from "../format";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -21,7 +27,7 @@ const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
 const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
-const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b" };
+const C = { phone: "#38bdf8", zoom: "#34d399", total: "#64748b", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b" };
 
 const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
   converted: "Converted",
@@ -30,10 +36,13 @@ const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
   no_show: "No show",
 };
 
-function ChartCard({ title, children }: { title: string; children: ReactElement }) {
+const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
+
+function ChartCard({ title, children, extra }: { title: string; children: ReactElement; extra?: ReactElement }) {
   return (
     <section className="card">
       <h2>{title}</h2>
+      {extra}
       <div style={{ width: "100%", height: 240 }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
@@ -41,12 +50,32 @@ function ChartCard({ title, children }: { title: string; children: ReactElement 
   );
 }
 
-const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
+interface TipEntry {
+  dataKey?: string | number;
+  value?: number;
+}
+
+function DiscoveryTooltip({ active, payload, label }: { active?: boolean; payload?: TipEntry[]; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const get = (k: string) => Number(payload.find((p) => p.dataKey === k)?.value ?? 0);
+  const phone = get("Phone");
+  const zoom = get("Zoom");
+  return (
+    <div style={{ ...TOOLTIP, padding: "6px 10px", fontSize: 13 }}>
+      <div style={{ marginBottom: 4 }}>{label}</div>
+      <div style={{ color: C.phone }}>Phone: {phone}</div>
+      <div style={{ color: C.zoom }}>Zoom: {zoom}</div>
+      <div style={{ borderTop: "1px solid #334155", marginTop: 4, paddingTop: 4 }}>Total: {phone + zoom}</div>
+    </div>
+  );
+}
 
 export function MetricsView() {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [report, setReport] = useState<Report | null>(null);
   const [calls, setCalls] = useState<DiscoveryCall[]>([]);
+  const [meetingAppts, setMeetingAppts] = useState<MeetingAppt[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,12 +83,13 @@ export function MetricsView() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([fetchReport(year), fetchDiscoveryCalls(year)])
-      .then(([r, c]) => {
-        if (!cancelled) {
-          setReport(r);
-          setCalls(c);
-        }
+    Promise.all([fetchReport(year), fetchDiscoveryCalls(year), fetchMentoringAppointments(year)])
+      .then(([r, c, m]) => {
+        if (cancelled) return;
+        setReport(r);
+        setCalls(c);
+        setMeetingAppts(m);
+        setSelectedTypes(new Set(m.map((a) => a.name)));
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -72,25 +102,42 @@ export function MetricsView() {
     };
   }, [year]);
 
-  const charts = useMemo(() => {
-    if (!report) return null;
-    const m = report.metrics;
-    const end = Math.min(12, Math.max(1, m.meta.endMonth));
-    const labels = m.shortMonths.slice(0, end);
-    const sum = (a: number[]) => a.slice(0, end).reduce((x, y) => x + y, 0);
-    return {
-      discovery: labels.map((month, i) => ({ month, Phone: m.discoveryPhone[i], Zoom: m.discoveryZoom[i] })),
-      meetings: labels.map((month, i) => ({ month, Meetings: m.menteeMeetings[i] })),
-      mentees: labels.map((month, i) => ({ month, Mentees: m.activeMentees[i] })),
-      mentors: labels.map((month, i) => ({ month, Mentors: m.activeMentors[i] })),
-      kpis: {
-        discoveryTotal: sum(m.discoveryPhone) + sum(m.discoveryZoom),
-        meetingsTotal: sum(m.menteeMeetings),
-        latestMentees: m.activeMentees[end - 1] ?? 0,
-        latestMentors: m.activeMentors[end - 1] ?? 0,
-      },
-    };
-  }, [report]);
+  const end = report ? Math.min(12, Math.max(1, report.metrics.meta.endMonth)) : 0;
+  const labels = report ? report.metrics.shortMonths.slice(0, end) : [];
+
+  const meetingTypes = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of meetingAppts) counts.set(a.name, (counts.get(a.name) ?? 0) + 1);
+    return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [meetingAppts]);
+
+  const meetingsData = labels.map((month, i) => {
+    let count = 0;
+    for (const a of meetingAppts) {
+      if (a.month === i + 1 && (!selectedTypes || selectedTypes.has(a.name))) count++;
+    }
+    return { month, Meetings: count };
+  });
+
+  const discoveryData = report
+    ? labels.map((month, i) => ({
+        month,
+        Phone: report.metrics.discoveryPhone[i],
+        Zoom: report.metrics.discoveryZoom[i],
+      }))
+    : [];
+  const menteesData = report ? labels.map((month, i) => ({ month, Mentees: report.metrics.activeMentees[i] })) : [];
+  const mentorsData = report ? labels.map((month, i) => ({ month, Mentors: report.metrics.activeMentors[i] })) : [];
+
+  const sum = (a: number[]) => a.slice(0, end).reduce((x, y) => x + y, 0);
+  const kpis = report
+    ? {
+        discoveryTotal: sum(report.metrics.discoveryPhone) + sum(report.metrics.discoveryZoom),
+        meetingsTotal: meetingsData.reduce((x, d) => x + d.Meetings, 0),
+        latestMentees: report.metrics.activeMentees[end - 1] ?? 0,
+        latestMentors: report.metrics.activeMentors[end - 1] ?? 0,
+      }
+    : null;
 
   const conv = useMemo(() => {
     const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
@@ -102,10 +149,43 @@ export function MetricsView() {
       }
     }
     const total = calls.length;
-    return { total, counts, recorded, notRecorded: total - recorded, rate: total > 0 ? counts.converted / total : null };
+    return { total, counts, notRecorded: total - recorded, rate: total > 0 ? counts.converted / total : null };
   }, [calls]);
 
+  function toggleType(name: string) {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
   const warnings = report?.meta.warnings ?? [];
+
+  const typeFilter = (
+    <div className="type-filter">
+      <div className="type-filter__head">
+        <span className="muted">Meeting types counted:</span>
+        <button className="linkbtn" onClick={() => setSelectedTypes(new Set(meetingTypes.map((t) => t.name)))}>
+          All
+        </button>
+        <button className="linkbtn" onClick={() => setSelectedTypes(new Set())}>
+          None
+        </button>
+      </div>
+      <div className="type-filter__items">
+        {meetingTypes.map((t) => (
+          <label key={t.name} className="type-filter__item">
+            <input type="checkbox" checked={selectedTypes?.has(t.name) ?? false} onChange={() => toggleType(t.name)} />
+            <span>{t.name}</span>
+            <span className="muted">{t.count}</span>
+          </label>
+        ))}
+        {meetingTypes.length === 0 && <span className="muted">No mentoring appointments for {year}.</span>}
+      </div>
+    </div>
+  );
 
   return (
     <section>
@@ -137,44 +217,46 @@ export function MetricsView() {
 
       {loading && !report ? (
         <div className="loading">Loading…</div>
-      ) : charts ? (
+      ) : kpis ? (
         <>
           <section className="card">
             <div className="stat-row">
               <div className="stat">
-                <span className="stat__value">{num(charts.kpis.discoveryTotal)}</span>
+                <span className="stat__value">{num(kpis.discoveryTotal)}</span>
                 <span className="stat__label">Discovery calls (YTD)</span>
               </div>
               <div className="stat">
-                <span className="stat__value">{num(charts.kpis.meetingsTotal)}</span>
+                <span className="stat__value">{num(kpis.meetingsTotal)}</span>
                 <span className="stat__label">Mentee meetings (YTD)</span>
               </div>
               <div className="stat">
-                <span className="stat__value">{num(charts.kpis.latestMentees)}</span>
+                <span className="stat__value">{num(kpis.latestMentees)}</span>
                 <span className="stat__label">Active mentees (latest)</span>
               </div>
               <div className="stat">
-                <span className="stat__value">{num(charts.kpis.latestMentors)}</span>
+                <span className="stat__value">{num(kpis.latestMentors)}</span>
                 <span className="stat__label">Mentors (latest)</span>
               </div>
             </div>
           </section>
 
-          <div className="grid" style={{ marginTop: 18 }}>
+          <div style={{ marginTop: 18 }}>
             <ChartCard title="Discovery calls">
-              <BarChart data={charts.discovery}>
+              <BarChart data={discoveryData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
-                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Tooltip content={<DiscoveryTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Phone" fill={C.phone} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Zoom" fill={C.zoom} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Phone" stackId="calls" fill={C.phone} />
+                <Bar dataKey="Zoom" stackId="calls" fill={C.zoom} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartCard>
+          </div>
 
-            <ChartCard title="Mentee meetings">
-              <BarChart data={charts.meetings}>
+          <div style={{ marginTop: 18 }}>
+            <ChartCard title="Mentee meetings" extra={typeFilter}>
+              <BarChart data={meetingsData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -182,9 +264,11 @@ export function MetricsView() {
                 <Bar dataKey="Meetings" fill={C.meetings} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartCard>
+          </div>
 
+          <div className="grid" style={{ marginTop: 18 }}>
             <ChartCard title="Active mentees">
-              <LineChart data={charts.mentees}>
+              <LineChart data={menteesData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -194,7 +278,7 @@ export function MetricsView() {
             </ChartCard>
 
             <ChartCard title="Mentors">
-              <BarChart data={charts.mentors}>
+              <BarChart data={mentorsData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -207,8 +291,7 @@ export function MetricsView() {
           <section className="card" style={{ marginTop: 18 }}>
             <h2>Discovery → conversion</h2>
             <p className="view__hint">
-              Based on the outcomes recorded on the Discovery tab. Conversion rate:{" "}
-              <strong>{pct(conv.rate)}</strong>
+              Based on the outcomes recorded on the Discovery tab. Conversion rate: <strong>{pct(conv.rate)}</strong>
             </p>
             <div className="stat-row">
               {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (

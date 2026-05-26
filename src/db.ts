@@ -118,6 +118,50 @@ export async function setDiscoveryOutcome(
   }
 }
 
+// --- Mentee meetings (individual mentoring appointments, for type filtering) ---
+
+export interface MeetingAppt {
+  id: number;
+  name: string;
+  month: number | null;
+}
+
+// Mentoring-category appointments for a year (status active), with placeholder /
+// group clients excluded — the same population the menteeMeetings count uses,
+// but kept per-row so the dashboard can break them down by appointment type.
+export async function fetchMentoringAppointments(year: number): Promise<MeetingAppt[]> {
+  const pageSize = 1000;
+  const rows: { id: number; name: string; start_month: number | null; client_id: number | null }[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_appointments")
+      .select("id,name,start_month,client_id")
+      .eq("category", "mentoring")
+      .eq("start_year", year)
+      .eq("status", "A")
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as typeof rows;
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+
+  const clientIds = [...new Set(rows.map((r) => r.client_id).filter((x): x is number => x != null))];
+  const excluded = new Set<number>();
+  if (clientIds.length) {
+    const { data, error } = await supabase.from("ca_clients").select("id,is_excluded").in("id", clientIds);
+    if (error) throw new Error(error.message);
+    for (const c of (data ?? []) as { id: number; is_excluded: boolean }[]) {
+      if (c.is_excluded) excluded.add(c.id);
+    }
+  }
+
+  return rows
+    .filter((r) => r.client_id == null || !excluded.has(r.client_id))
+    .map((r) => ({ id: r.id, name: r.name, month: r.start_month }));
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
