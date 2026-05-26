@@ -1,115 +1,65 @@
-import { useEffect, useState } from "react";
-import { fetchFunnelReport, type ReportResult } from "./api";
-import { BudgetGauge } from "./components/BudgetGauge";
-import { FunnelChart } from "./components/FunnelChart";
-import { SalesPanel } from "./components/SalesPanel";
-import { MetricsTable } from "./components/MetricsTable";
+import { useState } from "react";
+import { useAuth, signOut } from "./auth";
+import { Login } from "./components/Login";
+import { ReportsView } from "./views/ReportsView";
+import { GraduationsView } from "./views/GraduationsView";
+import { DiscoveryView } from "./views/DiscoveryView";
+import { CadenceView } from "./views/CadenceView";
+import { AdminView } from "./views/AdminView";
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
+type Tab = "reports" | "graduations" | "discovery" | "cadence" | "admin";
 
-const WARNING_TEXT: Record<string, string> = {
-  graduation_undefined:
-    "Graduation has no CoachAccountable field yet — define a rule in lib/config.ts to populate that funnel stage.",
-  uncategorized_appointment_types_present:
-    "Some appointment types fell into the “other” bucket and were not counted. Add their patterns to lib/config.ts.",
-};
+const TABS: { key: Tab; label: string }[] = [
+  { key: "reports", label: "Reports" },
+  { key: "graduations", label: "Graduations" },
+  { key: "discovery", label: "Discovery" },
+  { key: "cadence", label: "Cadence" },
+  { key: "admin", label: "Admin" },
+];
 
 export function App() {
-  const [year, setYear] = useState(CURRENT_YEAR);
-  const [result, setResult] = useState<ReportResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useAuth();
+  const [tab, setTab] = useState<Tab>("reports");
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetchFunnelReport(year).then((r) => {
-      if (!cancelled) {
-        setResult(r);
-        setLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [year]);
-
-  const report = result?.report;
+  if (loading) return <div className="loading">Loading…</div>;
+  if (!user) return <Login />;
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar__title">
           <h1>HJG Data Hub</h1>
-          <span className="topbar__subtitle">Sales funnel &amp; offerings report</span>
+          <span className="topbar__subtitle">Mentoring metrics &amp; records</span>
         </div>
         <div className="topbar__controls">
-          <label className="year-select">
-            Year
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {YEARS.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </label>
-          {report && (
-            <BudgetGauge
-              capDaily={report.meta.budget.capDaily}
-              usedToday={report.meta.budget.usedToday}
-              remainingToday={report.meta.budget.remainingToday}
-            />
-          )}
+          <span className="topbar__user">{user.email}</span>
+          <button className="btn" onClick={() => signOut()}>
+            Sign out
+          </button>
         </div>
       </header>
 
-      {result && (
-        <div className="badges">
-          <span className={`badge badge--${result.source}`}>
-            {result.source === "live" ? "Live data" : "Demo data"}
-          </span>
-          {report?.meta.stale && <span className="badge badge--stale">Stale (budget reached)</span>}
-          {report && (
-            <span className="badge badge--muted">
-              Updated {new Date(report.meta.computedAt).toLocaleString()}
-            </span>
-          )}
-        </div>
-      )}
-
-      {result?.error && (
-        <div className="notice notice--info">
-          Showing demo data — could not reach the API ({result.error}). Start <code>vercel dev</code> and set{" "}
-          <code>VITE_HJG_API_TOKEN</code> to see live numbers.
-        </div>
-      )}
-
-      {report?.meta.warnings
-        .filter((w) => WARNING_TEXT[w])
-        .map((w) => (
-          <div className="notice notice--warn" key={w}>
-            {WARNING_TEXT[w]}
-          </div>
+      <nav className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`tab ${tab === t.key ? "tab--active" : ""}`}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
         ))}
+      </nav>
 
-      {loading && !report ? (
-        <div className="loading">Loading…</div>
-      ) : report ? (
-        <main className="grid">
-          <FunnelChart funnel={report.funnel} leadsToConverted={report.conversionRates.leadsToConverted} />
-          <SalesPanel
-            sales={report.sales}
-            shortMonths={report.metrics.shortMonths}
-            endMonth={report.metrics.meta.endMonth}
-          />
-          <div className="grid__full">
-            <MetricsTable metrics={report.metrics} />
-          </div>
-        </main>
-      ) : null}
+      <div className="view">
+        {tab === "reports" && <ReportsView />}
+        {tab === "graduations" && <GraduationsView />}
+        {tab === "discovery" && <DiscoveryView />}
+        {tab === "cadence" && <CadenceView />}
+        {tab === "admin" && <AdminView />}
+      </div>
 
-      <footer className="footer">
-        Read-only · CoachAccountable usage capped at {report?.meta.budget.capDaily ?? "—"} calls/day
-      </footer>
+      <footer className="footer">Read-only toward CoachAccountable · data mirrored into Supabase</footer>
     </div>
   );
 }

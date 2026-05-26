@@ -129,3 +129,54 @@ body {
 .table-scroll { overflow-x: auto; }
 
 .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+/* --- auth / login --- */
+.auth { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.auth__card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 14px; }
+.auth__card h1 { margin: 0; font-size: 22px; }
+.auth__sub { margin: -8px 0 4px; color: var(--muted); font-size: 14px; }
+.auth__error { color: #fca5a5; font-size: 13px; }
+
+/* --- form fields --- */
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.field input, .field select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; font-size: 14px;
+}
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field--grow { flex: 1 1 180px; }
+
+/* --- buttons --- */
+.btn {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn--primary { background: var(--accent); color: #03283a; border-color: var(--accent); font-weight: 600; }
+.btn--danger { background: transparent; border-color: #7f1d1d; color: #fca5a5; }
+.btn--danger:hover { border-color: #ef4444; }
+.btn--sm { padding: 4px 10px; font-size: 12px; }
+
+/* --- tabs --- */
+.tabs { display: flex; gap: 6px; margin: 16px 0 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tab {
+  background: transparent; color: var(--muted); border: none; border-bottom: 2px solid transparent;
+  padding: 9px 14px; font-size: 14px; cursor: pointer;
+}
+.tab:hover { color: var(--text); }
+.tab--active { color: var(--text); border-bottom-color: var(--accent); }
+
+.topbar__user { font-size: 13px; color: var(--muted); }
+.view { margin-top: 18px; }
+.view__controls { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 4px; }
+.view__hint { margin: -4px 0 14px; color: var(--muted); font-size: 13px; }
+
+/* --- entry forms --- */
+.entry { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
+
+/* --- status pills --- */
+.pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); }
+.pill--success { background: #052e2b; border-color: #047857; color: #6ee7b7; }
+.pill--error { background: #450a0a; border-color: #b91c1c; color: #fca5a5; }
+.pill--running { background: #422006; border-color: #b45309; color: #fcd34d; }
