@@ -5,8 +5,8 @@ import {
   categorizeAppointmentName,
   isExcludedClientName,
   MENTOR_COACH_ID_WHITELIST,
-} from "./config";
-import type { CAAppointment, CAClient, MonthlyMetrics } from "./types";
+} from "./config.js";
+import type { CAAppointment, CAClient, MonthlyMetrics } from "./types.js";
 
 export const MONTHS = [
   "January", "February", "March", "April", "May", "June",

@@ -2,7 +2,7 @@
 // exclusions, and budget knobs correct. Everything here is read-only policy;
 // none of it calls CoachAccountable.
 
-import type { AppointmentCategory } from "./types";
+import type { AppointmentCategory } from "./types.js";
 
 // --- Appointment categorization (case-insensitive substring match) ---
 // Precedence: excluded -> discoveryPhone -> discoveryZoom -> mentoring -> other.

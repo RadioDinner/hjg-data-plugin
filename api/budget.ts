@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withApi } from "../lib/http";
-import { getAdminClient } from "../lib/supabase-admin";
-import { budgetStatus } from "../lib/budget";
+import { withApi } from "../lib/http.js";
+import { getAdminClient } from "../lib/supabase-admin.js";
+import { budgetStatus } from "../lib/budget.js";
 
 // Observability for the CA-call cap and today's sync usage. No CA call.
 export default withApi(

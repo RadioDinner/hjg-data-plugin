@@ -5,10 +5,10 @@
 //
 // Run: npx tsx scripts/verify-metrics.ts
 
-import { computeMonthlyMetrics } from "../lib/metrics";
-import { computeFunnelReport } from "../lib/funnel";
-import { BudgetTracker, BudgetExhaustedError } from "../lib/budget";
-import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types";
+import { computeMonthlyMetrics } from "../lib/metrics.js";
+import { computeFunnelReport } from "../lib/funnel.js";
+import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
+import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
 function assert(cond: boolean, msg: string) {

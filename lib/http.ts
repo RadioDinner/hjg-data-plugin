@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { CAError, CredentialsMissingError } from "./ca";
-import { BudgetExhaustedError } from "./budget";
-import { SyncInProgressError } from "./sync";
-import { getAdminClient, SupabaseConfigError } from "./supabase-admin";
+import { CAError, CredentialsMissingError } from "./ca.js";
+import { BudgetExhaustedError } from "./budget.js";
+import { SyncInProgressError } from "./sync.js";
+import { getAdminClient, SupabaseConfigError } from "./supabase-admin.js";
 
 const ALLOWED_ORIGINS = (process.env.HJG_CORS_ALLOWED_ORIGINS ?? "*")
   .split(",")

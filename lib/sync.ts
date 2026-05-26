@@ -2,11 +2,11 @@
 // HJG categorization/exclusion, and upsert the ca_* mirror tables. Each run is
 // recorded in sync_runs. The dashboard reads only from the mirror, never CA.
 
-import { getAdminClient } from "./supabase-admin";
-import { CAClient } from "./ca";
-import { makeTracker, BudgetExhaustedError, type BudgetTracker } from "./budget";
-import { categorizeAppointmentName, isExcludedClientName } from "./config";
-import { caDateParts } from "./metrics";
+import { getAdminClient } from "./supabase-admin.js";
+import { CAClient } from "./ca.js";
+import { makeTracker, BudgetExhaustedError, type BudgetTracker } from "./budget.js";
+import { categorizeAppointmentName, isExcludedClientName } from "./config.js";
+import { caDateParts } from "./metrics.js";
 import type {
   SyncTrigger,
   CaCoachRow,
@@ -14,7 +14,7 @@ import type {
   CaAppointmentRow,
   CaOfferingRow,
   CaOfferingSubmissionRow,
-} from "./types";
+} from "./types.js";
 
 export class SyncInProgressError extends Error {
   constructor() {

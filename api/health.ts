@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withApi } from "../lib/http";
-import { getAdminClient, hasSupabaseAdminEnv } from "../lib/supabase-admin";
-import { budgetStatus } from "../lib/budget";
+import { withApi } from "../lib/http.js";
+import { getAdminClient, hasSupabaseAdminEnv } from "../lib/supabase-admin.js";
+import { budgetStatus } from "../lib/budget.js";
 
 export default withApi(
   async (_req: VercelRequest, res: VercelResponse) => {

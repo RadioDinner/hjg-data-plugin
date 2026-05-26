@@ -2,8 +2,8 @@
 // metrics plus offering submissions. Graduation is intentionally null until HJG
 // defines a rule (CoachAccountable has no graduation field).
 
-import { computeMonthlyMetrics, caDateParts, type ComputeOptions } from "./metrics";
-import { categorizeAppointmentName, isExcludedClientName, GRADUATION_RULE } from "./config";
+import { computeMonthlyMetrics, caDateParts, type ComputeOptions } from "./metrics.js";
+import { categorizeAppointmentName, isExcludedClientName, GRADUATION_RULE } from "./config.js";
 import type {
   CAAppointment,
   CAClient,
@@ -12,7 +12,7 @@ import type {
   FunnelStage,
   SalesByOffering,
   SalesSummary,
-} from "./types";
+} from "./types.js";
 
 function clientFullName(c: CAClient | undefined): { full: string; first?: string; last?: string } {
   if (!c) return { full: "" };

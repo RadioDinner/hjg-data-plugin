@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { withApi } from "../../lib/http";
-import { getAdminClient } from "../../lib/supabase-admin";
-import { computeFunnelReport } from "../../lib/funnel";
-import { budgetStatus } from "../../lib/budget";
+import { withApi } from "../../lib/http.js";
+import { getAdminClient } from "../../lib/supabase-admin.js";
+import { computeFunnelReport } from "../../lib/funnel.js";
+import { budgetStatus } from "../../lib/budget.js";
 import type {
   CAAppointment,
   CAClient,
@@ -13,7 +13,7 @@ import type {
   CaClientRow,
   CaOfferingSubmissionRow,
   FunnelReport,
-} from "../../lib/types";
+} from "../../lib/types.js";
 
 const TZ = process.env.BUDGET_TZ || "America/Chicago";
 

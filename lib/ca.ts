@@ -3,7 +3,7 @@
 // wire call, so the caller (the sync job) can enforce a hard daily call cap.
 // There is no path to CA that bypasses spend().
 
-import { CA_FN } from "./config";
+import { CA_FN } from "./config.js";
 import type {
   CAAppointment,
   CAClient as CAClientEntity,
@@ -11,7 +11,7 @@ import type {
   CAOffering,
   CAOfferingSubmission,
   CAAppointmentType,
-} from "./types";
+} from "./types.js";
 
 const CA_ENDPOINT = "https://www.coachaccountable.com/API/";
 

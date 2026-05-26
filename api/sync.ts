@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withApi } from "../lib/http";
-import { runSync } from "../lib/sync";
+import { withApi } from "../lib/http.js";
+import { runSync } from "../lib/sync.js";
 
 // POST /api/sync — pull CoachAccountable into the Supabase mirror.
 // Auth: a signed-in staff member (Admin screen "Sync now"), or the cron secret
