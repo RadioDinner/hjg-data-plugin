@@ -175,6 +175,18 @@ body {
 /* --- entry forms --- */
 .entry { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
 
+/* --- card header (title + explore) --- */
+.card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; }
+.card__head h2 { margin: 0; }
+
+/* --- explore modal --- */
+.modal { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.7); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
+.modal__card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 760px; max-height: 85vh; display: flex; flex-direction: column; }
+.modal__head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.modal__head h2 { margin: 0; font-size: 16px; }
+.modal__body { padding: 4px 20px; overflow: auto; }
+.modal__foot { padding: 10px 20px; border-top: 1px solid var(--line); font-size: 12px; }
+
 /* --- meeting-type filter --- */
 .type-filter { margin-bottom: 14px; }
 .type-filter__head { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 8px; }

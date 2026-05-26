@@ -19,6 +19,7 @@ import {
   type DiscoveryOutcomeValue,
   type MeetingAppt,
 } from "../db";
+import { ExploreModal } from "../components/ExploreModal";
 import { num, pct } from "../format";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -38,16 +39,50 @@ const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
 
 const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
 
-function ChartCard({ title, children, extra }: { title: string; children: ReactElement; extra?: ReactElement }) {
+function ChartCard({
+  title,
+  children,
+  extra,
+  onExplore,
+}: {
+  title: string;
+  children: ReactElement;
+  extra?: ReactElement;
+  onExplore?: () => void;
+}) {
   return (
     <section className="card">
-      <h2>{title}</h2>
+      <div className="card__head">
+        <h2>{title}</h2>
+        {onExplore && (
+          <button className="btn btn--sm" onClick={onExplore}>
+            Explore
+          </button>
+        )}
+      </div>
       {extra}
       <div style={{ width: "100%", height: 240 }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
     </section>
   );
+}
+
+// Group mentoring appointments by mentee or mentor into [name, count] rows.
+function groupCount(
+  items: MeetingAppt[],
+  idOf: (a: MeetingAppt) => number | null,
+  nameOf: (a: MeetingAppt) => string
+): (string | number)[][] {
+  const m = new Map<string, { name: string; count: number }>();
+  for (const a of items) {
+    const id = idOf(a);
+    const key = id != null ? `id:${id}` : `n:${nameOf(a)}`;
+    const e = m.get(key);
+    if (e) e.count++;
+    else m.set(key, { name: nameOf(a), count: 1 });
+  }
+  return [...m.values()].sort((a, b) => b.count - a.count).map((e) => [e.name, e.count]);
 }
 
 interface TipEntry {
@@ -78,6 +113,9 @@ export function MetricsView() {
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [explore, setExplore] = useState<{ title: string; columns: string[]; rows: (string | number)[][] } | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +199,42 @@ export function MetricsView() {
     });
   }
 
+  const selectedMeetings = meetingAppts.filter((a) => !selectedTypes || selectedTypes.has(a.name));
+
+  function exploreDiscovery() {
+    setExplore({
+      title: `Discovery calls — ${year}`,
+      columns: ["Date", "Prospect", "Type", "Outcome"],
+      rows: calls.map((c) => [
+        c.date ?? "—",
+        c.prospect,
+        c.type,
+        c.outcome ? OUTCOME_LABELS[c.outcome] : "—",
+      ]),
+    });
+  }
+  function exploreMeetings() {
+    setExplore({
+      title: `Mentee meetings — ${year}`,
+      columns: ["Date", "Prospect", "Meeting type"],
+      rows: selectedMeetings.map((a) => [a.date ?? "—", a.clientName, a.name]),
+    });
+  }
+  function exploreMentees() {
+    setExplore({
+      title: `Active mentees — ${year}`,
+      columns: ["Mentee", "Meetings"],
+      rows: groupCount(selectedMeetings, (a) => a.clientId, (a) => a.clientName),
+    });
+  }
+  function exploreMentors() {
+    setExplore({
+      title: `Mentors — ${year}`,
+      columns: ["Mentor", "Meetings"],
+      rows: groupCount(selectedMeetings, (a) => a.coachId, (a) => a.coachName),
+    });
+  }
+
   const warnings = report?.meta.warnings ?? [];
 
   const typeFilter = (
@@ -241,7 +315,7 @@ export function MetricsView() {
           </section>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Discovery calls">
+            <ChartCard title="Discovery calls" onExplore={exploreDiscovery}>
               <BarChart data={discoveryData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -255,7 +329,7 @@ export function MetricsView() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Mentee meetings" extra={typeFilter}>
+            <ChartCard title="Mentee meetings" extra={typeFilter} onExplore={exploreMeetings}>
               <BarChart data={meetingsData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -267,7 +341,7 @@ export function MetricsView() {
           </div>
 
           <div className="grid" style={{ marginTop: 18 }}>
-            <ChartCard title="Active mentees">
+            <ChartCard title="Active mentees" onExplore={exploreMentees}>
               <LineChart data={menteesData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -277,7 +351,7 @@ export function MetricsView() {
               </LineChart>
             </ChartCard>
 
-            <ChartCard title="Mentors">
+            <ChartCard title="Mentors" onExplore={exploreMentors}>
               <BarChart data={mentorsData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -308,6 +382,8 @@ export function MetricsView() {
           </section>
         </>
       ) : null}
+
+      {explore && <ExploreModal {...explore} onClose={() => setExplore(null)} />}
     </section>
   );
 }
