@@ -30,6 +30,7 @@ export interface CAAppointment {
   name: string;
   startDate: string; // e.g. "2026-01-31 09:00:00" in the account timezone (unconfirmed)
   endDate?: string;
+  dateAdded?: string; // when the appointment was booked (signup date)
   status: CAAppointmentStatus;
 }
 
@@ -163,6 +164,10 @@ export interface CaAppointmentRow {
   start_date: string | null; // YYYY-MM-DD (account-local)
   start_year: number | null;
   start_month: number | null; // 1..12
+  date_added_raw: string | null;
+  date_added: string | null; // YYYY-MM-DD (account-local) — booking/signup date
+  date_added_year: number | null;
+  date_added_month: number | null;
   synced_at?: string;
 }
 

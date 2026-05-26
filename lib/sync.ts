@@ -150,6 +150,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
 
     const apptRows: CaAppointmentRow[] = appointments.map((a) => {
       const dp = dateParts(a.startDate);
+      const da = dateParts(a.dateAdded);
       return {
         id: a.ID,
         coach_id: a.CoachID ?? null,
@@ -162,6 +163,10 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         start_date: dp.date,
         start_year: dp.year,
         start_month: dp.month,
+        date_added_raw: a.dateAdded ?? null,
+        date_added: da.date,
+        date_added_year: da.year,
+        date_added_month: da.month,
       };
     });
 

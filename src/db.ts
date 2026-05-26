@@ -133,34 +133,54 @@ export interface RangeAppt {
   coachName: string;
 }
 
-// Mentoring + discovery appointments whose account-local date falls within
-// [from, to] (inclusive, YYYY-MM-DD), status active, placeholder/group clients
-// excluded, enriched with prospect/mentor names.
-export async function fetchRangeAppointments(from: string, to: string): Promise<RangeAppt[]> {
+// Page ca_appointments for the given categories, filtering/normalizing on the
+// supplied date column. `date` in the result is the column we counted by.
+async function pageAppts(
+  categories: ApptCategory[],
+  dateCol: "start_date" | "date_added",
+  from: string,
+  to: string
+): Promise<{ id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
   const pageSize = 1000;
-  const rows: {
-    id: number;
-    category: ApptCategory;
-    name: string;
-    start_date: string | null;
-    client_id: number | null;
-    coach_id: number | null;
-  }[] = [];
+  const out: { id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
-      .select("id,category,name,start_date,client_id,coach_id")
-      .in("category", ["mentoring", "discoveryPhone", "discoveryZoom"])
+      .select(`id,category,name,client_id,coach_id,${dateCol}`)
+      .in("category", categories)
       .eq("status", "A")
-      .gte("start_date", from)
-      .lte("start_date", to)
-      .order("start_date", { ascending: true })
+      .gte(dateCol, from)
+      .lte(dateCol, to)
+      .order(dateCol, { ascending: true })
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
-    const batch = (data ?? []) as typeof rows;
-    rows.push(...batch);
+    const batch = (data ?? []) as Record<string, unknown>[];
+    for (const r of batch) {
+      out.push({
+        id: r.id as number,
+        category: r.category as ApptCategory,
+        name: r.name as string,
+        date: (r[dateCol] as string | null) ?? null,
+        client_id: (r.client_id as number | null) ?? null,
+        coach_id: (r.coach_id as number | null) ?? null,
+      });
+    }
     if (batch.length < pageSize) break;
   }
+  return out;
+}
+
+// Appointments that count within [from, to] (inclusive, YYYY-MM-DD), status
+// active, placeholder/group clients excluded, enriched with prospect/mentor
+// names. Mentee meetings are counted by the SCHEDULED date; discovery calls are
+// counted by the SIGNUP/booking date (dateAdded). `date` carries whichever date
+// the row is counted by.
+export async function fetchRangeAppointments(from: string, to: string): Promise<RangeAppt[]> {
+  const [mentoring, discovery] = await Promise.all([
+    pageAppts(["mentoring"], "start_date", from, to),
+    pageAppts(["discoveryPhone", "discoveryZoom"], "date_added", from, to),
+  ]);
+  const rows = [...mentoring, ...discovery];
 
   const clientIds = [...new Set(rows.map((r) => r.client_id).filter((x): x is number => x != null))];
   const coachIds = [...new Set(rows.map((r) => r.coach_id).filter((x): x is number => x != null))];
@@ -187,7 +207,7 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
       id: r.id,
       category: r.category,
       name: r.name,
-      date: r.start_date,
+      date: r.date,
       clientId: r.client_id,
       clientName:
         (r.client_id != null ? clientMap.get(r.client_id)?.name : null) ??
