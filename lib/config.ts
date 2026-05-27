@@ -65,6 +65,21 @@ export const GRADUATION_RULE: null = null;
 // Budget governance now lives in lib/budget.ts, sourced from the app_settings
 // table (ca_plan_daily_limit, daily_cap_pct) with env fallbacks.
 
+// --- Discovery-call conversion (automated outcome) ---
+// A discovery call auto-counts as "converted" once the prospect buys the
+// SUPERVISED JumpStart Your Freedom offering. Matched by CoachAccountable
+// Offering.ID (stable across renames), never by name:
+//   42840 = "2. JumpStart Your Freedom (Waiting List)"  -> supervised, counts.
+// The self-paced course (32326 "JumpStart Your Freedom") and the test offering
+// (42841 "zTEST ...") deliberately do NOT auto-convert; staff can still set the
+// outcome by hand, and a manual outcome always wins over this rule.
+export const CONVERSION_OFFERING_IDS: number[] = [42840];
+
+// With no qualifying purchase on/after the call, a discovery call stays
+// "pending" until this many days have elapsed, then flips to "not_converted"
+// (assumed decided-against / ghosted).
+export const DISCOVERY_DECISION_WINDOW_DAYS = 30;
+
 // --- CoachAccountable function names (centralized so they're easy to correct) ---
 // Offering.getAll is confirmed in the docs. The submissions function name is
 // inferred from the docs ("submissions for Offerings") and MUST be verified on

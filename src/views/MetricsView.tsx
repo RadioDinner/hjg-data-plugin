@@ -15,11 +15,12 @@ import {
   MANUAL_METRICS,
   fetchLastSyncedAt,
   fetchManualMetrics,
-  fetchOutcomesByAppointment,
   fetchRangeAppointments,
+  fetchResolvedOutcomes,
   type DiscoveryOutcomeValue,
   type ManualMetricRow,
   type RangeAppt,
+  type ResolvedOutcome,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { num, pct } from "../format";
@@ -168,7 +169,7 @@ export function MetricsView() {
   const [preset, setPreset] = useState<PresetKey | "custom">("this_year");
   const [appts, setAppts] = useState<RangeAppt[]>([]);
   const [manual, setManual] = useState<ManualMetricRow[]>([]);
-  const [outcomes, setOutcomes] = useState<Map<number, DiscoveryOutcomeValue>>(new Map());
+  const [outcomes, setOutcomes] = useState<Map<number, ResolvedOutcome>>(new Map());
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
   const [meetingsMode, setMeetingsMode] = useState<"total" | "compare">("total");
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -185,8 +186,10 @@ export function MetricsView() {
     setError(null);
     fetchRangeAppointments(from, to)
       .then(async (rows) => {
-        const discoveryIds = rows.filter((a) => a.category !== "mentoring").map((a) => a.id);
-        const out = await fetchOutcomesByAppointment(discoveryIds);
+        const discoveryAppts = rows
+          .filter((a) => a.category !== "mentoring")
+          .map((a) => ({ id: a.id, clientId: a.clientId, date: a.date }));
+        const out = await fetchResolvedOutcomes(discoveryAppts);
         if (cancelled) return;
         setAppts(rows);
         setOutcomes(out);
@@ -353,16 +356,16 @@ export function MetricsView() {
 
   const conv = useMemo(() => {
     const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
-    let recorded = 0;
+    let manualCount = 0;
     for (const a of discovery) {
       const o = outcomes.get(a.id);
       if (o) {
-        counts[o]++;
-        recorded++;
+        counts[o.outcome]++;
+        if (o.source === "manual") manualCount++;
       }
     }
     const total = discovery.length;
-    return { total, counts, notRecorded: total - recorded, rate: total > 0 ? counts.converted / total : null };
+    return { total, counts, manualCount, rate: total > 0 ? counts.converted / total : null };
   }, [discovery, outcomes]);
 
   function toggleType(name: string) {
@@ -611,7 +614,10 @@ export function MetricsView() {
           <section className="card" style={{ marginTop: 18 }}>
             <h2>Discovery → conversion</h2>
             <p className="view__hint">
-              Based on the outcomes recorded on the Discovery tab. Conversion rate: <strong>{pct(conv.rate)}</strong>
+              Auto-computed: a call converts when the prospect buys JumpStart Your Freedom (Waiting List) on or after the
+              call. With no purchase it stays pending for 30 days, then becomes not converted. Staff overrides on the
+              Discovery tab take precedence. Conversion rate: <strong>{pct(conv.rate)}</strong>
+              {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
             </p>
             <div className="stat-row">
               {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
@@ -620,10 +626,6 @@ export function MetricsView() {
                   <span className="stat__label">{OUTCOME_LABELS[k]}</span>
                 </div>
               ))}
-              <div className="stat">
-                <span className="stat__value">{num(conv.notRecorded)}</span>
-                <span className="stat__label">Not yet recorded</span>
-              </div>
             </div>
           </section>
 

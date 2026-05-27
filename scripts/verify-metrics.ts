@@ -8,6 +8,7 @@
 import { computeMonthlyMetrics } from "../lib/metrics.js";
 import { computeFunnelReport } from "../lib/funnel.js";
 import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
+import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -159,6 +160,25 @@ console.log("[4] budget circuit breaker (BudgetTracker)");
     blockedCarried = e instanceof BudgetExhaustedError;
   }
   assert(blockedCarried, "tracker blocks once today's prior usage + this run hit the cap");
+}
+
+console.log("[5] discovery conversion resolver");
+{
+  const call = "2026-03-01";
+  const r = (over: Partial<Parameters<typeof resolveDiscoveryOutcome>[0]>) =>
+    resolveDiscoveryOutcome({ callDate: call, manual: null, conversionPurchaseDates: [], today: "2026-03-15", windowDays: 30, ...over });
+
+  eq(r({ conversionPurchaseDates: ["2026-03-10"] }).outcome, "converted", "purchase on/after the call -> converted");
+  eq(r({ conversionPurchaseDates: ["2026-03-01"], today: "2026-03-02" }).outcome, "converted", "same-day purchase counts (inclusive)");
+  eq(r({ conversionPurchaseDates: ["2026-02-20"] }).outcome, "pending", "purchase BEFORE the call is ignored");
+  eq(r({ today: "2026-03-31" }).outcome, "pending", "day 30, no purchase -> pending (boundary)");
+  eq(r({ today: "2026-04-01" }).outcome, "not_converted", "day 31, no purchase -> not_converted (boundary)");
+  eq(r({ callDate: null }).outcome, "pending", "missing call date -> pending");
+  eq(r({ conversionPurchaseDates: ["2026-03-10"] }).source, "auto", "purchase-derived outcome flagged auto");
+
+  const overridden = r({ manual: "no_show", conversionPurchaseDates: ["2026-03-10"] });
+  eq(overridden.outcome, "no_show", "manual override wins over a purchase");
+  eq(overridden.source, "manual", "override flagged as manual");
 }
 
 console.log("");

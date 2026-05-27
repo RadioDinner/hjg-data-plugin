@@ -3,8 +3,43 @@
 // only signed-in staff can touch them.
 
 import { supabase } from "./lib/supabase";
+import { CONVERSION_OFFERING_IDS } from "../lib/config";
+import {
+  resolveDiscoveryOutcome,
+  todayYmd,
+  type DiscoveryOutcomeValue,
+  type ResolvedOutcome,
+  type ResolvedOutcomeSource,
+} from "../lib/conversion";
 
-export type DiscoveryOutcomeValue = "converted" | "not_converted" | "pending" | "no_show";
+export { resolveDiscoveryOutcome };
+export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
+
+// This client's qualifying (supervised JumpStart) purchase dates, keyed by
+// client id and sorted ascending. Empty when nothing counts toward conversion.
+async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
+  const out = new Map<number, string[]>();
+  if (!clientIds.length || !CONVERSION_OFFERING_IDS.length) return out;
+  const chunk = 200;
+  for (let i = 0; i < clientIds.length; i += chunk) {
+    const slice = clientIds.slice(i, i + chunk);
+    const { data, error } = await supabase
+      .from("ca_offering_submissions")
+      .select("client_id,date_added")
+      .in("offering_id", CONVERSION_OFFERING_IDS)
+      .in("client_id", slice)
+      .not("date_added", "is", null);
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as { client_id: number | null; date_added: string | null }[]) {
+      if (r.client_id == null || r.date_added == null) continue;
+      const arr = out.get(r.client_id);
+      if (arr) arr.push(r.date_added);
+      else out.set(r.client_id, [r.date_added]);
+    }
+  }
+  for (const arr of out.values()) arr.sort();
+  return out;
+}
 
 // A discovery-call appointment pulled from the CA mirror, joined with whatever
 // outcome staff have recorded against it.
@@ -16,9 +51,17 @@ export interface DiscoveryCall {
   date: string | null; // YYYY-MM-DD (account-local)
   month: number | null;
   outcomeId: string | null;
-  outcome: DiscoveryOutcomeValue | null;
+  outcome: DiscoveryOutcomeValue | null; // manual override, if any
   followUpOn: string | null;
   notes: string | null;
+  // Resolved status: the manual override when present, otherwise the rule's
+  // verdict. `autoOutcome` is always the rule's verdict (shown even when an
+  // override hides it, so staff can see what the data says).
+  resolvedOutcome: DiscoveryOutcomeValue;
+  source: ResolvedOutcomeSource;
+  resolvedReason: string;
+  autoOutcome: DiscoveryOutcomeValue;
+  autoReason: string;
 }
 
 export interface SyncRun {
@@ -73,11 +116,18 @@ export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]
     : [];
   const outcomeMap = new Map(outcomeRows.map((o) => [o.appointment_id, o]));
 
+  const purchasesByClient = await fetchConversionPurchasesByClient(clientIds);
+  const today = todayYmd();
+
   const calls: DiscoveryCall[] = [];
   for (const a of appts) {
     const client = a.client_id != null ? clientMap.get(a.client_id) : undefined;
     if (client?.is_excluded) continue; // skip placeholder / group "clients"
     const o = outcomeMap.get(a.id);
+    const manual = o?.outcome ?? null;
+    const purchases = a.client_id != null ? purchasesByClient.get(a.client_id) ?? [] : [];
+    const auto = resolveDiscoveryOutcome({ callDate: a.start_date, manual: null, conversionPurchaseDates: purchases, today });
+    const resolved = manual ? resolveDiscoveryOutcome({ callDate: a.start_date, manual, conversionPurchaseDates: purchases, today }) : auto;
     calls.push({
       appointmentId: a.id,
       clientId: a.client_id,
@@ -86,9 +136,14 @@ export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]
       date: a.start_date,
       month: a.start_month,
       outcomeId: o?.id ?? null,
-      outcome: o?.outcome ?? null,
+      outcome: manual,
       followUpOn: o?.follow_up_on ?? null,
       notes: o?.notes ?? null,
+      resolvedOutcome: resolved.outcome,
+      source: resolved.source,
+      resolvedReason: resolved.reason,
+      autoOutcome: auto.outcome,
+      autoReason: auto.reason,
     });
   }
   return calls;
@@ -116,6 +171,12 @@ export async function setDiscoveryOutcome(
     });
     if (error) throw new Error(error.message);
   }
+}
+
+// Remove a manual override so the call reverts to its automatic outcome.
+export async function clearDiscoveryOutcome(id: string): Promise<void> {
+  const { error } = await supabase.from("discovery_outcomes").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 // --- Appointments in a date range (powers the Metrics dashboard) ---
@@ -271,6 +332,29 @@ export async function fetchOutcomesByAppointment(apptIds: number[]): Promise<Map
     }
   }
   return out;
+}
+
+// Resolve each discovery appointment to its outcome (manual override or the
+// automatic rule), keyed by appointment id. Powers the Metrics conversion panel.
+export async function fetchResolvedOutcomes(
+  appts: { id: number; clientId: number | null; date: string | null }[]
+): Promise<Map<number, ResolvedOutcome>> {
+  const result = new Map<number, ResolvedOutcome>();
+  if (!appts.length) return result;
+  const clientIds = [...new Set(appts.map((a) => a.clientId).filter((x): x is number => x != null))];
+  const [manualMap, purchasesByClient] = await Promise.all([
+    fetchOutcomesByAppointment(appts.map((a) => a.id)),
+    fetchConversionPurchasesByClient(clientIds),
+  ]);
+  const today = todayYmd();
+  for (const a of appts) {
+    const purchases = a.clientId != null ? purchasesByClient.get(a.clientId) ?? [] : [];
+    result.set(
+      a.id,
+      resolveDiscoveryOutcome({ callDate: a.date, manual: manualMap.get(a.id) ?? null, conversionPurchaseDates: purchases, today })
+    );
+  }
+  return result;
 }
 
 // Timestamp of the most recent successful sync (data freshness).

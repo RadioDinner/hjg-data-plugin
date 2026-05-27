@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import {
+  clearDiscoveryOutcome,
   fetchDiscoveryCalls,
   setDiscoveryOutcome,
   type DiscoveryCall,
@@ -17,6 +18,13 @@ const OUTCOMES: { value: DiscoveryOutcomeValue; label: string }[] = [
   { value: "no_show", label: "No show" },
 ];
 
+const OUTCOME_LABEL: Record<DiscoveryOutcomeValue, string> = {
+  converted: "Converted",
+  not_converted: "Not converted",
+  pending: "Pending",
+  no_show: "No show",
+};
+
 function DiscoveryRow({
   call,
   userId,
@@ -32,6 +40,7 @@ function DiscoveryRow({
   const [followUp, setFollowUp] = useState(call.followUpOn ?? "");
   const [notes, setNotes] = useState(call.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const dirty =
     (call.outcome ?? "") !== outcome ||
@@ -55,14 +64,32 @@ function DiscoveryRow({
     }
   }
 
+  async function clearOverride() {
+    if (!call.outcomeId) return;
+    setClearing(true);
+    try {
+      await clearDiscoveryOutcome(call.outcomeId);
+      onSaved();
+    } catch (e) {
+      onError(String(e));
+      setClearing(false);
+    }
+  }
+
   return (
     <tr>
       <td>{call.date ?? "—"}</td>
       <td>{call.prospect}</td>
       <td className="muted">{call.type}</td>
       <td>
+        <span className={`pill pill--${call.resolvedOutcome}`}>{OUTCOME_LABEL[call.resolvedOutcome]}</span>
+        <div className="pill__sub">
+          {call.source === "manual" ? "Manual override" : "Auto"} · {call.resolvedReason}
+        </div>
+      </td>
+      <td>
         <select value={outcome} onChange={(e) => setOutcome(e.target.value as DiscoveryOutcomeValue | "")}>
-          <option value="">—</option>
+          <option value="">Auto ({OUTCOME_LABEL[call.autoOutcome]})</option>
           {OUTCOMES.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -85,6 +112,11 @@ function DiscoveryRow({
         <button className="btn btn--primary btn--sm" onClick={save} disabled={!canSave}>
           {saving ? "Saving…" : call.outcomeId ? "Update" : "Save"}
         </button>
+        {call.outcomeId && (
+          <button className="btn btn--sm" onClick={clearOverride} disabled={clearing} style={{ marginLeft: 6 }}>
+            {clearing ? "…" : "Clear"}
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -116,8 +148,9 @@ export function DiscoveryView() {
     <section className="card">
       <h2>Discovery calls</h2>
       <p className="view__hint">
-        Every discovery call synced from CoachAccountable. Record the outcome of each one; those outcomes drive the
-        conversion funnel on the Metrics tab.
+        Every discovery call synced from CoachAccountable. Status is computed automatically — a call converts when the
+        prospect buys JumpStart Your Freedom (Waiting List) on or after the call, stays pending for 30 days otherwise,
+        then becomes not converted. Set an outcome here to override (e.g. a no-show), or Clear to revert to automatic.
       </p>
 
       <div className="view__controls">
@@ -146,7 +179,8 @@ export function DiscoveryView() {
                 <th>Date</th>
                 <th>Prospect</th>
                 <th>Type</th>
-                <th>Outcome</th>
+                <th>Status</th>
+                <th>Override</th>
                 <th>Follow up</th>
                 <th>Notes</th>
                 <th></th>
@@ -164,7 +198,7 @@ export function DiscoveryView() {
               ))}
               {calls.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted">
+                  <td colSpan={8} className="muted">
                     No discovery calls for {year}. Run a sync on the Admin tab if you expect some.
                   </td>
                 </tr>
