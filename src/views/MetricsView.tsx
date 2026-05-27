@@ -632,19 +632,14 @@ export function MetricsView() {
               title="Resource engagement"
               onExplore={exploreManual}
               extra={
-                <>
-                  <p className="view__hint" style={{ marginTop: 0 }}>
-                    Manually entered on the Admin tab — totals for the selected range.
-                  </p>
-                  <div className="stat-row" style={{ marginBottom: 12 }}>
-                    {MANUAL_METRICS.map((m) => (
-                      <div className="stat" key={m.key}>
-                        <span className="stat__value">{num(manualTotals.get(m.key) ?? 0)}</span>
-                        <span className="stat__label">{m.short}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <div className="stat-row" style={{ marginBottom: 12 }}>
+                  {MANUAL_METRICS.map((m) => (
+                    <div className="stat" key={m.key}>
+                      <span className="stat__value">{num(manualTotals.get(m.key) ?? 0)}</span>
+                      <span className="stat__label">{m.short}</span>
+                    </div>
+                  ))}
+                </div>
               }
             >
               <BarChart data={manualData}>
