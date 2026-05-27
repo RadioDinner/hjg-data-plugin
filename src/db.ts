@@ -285,6 +285,80 @@ export async function fetchLastSyncedAt(): Promise<string | null> {
   return (data?.[0]?.finished_at as string | undefined) ?? null;
 }
 
+// --- Manual metrics (board numbers with no CoachAccountable source) ---
+// Staff enter one count per metric per month on the Admin tab; the Metrics
+// dashboard sums them over its date range. Add a metric here (key must match
+// what's stored in manual_metrics.metric) and it shows up in both places — no
+// migration needed.
+
+export interface ManualMetricDef {
+  key: string;
+  label: string; // full label (charts, tables, Admin field)
+  short: string; // compact KPI-card label
+}
+
+export const MANUAL_METRICS: ManualMetricDef[] = [
+  { key: "triggers_pdf_downloads", label: "“Identify Your Triggers” downloads", short: "Triggers PDF downloads" },
+  { key: "sast_worksheets", label: "SAST worksheets completed", short: "SAST worksheets" },
+];
+
+export interface ManualMetricRow {
+  id: string;
+  metric: string;
+  periodMonth: string; // YYYY-MM-01
+  value: number;
+  notes: string | null;
+}
+
+// First day of the month containing the given YYYY-MM-DD (or YYYY-MM) date.
+function monthStart(date: string): string {
+  return `${date.slice(0, 7)}-01`;
+}
+
+// Every manual-metric entry whose month falls within [from, to] (inclusive).
+// period_month is always a day-1 date, so comparing it directly against the
+// range bounds buckets each entry into the right month.
+export async function fetchManualMetrics(from: string, to: string): Promise<ManualMetricRow[]> {
+  const { data, error } = await supabase
+    .from("manual_metrics")
+    .select("id,metric,period_month,value,notes")
+    .gte("period_month", monthStart(from))
+    .lte("period_month", to)
+    .order("period_month", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: string; metric: string; period_month: string; value: number; notes: string | null }[]).map(
+    (r) => ({ id: r.id, metric: r.metric, periodMonth: r.period_month, value: r.value, notes: r.notes })
+  );
+}
+
+// Values for a single month (YYYY-MM), keyed by metric — prefills the editor.
+export async function fetchManualMetricsForMonth(monthYm: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from("manual_metrics")
+    .select("metric,value")
+    .eq("period_month", monthStart(monthYm));
+  if (error) throw new Error(error.message);
+  const out = new Map<string, number>();
+  for (const r of (data ?? []) as { metric: string; value: number }[]) out.set(r.metric, r.value);
+  return out;
+}
+
+// Insert or update the count for one metric in one month (YYYY-MM).
+export async function upsertManualMetric(
+  createdBy: string,
+  metric: string,
+  monthYm: string,
+  value: number
+): Promise<void> {
+  const { error } = await supabase
+    .from("manual_metrics")
+    .upsert(
+      { metric, period_month: monthStart(monthYm), value, created_by: createdBy || null },
+      { onConflict: "metric,period_month" }
+    );
+  if (error) throw new Error(error.message);
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
@@ -294,6 +368,7 @@ export const RAW_TABLES = [
   "ca_offerings",
   "ca_offering_submissions",
   "discovery_outcomes",
+  "manual_metrics",
   "sync_runs",
 ] as const;
 

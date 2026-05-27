@@ -12,10 +12,13 @@ import {
   YAxis,
 } from "recharts";
 import {
+  MANUAL_METRICS,
   fetchLastSyncedAt,
+  fetchManualMetrics,
   fetchOutcomesByAppointment,
   fetchRangeAppointments,
   type DiscoveryOutcomeValue,
+  type ManualMetricRow,
   type RangeAppt,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
@@ -164,6 +167,7 @@ export function MetricsView() {
   const [to, setTo] = useState(INITIAL.to);
   const [preset, setPreset] = useState<PresetKey | "custom">("this_year");
   const [appts, setAppts] = useState<RangeAppt[]>([]);
+  const [manual, setManual] = useState<ManualMetricRow[]>([]);
   const [outcomes, setOutcomes] = useState<Map<number, DiscoveryOutcomeValue>>(new Map());
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
   const [meetingsMode, setMeetingsMode] = useState<"total" | "compare">("total");
@@ -194,6 +198,20 @@ export function MetricsView() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchManualMetrics(from, to)
+      .then((rows) => {
+        if (!cancelled) setManual(rows);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
       });
     return () => {
       cancelled = true;
@@ -294,6 +312,38 @@ export function MetricsView() {
     [byMonth, buckets, selectedTypeList, selectedTypes]
   );
 
+  const manualByMonth = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const r of manual) {
+      const k = r.periodMonth.slice(0, 7);
+      let inner = m.get(k);
+      if (!inner) {
+        inner = new Map();
+        m.set(k, inner);
+      }
+      inner.set(r.metric, (inner.get(r.metric) ?? 0) + r.value);
+    }
+    return m;
+  }, [manual]);
+
+  const manualData = useMemo(
+    () =>
+      buckets.map((b) => {
+        const inner = manualByMonth.get(b.key);
+        const row: Record<string, number | string> = { month: b.label };
+        for (const def of MANUAL_METRICS) row[def.key] = inner?.get(def.key) ?? 0;
+        return row;
+      }),
+    [buckets, manualByMonth]
+  );
+
+  const manualTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const def of MANUAL_METRICS) totals.set(def.key, 0);
+    for (const r of manual) totals.set(r.metric, (totals.get(r.metric) ?? 0) + r.value);
+    return totals;
+  }, [manual]);
+
   const kpis = {
     discoveryTotal: discovery.length,
     meetingsTotal: selectedMentoring.length,
@@ -359,6 +409,13 @@ export function MetricsView() {
       title: "Mentors — chart data",
       columns: ["Month", "Mentors"],
       rows: data.map((d) => [d.month, d.Mentors]),
+    });
+  }
+  function exploreManual() {
+    setExplore({
+      title: "Resource engagement — chart data",
+      columns: ["Month", ...MANUAL_METRICS.map((m) => m.label)],
+      rows: manualData.map((r) => [r.month as string, ...MANUAL_METRICS.map((m) => (r[m.key] as number) ?? 0)]),
     });
   }
 
@@ -569,6 +626,39 @@ export function MetricsView() {
               </div>
             </div>
           </section>
+
+          <div style={{ marginTop: 18 }}>
+            <ChartCard
+              title="Resource engagement"
+              onExplore={exploreManual}
+              extra={
+                <>
+                  <p className="view__hint" style={{ marginTop: 0 }}>
+                    Manually entered on the Admin tab — totals for the selected range.
+                  </p>
+                  <div className="stat-row" style={{ marginBottom: 12 }}>
+                    {MANUAL_METRICS.map((m) => (
+                      <div className="stat" key={m.key}>
+                        <span className="stat__value">{num(manualTotals.get(m.key) ?? 0)}</span>
+                        <span className="stat__label">{m.short}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              }
+            >
+              <BarChart data={manualData}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="month" {...axisProps} />
+                <YAxis allowDecimals={false} width={28} {...axisProps} />
+                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {MANUAL_METRICS.map((m, i) => (
+                  <Bar key={m.key} dataKey={m.key} name={m.label} fill={PALETTE[i % PALETTE.length]} radius={[4, 4, 0, 0]} />
+                ))}
+              </BarChart>
+            </ChartCard>
+          </div>
         </>
       )}
 
