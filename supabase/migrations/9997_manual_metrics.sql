@@ -23,13 +23,19 @@ create table if not exists manual_metrics (
 );
 create unique index if not exists uq_manual_metric_period on manual_metrics (metric, period_month);
 create index if not exists idx_manual_metric_period on manual_metrics (period_month);
+drop trigger if exists trg_manual_metrics_updated on manual_metrics;
 create trigger trg_manual_metrics_updated before update on manual_metrics
   for each row execute function set_updated_at();
 
 -- RLS: signed-in staff read everything and read/write their own entries (same
--- shape as the other HJG-owned tables).
+-- shape as the other HJG-owned tables). drop-if-exists keeps this script
+-- re-runnable in the SQL Editor.
 alter table manual_metrics enable row level security;
+drop policy if exists manual_metrics_read on manual_metrics;
 create policy manual_metrics_read on manual_metrics for select to authenticated using (true);
+drop policy if exists manual_metrics_ins on manual_metrics;
 create policy manual_metrics_ins  on manual_metrics for insert to authenticated with check (true);
+drop policy if exists manual_metrics_upd on manual_metrics;
 create policy manual_metrics_upd  on manual_metrics for update to authenticated using (true);
+drop policy if exists manual_metrics_del on manual_metrics;
 create policy manual_metrics_del  on manual_metrics for delete to authenticated using (created_by = auth.uid());
