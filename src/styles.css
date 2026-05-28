@@ -191,17 +191,18 @@ body {
 .seg__btn--active { background: var(--accent); color: #03283a; font-weight: 600; }
 .seg__btn + .seg__btn { border-left: 1px solid var(--line); }
 
-/* --- card header (title + explore) --- */
+/* --- card header (title + view toggle) --- */
 .card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; }
 .card__head h2 { margin: 0; }
 
-/* --- explore modal --- */
-.modal { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.7); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
-.modal__card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 760px; max-height: 85vh; display: flex; flex-direction: column; }
-.modal__head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
-.modal__head h2 { margin: 0; font-size: 16px; }
-.modal__body { padding: 4px 20px; overflow: auto; }
-.modal__foot { padding: 10px 20px; border-top: 1px solid var(--line); font-size: 12px; }
+/* --- ChartCard split: chart + inline table, side-by-side on wide screens --- */
+.chart-card__split { display: block; }
+.chart-card__chart { width: 100%; height: 240px; }
+.chart-card__table { max-height: 240px; overflow: auto; }
+.chart-card__split--both { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+@media (min-width: 960px) {
+  .chart-card__split--both { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
 
 /* --- meeting-type filter --- */
 .type-filter { margin-bottom: 14px; }

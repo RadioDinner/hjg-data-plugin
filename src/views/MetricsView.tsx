@@ -22,8 +22,11 @@ import {
   type RangeAppt,
   type ResolvedOutcome,
 } from "../db";
-import { ExploreModal } from "../components/ExploreModal";
 import { num, pct } from "../format";
+
+type ChartCardCell = string | number;
+type ChartCardTable = { columns: string[]; rows: ChartCardCell[][] };
+type ChartCardView = "graph" | "table" | "both";
 
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
@@ -117,28 +120,93 @@ function ChartCard({
   title,
   children,
   extra,
-  onExplore,
+  table,
 }: {
   title: string;
   children: ReactElement;
   extra?: ReactElement;
-  onExplore?: () => void;
+  table?: ChartCardTable;
 }) {
+  const storageKey = `hjg.chartcard.view:${title}`;
+  const [view, setView] = useState<ChartCardView>(() => {
+    if (!table || typeof window === "undefined") return "both";
+    const saved = window.localStorage.getItem(storageKey);
+    return saved === "graph" || saved === "table" || saved === "both" ? saved : "both";
+  });
+  useEffect(() => {
+    if (!table || typeof window === "undefined") return;
+    window.localStorage.setItem(storageKey, view);
+  }, [storageKey, view, table]);
+
+  const showGraph = !table || view !== "table";
+  const showTable = !!table && view !== "graph";
+
   return (
     <section className="card">
       <div className="card__head">
         <h2>{title}</h2>
-        {onExplore && (
-          <button className="btn btn--sm" onClick={onExplore}>
-            Explore
-          </button>
+        {table && (
+          <div className="seg" role="tablist" aria-label="Card view">
+            {(["graph", "table", "both"] as const).map((k) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={view === k}
+                className={`seg__btn ${view === k ? "seg__btn--active" : ""}`}
+                onClick={() => setView(k)}
+              >
+                {k === "graph" ? "Graph" : k === "table" ? "Table" : "Both"}
+              </button>
+            ))}
+          </div>
         )}
       </div>
       {extra}
-      <div style={{ width: "100%", height: 240 }}>
-        <ResponsiveContainer>{children}</ResponsiveContainer>
+      <div className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}>
+        {showGraph && (
+          <div className="chart-card__chart">
+            <ResponsiveContainer>{children}</ResponsiveContainer>
+          </div>
+        )}
+        {showTable && table && (
+          <div className="chart-card__table table-scroll">
+            <ChartDataTable columns={table.columns} rows={table.rows} />
+          </div>
+        )}
       </div>
     </section>
+  );
+}
+
+function ChartDataTable({ columns, rows }: ChartCardTable) {
+  return (
+    <table className="table">
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th key={c}>{c}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {row.map((cell, j) => (
+              <td key={j} className={typeof cell === "number" ? "num" : ""}>
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={columns.length} className="muted">
+              No rows.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }
 
@@ -176,9 +244,6 @@ export function MetricsView() {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [explore, setExplore] = useState<{ title: string; columns: string[]; rows: (string | number)[][] } | null>(
-    null
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -377,50 +442,49 @@ export function MetricsView() {
     });
   }
 
-  // Explore shows the aggregated values that build each chart (per-month series).
-  function exploreDiscovery() {
-    setExplore({
-      title: "Discovery calls — chart data",
+  // Each table mirrors the exact per-month numbers that build its chart, so the
+  // graph + table panels on every card stay in sync as filters and ranges move.
+  const discoveryTable = useMemo<ChartCardTable>(
+    () => ({
       columns: ["Month", "Phone", "Zoom", "Total"],
       rows: data.map((d) => [d.month, d.Phone, d.Zoom, d.Phone + d.Zoom]),
-    });
-  }
-  function exploreMeetings() {
-    if (meetingsMode === "compare") {
-      setExplore({
-        title: "Mentee meetings by type — chart data",
-        columns: ["Month", ...selectedTypeList.map(shortType)],
-        rows: compareData.map((r) => [r.month as string, ...selectedTypeList.map((n) => (r[n] as number) ?? 0)]),
-      });
-    } else {
-      setExplore({
-        title: "Mentee meetings — chart data",
-        columns: ["Month", "Meetings"],
-        rows: data.map((d) => [d.month, d.Meetings]),
-      });
-    }
-  }
-  function exploreMentees() {
-    setExplore({
-      title: "Active mentees — chart data",
+    }),
+    [data]
+  );
+  const meetingsTable = useMemo<ChartCardTable>(
+    () =>
+      meetingsMode === "compare"
+        ? {
+            columns: ["Month", ...selectedTypeList.map(shortType)],
+            rows: compareData.map((r) => [r.month as string, ...selectedTypeList.map((n) => (r[n] as number) ?? 0)]),
+          }
+        : {
+            columns: ["Month", "Meetings"],
+            rows: data.map((d) => [d.month, d.Meetings]),
+          },
+    [meetingsMode, data, compareData, selectedTypeList]
+  );
+  const menteesTable = useMemo<ChartCardTable>(
+    () => ({
       columns: ["Month", "Active mentees"],
       rows: data.map((d) => [d.month, d.Mentees]),
-    });
-  }
-  function exploreMentors() {
-    setExplore({
-      title: "Mentors — chart data",
+    }),
+    [data]
+  );
+  const mentorsTable = useMemo<ChartCardTable>(
+    () => ({
       columns: ["Month", "Mentors"],
       rows: data.map((d) => [d.month, d.Mentors]),
-    });
-  }
-  function exploreManual() {
-    setExplore({
-      title: "Resource engagement — chart data",
+    }),
+    [data]
+  );
+  const manualTable = useMemo<ChartCardTable>(
+    () => ({
       columns: ["Month", ...MANUAL_METRICS.map((m) => m.label)],
       rows: manualData.map((r) => [r.month as string, ...MANUAL_METRICS.map((m) => (r[m.key] as number) ?? 0)]),
-    });
-  }
+    }),
+    [manualData]
+  );
 
   const typeFilter = (
     <div className="type-filter">
@@ -570,7 +634,7 @@ export function MetricsView() {
           </section>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Discovery calls" onExplore={exploreDiscovery}>
+            <ChartCard title="Discovery calls" table={discoveryTable}>
               <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -584,13 +648,13 @@ export function MetricsView() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Mentee meetings" extra={meetingsExtra} onExplore={exploreMeetings}>
+            <ChartCard title="Mentee meetings" extra={meetingsExtra} table={meetingsTable}>
               {meetingsChart}
             </ChartCard>
           </div>
 
           <div className="grid" style={{ marginTop: 18 }}>
-            <ChartCard title="Active mentees" onExplore={exploreMentees}>
+            <ChartCard title="Active mentees" table={menteesTable}>
               <LineChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -600,7 +664,7 @@ export function MetricsView() {
               </LineChart>
             </ChartCard>
 
-            <ChartCard title="Mentors" onExplore={exploreMentors}>
+            <ChartCard title="Mentors" table={mentorsTable}>
               <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -632,7 +696,7 @@ export function MetricsView() {
           <div style={{ marginTop: 18 }}>
             <ChartCard
               title="Resource engagement"
-              onExplore={exploreManual}
+              table={manualTable}
               extra={
                 <div className="stat-row" style={{ marginBottom: 12 }}>
                   {MANUAL_METRICS.map((m) => (
@@ -658,8 +722,6 @@ export function MetricsView() {
           </div>
         </>
       )}
-
-      {explore && <ExploreModal {...explore} onClose={() => setExplore(null)} />}
     </section>
   );
 }

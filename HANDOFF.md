@@ -4,47 +4,54 @@ Working notes for resuming this project in a future session. Last updated
 2026-05-28.
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
-> where **every metric is viewable as a graph AND a table simultaneously** (not
-> just behind the Explore modal). See `CLAUDE.md` for the standing goals, and
-> `CSHARP_PORT.md` for the separate C# learning-rebuild track.
+> where **every metric is viewable as a graph AND a table simultaneously**. ✅
+> That core layout shift just shipped (see "Resume here" below). See `CLAUDE.md`
+> for the standing goals, and `CSHARP_PORT.md` for the separate C# learning-rebuild
+> track.
 >
-> **Shipped since last handoff:** automated discovery→conversion (no longer
-> manual-only), manual board metrics, and a Resource-engagement card. Everything
-> is merged to `main`, which is now the default branch.
+> **Shipped since last handoff:** automated discovery→conversion, manual board
+> metrics, Resource-engagement card, and now the **inline graph+table panels on
+> every ChartCard** with a Graph/Table/Both toggle (replaces the Explore modal).
 
 ## Resume here (live session state — 2026-05-28)
 
-Picking this up mid-conversation on a new device — start with this section.
+Picking this up cold — start with this section.
 
-**Repo state:** clean. Everything is on `main` (the default + production branch);
-working tree clean; the old `claude/*` work branches have been deleted, so the
-remote is just `main`. Latest commit `05cf717`.
+**Repo state:** on branch `claude/affectionate-pasteur-UaBv4` (working tree
+clean), one commit ahead of `main`. The graphs-AND-tables north-star change is
+on this branch and ready to merge.
 
-**This session's commits (newest first):**
-- `05cf717` — docs: C# port plan, handoff/session conventions, handoff refresh
-- `46f6072` — automate discovery→conversion from JumpStart purchases
-- `dd2038e` — drop the hint line on the Resource engagement card
-- `d719913` / `5af5071` — make the `manual_metrics` migration re-runnable
-- `862b904` — manual board metrics (table + Admin entry + Metrics card)
+**This session's commits (newest first, on top of `main` at `05cf717`):**
+- (this session) — graphs+tables: inline table panel on every ChartCard with
+  Graph/Table/Both toggle (default Both, persisted per card), side-by-side at
+  ≥960px and stacked below; removes `ExploreModal`
+- `1be071b` — handoff: live session-resume state
 
-**▶ DECISION PENDING — this blocks the next build (the north star).**
-Make every metric viewable as a **graph AND a table at once**. Agreed design:
-turn the per-card **Explore modal** into an **inline table panel** on every
-`ChartCard`, with a `Graph / Table / Both` toggle (default **Both**), reusing the
-existing per-chart data builders in `MetricsView.tsx` (`exploreDiscovery`,
-`exploreMeetings`, `exploreMentees`, `exploreMentors`, `exploreManual`) so the
-chart and the exact-numbers table stay in sync. Apply it consistently to all
-Metrics cards. Tradeoff: vertical density (mitigated by the toggle + remembering
-the choice). Follow-ons, not v1: sortable/filterable tables, CSV export.
-- **Open question to answer first:** table **stacked below** each chart (works at
-  any width) vs **side-by-side** (denser, needs a wide screen). Answer this and
-  the build starts.
+**▶ Next step on the north star — pick what to lock in next:**
+The v1 split is in. Natural follow-ons, in rough order:
+1. **Sortable / filterable tables** (sort by column, free-text filter per card).
+2. **CSV export** per table (one-line download of the per-month rows).
+3. Apply the same graph+table treatment to the **Discovery → conversion** panel
+   (today it's stat-row only — could add a per-month conversion-rate series with
+   a matching table).
+4. **"Calls held" toggle** for discovery (vs signup date) — long-standing.
+
+**Verification status (this session):** `npm run typecheck`, `npm run verify`,
+and `npm run build` all pass. **The UI was NOT exercised in a real browser**
+this session — the remote container is headless and the app is Supabase-auth-
+gated, so a quick manual pass on a real machine is wanted before merging:
+- on each Metrics card, the Graph/Table/Both toggle flips the panel and the
+  choice survives a reload (stored in `localStorage` under
+  `hjg.chartcard.view:<title>`);
+- at wide widths (≥960px) the table sits to the right of the chart; at narrower
+  widths it stacks below;
+- the Mentee-meetings card's Total/Compare toggle and type filter still drive
+  both the chart and the new inline table.
 
 **Other offered-but-not-done (pick up if wanted):**
 - A **`Stop` hook** in `settings.json` to *auto-enforce* "update HANDOFF.md each
   session" (today it's only a soft `CLAUDE.md` instruction). Can be set up via the
   config skill.
-- **"Calls held" toggle** for discovery (vs signup date) — long-standing.
 
 **Separate track — C# rebuild:** see `CSHARP_PORT.md`. Not started; begin with the
 pure-logic port (`Config`, `Conversion`) + xUnit tests, keeping this app as the
@@ -116,7 +123,6 @@ Server endpoints (`lib/http.ts` `withApi`, Supabase-JWT auth):
 | `src/views/DiscoveryView.tsx` | Lists discovery calls; record an outcome per call. |
 | `src/views/RawDataView.tsx` | Browse `ca_*` / `sync_runs` tables. |
 | `src/views/AdminView.tsx` | "Sync now", run history, budget/sync settings. |
-| `src/components/ExploreModal.tsx` | Generic table modal for card drill-downs. |
 | `supabase/migrations/*.sql` | DB schema. **Descending numbering** (see below). |
 | `scripts/verify-metrics.ts` | Validates categorization/metric logic vs SPEC §4. |
 
@@ -126,10 +132,13 @@ Server endpoints (`lib/http.ts` `withApi`, Supabase-JWT auth):
   this year, last 12 mo, all; plus custom From/To). KPI cards + charts:
   Discovery calls (stacked phone/zoom + total in tooltip), Mentee meetings (with
   a meeting-type checkbox filter and a **Total / Compare types** toggle), Active
-  mentees (line), Mentors (bar), and a Discovery→conversion panel. Each card's
-  **Explore** button shows that chart's per-month data as a table. There's also a
-  **Resource engagement** card (totals + per-month bars for the manual board
-  metrics). A "Data as of <last sync>" line shows freshness.
+  mentees (line), Mentors (bar), and a Discovery→conversion panel. **Every
+  ChartCard has an inline Graph / Table / Both toggle** (default Both, choice
+  persisted per card in `localStorage`) so the chart and the exact per-month
+  numbers are visible together — side-by-side at ≥960px, stacked below on
+  narrower screens. There's also a **Resource engagement** card (totals +
+  per-month bars for the manual board metrics). A "Data as of <last sync>" line
+  shows freshness.
 - **Discovery** — discovery-call appointments. Outcome is now **computed
   automatically** (see "Conversion automation" below): a **Status** column shows
   the resolved outcome + an Auto/Manual tag + a plain reason. Staff can still
@@ -207,14 +216,17 @@ SYNC_CRON_SECRET=            # optional; for the (dormant) scheduled sync
 
 ## Current branch / deploy
 
-- **`main` is the default + production branch** and has everything merged. The old
-  `claude/*` work branches have been deleted — the remote is just `main`. Pushes
-  to `main` deploy to Vercel production.
+- Active branch: **`claude/affectionate-pasteur-UaBv4`** (one commit ahead of
+  `main` — the graphs-AND-tables work). Deploys as a Vercel **Preview**. Merge
+  to `main` to ship to production.
+- `main` is still the default + production branch. Pushes to `main` deploy to
+  Vercel production.
 
 ## Immediate next step
 
-See **"Resume here"** at the top — the north-star graphs-AND-tables dashboard is
-next, blocked only on the stacked-vs-side-by-side layout choice.
+See **"Resume here"** at the top — the graphs-AND-tables layout is in. Next:
+sortable/filterable tables and CSV export, or extend the treatment to the
+Discovery → conversion panel.
 
 Operational (not code): confirm migration `9997_manual_metrics.sql` is fully
 applied in Supabase (it was run once — the re-runnable version drops/recreates the
