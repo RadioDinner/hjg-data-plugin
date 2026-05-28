@@ -1,7 +1,7 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-05-27.
+2026-05-28.
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously** (not
@@ -11,6 +11,49 @@ Working notes for resuming this project in a future session. Last updated
 > **Shipped since last handoff:** automated discovery→conversion (no longer
 > manual-only), manual board metrics, and a Resource-engagement card. Everything
 > is merged to `main`, which is now the default branch.
+
+## Resume here (live session state — 2026-05-28)
+
+Picking this up mid-conversation on a new device — start with this section.
+
+**Repo state:** clean. Everything is on `main` (the default + production branch);
+working tree clean; the old `claude/*` work branches have been deleted, so the
+remote is just `main`. Latest commit `05cf717`.
+
+**This session's commits (newest first):**
+- `05cf717` — docs: C# port plan, handoff/session conventions, handoff refresh
+- `46f6072` — automate discovery→conversion from JumpStart purchases
+- `dd2038e` — drop the hint line on the Resource engagement card
+- `d719913` / `5af5071` — make the `manual_metrics` migration re-runnable
+- `862b904` — manual board metrics (table + Admin entry + Metrics card)
+
+**▶ DECISION PENDING — this blocks the next build (the north star).**
+Make every metric viewable as a **graph AND a table at once**. Agreed design:
+turn the per-card **Explore modal** into an **inline table panel** on every
+`ChartCard`, with a `Graph / Table / Both` toggle (default **Both**), reusing the
+existing per-chart data builders in `MetricsView.tsx` (`exploreDiscovery`,
+`exploreMeetings`, `exploreMentees`, `exploreMentors`, `exploreManual`) so the
+chart and the exact-numbers table stay in sync. Apply it consistently to all
+Metrics cards. Tradeoff: vertical density (mitigated by the toggle + remembering
+the choice). Follow-ons, not v1: sortable/filterable tables, CSV export.
+- **Open question to answer first:** table **stacked below** each chart (works at
+  any width) vs **side-by-side** (denser, needs a wide screen). Answer this and
+  the build starts.
+
+**Other offered-but-not-done (pick up if wanted):**
+- A **`Stop` hook** in `settings.json` to *auto-enforce* "update HANDOFF.md each
+  session" (today it's only a soft `CLAUDE.md` instruction). Can be set up via the
+  config skill.
+- **"Calls held" toggle** for discovery (vs signup date) — long-standing.
+
+**Separate track — C# rebuild:** see `CSHARP_PORT.md`. Not started; begin with the
+pure-logic port (`Config`, `Conversion`) + xUnit tests, keeping this app as the
+reference.
+
+**Orient on the new device:** `npm install && npm run typecheck && npm run verify
+&& npm run build`, then read `CLAUDE.md` (conventions + north star), this file,
+and `CSHARP_PORT.md`. To actually *run* the app you need the Supabase + CA env
+vars (see "Environment variables" below).
 
 ## What this is
 
@@ -164,23 +207,18 @@ SYNC_CRON_SECRET=            # optional; for the (dormant) scheduled sync
 
 ## Current branch / deploy
 
-- **`main` is the default + production branch** and has everything merged. The
-  old `claude/*` work branches were consolidated into `main` (a couple still
-  exist on the remote and can be deleted from the GitHub UI — the sandbox lacks
-  delete permission).
+- **`main` is the default + production branch** and has everything merged. The old
+  `claude/*` work branches have been deleted — the remote is just `main`. Pushes
+  to `main` deploy to Vercel production.
 
 ## Immediate next step
 
-Top priority is the **north star**: make every metric viewable as a **graph AND
-a table at the same time** (today tables are only behind the per-card *Explore*
-modal). Likely approach: give each `ChartCard` an inline graph/table toggle or a
-twin table panel, generalize the Explore data builders into a reusable shape, and
-keep it consistent across all cards. Confirm the exact interaction with the user
-before building.
+See **"Resume here"** at the top — the north-star graphs-AND-tables dashboard is
+next, blocked only on the stacked-vs-side-by-side layout choice.
 
-Also pending (operational, not code): apply migration `9997_manual_metrics.sql`
-in Supabase if it isn't already (it was made re-runnable), then staff can enter
-manual metrics.
+Operational (not code): confirm migration `9997_manual_metrics.sql` is fully
+applied in Supabase (it was run once — the re-runnable version drops/recreates the
+trigger + policies cleanly), then staff can enter manual metrics on the Admin tab.
 
 ## Open items / TODO
 
