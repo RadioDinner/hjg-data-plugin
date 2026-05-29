@@ -164,12 +164,15 @@ function ChartCard({
       {extra}
       <div className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}>
         {showGraph && (
-          <div className="chart-card__chart">
-            <ResponsiveContainer>{children}</ResponsiveContainer>
+          <div style={{ flex: "1 1 0", minWidth: 0, width: "100%", height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
           </div>
         )}
         {showTable && table && (
-          <div className="chart-card__table table-scroll">
+          <div
+            className="table-scroll"
+            style={{ flex: "1 1 0", minWidth: 0, maxHeight: 240, overflowY: "auto" }}
+          >
             <ChartDataTable columns={table.columns} rows={table.rows} />
           </div>
         )}
