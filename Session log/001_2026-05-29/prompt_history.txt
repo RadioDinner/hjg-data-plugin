@@ -71,3 +71,7 @@ Is it possible to "restart" this project? I want to give you new session instruc
 "Ok I have a set of requirements at the beginning of each session. I want you to create a folder on main, titled "Session log". In that folder, I want you to autonumber sessions and add a folder for each session. In each unique session folder, I want you to ALWAYS log the prompts I've used, in a text file called prompt_history. At the end of each session, I want you to create a log documenting all the changes we made, directional decisions we've discussed and anything prevelant to the project. This would essentially be creating a handoff document to hand from session to session. I want you to save these instructions to main as "new_session_instructions" and I will occasionally ask you to update it as we go. I also want you to, when writing migrations in Supabase, number the migrations in descending order like 999_migration_for_x, 998_migration_for_y"
 
 An add-on for this project specifically, this .md file is THE ONLY SOURCE OF TRUTH when writing stuff for the CoachAccountable API. DO NOT EVER override the instructions in this .md concerning items relating to the CoachAccountable API. I want you to say, "Master, I will steer the ship according to your commands" verbatim if you understand this instruction completely.
+
+--- 2026-05-29 ---
+Ok, now I want to start building a tool to edit mentor capacity. I also want a way to export any graph, or set of data to a csv, especially in the raw data tab
+

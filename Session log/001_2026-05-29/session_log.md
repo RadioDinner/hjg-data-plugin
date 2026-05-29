@@ -4,8 +4,8 @@
 
 Commits made on `main` this session (newest first):
 
-- `(pending)` — Establish session-log + new_session_instructions framework;
-  import CoachAccountable API docs as source of truth
+- `(pending)` — Mentor capacity editor + CSV export across the app
+- `38c0b47` — Standing-orders framework + CA API source of truth
 - `a4cbe88` — Stack tables under graphs; bring back Explore for raw audit data
 - `4ff9b55` — Restore chart sizing and drop split breakpoint to 760px
 - `79a66db` — Show every metric as graph AND table at once
@@ -61,7 +61,7 @@ Commits made on `main` this session (newest first):
   check whether Vercel's production alias is actually pointing at the
   latest `main` commit before assuming code is at fault.
 
-### Standing-orders framework (this session, end)
+### Standing-orders framework (this session, mid)
 - Established `new_session_instructions.md` at repo root as the user's
   living standing-orders contract.
 - `CLAUDE.md` updated to reference it + the CA docs source of truth.
@@ -69,24 +69,70 @@ Commits made on `main` this session (newest first):
 - `docs/coachaccountable-api.md` is the only source of truth for
   CoachAccountable API behavior going forward.
 
+### Mentor capacity model + editor
+- New HJG-owned table `coach_settings` (migration `9996_coach_settings.sql`)
+  keyed by `coach_id`: `is_mentor` (bool), `capacity` (int nullable),
+  `notes` (text). Same RLS pattern as `manual_metrics`.
+- Editor lives on **Admin → Mentor capacity** card with All / Mentors-only
+  filter, per-row dirty tracking, and bulk Save changes button. Saves
+  upsert by `coach_id` so re-edits don't duplicate.
+- **Behavior knob on Metrics**: when *any* `coach_settings.is_mentor=true`
+  rows exist, the Mentors metric (KPI + per-month bar + aggregated table)
+  is restricted to that whitelist client-side. Empty roster = no filter
+  (current behavior preserved), so the editor activates incrementally.
+- New **Mentor capacity utilization** card on Metrics: stat row
+  (mentors flagged, mentees in range, total capacity, overall utilization)
+  + per-mentor table sorted by utilization desc. Has its own Explore +
+  Export CSV buttons.
+- `exploreMentorsRaw` now keys by `coachId` (not name) and adds a
+  "Flagged is_mentor?" column so staff can audit which coaches to flag.
+
+### CSV export
+- New `src/csv.ts`: RFC4180 quoting + UTF-8 BOM (Excel-friendly) + filename
+  slugify with today's date. Exposes `toCsv` + `downloadCsv`.
+- Export CSV button added in three places:
+  - Every **ChartCard** header — downloads the per-month aggregated table.
+  - **Explore modal** header — downloads the raw audit rows currently shown.
+  - **Raw data tab** header — `fetchAllRows()` pages through the selected
+    `ca_*` / `discovery_outcomes` / `coach_settings` / etc. table and exports
+    every row. The on-screen view still shows the first 100 for speed.
+- `RAW_TABLES` now includes `coach_settings`.
+
 ## Open questions / next step
 
+- **Apply migration `9996_coach_settings.sql`** in the Supabase SQL Editor
+  before the Admin → Mentor capacity card or the new dashboard utilization
+  card will work (they'll just error / show empty until the table exists).
 - Vercel env vars: should double-check that all required vars (SUPABASE_*,
   CA_API_*, etc.) are scoped to **Production** (not just Preview), now
   that production actually deploys from `main`. The handoff calls this
   out and it bit us once already.
 - Bundle warning still cosmetic (recharts > 500 kB) — no action needed yet.
 - Follow-ons offered but not done: sortable / filterable inline tables,
-  CSV export, "Calls held" toggle for discovery (vs signup date).
+  "Calls held" toggle for discovery (vs signup date), retire the unused
+  `MENTOR_COACH_ID_WHITELIST` from `lib/config.ts`.
 
 ## Files touched this session
 
 - `src/views/MetricsView.tsx` — ChartCard refactor; per-card tables; raw
-  Explore builders.
-- `src/components/ExploreModal.tsx` — deleted in v1, restored for raw data.
+  Explore builders; mentor filter; Mentor capacity utilization card;
+  Export CSV button on every ChartCard.
+- `src/views/AdminView.tsx` — Mentor capacity editor card with
+  All/Mentors-only filter, per-row dirty tracking, bulk save.
+- `src/views/RawDataView.tsx` — Export CSV button that pages through
+  the full table; `coach_settings` in the table picker.
+- `src/components/ExploreModal.tsx` — deleted in v1, restored for raw
+  data, now with Export CSV button.
+- `src/csv.ts` — new RFC4180 CSV utility + download helper.
+- `src/db.ts` — `fetchCoachesWithSettings`, `fetchMentorCoachIds`,
+  `upsertCoachSettings`, `fetchAllRows` for export; `coach_settings`
+  added to `RAW_TABLES`.
 - `src/styles.css` — chart-card__split layout; modal styles back; no
   internal table scroll.
-- `HANDOFF.md` — refreshed to reflect graphs+tables shipped.
+- `supabase/migrations/9996_coach_settings.sql` — new HJG-owned table
+  with re-runnable RLS + trigger.
+- `HANDOFF.md` — refreshed (graphs+tables shipped; mentor inflation
+  marked addressed by `coach_settings`).
 - `CLAUDE.md` — references new standing-orders file + CA docs.
 - `new_session_instructions.md` — created (root).
 - `docs/coachaccountable-api.md` — created (4949 lines, full CA API docs).

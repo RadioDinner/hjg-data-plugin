@@ -234,12 +234,12 @@ trigger + policies cleanly), then staff can enter manual metrics on the Admin ta
 
 ## Open items / TODO
 
-- **Mentors count likely inflated.** `Coach.getAll` returns ~35 "coaches"; the
-  Mentors metric counts unique `coach_id` among mentoring appointments. The
-  board sheet shows ~3–5. There's a `MENTOR_COACH_ID_WHITELIST` in
-  `lib/config.ts` but it's only applied by the (now-unused) server endpoint —
-  the client-side dashboard does NOT apply it. Decide how to restrict (whitelist
-  applied client-side, or an `is_mentor` flag on `ca_coaches`).
+- **Mentors count inflation: addressed by `coach_settings`** (migration `9996`).
+  Staff mark `is_mentor=true` in Admin → Mentor capacity; once any are flagged
+  the Metrics dashboard's Mentors metric is filtered to that whitelist
+  client-side. Capacity per mentor drives the new Mentor capacity utilization
+  card. The old `MENTOR_COACH_ID_WHITELIST` in `lib/config.ts` is unused now
+  and can be removed in a cleanup pass.
 - **Offerings/submissions — CONFIRMED working.** `Offering.getSubmissions`
   populates `ca_offering_submissions` (108 JumpStart rows, 2024-06→2026-05), which
   is what the conversion automation depends on. Still best-effort in `lib/sync.ts`

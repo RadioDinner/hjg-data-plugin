@@ -1,3 +1,5 @@
+import { downloadCsv } from "../csv";
+
 interface Props {
   title: string;
   columns: string[];
@@ -11,9 +13,19 @@ export function ExploreModal({ title, columns, rows, onClose }: Props) {
       <div className="modal__card" onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
           <h2>{title}</h2>
-          <button className="btn btn--sm" onClick={onClose}>
-            Close
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn btn--sm"
+              onClick={() => downloadCsv(title, columns, rows)}
+              disabled={rows.length === 0}
+              title="Download the rows shown here as CSV"
+            >
+              Export CSV
+            </button>
+            <button className="btn btn--sm" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </div>
         <div className="modal__body table-scroll">
           <table className="table">

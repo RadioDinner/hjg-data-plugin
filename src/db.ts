@@ -443,6 +443,75 @@ export async function upsertManualMetric(
   if (error) throw new Error(error.message);
 }
 
+// --- Mentor capacity (coach_settings, HJG-owned) ---
+
+export interface CoachWithSettings {
+  coachId: number;
+  name: string;
+  isMentor: boolean;
+  capacity: number | null;
+  notes: string | null;
+}
+
+// Every coach from ca_coaches with their HJG-owned mentor flag + capacity
+// (left-join). Coaches with no coach_settings row come back as
+// is_mentor=false, capacity=null, notes=null.
+export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
+  const [coachesRes, settingsRes] = await Promise.all([
+    supabase.from("ca_coaches").select("id,name").order("name", { ascending: true }),
+    supabase.from("coach_settings").select("coach_id,is_mentor,capacity,notes"),
+  ]);
+  if (coachesRes.error) throw new Error(coachesRes.error.message);
+  if (settingsRes.error) throw new Error(settingsRes.error.message);
+  const settings = new Map<number, { is_mentor: boolean; capacity: number | null; notes: string | null }>();
+  for (const s of (settingsRes.data ?? []) as { coach_id: number; is_mentor: boolean; capacity: number | null; notes: string | null }[]) {
+    settings.set(s.coach_id, { is_mentor: s.is_mentor, capacity: s.capacity, notes: s.notes });
+  }
+  return ((coachesRes.data ?? []) as { id: number; name: string | null }[]).map((c) => {
+    const s = settings.get(c.id);
+    return {
+      coachId: c.id,
+      name: c.name ?? `#${c.id}`,
+      isMentor: s?.is_mentor ?? false,
+      capacity: s?.capacity ?? null,
+      notes: s?.notes ?? null,
+    };
+  });
+}
+
+// Set of coach IDs flagged as mentors. The Metrics dashboard uses this to
+// filter the Mentors metric to the real mentor roster. Returns an empty set
+// (meaning "no filter — count everyone") until staff start flagging coaches.
+export async function fetchMentorCoachIds(): Promise<Set<number>> {
+  const { data, error } = await supabase
+    .from("coach_settings")
+    .select("coach_id")
+    .eq("is_mentor", true);
+  if (error) throw new Error(error.message);
+  return new Set(((data ?? []) as { coach_id: number }[]).map((r) => r.coach_id));
+}
+
+export async function upsertCoachSettings(
+  coachId: number,
+  patch: { isMentor: boolean; capacity: number | null; notes: string | null }
+): Promise<void> {
+  const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const { error } = await supabase
+    .from("coach_settings")
+    .upsert(
+      {
+        coach_id: coachId,
+        is_mentor: patch.isMentor,
+        capacity: patch.capacity,
+        notes: patch.notes,
+        created_by: createdBy,
+        updated_by: createdBy,
+      },
+      { onConflict: "coach_id" }
+    );
+  if (error) throw new Error(error.message);
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
@@ -451,6 +520,7 @@ export const RAW_TABLES = [
   "ca_coaches",
   "ca_offerings",
   "ca_offering_submissions",
+  "coach_settings",
   "discovery_outcomes",
   "manual_metrics",
   "sync_runs",
@@ -469,6 +539,24 @@ export async function fetchTable(
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as Record<string, unknown>[];
   return { rows, total: count ?? rows.length };
+}
+
+// Page through an entire raw table for CSV export. Supabase caps each request
+// at ~1000 rows, so we walk by `range` until the page comes back short.
+export async function fetchAllRows(table: RawTable): Promise<Record<string, unknown>[]> {
+  const pageSize = 1000;
+  const out: Record<string, unknown>[] = [];
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as Record<string, unknown>[];
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return out;
 }
 
 // --- Sync runs + settings (Admin) ---

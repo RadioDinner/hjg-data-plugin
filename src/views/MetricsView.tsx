@@ -13,16 +13,20 @@ import {
 } from "recharts";
 import {
   MANUAL_METRICS,
+  fetchCoachesWithSettings,
   fetchLastSyncedAt,
   fetchManualMetrics,
+  fetchMentorCoachIds,
   fetchRangeAppointments,
   fetchResolvedOutcomes,
+  type CoachWithSettings,
   type DiscoveryOutcomeValue,
   type ManualMetricRow,
   type RangeAppt,
   type ResolvedOutcome,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
+import { downloadCsv } from "../csv";
 import { num, pct } from "../format";
 
 type ChartCardCell = string | number;
@@ -149,6 +153,15 @@ function ChartCard({
       <div className="card__head">
         <h2>{title}</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {table && (
+            <button
+              className="btn btn--sm"
+              onClick={() => downloadCsv(title, table.columns, table.rows)}
+              title="Download the per-month aggregated table as CSV"
+            >
+              Export CSV
+            </button>
+          )}
           {onExplore && (
             <button className="btn btn--sm" onClick={onExplore}>
               Explore
@@ -251,6 +264,8 @@ export function MetricsView() {
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
   const [meetingsMode, setMeetingsMode] = useState<"total" | "compare">("total");
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [mentorIds, setMentorIds] = useState<Set<number>>(new Set());
+  const [coachSettings, setCoachSettings] = useState<CoachWithSettings[]>([]);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -311,6 +326,22 @@ export function MetricsView() {
     };
   }, []);
 
+  // Mentor roster + capacities (HJG-owned). Loaded once per view mount; the
+  // Admin tab updates these and the dashboard reflects on next visit.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchMentorCoachIds(), fetchCoachesWithSettings()])
+      .then(([ids, all]) => {
+        if (cancelled) return;
+        setMentorIds(ids);
+        setCoachSettings(all);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function applyPreset(key: PresetKey) {
     const r = presetRange(key);
     setFrom(r.from);
@@ -349,6 +380,12 @@ export function MetricsView() {
     return m;
   }, [appts]);
 
+  // When staff have flagged any coaches as is_mentor, restrict the Mentors
+  // metric to that whitelist (fixes the long-standing inflated-mentor-count
+  // problem from CA's broader "coach" roster). Empty set = no filter.
+  const isMentor = (coachId: number | null): boolean =>
+    mentorIds.size === 0 || (coachId != null && mentorIds.has(coachId));
+
   const data = useMemo(
     () =>
       buckets.map((b) => {
@@ -364,12 +401,12 @@ export function MetricsView() {
           else if (a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))) {
             meetings++;
             mentees.add(a.clientId ?? -1);
-            mentors.add(a.coachId ?? -1);
+            if (isMentor(a.coachId)) mentors.add(a.coachId ?? -1);
           }
         }
         return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
       }),
-    [byMonth, buckets, selectedTypes]
+    [byMonth, buckets, selectedTypes, mentorIds]
   );
 
   const selectedTypeList = useMemo(
@@ -429,8 +466,67 @@ export function MetricsView() {
     discoveryTotal: discovery.length,
     meetingsTotal: selectedMentoring.length,
     mentees: new Set(selectedMentoring.map((a) => a.clientId ?? -1)).size,
-    mentors: new Set(selectedMentoring.map((a) => a.coachId ?? -1)).size,
+    mentors: new Set(selectedMentoring.filter((a) => isMentor(a.coachId)).map((a) => a.coachId ?? -1)).size,
   };
+
+  // Per-mentor capacity utilization in the selected range. Rows include every
+  // flagged mentor (is_mentor=true) plus, even when capacity is unset, the
+  // count of mentees they're actively meeting with — so unfilled capacity
+  // jumps out. Sorted by utilization desc so the most-loaded mentors are top.
+  const capacityRows = useMemo(() => {
+    const menteesByCoach = new Map<number, Set<number>>();
+    for (const a of selectedMentoring) {
+      if (a.coachId == null) continue;
+      if (!isMentor(a.coachId)) continue;
+      let set = menteesByCoach.get(a.coachId);
+      if (!set) {
+        set = new Set();
+        menteesByCoach.set(a.coachId, set);
+      }
+      if (a.clientId != null) set.add(a.clientId);
+    }
+    return coachSettings
+      .filter((c) => c.isMentor)
+      .map((c) => {
+        const mentees = menteesByCoach.get(c.coachId)?.size ?? 0;
+        const capacity = c.capacity ?? null;
+        const utilization = capacity != null && capacity > 0 ? mentees / capacity : null;
+        return { coachId: c.coachId, name: c.name, mentees, capacity, utilization };
+      })
+      .sort((a, b) => {
+        const au = a.utilization ?? -1;
+        const bu = b.utilization ?? -1;
+        if (bu !== au) return bu - au;
+        return b.mentees - a.mentees;
+      });
+  }, [coachSettings, selectedMentoring, mentorIds]);
+
+  const capacityTotals = useMemo(() => {
+    const totalCapacity = capacityRows.reduce((s, r) => s + (r.capacity ?? 0), 0);
+    const totalMentees = capacityRows.reduce((s, r) => s + r.mentees, 0);
+    const mentorsWithCapacity = capacityRows.filter((r) => r.capacity != null).length;
+    return {
+      mentors: capacityRows.length,
+      mentorsWithCapacity,
+      totalCapacity,
+      totalMentees,
+      rate: totalCapacity > 0 ? totalMentees / totalCapacity : null,
+    };
+  }, [capacityRows]);
+
+  function exploreCapacityRaw() {
+    setExplore({
+      title: "Mentor capacity utilization — source data",
+      columns: ["Mentor", "Mentees", "Capacity", "Utilization", "Notes"],
+      rows: capacityRows.map((r) => [
+        r.name,
+        r.mentees,
+        r.capacity ?? "—",
+        r.utilization != null ? `${Math.round(r.utilization * 100)}%` : "—",
+        coachSettings.find((c) => c.coachId === r.coachId)?.notes ?? "",
+      ]),
+    });
+  }
 
   const conv = useMemo(() => {
     const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
@@ -553,12 +649,14 @@ export function MetricsView() {
     });
   }
   function exploreMentorsRaw() {
-    const byCoach = new Map<string, { count: number; mentees: Set<string>; first: string; last: string }>();
+    // Group by coachId so we can pin the mentor flag accurately even when two
+    // coaches share a name. Falls back to coachName for display.
+    const byCoach = new Map<number, { name: string; count: number; mentees: Set<string>; first: string; last: string }>();
     for (const a of selectedMentoring) {
-      const key = a.coachName;
+      const id = a.coachId ?? -1;
       const d = a.date ?? "";
-      const cur = byCoach.get(key);
-      if (!cur) byCoach.set(key, { count: 1, mentees: new Set([a.clientName]), first: d, last: d });
+      const cur = byCoach.get(id);
+      if (!cur) byCoach.set(id, { name: a.coachName, count: 1, mentees: new Set([a.clientName]), first: d, last: d });
       else {
         cur.count++;
         cur.mentees.add(a.clientName);
@@ -568,10 +666,17 @@ export function MetricsView() {
     }
     const rows = [...byCoach.entries()]
       .sort((a, b) => b[1].count - a[1].count)
-      .map(([name, v]) => [name, v.mentees.size, v.count, v.first, v.last] as (string | number)[]);
+      .map(([id, v]) => [
+        v.name,
+        mentorIds.size === 0 ? "—" : mentorIds.has(id) ? "Yes" : "No",
+        v.mentees.size,
+        v.count,
+        v.first,
+        v.last,
+      ] as (string | number)[]);
     setExplore({
       title: "Mentors — source data",
-      columns: ["Mentor", "Mentees", "Meetings", "First meeting", "Last meeting"],
+      columns: ["Mentor", "Flagged is_mentor?", "Mentees", "Meetings", "First meeting", "Last meeting"],
       rows,
     });
   }
@@ -797,6 +902,95 @@ export function MetricsView() {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="card" style={{ marginTop: 18 }}>
+            <div className="card__head">
+              <h2>Mentor capacity utilization</h2>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className="btn btn--sm"
+                  onClick={() =>
+                    downloadCsv(
+                      "Mentor capacity utilization",
+                      ["Mentor", "Mentees", "Capacity", "Utilization %"],
+                      capacityRows.map((r) => [
+                        r.name,
+                        r.mentees,
+                        r.capacity ?? "",
+                        r.utilization != null ? Math.round(r.utilization * 100) : "",
+                      ])
+                    )
+                  }
+                  disabled={capacityRows.length === 0}
+                  title="Download the per-mentor utilization table as CSV"
+                >
+                  Export CSV
+                </button>
+                <button
+                  className="btn btn--sm"
+                  onClick={exploreCapacityRaw}
+                  disabled={capacityRows.length === 0}
+                >
+                  Explore
+                </button>
+              </div>
+            </div>
+            <p className="view__hint">
+              Active mentees per mentor in the selected range vs the capacity set on the Admin tab. Mark coaches as
+              mentors and set a capacity in <strong>Admin → Mentor capacity</strong>.
+            </p>
+            {capacityRows.length === 0 ? (
+              <p className="muted">
+                No coaches are flagged as mentors yet. Go to Admin → Mentor capacity to mark mentors and set
+                capacities.
+              </p>
+            ) : (
+              <>
+                <div className="stat-row">
+                  <div className="stat">
+                    <span className="stat__value">{num(capacityTotals.mentors)}</span>
+                    <span className="stat__label">Mentors flagged</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat__value">{num(capacityTotals.totalMentees)}</span>
+                    <span className="stat__label">Mentees in range</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat__value">
+                      {capacityTotals.totalCapacity > 0 ? num(capacityTotals.totalCapacity) : "—"}
+                    </span>
+                    <span className="stat__label">Total capacity</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat__value">{pct(capacityTotals.rate)}</span>
+                    <span className="stat__label">Overall utilization</span>
+                  </div>
+                </div>
+                <div className="table-scroll" style={{ marginTop: 4 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Mentor</th>
+                        <th className="num">Mentees</th>
+                        <th className="num">Capacity</th>
+                        <th className="num">Utilization</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {capacityRows.map((r) => (
+                        <tr key={r.coachId}>
+                          <td>{r.name}</td>
+                          <td className="num">{num(r.mentees)}</td>
+                          <td className="num">{r.capacity == null ? "—" : num(r.capacity)}</td>
+                          <td className="num">{r.utilization == null ? "—" : pct(r.utilization)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </section>
 
           <div style={{ marginTop: 18 }}>

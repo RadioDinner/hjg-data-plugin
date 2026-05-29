@@ -3,12 +3,15 @@ import { triggerSync } from "../api";
 import { useAuth } from "../auth";
 import {
   MANUAL_METRICS,
+  fetchCoachesWithSettings,
   fetchManualMetrics,
   fetchManualMetricsForMonth,
   fetchSettings,
   listSyncRuns,
   updateSetting,
+  upsertCoachSettings,
   upsertManualMetric,
+  type CoachWithSettings,
   type ManualMetricRow,
   type SyncRun,
 } from "../db";
@@ -46,6 +49,16 @@ export function AdminView() {
   const [mmMsg, setMmMsg] = useState<string | null>(null);
   const [mmRecent, setMmRecent] = useState<ManualMetricRow[]>([]);
 
+  // --- Mentor capacity editor state ---
+  // `coaches` is the canonical roster joined with current saved settings.
+  // `mcEdits` mirrors what's in the inputs; rows are saved by Save changes.
+  const [coaches, setCoaches] = useState<CoachWithSettings[]>([]);
+  const [mcEdits, setMcEdits] = useState<Record<number, { isMentor: boolean; capacity: string; notes: string }>>({});
+  const [mcDirty, setMcDirty] = useState<Set<number>>(new Set());
+  const [mcSaving, setMcSaving] = useState(false);
+  const [mcMsg, setMcMsg] = useState<string | null>(null);
+  const [mcShowOnly, setMcShowOnly] = useState<"all" | "mentors">("all");
+
   async function load() {
     try {
       const [r, s] = await Promise.all([listSyncRuns(), fetchSettings()]);
@@ -53,10 +66,63 @@ export function AdminView() {
       setPlanLimit(s.ca_plan_daily_limit == null ? "" : String(s.ca_plan_daily_limit));
       setCapPct(s.daily_cap_pct == null ? "" : String(s.daily_cap_pct));
       setIntervalHours(s.sync_interval_hours == null ? "" : String(s.sync_interval_hours));
-      await loadRecentManual();
+      await Promise.all([loadRecentManual(), loadCoaches()]);
     } catch (e) {
       setError(String(e));
     }
+  }
+
+  async function loadCoaches() {
+    const all = await fetchCoachesWithSettings();
+    setCoaches(all);
+    const edits: Record<number, { isMentor: boolean; capacity: string; notes: string }> = {};
+    for (const c of all) {
+      edits[c.coachId] = {
+        isMentor: c.isMentor,
+        capacity: c.capacity == null ? "" : String(c.capacity),
+        notes: c.notes ?? "",
+      };
+    }
+    setMcEdits(edits);
+    setMcDirty(new Set());
+  }
+
+  function markDirty(coachId: number) {
+    setMcDirty((prev) => {
+      const next = new Set(prev);
+      next.add(coachId);
+      return next;
+    });
+  }
+
+  async function saveCoachSettings() {
+    if (mcDirty.size === 0) {
+      setMcMsg("Nothing changed.");
+      return;
+    }
+    setMcSaving(true);
+    setMcMsg(null);
+    setError(null);
+    try {
+      const dirtyIds = [...mcDirty];
+      await Promise.all(
+        dirtyIds.map((id) => {
+          const e = mcEdits[id];
+          const capRaw = e.capacity.trim();
+          const cap = capRaw === "" ? null : Math.max(0, Math.floor(Number(capRaw)));
+          return upsertCoachSettings(id, {
+            isMentor: e.isMentor,
+            capacity: Number.isFinite(cap as number) || cap === null ? cap : null,
+            notes: e.notes.trim() === "" ? null : e.notes.trim(),
+          });
+        })
+      );
+      setMcMsg(`Saved ${dirtyIds.length} coach${dirtyIds.length === 1 ? "" : "es"}.`);
+      await loadCoaches();
+    } catch (e) {
+      setError(String(e));
+    }
+    setMcSaving(false);
   }
   useEffect(() => {
     load();
@@ -293,6 +359,117 @@ export function AdminView() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card__head">
+          <h2>Mentor capacity</h2>
+          <div className="seg">
+            <button
+              className={`seg__btn ${mcShowOnly === "all" ? "seg__btn--active" : ""}`}
+              onClick={() => setMcShowOnly("all")}
+            >
+              All coaches ({coaches.length})
+            </button>
+            <button
+              className={`seg__btn ${mcShowOnly === "mentors" ? "seg__btn--active" : ""}`}
+              onClick={() => setMcShowOnly("mentors")}
+            >
+              Mentors only ({coaches.filter((c) => mcEdits[c.coachId]?.isMentor).length})
+            </button>
+          </div>
+        </div>
+        <p className="view__hint">
+          Mark which CoachAccountable coaches actually count as mentors, and set how many concurrent mentees each can
+          take. The Metrics tab&apos;s Mentors metric is filtered to flagged mentors once any are set, and the new
+          <strong> Mentor capacity utilization </strong>card reads these capacities. Saves write to the HJG-owned
+          <code> coach_settings</code> table, untouched by CA sync.
+        </p>
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Coach</th>
+                <th>Mentor?</th>
+                <th className="num">Capacity</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {coaches
+                .filter((c) => mcShowOnly === "all" || mcEdits[c.coachId]?.isMentor)
+                .map((c) => {
+                  const e = mcEdits[c.coachId] ?? { isMentor: false, capacity: "", notes: "" };
+                  return (
+                    <tr key={c.coachId}>
+                      <td>
+                        {c.name}
+                        {mcDirty.has(c.coachId) && <span className="muted"> · unsaved</span>}
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={e.isMentor}
+                          onChange={(ev) => {
+                            setMcEdits((prev) => ({
+                              ...prev,
+                              [c.coachId]: { ...e, isMentor: ev.target.checked },
+                            }));
+                            markDirty(c.coachId);
+                          }}
+                        />
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={e.capacity}
+                          placeholder="—"
+                          style={{ width: 80, textAlign: "right" }}
+                          onChange={(ev) => {
+                            setMcEdits((prev) => ({
+                              ...prev,
+                              [c.coachId]: { ...e, capacity: ev.target.value },
+                            }));
+                            markDirty(c.coachId);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={e.notes}
+                          placeholder=""
+                          style={{ width: "100%" }}
+                          onChange={(ev) => {
+                            setMcEdits((prev) => ({
+                              ...prev,
+                              [c.coachId]: { ...e, notes: ev.target.value },
+                            }));
+                            markDirty(c.coachId);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              {coaches.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    No coaches synced yet. Run a sync first.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn btn--primary" onClick={saveCoachSettings} disabled={mcSaving || mcDirty.size === 0}>
+            {mcSaving ? "Saving…" : `Save changes${mcDirty.size > 0 ? ` (${mcDirty.size})` : ""}`}
+          </button>
+          {mcMsg && <span className="muted">{mcMsg}</span>}
         </div>
       </div>
 

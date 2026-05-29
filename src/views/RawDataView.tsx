@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
-import { fetchTable, RAW_TABLES, type RawTable } from "../db";
+import { downloadCsv } from "../csv";
+import { fetchAllRows, fetchTable, RAW_TABLES, type RawTable } from "../db";
 
 function renderCell(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+// Flatten a row's value for CSV. Same rules as renderCell but without the "—"
+// placeholder (CSV null is empty).
+function csvCell(v: unknown): string | number {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  if (typeof v === "number") return v;
   return String(v);
 }
 
@@ -13,6 +23,7 @@ export function RawDataView() {
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,9 +49,33 @@ export function RawDataView() {
 
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
+  async function exportAll() {
+    setExporting(true);
+    setError(null);
+    try {
+      const all = await fetchAllRows(table);
+      const cols = all.length > 0 ? Object.keys(all[0]) : columns;
+      downloadCsv(table, cols, all.map((row) => cols.map((c) => csvCell(row[c]))));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <section className="card">
-      <h2>Raw data</h2>
+      <div className="card__head">
+        <h2>Raw data</h2>
+        <button
+          className="btn btn--sm"
+          onClick={exportAll}
+          disabled={exporting || total === 0}
+          title={`Download all ${total} rows of ${table} as CSV`}
+        >
+          {exporting ? "Exporting…" : `Export CSV (${total})`}
+        </button>
+      </div>
       <p className="view__hint">The data synced from CoachAccountable, straight from the database tables.</p>
 
       <div className="tabs" style={{ marginTop: 0 }}>
