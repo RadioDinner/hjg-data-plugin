@@ -22,6 +22,7 @@ import {
   type RangeAppt,
   type ResolvedOutcome,
 } from "../db";
+import { ExploreModal } from "../components/ExploreModal";
 import { num, pct } from "../format";
 
 type ChartCardCell = string | number;
@@ -121,11 +122,13 @@ function ChartCard({
   children,
   extra,
   table,
+  onExplore,
 }: {
   title: string;
   children: ReactElement;
   extra?: ReactElement;
   table?: ChartCardTable;
+  onExplore?: () => void;
 }) {
   const storageKey = `hjg.chartcard.view:${title}`;
   const [view, setView] = useState<ChartCardView>(() => {
@@ -145,34 +148,38 @@ function ChartCard({
     <section className="card">
       <div className="card__head">
         <h2>{title}</h2>
-        {table && (
-          <div className="seg" role="tablist" aria-label="Card view">
-            {(["graph", "table", "both"] as const).map((k) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={view === k}
-                className={`seg__btn ${view === k ? "seg__btn--active" : ""}`}
-                onClick={() => setView(k)}
-              >
-                {k === "graph" ? "Graph" : k === "table" ? "Table" : "Both"}
-              </button>
-            ))}
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {onExplore && (
+            <button className="btn btn--sm" onClick={onExplore}>
+              Explore
+            </button>
+          )}
+          {table && (
+            <div className="seg" role="tablist" aria-label="Card view">
+              {(["graph", "table", "both"] as const).map((k) => (
+                <button
+                  key={k}
+                  role="tab"
+                  aria-selected={view === k}
+                  className={`seg__btn ${view === k ? "seg__btn--active" : ""}`}
+                  onClick={() => setView(k)}
+                >
+                  {k === "graph" ? "Graph" : k === "table" ? "Table" : "Both"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {extra}
       <div className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}>
         {showGraph && (
-          <div style={{ flex: "1 1 0", minWidth: 0, width: "100%", height: 240 }}>
+          <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
           </div>
         )}
         {showTable && table && (
-          <div
-            className="table-scroll"
-            style={{ flex: "1 1 0", minWidth: 0, maxHeight: 240, overflowY: "auto" }}
-          >
+          <div className="table-scroll" style={{ width: "100%" }}>
             <ChartDataTable columns={table.columns} rows={table.rows} />
           </div>
         )}
@@ -247,6 +254,9 @@ export function MetricsView() {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [explore, setExplore] = useState<{ title: string; columns: string[]; rows: (string | number)[][] } | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -489,6 +499,99 @@ export function MetricsView() {
     [manualData]
   );
 
+  // Explore = raw underlying data the chart was built from (a CA-style audit
+  // view). Sorted newest-first so it lines up with how CA shows appointments.
+  function exploreDiscoveryRaw() {
+    const rows = [...discovery]
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+      .map((a) => {
+        const o = outcomes.get(a.id);
+        return [
+          a.date ?? "",
+          a.clientName,
+          a.category === "discoveryPhone" ? "phone" : a.category === "discoveryZoom" ? "zoom" : a.category,
+          o ? `${OUTCOME_LABELS[o.outcome]} (${o.source})` : "—",
+          o?.reason ?? "",
+        ] as (string | number)[];
+      });
+    setExplore({
+      title: "Discovery calls — source data",
+      columns: ["Signup date", "Prospect", "Type", "Outcome", "Reason"],
+      rows,
+    });
+  }
+  function exploreMeetingsRaw() {
+    const rows = [...selectedMentoring]
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+      .map((a) => [a.date ?? "", a.clientName, a.coachName, a.name] as (string | number)[]);
+    setExplore({
+      title: "Mentee meetings — source data",
+      columns: ["Date", "Mentee", "Mentor", "Meeting type"],
+      rows,
+    });
+  }
+  function exploreMenteesRaw() {
+    const byClient = new Map<string, { count: number; first: string; last: string }>();
+    for (const a of selectedMentoring) {
+      const key = a.clientName;
+      const cur = byClient.get(key);
+      const d = a.date ?? "";
+      if (!cur) byClient.set(key, { count: 1, first: d, last: d });
+      else {
+        cur.count++;
+        if (d && (!cur.first || d < cur.first)) cur.first = d;
+        if (d && d > cur.last) cur.last = d;
+      }
+    }
+    const rows = [...byClient.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, v]) => [name, v.count, v.first, v.last] as (string | number)[]);
+    setExplore({
+      title: "Active mentees — source data",
+      columns: ["Mentee", "Meetings", "First meeting", "Last meeting"],
+      rows,
+    });
+  }
+  function exploreMentorsRaw() {
+    const byCoach = new Map<string, { count: number; mentees: Set<string>; first: string; last: string }>();
+    for (const a of selectedMentoring) {
+      const key = a.coachName;
+      const d = a.date ?? "";
+      const cur = byCoach.get(key);
+      if (!cur) byCoach.set(key, { count: 1, mentees: new Set([a.clientName]), first: d, last: d });
+      else {
+        cur.count++;
+        cur.mentees.add(a.clientName);
+        if (d && (!cur.first || d < cur.first)) cur.first = d;
+        if (d && d > cur.last) cur.last = d;
+      }
+    }
+    const rows = [...byCoach.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, v]) => [name, v.mentees.size, v.count, v.first, v.last] as (string | number)[]);
+    setExplore({
+      title: "Mentors — source data",
+      columns: ["Mentor", "Mentees", "Meetings", "First meeting", "Last meeting"],
+      rows,
+    });
+  }
+  function exploreManualRaw() {
+    const labelByKey = new Map(MANUAL_METRICS.map((m) => [m.key, m.label]));
+    const rows = [...manual]
+      .sort((a, b) => b.periodMonth.localeCompare(a.periodMonth))
+      .map((r) => [
+        r.periodMonth.slice(0, 7),
+        labelByKey.get(r.metric) ?? r.metric,
+        r.value,
+        r.notes ?? "",
+      ] as (string | number)[]);
+    setExplore({
+      title: "Resource engagement — source data",
+      columns: ["Month", "Metric", "Value", "Notes"],
+      rows,
+    });
+  }
+
   const typeFilter = (
     <div className="type-filter">
       <div className="type-filter__head">
@@ -637,7 +740,7 @@ export function MetricsView() {
           </section>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Discovery calls" table={discoveryTable}>
+            <ChartCard title="Discovery calls" table={discoveryTable} onExplore={exploreDiscoveryRaw}>
               <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -651,13 +754,13 @@ export function MetricsView() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Mentee meetings" extra={meetingsExtra} table={meetingsTable}>
+            <ChartCard title="Mentee meetings" extra={meetingsExtra} table={meetingsTable} onExplore={exploreMeetingsRaw}>
               {meetingsChart}
             </ChartCard>
           </div>
 
           <div className="grid" style={{ marginTop: 18 }}>
-            <ChartCard title="Active mentees" table={menteesTable}>
+            <ChartCard title="Active mentees" table={menteesTable} onExplore={exploreMenteesRaw}>
               <LineChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -667,7 +770,7 @@ export function MetricsView() {
               </LineChart>
             </ChartCard>
 
-            <ChartCard title="Mentors" table={mentorsTable}>
+            <ChartCard title="Mentors" table={mentorsTable} onExplore={exploreMentorsRaw}>
               <BarChart data={data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
@@ -700,6 +803,7 @@ export function MetricsView() {
             <ChartCard
               title="Resource engagement"
               table={manualTable}
+              onExplore={exploreManualRaw}
               extra={
                 <div className="stat-row" style={{ marginBottom: 12 }}>
                   {MANUAL_METRICS.map((m) => (
@@ -725,6 +829,8 @@ export function MetricsView() {
           </div>
         </>
       )}
+
+      {explore && <ExploreModal {...explore} onClose={() => setExplore(null)} />}
     </section>
   );
 }
