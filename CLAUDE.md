@@ -1,5 +1,23 @@
 # Project conventions
 
+## Standing orders
+**Read `new_session_instructions.md` at the start of every session.** It
+contains the user's standing orders for how I work on this repo (session
+logs, prompt history, end-of-session log, migration numbering, and the
+CoachAccountable docs source of truth). Those rules override anything in
+this file if they conflict.
+
+## CoachAccountable API source of truth
+`docs/coachaccountable-api.md` is **the only source of truth** for
+CoachAccountable API behavior — endpoints, parameters, return shapes,
+response envelope. Do not contradict it from training-data memory. If code
+in `lib/ca.ts` / `lib/sync.ts` disagrees with the docs, fix the code.
+
+## Session log + prompt history
+Every session, create `Session log/NNN_YYYY-MM-DD/` and log every user
+prompt to `prompt_history.txt` inside it. Write a `session_log.md` before
+the session ends. Details in `new_session_instructions.md`.
+
 ## Migrations
 Name migration files with **descending** numbers so the newest sorts to the
 top of the folder. The first migration is `9999_*`, the next `9998_*`, then
@@ -7,13 +25,16 @@ top of the folder. The first migration is `9999_*`, the next `9998_*`, then
 
 (Note: these run via the Supabase SQL Editor by copy-paste, not `supabase db
 push`. The descending order is for at-a-glance readability, not CLI apply
-order.)
+order. Make new migrations re-runnable — `drop ... if exists` before triggers
+and policies.)
 
 ## Session workflow
 - **At the end of each session, update `HANDOFF.md`** so the next session can
   resume cold: what shipped, current branch/deploy state, the next step, and any
-  open questions. Treat a stale handoff as a bug.
-- Start each session oriented by `HANDOFF.md` and the north star below.
+  open questions. Treat a stale handoff as a bug. Also write the per-session
+  `session_log.md` per `new_session_instructions.md`.
+- Start each session oriented by `HANDOFF.md`, `new_session_instructions.md`,
+  and the north star below.
 - For anything beyond a small change, plan first and confirm direction before
   building.
 

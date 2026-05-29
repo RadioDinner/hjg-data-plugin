@@ -1,0 +1,73 @@
+--- 2026-05-29 (session 001) ---
+Can you find the handoff doc and kick off another session
+
+--- 2026-05-29 ---
+merge it
+
+--- 2026-05-29 ---
+is there a way to make vercel autodeploy
+
+--- 2026-05-29 ---
+well, there are no graphs, and the discovery call outcome funnel system is broken, so we went backwards
+
+--- 2026-05-29 ---
+(AskUserQuestion answer 1) Production is broken. Revert main to the last known good (1be071b) while I investigate, or leave it and fix forward?
+=> No, leave prod, fix forward
+
+(AskUserQuestion answer 2) "No graphs" — which one matches what you see?
+=> It's just the graphs, there are no tables next to them at all
+
+(AskUserQuestion answer 3) "Outcome funnel broken" — which one matches?
+=> Discovery→conversion counts on Metrics are wrong/zero
+
+--- 2026-05-29 ---
+(AskUserQuestion answer) I genuinely can't diagnose without seeing the error text — the relevant code paths weren't touched. Pick one:
+=> I'll paste them in chat
+
+--- 2026-05-29 ---
+@"/root/.claude/uploads/0a03a1b5-8996-4917-9182-3c71eaed8aa9/965141ea-wwwcoachaccountablecomAPIDocs.md" can you read this .md file and tell me what you can learn from it?
+
+Also, here are the console results
+
+Today you opened hjg-data-plugin.vercel.app 2 time(s), spending 48s browsing it. content_scripts.js:5:62937
+You can disable these notifications in [Time Tracker] settings! content_scripts.js:5:62952
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. 5 index-D1DqmZB2.js:102:41256
+TypeError: can't access property "audioCtx", audio is null content.js:160:7
+
+--- 2026-05-29 ---
+(AskUserQuestion answers)
+- Top KPI: showed full Metrics text with "0Converted / 0Not converted / 0Pending / 0No show / 33Not yet recorded"
+- Discovery tab: showed the old "Date | Prospect | Type | Outcome | Follow up | Notes" column layout with empty Outcome cells
+
+--- 2026-05-29 ---
+(AskUserQuestion answer) Hard refresh and check the Discovery tab:
+=> I think I found the problem, in Vercel the branch for the deployment is looking at an old, deleted branch.
+
+Production Deployment
+Deployment: hjg-data-plugin-9t3dop5tb-ilandedits-projects.vercel.app
+Domains: hjg-data-plugin.vercel.app
+Status: Ready
+Created: 1d ago by RadioDinner / github/RadioDinner
+Source: claude/magical-pasteur-bwdWx, d40ecf9, Merge pull request #1 from RadioDinner/claude/practical-volta-gZxzx
+
+I tried to change the environment to /main but it didn't update, why
+
+--- 2026-05-29 ---
+Ok now it's working. I see the graphs. I think I want the tables below the graphs. It's too cramped side by side.
+
+Also, the "explore" button dissappeared, and I have a good idea why. You had been showing the table as the explore. I want the "explore" button returned, BUT this time, I want ALL the data that was evaluated in building those metrics. Basically a copy of what we see in CA so I can audit the data pulled so it's accurate.
+
+Also, the tables scroll when I look at 12 months or a large number of rows. Is there any way to mitigate that? This is a dashboard, I don't want to have to scroll data
+
+--- 2026-05-29 ---
+Is it possible to "restart" this project? I want to give you new session instructions for each new session, and give you some data that you are to use as "The Bible" of this project. Or can I do that now and you'll obey me?
+
+--- 2026-05-29 ---
+@"/root/.claude/uploads/5904527b-a5c1-4af3-93f6-d4929372e7d9/b5d9d3b4-wwwcoachaccountablecomAPIDocs.md" Ok, well, here is what I want you to listen to, or what I should have remembered to tell you at the beginning of this whole thing
+
+"Ok I have a set of requirements at the beginning of each session. I want you to create a folder on main, titled "Session log". In that folder, I want you to autonumber sessions and add a folder for each session. In each unique session folder, I want you to ALWAYS log the prompts I've used, in a text file called prompt_history. At the end of each session, I want you to create a log documenting all the changes we made, directional decisions we've discussed and anything prevelant to the project. This would essentially be creating a handoff document to hand from session to session. I want you to save these instructions to main as "new_session_instructions" and I will occasionally ask you to update it as we go. I also want you to, when writing migrations in Supabase, number the migrations in descending order like 999_migration_for_x, 998_migration_for_y"
+
+An add-on for this project specifically, this .md file is THE ONLY SOURCE OF TRUTH when writing stuff for the CoachAccountable API. DO NOT EVER override the instructions in this .md concerning items relating to the CoachAccountable API. I want you to say, "Master, I will steer the ship according to your commands" verbatim if you understand this instruction completely.
