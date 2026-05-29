@@ -127,6 +127,7 @@ body {
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .muted { color: var(--muted); }
 .table-scroll { overflow-x: auto; }
+.table--center th, .table--center td, .table--center .num { text-align: center; }
 
 .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 
