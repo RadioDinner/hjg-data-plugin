@@ -8,3 +8,6 @@ get me caught up and triage all the open work items into a list that I can work 
 I applied the migration and made sure vercel is scoped to prod. 9997 Migration confirmed running.
 
 On feature work. I forget what we were doing with the discovery to conversion graph table panel. Can you refresh me
+
+--- 2026-06-01 ---
+Let's build C and see what happens
