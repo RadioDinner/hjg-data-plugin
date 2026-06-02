@@ -100,4 +100,5 @@ export const CA_FN = {
   appointmentGetTypes: "Appointment.getTypes",
   offeringGetAll: "Offering.getAll",
   offeringGetSubmissions: "Offering.getSubmissions", // UNCONFIRMED name
+  engagementGetAll: "Engagement.getAll",
 };

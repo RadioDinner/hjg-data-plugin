@@ -46,6 +46,32 @@ export interface CAOffering {
   [k: string]: unknown;
 }
 
+// A CoachAccountable Engagement (Engagement.getAll). Often one per program tier
+// (JumpStart / 4x / 2x / 1x); `name` likely carries the tier. Close state comes
+// from isComplete/isCanceled + dateClosed. AppointmentSet is omitted — we
+// already mirror appointments with their EngagementID.
+export interface CAEngagement {
+  ID: number;
+  type?: string;
+  ClientID?: number;
+  CompanyID?: number;
+  CoachID?: number;
+  withName?: string;
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  allocationUnits?: string; // "A" appointments or "M" minutes
+  allocation?: number;
+  allocationUsedP?: number;
+  allocationUsedA?: number;
+  allocationUsedV?: number;
+  allocationPerClient?: number;
+  isComplete?: boolean;
+  isCanceled?: boolean;
+  dateClosed?: string;
+  dateAdded?: string;
+}
+
 // "Submissions" = signups and/or purchases for an Offering.
 export interface CAOfferingSubmission {
   ID: number;
@@ -191,6 +217,33 @@ export interface CaOfferingSubmissionRow {
   date_added: string | null;
   date_year: number | null;
   date_month: number | null;
+  synced_at?: string;
+}
+
+export interface CaEngagementRow {
+  id: number;
+  type: string | null;
+  client_id: number | null;
+  company_id: number | null;
+  coach_id: number | null;
+  with_name: string | null;
+  name: string | null;
+  start_raw: string | null;
+  start_date: string | null;
+  end_raw: string | null;
+  end_date: string | null;
+  allocation_units: string | null;
+  allocation: number | null;
+  allocation_used_a: number | null;
+  allocation_used_p: number | null;
+  allocation_used_v: number | null;
+  allocation_per_client: number | null;
+  is_complete: boolean | null;
+  is_canceled: boolean | null;
+  date_closed_raw: string | null;
+  date_closed: string | null;
+  date_added_raw: string | null;
+  date_added: string | null;
   synced_at?: string;
 }
 

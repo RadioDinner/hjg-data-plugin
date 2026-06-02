@@ -8,6 +8,7 @@ import type {
   CAAppointment,
   CAClient as CAClientEntity,
   CACoach,
+  CAEngagement,
   CAOffering,
   CAOfferingSubmission,
   CAAppointmentType,
@@ -154,6 +155,21 @@ export class CAClient {
         dateTo: opts.dateTo,
         ClientID: opts.clientId,
         OfferingID: opts.offeringId,
+      })
+    );
+  }
+
+  // READ-ONLY: Engagement.getAll only. Called with no client/coach filter to
+  // pull every engagement in one (best-effort) request; includeAppointments
+  // stays false since we already mirror appointments with their EngagementID.
+  async getEngagements(
+    opts: { clientId?: number; coachId?: number; includeAppointments?: boolean } = {}
+  ): Promise<CAEngagement[]> {
+    return asArray<CAEngagement>(
+      await this.call(CA_FN.engagementGetAll, {
+        ClientID: opts.clientId,
+        CoachID: opts.coachId,
+        includeAppointments: opts.includeAppointments ?? false,
       })
     );
   }

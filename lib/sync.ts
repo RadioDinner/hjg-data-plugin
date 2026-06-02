@@ -14,6 +14,7 @@ import type {
   CaAppointmentRow,
   CaOfferingRow,
   CaOfferingSubmissionRow,
+  CaEngagementRow,
 } from "./types.js";
 
 export class SyncInProgressError extends Error {
@@ -118,7 +119,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
   const ca = new CAClient(() => tracker.spend());
 
   let records = 0;
-  let warning: string | null = null;
+  const warnings: string[] = [];
   try {
     // Core data, sequential to keep call accounting clean. A failure here is a
     // real error (the dashboard's headline metrics depend on it).
@@ -206,7 +207,51 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       records += await chunkedUpsert(admin, "ca_offering_submissions", submissionRows);
     } catch (e) {
       if (e instanceof BudgetExhaustedError) throw e;
-      warning = `Offerings/submissions skipped: ${sanitizeError(e)}`;
+      warnings.push(`Offerings/submissions skipped: ${sanitizeError(e)}`);
+    }
+
+    // Engagements feed the pipeline-stage timeline (Journeys tab). READ-ONLY:
+    // only Engagement.getAll is called; nothing is written back to CA. Pulled in
+    // one unfiltered request. Best-effort like offerings — a failure here leaves
+    // the core sync intact and is reported as a warning. Budget exhaustion still
+    // hard-stops.
+    try {
+      const engagements = await ca.getEngagements({ includeAppointments: false });
+      const engagementRows: CaEngagementRow[] = engagements.map((e) => {
+        const sd = dateParts(e.startDate);
+        const ed = dateParts(e.endDate);
+        const dc = dateParts(e.dateClosed);
+        const da = dateParts(e.dateAdded);
+        return {
+          id: e.ID,
+          type: e.type ?? null,
+          client_id: e.ClientID ?? null,
+          company_id: e.CompanyID ?? null,
+          coach_id: e.CoachID ?? null,
+          with_name: e.withName ?? null,
+          name: e.name ?? null,
+          start_raw: e.startDate ?? null,
+          start_date: sd.date,
+          end_raw: e.endDate ?? null,
+          end_date: ed.date,
+          allocation_units: e.allocationUnits ?? null,
+          allocation: e.allocation ?? null,
+          allocation_used_a: e.allocationUsedA ?? null,
+          allocation_used_p: e.allocationUsedP ?? null,
+          allocation_used_v: e.allocationUsedV ?? null,
+          allocation_per_client: e.allocationPerClient ?? null,
+          is_complete: e.isComplete ?? null,
+          is_canceled: e.isCanceled ?? null,
+          date_closed_raw: e.dateClosed ?? null,
+          date_closed: dc.date,
+          date_added_raw: e.dateAdded ?? null,
+          date_added: da.date,
+        };
+      });
+      records += await chunkedUpsert(admin, "ca_engagements", engagementRows);
+    } catch (e) {
+      if (e instanceof BudgetExhaustedError) throw e;
+      warnings.push(`Engagements skipped: ${sanitizeError(e)}`);
     }
 
     await admin
@@ -216,11 +261,18 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         finished_at: new Date().toISOString(),
         calls_made: tracker.callsMade,
         records_synced: records,
-        error: warning,
+        error: warnings.length ? warnings.join(" · ") : null,
       })
       .eq("id", runId);
 
-    return { runId, status: "success", callsMade: tracker.callsMade, recordsSynced: records, years, error: warning ?? undefined };
+    return {
+      runId,
+      status: "success",
+      callsMade: tracker.callsMade,
+      recordsSynced: records,
+      years,
+      error: warnings.length ? warnings.join(" · ") : undefined,
+    };
   } catch (e) {
     const error = sanitizeError(e);
     await admin
