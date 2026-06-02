@@ -16,6 +16,14 @@ export const DISCOVERY_PHONE_CONTAINS = ["discovery call appointment (phone call
 
 export const DISCOVERY_ZOOM_CONTAINS = ["discovery call appointment (zoom)"];
 
+// Older generic discovery bookings (no phone/zoom suffix) predate the medium
+// split. They're real discovery calls — historically dropped to "other", which
+// undercounted the funnel. Checked LAST (the suffixed names above win their
+// medium first), defaulting the unspecified medium to zoom (the current flow).
+// NOTE: categorization runs at sync time, so a re-sync is needed to reclassify
+// existing rows.
+export const DISCOVERY_GENERIC_CONTAINS = ["discovery call appointment"];
+
 export const MENTORING_CONTAINS = [
   "mentoring call",
   "in depth mentoring session",
@@ -29,6 +37,7 @@ export function categorizeAppointmentName(rawName: string): AppointmentCategory 
   if (EXCLUDE_CONTAINS.some((s) => name.includes(s))) return "excluded";
   if (DISCOVERY_PHONE_CONTAINS.some((s) => name.includes(s))) return "discoveryPhone";
   if (DISCOVERY_ZOOM_CONTAINS.some((s) => name.includes(s))) return "discoveryZoom";
+  if (DISCOVERY_GENERIC_CONTAINS.some((s) => name.includes(s))) return "discoveryZoom";
   if (MENTORING_CONTAINS.some((s) => name.includes(s))) return "mentoring";
   return "other";
 }

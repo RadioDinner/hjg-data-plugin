@@ -20,3 +20,6 @@ This is a "time in HJG system" metric. I want to track, and display beautifully,
 To build this, I may have you analyze the raw_data .csv file to see what you can make of it.
 
 I'll attach it here
+
+--- 2026-06-01 ---
+Journey's tab I think
