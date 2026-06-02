@@ -40,3 +40,6 @@ Then I want a button on the raw_data tab, where I can export ALL raw data in one
 
 --- 2026-06-01 ---
 [attached hjgrawdata20260601.xlsx] Ok, here is a snapshot of the data I have. I want you to build a visual mapping of how this data connects. Kinda like an Obsidian graph thing
+
+--- 2026-06-01 ---
+i want this data-map.html to be hostable on the vercel deployment. And I want the little bubbles to open, when clicked to show key relationships and cool data. Build the timeline

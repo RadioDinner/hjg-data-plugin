@@ -89,6 +89,9 @@ export function RawDataView() {
       <div className="card__head">
         <h2>Raw data</h2>
         <div style={{ display: "flex", gap: 8 }}>
+          <a className="btn btn--sm" href="/data-map.html" target="_blank" rel="noopener" title="Open the interactive data-relationship map in a new tab">
+            Data map ↗
+          </a>
           <button
             className="btn btn--sm"
             onClick={exportAll}
