@@ -204,7 +204,7 @@ function ChartCard({
 
 function ChartDataTable({ columns, rows }: ChartCardTable) {
   return (
-    <table className="table">
+    <table className="table table--center">
       <thead>
         <tr>
           {columns.map((c) => (
@@ -1040,7 +1040,7 @@ export function MetricsView() {
                   </div>
                 </div>
                 <div className="table-scroll" style={{ marginTop: 4 }}>
-                  <table className="table">
+                  <table className="table table--center">
                     <thead>
                       <tr>
                         <th>Mentor</th>
