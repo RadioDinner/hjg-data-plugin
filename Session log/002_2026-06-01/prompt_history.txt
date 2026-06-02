@@ -37,3 +37,6 @@ You have the legs wrong. It is Discovery to JumpStart but then it is JumpStart t
 Let's start syncing engagements. Add this to the getall sync. Make sure it's read only, I don't want to sync data back to CA yet.
 
 Then I want a button on the raw_data tab, where I can export ALL raw data in one csv. That export would break the tables that are exported, onto separate sheets in the csv file. Do that next.
+
+--- 2026-06-01 ---
+[attached hjgrawdata20260601.xlsx] Ok, here is a snapshot of the data I have. I want you to build a visual mapping of how this data connects. Kinda like an Obsidian graph thing
