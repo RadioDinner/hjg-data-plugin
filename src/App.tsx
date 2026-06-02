@@ -3,14 +3,16 @@ import { useAuth, signOut } from "./auth";
 import { Login } from "./components/Login";
 import { MetricsView } from "./views/MetricsView";
 import { DiscoveryView } from "./views/DiscoveryView";
+import { JourneysView } from "./views/JourneysView";
 import { RawDataView } from "./views/RawDataView";
 import { AdminView } from "./views/AdminView";
 
-type Tab = "metrics" | "discovery" | "raw" | "admin";
+type Tab = "metrics" | "discovery" | "journeys" | "raw" | "admin";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "metrics", label: "Metrics" },
   { key: "discovery", label: "Discovery" },
+  { key: "journeys", label: "Journeys" },
   { key: "raw", label: "Raw data" },
   { key: "admin", label: "Admin" },
 ];
@@ -52,6 +54,7 @@ export function App() {
       <div className="view">
         {tab === "metrics" && <MetricsView />}
         {tab === "discovery" && <DiscoveryView />}
+        {tab === "journeys" && <JourneysView />}
         {tab === "raw" && <RawDataView />}
         {tab === "admin" && <AdminView />}
       </div>

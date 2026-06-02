@@ -512,6 +512,236 @@ export async function upsertCoachSettings(
   if (error) throw new Error(error.message);
 }
 
+// --- Mentee journeys (Journeys tab) ---
+// One mentee's path through the HJG pipeline, assembled from the mirror:
+//   Discovery Call -> JumpStart (Supervised) purchase -> mentoring meetings -> exit.
+// The 4x/2x/1x cadence tiers are NOT recorded in the appointment data (mentees
+// meet ~weekly throughout), so the timeline reports the OBSERVED meeting rhythm
+// rather than claiming tiers. Exit status is inferred from activity (active vs
+// dormant) and can be overridden by staff via mentee_outcomes.
+
+export type MenteeStatus = "active" | "graduated" | "quit" | "fired";
+// Inferred view adds "inactive": meetings stopped, but we can't know why
+// (graduated vs quit vs fired) until staff classify it.
+export type ResolvedMenteeStatus = MenteeStatus | "inactive";
+
+// A mentee counts as active if they've met within this many days of today.
+export const MENTEE_ACTIVE_WINDOW_DAYS = 45;
+
+export interface MenteeMeeting {
+  date: string; // YYYY-MM-DD (scheduled)
+  name: string;
+  engagementId: number | null;
+  coachName: string;
+}
+
+export interface MenteeJourney {
+  clientId: number;
+  name: string;
+  discoveryDate: string | null; // earliest discovery call (signup date)
+  jyfPurchaseDate: string | null; // earliest supervised JumpStart purchase
+  firstMeeting: string | null;
+  lastMeeting: string | null;
+  meetingCount: number;
+  meetings: MenteeMeeting[]; // ascending by date
+  engagementIds: number[];
+  // Manual override (mentee_outcomes), if any.
+  overrideId: string | null;
+  override: MenteeStatus | null;
+  overrideDate: string | null;
+  notes: string | null;
+  // Resolved status: override wins; otherwise inferred active/inactive.
+  resolvedStatus: ResolvedMenteeStatus;
+  source: ResolvedOutcomeSource;
+  // Durations in whole days (null when an endpoint is missing).
+  daysDiscoveryToJyf: number | null;
+  daysJyfToFirstMeeting: number | null;
+  daysDiscoveryToFirstMeeting: number | null;
+  activeSpanDays: number | null; // first -> last meeting
+  daysInSystem: number | null; // earliest start -> exit / last activity / today
+}
+
+// Whole days from `a` to `b` (both YYYY-MM-DD), parsed at UTC midnight.
+function dayspan(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  return Math.floor((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+// Page every active mentoring appointment across all history (the pipeline spans
+// years, so this is not date-bounded). Used only by the Journeys tab.
+async function fetchAllMentoring(): Promise<
+  { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; start_date: string | null }[]
+> {
+  const pageSize = 1000;
+  const out: { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; start_date: string | null }[] = [];
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_appointments")
+      .select("id,client_id,coach_id,engagement_id,name,start_date")
+      .eq("category", "mentoring")
+      .eq("status", "A")
+      .order("start_date", { ascending: true })
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as typeof out;
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
+// Earliest discovery-call date per client. Matched by NAME ("Discovery Call…")
+// rather than category so it's correct even before a re-sync reclassifies the
+// older generic bookings. Uses signup date (date_added) when present, else the
+// scheduled date — the same basis the rest of the app counts discovery by.
+async function fetchDiscoveryDatesByClient(): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  const pageSize = 1000;
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_appointments")
+      .select("client_id,start_date,date_added")
+      .ilike("name", "discovery call%")
+      .eq("status", "A")
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as { client_id: number | null; start_date: string | null; date_added: string | null }[];
+    for (const r of batch) {
+      if (r.client_id == null) continue;
+      const d = r.date_added ?? r.start_date;
+      if (!d) continue;
+      const cur = out.get(r.client_id);
+      if (!cur || d < cur) out.set(r.client_id, d);
+    }
+    if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
+// Assemble a journey per mentee (any client with at least one mentoring
+// meeting), sorted by most-recent activity first. Excludes placeholder/group
+// "clients". Reads the full mirror once; the Journeys tab filters/searches it.
+export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
+  const [mentoring, discoveryDates, clientsRes, coachesRes, outcomesRes] = await Promise.all([
+    fetchAllMentoring(),
+    fetchDiscoveryDatesByClient(),
+    supabase.from("ca_clients").select("id,name,is_excluded"),
+    supabase.from("ca_coaches").select("id,name"),
+    supabase.from("mentee_outcomes").select("id,client_id,status,status_date,notes"),
+  ]);
+  if (clientsRes.error) throw new Error(clientsRes.error.message);
+  if (coachesRes.error) throw new Error(coachesRes.error.message);
+  if (outcomesRes.error) throw new Error(outcomesRes.error.message);
+
+  const clientMap = new Map<number, { name: string | null; is_excluded: boolean }>();
+  for (const c of (clientsRes.data ?? []) as { id: number; name: string | null; is_excluded: boolean }[]) {
+    clientMap.set(c.id, { name: c.name, is_excluded: c.is_excluded });
+  }
+  const coachMap = new Map<number, string | null>();
+  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coachMap.set(c.id, c.name);
+
+  const overrideMap = new Map<number, { id: string; status: MenteeStatus; status_date: string | null; notes: string | null }>();
+  for (const o of (outcomesRes.data ?? []) as { id: string; client_id: number; status: MenteeStatus; status_date: string | null; notes: string | null }[]) {
+    overrideMap.set(o.client_id, o);
+  }
+
+  const purchasesByClient = await fetchConversionPurchasesByClient([...clientMap.keys()]);
+
+  // Group mentoring meetings by client.
+  const byClient = new Map<number, MenteeMeeting[]>();
+  for (const a of mentoring) {
+    if (a.client_id == null) continue;
+    if (clientMap.get(a.client_id)?.is_excluded) continue;
+    const arr = byClient.get(a.client_id) ?? [];
+    arr.push({
+      date: a.start_date ?? "",
+      name: a.name,
+      engagementId: a.engagement_id,
+      coachName: (a.coach_id != null ? coachMap.get(a.coach_id) : null) ?? (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
+    });
+    byClient.set(a.client_id, arr);
+  }
+
+  const today = todayYmd();
+  const journeys: MenteeJourney[] = [];
+  for (const [clientId, rawMeetings] of byClient) {
+    const meetings = rawMeetings.filter((m) => m.date).sort((a, b) => a.date.localeCompare(b.date));
+    if (!meetings.length) continue;
+    const firstMeeting = meetings[0].date;
+    const lastMeeting = meetings[meetings.length - 1].date;
+    const discoveryDate = discoveryDates.get(clientId) ?? null;
+    const jyfPurchaseDate = purchasesByClient.get(clientId)?.[0] ?? null;
+    const engagementIds = [...new Set(meetings.map((m) => m.engagementId).filter((x): x is number => x != null && x !== 0))];
+
+    const o = overrideMap.get(clientId);
+    const override = o?.status ?? null;
+    const overrideDate = o?.status_date ?? null;
+    const sinceLast = dayspan(lastMeeting, today) ?? Infinity;
+    const inferred: ResolvedMenteeStatus = sinceLast <= MENTEE_ACTIVE_WINDOW_DAYS ? "active" : "inactive";
+    const resolvedStatus: ResolvedMenteeStatus = override ?? inferred;
+    const source: ResolvedOutcomeSource = override ? "manual" : "auto";
+
+    const startDate = discoveryDate ?? jyfPurchaseDate ?? firstMeeting;
+    const endDate =
+      override && override !== "active" && overrideDate
+        ? overrideDate
+        : resolvedStatus === "active"
+        ? today
+        : lastMeeting;
+
+    journeys.push({
+      clientId,
+      name: clientMap.get(clientId)?.name ?? `#${clientId}`,
+      discoveryDate,
+      jyfPurchaseDate,
+      firstMeeting,
+      lastMeeting,
+      meetingCount: meetings.length,
+      meetings,
+      engagementIds,
+      overrideId: o?.id ?? null,
+      override,
+      overrideDate,
+      notes: o?.notes ?? null,
+      resolvedStatus,
+      source,
+      daysDiscoveryToJyf: dayspan(discoveryDate, jyfPurchaseDate),
+      daysJyfToFirstMeeting: dayspan(jyfPurchaseDate, firstMeeting),
+      daysDiscoveryToFirstMeeting: dayspan(discoveryDate, firstMeeting),
+      activeSpanDays: dayspan(firstMeeting, lastMeeting),
+      daysInSystem: dayspan(startDate, endDate),
+    });
+  }
+
+  journeys.sort((a, b) => (b.lastMeeting ?? "").localeCompare(a.lastMeeting ?? ""));
+  return journeys;
+}
+
+// Set (or update) a mentee's pipeline outcome override. One row per client.
+export async function setMenteeOutcome(
+  createdBy: string,
+  clientId: number,
+  values: { status: MenteeStatus; statusDate: string | null; notes: string | null }
+): Promise<void> {
+  const { error } = await supabase.from("mentee_outcomes").upsert(
+    {
+      client_id: clientId,
+      status: values.status,
+      status_date: values.statusDate,
+      notes: values.notes,
+      created_by: createdBy || null,
+    },
+    { onConflict: "client_id" }
+  );
+  if (error) throw new Error(error.message);
+}
+
+// Remove a mentee's override so status reverts to the inferred active/inactive.
+export async function clearMenteeOutcome(clientId: number): Promise<void> {
+  const { error } = await supabase.from("mentee_outcomes").delete().eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
@@ -523,6 +753,7 @@ export const RAW_TABLES = [
   "coach_settings",
   "discovery_outcomes",
   "manual_metrics",
+  "mentee_outcomes",
   "sync_runs",
 ] as const;
 
