@@ -9,8 +9,17 @@ import {
   setMenteeOutcome,
   type MenteeJourney,
   type MenteeStatus,
+  type PipelineTier,
   type ResolvedMenteeStatus,
 } from "../db";
+
+const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
+
+// Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
+function spanDays(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  return Math.floor((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
 
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
@@ -134,12 +143,12 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
           <span className="stat__label">Time in system</span>
         </div>
         <div className="stat">
-          <span className="stat__value">{humanizeDays(journey.daysDiscoveryToJyf)}</span>
+          <span className="stat__value">{humanizeDays(spanDays(journey.discoveryDate, journey.stageDates.jumpstart))}</span>
           <span className="stat__label">Discovery → JumpStart</span>
         </div>
         <div className="stat">
-          <span className="stat__value">{humanizeDays(journey.daysDiscoveryToFirstMeeting)}</span>
-          <span className="stat__label">Discovery → 1st meeting</span>
+          <span className="stat__value">{journey.currentTier ? TIER_LABEL[journey.currentTier] : "—"}</span>
+          <span className="stat__label">Current tier</span>
         </div>
         <div className="stat">
           <span className="stat__value">{humanizeDays(journey.activeSpanDays)}</span>
@@ -148,17 +157,18 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
       </div>
 
       <div className="stage-rail">
-        <StageNode label="Discovery call" date={journey.discoveryDate} />
-        <StageNode label="JumpStart (Supervised)" date={journey.jyfPurchaseDate} gap={humanizeDays(journey.daysDiscoveryToJyf)} />
-        <StageNode label="First meeting" date={journey.firstMeeting} gap={humanizeDays(journey.daysJyfToFirstMeeting)} />
-        <StageNode label="Last meeting" date={journey.lastMeeting} gap={humanizeDays(journey.activeSpanDays)} />
-        <StageNode label={STATUS_LABEL[journey.resolvedStatus]} date={journey.override && journey.override !== "active" ? journey.overrideDate : null} />
+        <StageNode label="Discovery" date={journey.discoveryDate} />
+        <StageNode label="JumpStart" date={journey.stageDates.jumpstart} gap={humanizeDays(spanDays(journey.discoveryDate, journey.stageDates.jumpstart))} />
+        <StageNode label="4x mentoring" date={journey.stageDates["4x"]} gap={humanizeDays(spanDays(journey.stageDates.jumpstart, journey.stageDates["4x"]))} />
+        <StageNode label="2x mentoring" date={journey.stageDates["2x"]} gap={humanizeDays(spanDays(journey.stageDates["4x"], journey.stageDates["2x"]))} />
+        <StageNode label="1x mentoring" date={journey.stageDates["1x"]} gap={humanizeDays(spanDays(journey.stageDates["2x"], journey.stageDates["1x"]))} />
+        <StageNode label="Graduation" date={journey.stageDates.graduated} gap={humanizeDays(spanDays(journey.stageDates["1x"], journey.stageDates.graduated))} />
       </div>
 
       <div className="journey__rhythm">
         <div className="journey__rhythm-head">
           <h3>Observed meeting rhythm</h3>
-          <span className="muted">Meetings per month — actual cadence, not a 4x/2x/1x tier (tiers aren’t recorded in the data).</span>
+          <span className="muted">Meetings per month — actual meeting cadence (the tier comes from the engagement, shown above).</span>
         </div>
         <div style={{ width: "100%", height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -248,9 +258,9 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
     <div className="card card--inset" style={{ marginBottom: 18 }}>
       <h2>Pipeline timing — all mentees</h2>
       <p className="view__hint">
-        Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg). The
-        4x/2x/1x tiers aren’t recorded in the data, so the legs are the ones the data supports. “Discovery → graduation”
-        fills in as staff mark graduations on the timelines below.
+        Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg).
+        Stages come from CoachAccountable engagements (JumpStart → 4x → 2x → 1x), and graduation from an “After Graduation
+        Care” engagement.
       </p>
       <div className="stat-row">
         <div className="stat">
@@ -346,9 +356,9 @@ export function JourneysView() {
     <section className="card">
       <h2>Mentee journeys</h2>
       <p className="view__hint">
-        Each mentee’s path through the pipeline — Discovery Call → JumpStart (Supervised) → mentoring → exit — with how
-        long each leg took. Pick a mentee to see their timeline. (DC → JumpStart uses the supervised JumpStart purchase
-        date; exit status is inferred from activity and can be overridden.)
+        Each mentee’s path through the pipeline — Discovery → JumpStart → 4x → 2x → 1x → Graduation — with how long each
+        leg took. Pick a mentee to see their timeline. (Stages come from CoachAccountable engagements; graduation from an
+        “After Graduation Care” engagement. Exit status can still be overridden for quits/fires.)
       </p>
 
       {error && <div className="notice notice--warn">{error}</div>}

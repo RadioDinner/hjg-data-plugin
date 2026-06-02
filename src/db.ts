@@ -3,7 +3,10 @@
 // only signed-in staff can touch them.
 
 import { supabase } from "./lib/supabase";
-import { CONVERSION_OFFERING_IDS } from "../lib/config";
+import { CONVERSION_OFFERING_IDS, PIPELINE_TIERS, engagementTier, type PipelineTier } from "../lib/config";
+
+export { PIPELINE_TIERS };
+export type { PipelineTier };
 import {
   resolveDiscoveryOutcome,
   todayYmd,
@@ -545,18 +548,21 @@ export interface MenteeJourney {
   meetingCount: number;
   meetings: MenteeMeeting[]; // ascending by date
   engagementIds: number[];
+  // Pipeline stage entry dates from engagements (earliest start per tier), and
+  // the highest tier reached. graduated date comes from an "After Graduation
+  // Care" engagement.
+  stageDates: Record<PipelineTier, string | null>;
+  currentTier: PipelineTier | null;
   // Manual override (mentee_outcomes), if any.
   overrideId: string | null;
   override: MenteeStatus | null;
   overrideDate: string | null;
   notes: string | null;
-  // Resolved status: override wins; otherwise inferred active/inactive.
+  // Resolved status: override wins; else a real "After Graduation Care"
+  // engagement => graduated; else inferred active/inactive from activity.
   resolvedStatus: ResolvedMenteeStatus;
   source: ResolvedOutcomeSource;
   // Durations in whole days (null when an endpoint is missing).
-  daysDiscoveryToJyf: number | null;
-  daysJyfToFirstMeeting: number | null;
-  daysDiscoveryToFirstMeeting: number | null;
   activeSpanDays: number | null; // first -> last meeting
   daysInSystem: number | null; // earliest start -> exit / last activity / today
 }
@@ -565,6 +571,13 @@ export interface MenteeJourney {
 function dayspan(a: string | null, b: string | null): number | null {
   if (!a || !b) return null;
   return Math.floor((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+// Latest non-null YYYY-MM-DD from a list (or null if all empty).
+function maxDate(ds: (string | null)[]): string | null {
+  let m: string | null = null;
+  for (const d of ds) if (d && (!m || d > m)) m = d;
+  return m;
 }
 
 // Page every active mentoring appointment across all history (the pipeline spans
@@ -618,12 +631,77 @@ async function fetchDiscoveryDatesByClient(): Promise<Map<number, string>> {
   return out;
 }
 
-// Assemble a journey per mentee (any client with at least one mentoring
-// meeting), sorted by most-recent activity first. Excludes placeholder/group
-// "clients". Reads the full mirror once; the Journeys tab filters/searches it.
+interface EngagementRow {
+  client_id: number | null;
+  name: string | null;
+  start_date: string | null;
+  is_complete: boolean | null;
+  is_canceled: boolean | null;
+}
+
+// Page every engagement across all history (for the pipeline-stage timeline).
+async function fetchAllEngagements(): Promise<EngagementRow[]> {
+  const pageSize = 1000;
+  const out: EngagementRow[] = [];
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_engagements")
+      .select("client_id,name,start_date,is_complete,is_canceled")
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as EngagementRow[];
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
+// Per-client pipeline stages from engagements: the earliest start date for each
+// tier (jumpstart/4x/2x/1x/graduated), the highest tier reached, and whether any
+// pipeline engagement is still open (not complete, not canceled).
+interface ClientStages {
+  stageDates: Record<PipelineTier, string | null>;
+  currentTier: PipelineTier | null;
+  hasOpen: boolean;
+}
+function stagesByClient(engagements: EngagementRow[]): Map<number, ClientStages> {
+  const tierOrder = new Map(PIPELINE_TIERS.map((t, i) => [t, i] as const));
+  const out = new Map<number, ClientStages>();
+  for (const e of engagements) {
+    if (e.client_id == null) continue;
+    const tier = engagementTier(e.name);
+    if (!tierOrder.has(tier as PipelineTier)) continue; // skip mentor_training/group/other
+    const pt = tier as PipelineTier;
+    let cur = out.get(e.client_id);
+    if (!cur) {
+      cur = { stageDates: { jumpstart: null, "4x": null, "2x": null, "1x": null, graduated: null }, currentTier: null, hasOpen: false };
+      out.set(e.client_id, cur);
+    }
+    if (e.start_date && (!cur.stageDates[pt] || e.start_date < cur.stageDates[pt]!)) cur.stageDates[pt] = e.start_date;
+    if (!e.is_complete && !e.is_canceled) cur.hasOpen = true;
+  }
+  // Resolve the highest tier reached (latest in PIPELINE_TIERS order with a date).
+  for (const s of out.values()) {
+    let best: PipelineTier | null = null;
+    let bestIdx = -1;
+    for (const t of PIPELINE_TIERS) {
+      if (s.stageDates[t] && tierOrder.get(t)! > bestIdx) {
+        best = t;
+        bestIdx = tierOrder.get(t)!;
+      }
+    }
+    s.currentTier = best;
+  }
+  return out;
+}
+
+// Assemble a journey per mentee (any client with a mentoring meeting or a
+// pipeline engagement), sorted by most-recent activity first. Excludes
+// placeholder/group "clients". Reads the full mirror once; the tab filters it.
 export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
-  const [mentoring, discoveryDates, clientsRes, coachesRes, outcomesRes] = await Promise.all([
+  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomesRes] = await Promise.all([
     fetchAllMentoring(),
+    fetchAllEngagements(),
     fetchDiscoveryDatesByClient(),
     supabase.from("ca_clients").select("id,name,is_excluded"),
     supabase.from("ca_coaches").select("id,name"),
@@ -662,13 +740,22 @@ export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
     byClient.set(a.client_id, arr);
   }
 
+  const stages = stagesByClient(engagements);
   const today = todayYmd();
+  const emptyStages = (): Record<PipelineTier, string | null> => ({ jumpstart: null, "4x": null, "2x": null, "1x": null, graduated: null });
+  const clientIds = new Set<number>([...byClient.keys(), ...stages.keys()]);
   const journeys: MenteeJourney[] = [];
-  for (const [clientId, rawMeetings] of byClient) {
-    const meetings = rawMeetings.filter((m) => m.date).sort((a, b) => a.date.localeCompare(b.date));
-    if (!meetings.length) continue;
-    const firstMeeting = meetings[0].date;
-    const lastMeeting = meetings[meetings.length - 1].date;
+  for (const clientId of clientIds) {
+    if (clientMap.get(clientId)?.is_excluded) continue;
+    const meetings = (byClient.get(clientId) ?? []).filter((m) => m.date).sort((a, b) => a.date.localeCompare(b.date));
+    const st = stages.get(clientId);
+    if (!meetings.length && !st) continue; // nothing to show
+    const stageDates = st?.stageDates ?? emptyStages();
+    const currentTier = st?.currentTier ?? null;
+    const hasOpen = st?.hasOpen ?? false;
+
+    const firstMeeting = meetings.length ? meetings[0].date : null;
+    const lastMeeting = meetings.length ? meetings[meetings.length - 1].date : null;
     const discoveryDate = discoveryDates.get(clientId) ?? null;
     const jyfPurchaseDate = purchasesByClient.get(clientId)?.[0] ?? null;
     const engagementIds = [...new Set(meetings.map((m) => m.engagementId).filter((x): x is number => x != null && x !== 0))];
@@ -676,18 +763,26 @@ export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
     const o = overrideMap.get(clientId);
     const override = o?.status ?? null;
     const overrideDate = o?.status_date ?? null;
-    const sinceLast = dayspan(lastMeeting, today) ?? Infinity;
-    const inferred: ResolvedMenteeStatus = sinceLast <= MENTEE_ACTIVE_WINDOW_DAYS ? "active" : "inactive";
-    const resolvedStatus: ResolvedMenteeStatus = override ?? inferred;
+
+    // Activity: latest meeting, else the latest known stage date.
+    const lastActivity = lastMeeting ?? maxDate(Object.values(stageDates));
+    const active = (dayspan(lastActivity, today) ?? Infinity) <= MENTEE_ACTIVE_WINDOW_DAYS || hasOpen;
+
+    // Resolved status: override wins; else a real "After Graduation Care"
+    // engagement => graduated; else inferred from activity.
+    const resolvedStatus: ResolvedMenteeStatus =
+      override ?? (stageDates.graduated ? "graduated" : active ? "active" : "inactive");
     const source: ResolvedOutcomeSource = override ? "manual" : "auto";
 
-    const startDate = discoveryDate ?? jyfPurchaseDate ?? firstMeeting;
-    const endDate =
+    const startDate = discoveryDate ?? stageDates.jumpstart ?? jyfPurchaseDate ?? firstMeeting;
+    const exitDate =
       override && override !== "active" && overrideDate
         ? overrideDate
+        : !override && stageDates.graduated
+        ? stageDates.graduated
         : resolvedStatus === "active"
         ? today
-        : lastMeeting;
+        : lastActivity;
 
     journeys.push({
       clientId,
@@ -699,21 +794,20 @@ export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
       meetingCount: meetings.length,
       meetings,
       engagementIds,
+      stageDates,
+      currentTier,
       overrideId: o?.id ?? null,
       override,
       overrideDate,
       notes: o?.notes ?? null,
       resolvedStatus,
       source,
-      daysDiscoveryToJyf: dayspan(discoveryDate, jyfPurchaseDate),
-      daysJyfToFirstMeeting: dayspan(jyfPurchaseDate, firstMeeting),
-      daysDiscoveryToFirstMeeting: dayspan(discoveryDate, firstMeeting),
       activeSpanDays: dayspan(firstMeeting, lastMeeting),
-      daysInSystem: dayspan(startDate, endDate),
+      daysInSystem: dayspan(startDate, exitDate),
     });
   }
 
-  journeys.sort((a, b) => (b.lastMeeting ?? "").localeCompare(a.lastMeeting ?? ""));
+  journeys.sort((a, b) => (b.lastMeeting ?? b.discoveryDate ?? "").localeCompare(a.lastMeeting ?? a.discoveryDate ?? ""));
   return journeys;
 }
 
@@ -756,11 +850,12 @@ export interface LegStat {
 
 export function aggregateJourneyDurations(journeys: MenteeJourney[]): LegStat[] {
   const legs: { key: string; label: string; pick: (j: MenteeJourney) => number | null }[] = [
-    { key: "dc_jyf", label: "Discovery → JumpStart", pick: (j) => j.daysDiscoveryToJyf },
-    { key: "jyf_first", label: "JumpStart → 1st meeting", pick: (j) => j.daysJyfToFirstMeeting },
-    { key: "dc_first", label: "Discovery → 1st meeting", pick: (j) => j.daysDiscoveryToFirstMeeting },
-    { key: "span", label: "Mentoring span (1st → last)", pick: (j) => j.activeSpanDays },
-    { key: "dc_grad", label: "Discovery → graduation", pick: (j) => (j.resolvedStatus === "graduated" ? dayspan(j.discoveryDate, j.overrideDate) : null) },
+    { key: "dc_js", label: "Discovery → JumpStart", pick: (j) => dayspan(j.discoveryDate, j.stageDates.jumpstart) },
+    { key: "js_4x", label: "JumpStart → 4x", pick: (j) => dayspan(j.stageDates.jumpstart, j.stageDates["4x"]) },
+    { key: "4x_2x", label: "4x → 2x", pick: (j) => dayspan(j.stageDates["4x"], j.stageDates["2x"]) },
+    { key: "2x_1x", label: "2x → 1x", pick: (j) => dayspan(j.stageDates["2x"], j.stageDates["1x"]) },
+    { key: "1x_grad", label: "1x → graduation", pick: (j) => dayspan(j.stageDates["1x"], j.stageDates.graduated) },
+    { key: "dc_grad", label: "Discovery → graduation", pick: (j) => dayspan(j.discoveryDate, j.stageDates.graduated) },
   ];
   return legs.map((leg) => {
     const vals = journeys

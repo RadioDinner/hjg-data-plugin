@@ -89,6 +89,45 @@ export const CONVERSION_OFFERING_IDS: number[] = [42840];
 // (assumed decided-against / ghosted).
 export const DISCOVERY_DECISION_WINDOW_DAYS = 30;
 
+// --- Engagement → pipeline tier ---
+// CoachAccountable Engagement names encode HJG's pipeline stage. A mentee's
+// journey is JumpStart → 4x → 2x → 1x → graduated; mentor_training / group /
+// other are NOT part of a mentee's pipeline.
+export type EngagementTier = "jumpstart" | "4x" | "2x" | "1x" | "graduated" | "mentor_training" | "group" | "other";
+
+// The mentee pipeline tiers, in journey order. JumpStart is the supervised
+// start; "graduated" is reached via an "After Graduation Care" engagement.
+export const PIPELINE_TIERS = ["jumpstart", "4x", "2x", "1x", "graduated"] as const;
+export type PipelineTier = (typeof PIPELINE_TIERS)[number];
+
+// Map an engagement name to its tier. Handles the modern
+// "MN Subscription | (Nx Month) ..." naming and the legacy
+// "... Every N Appointments" / "ONE|TWO appointment per month" / "WEEKLY
+// appointments" conventions. Order matters: the legacy mentoring names all
+// carry a "60 minute weekly Zoom call" description regardless of cadence, so the
+// explicit frequency markers (one/two/twice/(1x/(2x) are checked BEFORE the 4x
+// "weekly appointments" markers, and bare "weekly" is never used as a signal.
+export function engagementTier(rawName: string | null | undefined): EngagementTier {
+  const s = (rawName ?? "").toLowerCase();
+  if (!s) return "other";
+  if (s.includes("mentor training") || s.includes("mt engagement")) return "mentor_training";
+  if (s.includes("after graduation")) return "graduated";
+  if (s.includes("gain momentum")) return "group";
+  if (s.includes("jumpstart") || s.includes("(0x") || s.includes("jyf")) return "jumpstart";
+  if (s.includes("(1x") || s.includes("one appointment") || s.includes("1x month") || s.includes("1 hour per month")) return "1x";
+  if (
+    s.includes("(2x") ||
+    s.includes("biweekly") ||
+    s.includes("twice") ||
+    s.includes("two appointment") ||
+    s.includes("every 2 appointment") ||
+    s.includes("2x month")
+  )
+    return "2x";
+  if (s.includes("(4x") || s.includes("weekly appointment") || s.includes("every 4 appointment") || s.includes("normal monthly")) return "4x";
+  return "other";
+}
+
 // --- CoachAccountable function names (centralized so they're easy to correct) ---
 // Offering.getAll is confirmed in the docs. The submissions function name is
 // inferred from the docs ("submissions for Offerings") and MUST be verified on

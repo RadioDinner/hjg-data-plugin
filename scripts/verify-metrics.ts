@@ -9,6 +9,7 @@ import { computeMonthlyMetrics } from "../lib/metrics.js";
 import { computeFunnelReport } from "../lib/funnel.js";
 import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
+import { engagementTier } from "../lib/config.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -179,6 +180,26 @@ console.log("[5] discovery conversion resolver");
   const overridden = r({ manual: "no_show", conversionPurchaseDates: ["2026-03-10"] });
   eq(overridden.outcome, "no_show", "manual override wins over a purchase");
   eq(overridden.source, "manual", "override flagged as manual");
+}
+
+console.log("[6] engagement → pipeline tier");
+{
+  const t = (name: string) => engagementTier(name);
+  eq(t("MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress"), "jumpstart", "modern JumpStart (0x)");
+  eq(t("MN Subscription | (4x Month) Zoom Meetings"), "4x", "modern 4x");
+  eq(t("MN Subscription | (2x Month) Zoom Meetings"), "2x", "modern 2x");
+  eq(t("MN Subscription | (1x Month) Zoom Meetings"), "1x", "modern 1x");
+  eq(t("MN Subscription | After Graduation Care"), "graduated", "after-graduation care");
+  eq(t("MT Engagement | Mentor Training Program"), "mentor_training", "mentor training excluded from pipeline");
+  // Legacy names carry a "60 minute weekly Zoom call" description regardless of
+  // cadence — the explicit frequency must win over the word "weekly".
+  eq(t("ONE appointment per Month Mentoring Subscription -- 60 minute weekly Zoom call"), "1x", "legacy ONE/month is 1x, not 4x");
+  eq(t("TWO appointments per Month Mentoring Subscription -- 60 minute weekly Zoom call"), "2x", "legacy TWO/month is 2x");
+  eq(t("WEEKLY appointments Monthly Mentoring Subscription -- 60 minute weekly Zoom call"), "4x", "legacy WEEKLY appointments is 4x");
+  eq(t("60 Minute WEEKLY Mentoring Sessions - Pay in Advance Every 4 Appointments"), "4x", "legacy every-4-appointments is 4x");
+  eq(t("60 Minute BIWEEKLY Coaching Sessions - Pay in Advance Every 2 Appointments"), "2x", "legacy biweekly/every-2 is 2x");
+  eq(t("Gain Momentum Group"), "group", "gain momentum group");
+  eq(t(""), "other", "empty name");
 }
 
 console.log("");
