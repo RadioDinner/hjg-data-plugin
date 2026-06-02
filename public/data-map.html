@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>HJG Data Hub — Data Map</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  :root{ --bg:#0f172a; --panel:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8;
+         --mirror:#38bdf8; --hjg:#34d399; --ops:#94a3b8; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  #wrap{position:fixed;inset:0}
+  svg{width:100%;height:100%;display:block;cursor:grab} svg:active{cursor:grabbing}
+  .link{stroke:#475569;stroke-opacity:.45}
+  .link--schema{stroke-dasharray:4 5;stroke-opacity:.3}
+  .linklabel{fill:var(--muted);font-size:10px;pointer-events:none;opacity:0}
+  .node circle{stroke:var(--bg);stroke-width:2px;cursor:pointer;transition:opacity .15s,stroke .15s}
+  .node circle.sel{stroke:#fff;stroke-width:3px}
+  .node text{fill:var(--text);font-size:12px;font-weight:600;pointer-events:none;text-anchor:middle;
+    paint-order:stroke;stroke:var(--bg);stroke-width:3px;transition:opacity .15s}
+  .node text.sub{fill:var(--muted);font-size:10px;font-weight:400}
+  .faded{opacity:.1}
+  .panel{position:fixed;top:18px;left:18px;background:rgba(30,41,59,.85);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;max-width:300px;backdrop-filter:blur(5px)}
+  .panel h1{margin:0 0 4px;font-size:16px}
+  .panel p{margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.5}
+  .legend{display:flex;flex-direction:column;gap:6px;font-size:12px}
+  .legend .row{display:flex;align-items:center;gap:8px}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .tip{position:fixed;pointer-events:none;background:#0b1220;border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;font-size:12px;opacity:0;transition:opacity .1s;max-width:260px}
+  .tip b{color:#fff}
+  .hint{position:fixed;bottom:14px;left:18px;font-size:11px;color:var(--muted)}
+  /* detail drawer */
+  #detail{position:fixed;top:0;right:0;height:100%;width:340px;background:rgba(15,23,42,.96);
+    border-left:1px solid var(--line);backdrop-filter:blur(6px);transform:translateX(100%);
+    transition:transform .22s ease;overflow-y:auto;padding:20px;z-index:5}
+  #detail.open{transform:translateX(0)}
+  #detail .close{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:20px;border:none;background:none}
+  #detail h2{margin:0 0 2px;font-size:18px;display:flex;align-items:center;gap:9px}
+  #detail .badge{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600}
+  #detail .rowsline{color:var(--muted);font-size:13px;margin:2px 0 16px}
+  #detail h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 8px}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #25324a}
+  .kv span:last-child{font-weight:600;font-variant-numeric:tabular-nums}
+  .rel{font-size:13px;padding:6px 0;border-bottom:1px solid #25324a;cursor:pointer}
+  .rel:hover{color:#fff} .rel .arrow{color:var(--mirror)} .rel .via{color:var(--muted);font-size:11px}
+  .bar{margin:7px 0}
+  .bar .b-top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+  .bar .b-track{height:7px;background:#25324a;border-radius:999px;overflow:hidden}
+  .bar .b-fill{height:100%;border-radius:999px}
+  .note{font-size:12px;color:var(--muted);font-style:italic;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="wrap"><svg></svg></div>
+<div class="panel">
+  <h1>HJG Data Hub — Data Map</h1>
+  <p>How the CoachAccountable mirror + HJG-owned tables connect. Node size = rows; link thickness = linking rows. <b>Click a bubble</b> for its relationships &amp; stats. Drag to rearrange, scroll to zoom.</p>
+  <div class="legend">
+    <div class="row"><span class="dot" style="background:var(--mirror)"></span> CoachAccountable mirror</div>
+    <div class="row"><span class="dot" style="background:var(--hjg)"></span> HJG-owned (staff)</div>
+    <div class="row"><span class="dot" style="background:var(--ops)"></span> Ops / sync log</div>
+    <div class="row"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#475569" stroke-dasharray="4 5"/></svg> relationship, no rows yet</div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+<div class="hint">Snapshot: hjgrawdata 2026-06-01 · 11 tables</div>
+<aside id="detail"><button class="close" onclick="closeDetail()">&times;</button><div id="detail-body"></div></aside>
+<script>
+const GRAPH = {"nodes":[{"id":"ca_appointments","rows":3802,"group":"mirror"},{"id":"ca_clients","rows":401,"group":"mirror"},{"id":"ca_coaches","rows":35,"group":"mirror"},{"id":"ca_engagements","rows":466,"group":"mirror"},{"id":"ca_offerings","rows":18,"group":"mirror"},{"id":"ca_offering_submissions","rows":292,"group":"mirror"},{"id":"coach_settings","rows":5,"group":"hjg"},{"id":"discovery_outcomes","rows":0,"group":"hjg"},{"id":"manual_metrics","rows":22,"group":"hjg"},{"id":"mentee_outcomes","rows":0,"group":"hjg"},{"id":"sync_runs","rows":6,"group":"ops"}],"edges":[{"source":"ca_appointments","target":"ca_clients","via":"client_id","weight":3802},{"source":"ca_appointments","target":"ca_coaches","via":"coach_id","weight":3802},{"source":"ca_appointments","target":"ca_engagements","via":"engagement_id","weight":3525},{"source":"ca_engagements","target":"ca_clients","via":"client_id","weight":466},{"source":"ca_engagements","target":"ca_coaches","via":"coach_id","weight":466},{"source":"ca_offering_submissions","target":"ca_clients","via":"client_id","weight":292},{"source":"ca_offering_submissions","target":"ca_offerings","via":"offering_id","weight":291},{"source":"coach_settings","target":"ca_coaches","via":"coach_id","weight":5},{"source":"discovery_outcomes","target":"ca_clients","via":"client_id","weight":0},{"source":"discovery_outcomes","target":"ca_appointments","via":"appointment_id","weight":0},{"source":"mentee_outcomes","target":"ca_clients","via":"client_id","weight":0}],"details":{"ca_appointments":{"stats":[["Total rows",3802],["Distinct clients",241],["Distinct coaches",9],["Linked to an engagement",3525],["Date range","2024-01-01 \u2192 2026-12-14"]],"dist":{"title":"By category","items":[["mentoring",2475],["other",734],["excluded",474],["discoveryZoom",84],["discoveryPhone",35]]}},"ca_clients":{"stats":[["Total",401],["Active",129],["Excluded (placeholder/group)",0]],"dist":null},"ca_coaches":{"stats":[["Total",35],["Active",34],["Flagged as mentors",5]],"dist":null},"ca_engagements":{"stats":[["Total",466],["Distinct clients",293],["Completed",163],["Canceled",213]],"dist":{"title":"By pipeline tier (from engagement name)","items":[["JumpStart",108],["4x",188],["2x",41],["1x",14],["Graduated",11],["Mentor Training",97],["Group",5],["Other",2]]}},"ca_offerings":{"stats":[["Total offerings",18]],"dist":{"title":"Top by submissions","items":[["1a. Discovery Call (via phone) - Arthur",91],["2. JumpStart Your Freedom (Waiting List)",86],["1b. Discovery Call (Zoom) - Arthur",36],["JumpStart Your Freedom",23],["4. 90-Minute \u201cTracking Together\u201d Marriage Encounter",13],["3. After Graduation 'Tune-Up' Session",11]]}},"ca_offering_submissions":{"stats":[["Total",292],["Distinct clients",169],["Total paid","$23,453"]],"dist":{"title":"By offering","items":[["1a. Discovery Call (via phone) - Arthur",91],["2. JumpStart Your Freedom (Waiting List)",86],["1b. Discovery Call (Zoom) - Arthur",36],["JumpStart Your Freedom",23],["4. 90-Minute \u201cTracking Together\u201d Marriage Encounter",13],["3. After Graduation 'Tune-Up' Session",11]]}},"coach_settings":{"stats":[["Rows",5],["Flagged mentors",5],["Total capacity",42]],"dist":null},"discovery_outcomes":{"stats":[["Rows",0]],"note":"No manual discovery overrides recorded yet \u2014 outcomes resolve automatically from JumpStart purchases.","dist":null},"manual_metrics":{"stats":[["Rows",22]],"dist":{"title":"Sum by metric","items":[["triggers_pdf_downloads",112],["sast_worksheets",33]]}},"mentee_outcomes":{"stats":[["Rows",0]],"note":"No mentee pipeline overrides yet \u2014 status infers from activity until staff classify exits on the Journeys tab.","dist":null},"sync_runs":{"stats":[["Total runs",6],["Last status","success"],["Last finished","2026-06-02"],["Last records synced",5009]],"dist":null}}};
+const COLOR = {mirror:'#38bdf8', hjg:'#34d399', ops:'#94a3b8'};
+const GROUPLBL = {mirror:'CA mirror', hjg:'HJG-owned', ops:'Ops'};
+const svg = d3.select('svg');
+let W = window.innerWidth, H = window.innerHeight;
+svg.attr('viewBox',[0,0,W,H]);
+const root = svg.append('g');
+svg.call(d3.zoom().scaleExtent([0.3,3]).on('zoom', e=>root.attr('transform', e.transform)));
+svg.on('click', ()=>{ if(d3.event) return; });
+
+svg.append('defs').append('marker').attr('id','arrow').attr('viewBox','0 -5 10 10')
+  .attr('refX',26).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
+  .append('path').attr('d','M0,-4L8,0L0,4').attr('fill','#475569');
+
+const rscale = d3.scaleSqrt().domain([0, d3.max(GRAPH.nodes,d=>d.rows)||1]).range([15,48]);
+const wscale = d3.scaleSqrt().domain([1, d3.max(GRAPH.edges,d=>d.weight)||1]).range([1,7]);
+GRAPH.nodes.forEach(n=> n.r = Math.max(15, rscale(n.rows)) );
+const byId = {}; GRAPH.nodes.forEach(n=>byId[n.id]=n);
+const adj = {}; GRAPH.nodes.forEach(n=>adj[n.id]=new Set([n.id]));
+GRAPH.edges.forEach(e=>{ adj[e.source].add(e.target); adj[e.target].add(e.source); });
+
+const sim = d3.forceSimulation(GRAPH.nodes)
+  .force('link', d3.forceLink(GRAPH.edges).id(d=>d.id).distance(d=> 95 + (8-wscale(d.weight||1))*14 ).strength(0.25))
+  .force('charge', d3.forceManyBody().strength(-950))
+  .force('center', d3.forceCenter(W/2, H/2))
+  .force('collide', d3.forceCollide().radius(d=>d.r+24));
+
+const link = root.append('g').selectAll('line').data(GRAPH.edges).join('line')
+  .attr('class', d=> 'link'+(d.weight===0?' link--schema':''))
+  .attr('stroke-width', d=> d.weight===0?1:wscale(d.weight)).attr('marker-end','url(#arrow)');
+const linkLabel = root.append('g').selectAll('text').data(GRAPH.edges).join('text')
+  .attr('class','linklabel').text(d=> d.via + (d.weight?(' · '+d.weight.toLocaleString()):''));
+
+const node = root.append('g').selectAll('g').data(GRAPH.nodes).join('g').attr('class','node')
+  .call(d3.drag().on('start',ds).on('drag',dd).on('end',de));
+node.append('circle').attr('r',d=>d.r).attr('fill',d=>COLOR[d.group]).attr('fill-opacity',.9);
+node.append('text').attr('dy', d=>d.r+15).text(d=>d.id);
+node.append('text').attr('class','sub').attr('dy',d=>d.r+28).text(d=>d.rows.toLocaleString()+' rows');
+
+const tip = d3.select('#tip');
+node.on('mousemove', (e,d)=>{ tip.style('left',(e.clientX+14)+'px').style('top',(e.clientY+14)+'px').style('opacity',1)
+     .html('<b>'+d.id+'</b><br>'+d.rows.toLocaleString()+' rows · click for detail'); })
+   .on('mouseover',(e,d)=>{ if(!selected) highlight(d.id); })
+   .on('mouseout',()=>{ tip.style('opacity',0); if(!selected) highlight(null); })
+   .on('click',(e,d)=>{ e.stopPropagation(); openDetail(d.id); });
+
+link.on('mousemove',(e,d)=>{ tip.style('left',(e.clientX+14)+'px').style('top',(e.clientY+14)+'px').style('opacity',1)
+     .html('<b>'+d.source.id+'</b> → <b>'+d.target.id+'</b><br>via '+d.via+' · '+(d.weight?d.weight.toLocaleString()+' linking rows':'no rows yet')); })
+   .on('mouseout',()=>tip.style('opacity',0));
+
+let selected=null;
+function highlight(id){
+  if(!id){ node.classed('faded',false); link.classed('faded',false); linkLabel.style('opacity',0); return; }
+  node.classed('faded', n=> !adj[id].has(n.id));
+  link.classed('faded', l=> l.source.id!==id && l.target.id!==id);
+  linkLabel.style('opacity', l=> (l.source.id===id||l.target.id===id)?1:0);
+}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function openDetail(id){
+  selected=id; highlight(id);
+  node.select('circle').classed('sel', n=>n.id===id);
+  const n=byId[id], det=GRAPH.details[id]||{stats:[]};
+  const out=GRAPH.edges.filter(e=>e.source.id===id||e.source===id).map(e=>({to:(e.target.id||e.target),via:e.via,w:e.weight,dir:'→'}));
+  const inc=GRAPH.edges.filter(e=>e.target.id===id||e.target===id).map(e=>({to:(e.source.id||e.source),via:e.via,w:e.weight,dir:'←'}));
+  const rels=out.concat(inc);
+  let html='<h2>'+esc(id)+'<span class="badge" style="background:'+COLOR[n.group]+'22;color:'+COLOR[n.group]+'">'+GROUPLBL[n.group]+'</span></h2>';
+  html+='<div class="rowsline">'+n.rows.toLocaleString()+' rows</div>';
+  if(det.note) html+='<div class="note">'+esc(det.note)+'</div>';
+  if(det.stats&&det.stats.length){ html+='<h3>Key facts</h3>'; det.stats.forEach(([k,v])=> html+='<div class="kv"><span>'+esc(k)+'</span><span>'+esc(v)+'</span></div>'); }
+  if(rels.length){ html+='<h3>Relationships</h3>'; rels.forEach(r=> html+='<div class="rel" onclick="openDetail(\''+r.to+'\')"><span class="arrow">'+r.dir+'</span> '+esc(r.to)+' <span class="via">· '+esc(r.via)+(r.w?(' · '+r.w.toLocaleString()):' · none')+'</span></div>'); }
+  if(det.dist&&det.dist.items.length){ const mx=Math.max(...det.dist.items.map(i=>i[1]))||1;
+    html+='<h3>'+esc(det.dist.title)+'</h3>';
+    det.dist.items.forEach(([name,c])=> html+='<div class="bar"><div class="b-top"><span>'+esc(name)+'</span><span>'+c.toLocaleString()+'</span></div><div class="b-track"><div class="b-fill" style="width:'+(100*c/mx)+'%;background:'+COLOR[n.group]+'"></div></div></div>'); }
+  document.getElementById('detail-body').innerHTML=html;
+  document.getElementById('detail').classList.add('open');
+}
+function closeDetail(){ selected=null; document.getElementById('detail').classList.remove('open');
+  node.select('circle').classed('sel',false); highlight(null); }
+
+sim.on('tick',()=>{
+  link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+  linkLabel.attr('x',d=>(d.source.x+d.target.x)/2).attr('y',d=>(d.source.y+d.target.y)/2);
+  node.attr('transform',d=>`translate(${d.x},${d.y})`);
+});
+function ds(e,d){ if(!e.active) sim.alphaTarget(.3).restart(); d.fx=d.x; d.fy=d.y; }
+function dd(e,d){ d.fx=e.x; d.fy=e.y; }
+function de(e,d){ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }
+window.addEventListener('resize',()=>{ W=window.innerWidth;H=window.innerHeight; svg.attr('viewBox',[0,0,W,H]); sim.force('center',d3.forceCenter(W/2,H/2)).alpha(.3).restart(); });
+</script>
+</body>
+</html>

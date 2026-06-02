@@ -1,255 +1,150 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-05-28.
+2026-06-01 (session 002).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
-> where **every metric is viewable as a graph AND a table simultaneously**. ✅
-> That core layout shift just shipped (see "Resume here" below). See `CLAUDE.md`
-> for the standing goals, and `CSHARP_PORT.md` for the separate C# learning-rebuild
-> track.
->
-> **Shipped since last handoff:** automated discovery→conversion, manual board
-> metrics, Resource-engagement card, and now the **inline graph+table panels on
-> every ChartCard** with a Graph/Table/Both toggle (replaces the Explore modal).
+> where **every metric is viewable as a graph AND a table simultaneously**. See
+> `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
+> orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live session state — 2026-05-28)
+## Resume here (live state — 2026-06-01, session 002)
 
-Picking this up cold — start with this section.
+Picking this up cold — start here.
 
-**Repo state:** on branch `claude/affectionate-pasteur-UaBv4` (working tree
-clean), one commit ahead of `main`. The graphs-AND-tables north-star change is
-on this branch and ready to merge.
+**Repo state:** on branch **`claude/admiring-cray-nZJgk`** (working tree clean
+after the final handoff commit), **13 commits ahead of `main`**, all pushed.
+**Not yet merged to `main`.** `main` is still default + production.
 
-**This session's commits (newest first, on top of `main` at `05cf717`):**
-- (this session) — graphs+tables: inline table panel on every ChartCard with
-  Graph/Table/Both toggle (default Both, persisted per card), side-by-side at
-  ≥960px and stacked below; removes `ExploreModal`
-- `1be071b` — handoff: live session-resume state
+**Shipped this session (see `Session log/002_2026-06-01/session_log.md` for the
+full list + hashes):**
+- **Discovery → conversion ChartCard** (converted bars + rate line + table).
+- **Journeys tab** (new): per-mentee pipeline timeline + board-level aggregate.
+- **Engagement sync** (read-only) → new `ca_engagements` mirror.
+- **Real engagement-based pipeline stages** — `Discovery → JumpStart → 4x → 2x →
+  1x → Graduation` with real per-stage dates (the headline feature).
+- **Raw data: "Export all" → multi-sheet `.xlsx`** (one table per sheet).
+- **Interactive data map** at `public/data-map.html` → hosted at
+  `/data-map.html`, linked from the Raw data tab.
 
-**▶ Next step on the north star — pick what to lock in next:**
-The v1 split is in. Natural follow-ons, in rough order:
-1. **Sortable / filterable tables** (sort by column, free-text filter per card).
-2. **CSV export** per table (one-line download of the per-month rows).
-3. Apply the same graph+table treatment to the **Discovery → conversion** panel
-   (today it's stat-row only — could add a per-month conversion-rate series with
-   a matching table).
-4. **"Calls held" toggle** for discovery (vs signup date) — long-standing.
+**▶ Immediate next steps:**
+1. **Pick a fix for the mentor-capacity inflation** (see Open items). Diagnosed
+   this session, not yet built — the user needs to choose the approach.
+2. **Verify in a real browser / Vercel preview** (container is headless): the
+   Journeys tab, `/data-map.html`, and the Export-all `.xlsx`.
+3. **Apply migrations** in the Supabase SQL Editor if not done: `9995_mentee_
+   outcomes.sql` (needed for the status override) and `9994_ca_engagements.sql`
+   (engagements already synced, so likely applied — confirm).
+4. Consider widening `SYNC_YEARS` so pre-window JumpStart engagements aren't
+   missing a start date on the timeline.
+5. **Merge to `main`** when verified.
 
-**Verification status (this session):** `npm run typecheck`, `npm run verify`,
-and `npm run build` all pass. **The UI was NOT exercised in a real browser**
-this session — the remote container is headless and the app is Supabase-auth-
-gated, so a quick manual pass on a real machine is wanted before merging:
-- on each Metrics card, the Graph/Table/Both toggle flips the panel and the
-  choice survives a reload (stored in `localStorage` under
-  `hjg.chartcard.view:<title>`);
-- at wide widths (≥960px) the table sits to the right of the chart; at narrower
-  widths it stacks below;
-- the Mentee-meetings card's Total/Compare toggle and type filter still drive
-  both the chart and the new inline table.
-
-**Other offered-but-not-done (pick up if wanted):**
-- A **`Stop` hook** in `settings.json` to *auto-enforce* "update HANDOFF.md each
-  session" (today it's only a soft `CLAUDE.md` instruction). Can be set up via the
-  config skill.
-
-**Separate track — C# rebuild:** see `CSHARP_PORT.md`. Not started; begin with the
-pure-logic port (`Config`, `Conversion`) + xUnit tests, keeping this app as the
-reference.
-
-**Orient on the new device:** `npm install && npm run typecheck && npm run verify
-&& npm run build`, then read `CLAUDE.md` (conventions + north star), this file,
-and `CSHARP_PORT.md`. To actually *run* the app you need the Supabase + CA env
-vars (see "Environment variables" below).
+**Verification status:** `npm run typecheck`, `npm run verify` (6 sections),
+`npm run build` all pass. UI not browser-tested this session.
 
 ## What this is
 
 A dashboard for Henry Jude Group (a faith-based mentoring nonprofit) that
 **mirrors CoachAccountable (CA) data into Supabase Postgres** and presents
-mentoring / discovery-funnel metrics for board reporting. Staff log in, the data
-is synced from CA on demand, and the dashboard reads from the mirror.
+mentoring / discovery-funnel / **pipeline-journey** metrics for board reporting.
+Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 
-> The project started as a budget-governed read-only API over CA (see
-> `SPEC.md`). It was re-architected mid-stream into the Supabase-mirror model
-> described here. `SPEC.md` is still useful for CA API details and the
-> categorization rules, but the KV/on-demand parts are superseded.
+> Read-only toward CA. `SPEC.md` has CA API details + categorization rules but
+> its KV/on-demand parts are superseded by the Supabase-mirror model.
 
 ## Stack
 
-- **Frontend:** React 18 + Vite + TypeScript + `recharts`. Supabase Auth
-  (email/password) gates the whole app.
-- **Backend:** Vercel serverless functions (TypeScript, **ESM**) under `api/`.
-- **Data:** Supabase Postgres. CA is pulled in via `POST /api/sync`.
-- **Hosting:** Vercel, connected to GitHub repo `radiodinner/hjg-data-plugin`.
-  Deploys on push (feature branches deploy as **Preview**).
+- **Frontend:** React 18 + Vite + TS + `recharts`; Supabase Auth gates the app.
+  `write-excel-file` for the multi-sheet export.
+- **Backend:** Vercel serverless functions (TS, **ESM**) under `api/`.
+- **Data:** Supabase Postgres; CA pulled via `POST /api/sync`.
+- **Hosting:** Vercel, GitHub `radiodinner/hjg-data-plugin`. Feature branches
+  deploy as **Preview**; `main` → production.
 
-## Data flow
+## App tabs
 
-```
-CoachAccountable ──(read-only, budget-guarded)──▶ /api/sync ──▶ ca_* mirror tables (Supabase)
-                                                                      │
-Browser dashboard ──(supabase-js, RLS)────────────────────────────────┘
-   • reads the mirror directly and computes metrics client-side over a date range
-   • writes discovery_outcomes directly (RLS: signed-in staff)
-```
-
-Server endpoints (`lib/http.ts` `withApi`, Supabase-JWT auth):
-- `POST /api/sync` — pull CA → upsert mirror, writes a `sync_runs` row. Auth: a
-  signed-in user, or `x-sync-secret` == `SYNC_CRON_SECRET` (for a future cron).
-- `GET /api/health` — no auth; reports whether env is configured + last sync.
-- `GET /api/budget` — CA-call cap + recent runs.
-- `GET /api/reports/funnel` — server-side monthly metrics (reuses
-  `lib/metrics.ts`/`lib/funnel.ts`). **Currently unused by the UI** (the
-  dashboard computes client-side); kept as a reporting foundation + it's what
-  `scripts/verify-metrics.ts` exercises.
+- **Metrics** — date-range KPIs + charts; every ChartCard has Graph/Table/Both +
+  Export CSV + Explore. Includes the **Discovery → conversion** ChartCard
+  (converted bars + conversion-rate line), Resource engagement, and Mentor
+  capacity utilization (⚠ inflation bug — see Open items).
+- **Discovery** — discovery calls; auto outcome + manual override.
+- **Journeys** (NEW) — per-mentee pipeline timeline `Discovery → JumpStart → 4x
+  → 2x → 1x → Graduation` from engagement stage dates, current tier, observed
+  meeting-rhythm chart, and a status override (active/graduated/quit/fired).
+  Top card = **board-level aggregate** leg durations (avg/median/n) as graph +
+  table. Mentee search/list on the left.
+- **Raw data** — browse `ca_*`/HJG tables; per-table CSV export; **Export all
+  → `.xlsx`** (one table per sheet); **Data map ↗** link.
+- **Admin** — Sync now, run history, settings, Manual metrics, Mentor capacity.
 
 ## Key files
 
 | Path | Role |
 |---|---|
-| `lib/ca.ts` | CA API client (`CAClient`), read-only, `spend()` budget hook. **CA returns data under `return`, not `result`.** |
-| `lib/config.ts` | Categorization rules (mentoring / discovery / excluded), client-name exclusions, CA function names, **conversion knobs** (`CONVERSION_OFFERING_IDS=[42840]`, `DISCOVERY_DECISION_WINDOW_DAYS=30`). The file to edit when an appointment type isn't recognized or the conversion rule changes. |
-| `lib/conversion.ts` | **Pure** discovery→conversion resolver (manual wins → JumpStart purchase on/after the call = converted → pending ≤30d → not_converted). Covered by `verify-metrics.ts` §5. |
-| `lib/sync.ts` | Sync orchestration: pull CA, categorize, upsert `ca_*`, write `sync_runs`. Offerings/submissions are best-effort. |
-| `lib/budget.ts` | Postgres-backed daily CA-call cap (`BudgetTracker`), config from `app_settings`. |
-| `lib/supabase-admin.ts` | Service-role Supabase client (server only). |
-| `lib/http.ts` | `withApi` wrapper: CORS, Supabase session auth, error mapping. |
-| `lib/metrics.ts`, `lib/funnel.ts` | Pure metric computation (server + verify). |
-| `lib/types.ts` | CA entity types + DB row types. |
-| `src/auth.tsx` | Supabase session provider + sign in/out. |
-| `src/db.ts` | **Browser** data access (reads mirror, writes outcomes, range fetch). |
-| `src/api.ts` | `triggerSync()` (calls `/api/sync` with the session token). |
-| `src/views/MetricsView.tsx` | The dashboard (range picker, KPIs, charts, Explore). |
-| `src/views/DiscoveryView.tsx` | Lists discovery calls; record an outcome per call. |
-| `src/views/RawDataView.tsx` | Browse `ca_*` / `sync_runs` tables. |
-| `src/views/AdminView.tsx` | "Sync now", run history, budget/sync settings. |
-| `supabase/migrations/*.sql` | DB schema. **Descending numbering** (see below). |
-| `scripts/verify-metrics.ts` | Validates categorization/metric logic vs SPEC §4. |
-
-## App tabs
-
-- **Metrics** — date-range picker (presets: this/last month, this/last quarter,
-  this year, last 12 mo, all; plus custom From/To). KPI cards + charts:
-  Discovery calls (stacked phone/zoom + total in tooltip), Mentee meetings (with
-  a meeting-type checkbox filter and a **Total / Compare types** toggle), Active
-  mentees (line), Mentors (bar), and a Discovery→conversion panel. **Every
-  ChartCard has an inline Graph / Table / Both toggle** (default Both, choice
-  persisted per card in `localStorage`) so the chart and the exact per-month
-  numbers are visible together — side-by-side at ≥960px, stacked below on
-  narrower screens. There's also a **Resource engagement** card (totals +
-  per-month bars for the manual board metrics). A "Data as of <last sync>" line
-  shows freshness.
-- **Discovery** — discovery-call appointments. Outcome is now **computed
-  automatically** (see "Conversion automation" below): a **Status** column shows
-  the resolved outcome + an Auto/Manual tag + a plain reason. Staff can still
-  **Override** per call (e.g. a no-show) — the override wins — or **Clear** it to
-  revert to automatic.
-- **Raw data** — browse mirror tables directly (`manual_metrics` included).
-- **Admin** — Sync now, recent sync runs, settings, and a **Manual metrics** card
-  (pick a month, key in counts; the Metrics tab sums them over its range).
+| `lib/ca.ts` | CA API client (read-only). `getEngagements()` = Engagement.getAll. **CA payload under `return`, not `result`.** |
+| `lib/config.ts` | Categorization, exclusions, conversion knobs (`CONVERSION_OFFERING_IDS=[42840]`), **`engagementTier()` + `PIPELINE_TIERS`** (engagement-name → tier), CA function names. |
+| `lib/conversion.ts` | Pure discovery→conversion resolver. Verify §5. |
+| `lib/sync.ts` | Sync orchestration; offerings/submissions + **engagements** are best-effort (warnings accumulate). |
+| `src/db.ts` | Browser data access. **`fetchMenteeJourneys`** (engagement-based stages) + **`aggregateJourneyDurations`**; mentee_outcomes read/write; `fetchAllRows`. |
+| `src/views/JourneysView.tsx` | The Journeys tab (timeline + aggregate). |
+| `src/views/MetricsView.tsx` | Metrics dashboard (ChartCards, conversion, capacity). |
+| `src/xlsx.ts` | Multi-sheet `.xlsx` workbook export. |
+| `public/data-map.html` | Static interactive data-relationship graph (snapshot). |
+| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 = engagement tier mapping**. |
 
 ## Important domain decisions
 
-- **Discovery calls are counted by SIGNUP date** (`date_added` / booking date),
-  not the scheduled call date — that's the board-relevant top-of-funnel number
-  and matches CA's Business Center → Offering Signups. Falls back to the
-  scheduled date when `date_added` isn't populated yet. **Mentee meetings,
-  active mentees, and mentors are counted by the scheduled date.**
-- Categorization happens at **sync time**; the category is stored on
-  `ca_appointments.category`. The dashboard aggregates stored categories.
-- **Conversion is automated, read-time** (no stored auto-outcome, no job): a
-  discovery call converts when its client bought offering **42840** (supervised
-  *JumpStart Your Freedom (Waiting List)*) on/after the call; else pending for 30
-  days, then not_converted. **Manual overrides in `discovery_outcomes` always
-  win.** The self-paced `32326` and test `42841` deliberately do not auto-convert.
-  Logic in `lib/conversion.ts`; the Metrics conversion panel and Discovery tab
-  both read through it. (Known simplification: counting is per-appointment, so a
-  prospect with multiple discovery calls could be counted more than once.)
-- Placeholder/group "clients" are flagged `ca_clients.is_excluded` (rules in
-  `lib/config.ts`) and excluded from metrics.
+- **Pipeline tiers live in `ca_engagements.name`** (`MN Subscription | (Nx
+  Month) …`; legacy `Every N Appointments` / `ONE|TWO appointment per month` /
+  `WEEKLY appointments`). `engagementTier()` maps them; the word "weekly" is
+  ignored as a signal (legacy names always say "60 min weekly Zoom call").
+  Snapshot funnel: JumpStart→4x→2x→1x→graduated ≈ 102→149→55→18→10.
+- **Graduation** = an "After Graduation Care" engagement (auto), or a manual
+  `mentee_outcomes` override. Override always wins; quit/fired can be any stage.
+- **Mentee activity:** active if a meeting OR open engagement within 45 days.
+- Discovery counted by **signup date**; mentee meetings/mentees/mentors by
+  **scheduled date**. Conversion is automated read-time (offering 42840).
+- Group "In Depth" sessions inflate the per-mentor mentee count (Arthur Nisly
+  case) — **bug, not yet fixed.**
 
 ## Database schema (Supabase)
 
-Mirror (written by sync / service role, read by all authenticated):
-`ca_coaches`, `ca_clients`, `ca_appointments`, `ca_offerings`,
-`ca_offering_submissions`. Ops: `sync_runs`, `app_settings`.
-HJG-owned (staff read/write via RLS): `graduations`, `discovery_outcomes`,
-`cadence_status_log` (Graduations and Cadence UI were removed — only
-`discovery_outcomes` is wired up), and **`manual_metrics`** (migration `9997`,
-generic metric-key + month + value; powers the Manual metrics card and the
-Resource engagement card).
+Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
+`ca_appointments`, `ca_offerings`, `ca_offering_submissions`, **`ca_engagements`
+(migration 9994)**. Ops: `sync_runs`, `app_settings`. HJG-owned (staff RLS):
+`discovery_outcomes`, **`mentee_outcomes` (9995)**, `coach_settings` (9996),
+`manual_metrics` (9997), plus dormant `graduations`/`cadence_status_log`.
 
 ## Environment variables
 
-Set in Vercel (Settings → Environment Variables) **and** documented in
-`.env.example`. Scope them to **Preview** (feature branches deploy as preview)
-or All Environments, or the functions/build won't see them.
-
-```
-SUPABASE_URL                 # project URL
-SUPABASE_SERVICE_ROLE_KEY    # secret key (sb_secret_… or legacy service_role JWT). SERVER ONLY.
-VITE_SUPABASE_URL            # same project URL (browser; baked in at build)
-VITE_SUPABASE_ANON_KEY       # publishable / anon key (browser-safe)
-CA_API_ID, CA_API_KEY        # CoachAccountable API creds
-CA_PLAN_DAILY_LIMIT=600      # CA daily call limit (also in app_settings)
-HJG_DAILY_CAP_PCT=5          # self-imposed cap %
-BUDGET_TZ=America/Chicago     # day boundary + appointment-month bucketing
-SYNC_YEARS=                  # default: current and prior two years
-HJG_CORS_ALLOWED_ORIGINS=*   # lock to the dashboard origin in prod
-SYNC_CRON_SECRET=            # optional; for the (dormant) scheduled sync
-```
+(unchanged — set in Vercel, documented in `.env.example`) `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+`CA_API_ID`, `CA_API_KEY`, `CA_PLAN_DAILY_LIMIT`, `HJG_DAILY_CAP_PCT`,
+`BUDGET_TZ`, `SYNC_YEARS`, `HJG_CORS_ALLOWED_ORIGINS`, `SYNC_CRON_SECRET`.
 
 ## Conventions / gotchas
 
-- **Migrations are numbered DESCENDING** (newest = lowest): `9999_init` →
-  `9998_appointment_booking_date` → `9997_manual_metrics`. **Next new one is
-  `9996_…`.** Run by copy-paste into the Supabase **SQL Editor** (not `supabase db
-  push`), so make new ones re-runnable (`drop ... if exists` before triggers and
-  policies). See `CLAUDE.md`.
-- **Vercel runs functions as native ESM** → every relative import in `lib/`,
-  `api/`, and `scripts/` MUST end in `.js` (e.g. `import { x } from "./foo.js"`)
-  even though the source is `.ts`. Missing extensions = `ERR_MODULE_NOT_FOUND`
-  crashes. Frontend `src/` is bundled by Vite and does NOT need `.js`.
-- **Env var changes require a redeploy** (VITE_ vars bake in at build time).
-- After a schema migration, **re-sync** (Admin → Sync now) to backfill.
+- **Migrations DESCENDING** (newest = lowest). Applied = `9994`…`9999`. **Next
+  new one is `9993_…`.** Run by copy-paste into the Supabase SQL Editor; make
+  re-runnable (`drop … if exists`).
+- **Vercel functions are native ESM** → every relative import in `lib/`/`api/`/
+  `scripts/` MUST end in `.js`. Frontend `src/` (Vite) does not.
+- `public/*` is copied to the build root → served at `/<file>`; the SPA rewrite
+  in `vercel.json` only applies when no real file matches.
+- Env var changes need a redeploy; after a schema migration, re-sync.
 - Verify locally: `npm install && npm run typecheck && npm run verify && npm run build`.
-
-## Current branch / deploy
-
-- Active branch: **`claude/affectionate-pasteur-UaBv4`** (one commit ahead of
-  `main` — the graphs-AND-tables work). Deploys as a Vercel **Preview**. Merge
-  to `main` to ship to production.
-- `main` is still the default + production branch. Pushes to `main` deploy to
-  Vercel production.
-
-## Immediate next step
-
-See **"Resume here"** at the top — the graphs-AND-tables layout is in. Next:
-sortable/filterable tables and CSV export, or extend the treatment to the
-Discovery → conversion panel.
-
-Operational (not code): confirm migration `9997_manual_metrics.sql` is fully
-applied in Supabase (it was run once — the re-runnable version drops/recreates the
-trigger + policies cleanly), then staff can enter manual metrics on the Admin tab.
 
 ## Open items / TODO
 
-- **Mentors count inflation: addressed by `coach_settings`** (migration `9996`).
-  Staff mark `is_mentor=true` in Admin → Mentor capacity; once any are flagged
-  the Metrics dashboard's Mentors metric is filtered to that whitelist
-  client-side. Capacity per mentor drives the new Mentor capacity utilization
-  card. The old `MENTOR_COACH_ID_WHITELIST` in `lib/config.ts` is unused now
-  and can be removed in a cleanup pass.
-- **Offerings/submissions — CONFIRMED working.** `Offering.getSubmissions`
-  populates `ca_offering_submissions` (108 JumpStart rows, 2024-06→2026-05), which
-  is what the conversion automation depends on. Still best-effort in `lib/sync.ts`
-  (a failure is a warning, not a hard error).
-- **"Calls held" toggle** for discovery (vs signup date) — offered, not built.
-- **Raw data filters** (category / date / status) would make CA reconciliation
-  easier.
-- **Scheduled sync** is dormant (`app_settings.sync_interval_hours = null`).
-  Could add a Vercel Cron hitting `/api/sync` with `SYNC_CRON_SECRET`.
-- **Client vs server metric divergence:** the dashboard computes client-side
-  while `/api/reports/funnel` computes server-side. If both are kept, watch for
-  drift, or retire the endpoint.
-- Bundle size > 500 kB warning (recharts) — cosmetic.
+- **Mentor capacity inflation (Arthur Nisly) — DIAGNOSED, NOT FIXED.** Group
+  "In Depth"/"Tracking Together" sessions + multi-client weekly slots count as
+  individual mentees. Options offered: (a) categorize group sessions separately
+  (config + re-sync), (b) exclude multi-client slots from capacity, (c) exclude
+  known group names. **User to pick.**
+- **Data map is a static snapshot** — wire to live Supabase if wanted.
+- **Stage rail** has no explicit quit/fired exit marker (status pill covers it).
+- **`MENTOR_COACH_ID_WHITELIST`** in `lib/config.ts` is dead (empty); remove in
+  a cleanup pass.
+- **Client vs server metric divergence** (`/api/reports/funnel` unused by UI).
+- Bundle > 500 kB (recharts + write-excel-file) — cosmetic.
+- **C# rebuild** — separate track, not started (`CSHARP_PORT.md`).
