@@ -742,12 +742,45 @@ export async function clearMenteeOutcome(clientId: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// Board-level roll-up of how long each pipeline leg takes, across all mentees.
+// Each leg is averaged only over mentees where BOTH endpoints exist (so a small
+// n is honest, not zero-padded), and negative spans (data anomalies) are dropped.
+// Pure over the journeys it's given — no I/O — so it's easy to reason about.
+export interface LegStat {
+  key: string;
+  label: string;
+  n: number; // mentees with this leg measurable
+  avgDays: number | null;
+  medianDays: number | null;
+}
+
+export function aggregateJourneyDurations(journeys: MenteeJourney[]): LegStat[] {
+  const legs: { key: string; label: string; pick: (j: MenteeJourney) => number | null }[] = [
+    { key: "dc_jyf", label: "Discovery → JumpStart", pick: (j) => j.daysDiscoveryToJyf },
+    { key: "jyf_first", label: "JumpStart → 1st meeting", pick: (j) => j.daysJyfToFirstMeeting },
+    { key: "dc_first", label: "Discovery → 1st meeting", pick: (j) => j.daysDiscoveryToFirstMeeting },
+    { key: "span", label: "Mentoring span (1st → last)", pick: (j) => j.activeSpanDays },
+    { key: "dc_grad", label: "Discovery → graduation", pick: (j) => (j.resolvedStatus === "graduated" ? dayspan(j.discoveryDate, j.overrideDate) : null) },
+  ];
+  return legs.map((leg) => {
+    const vals = journeys
+      .map(leg.pick)
+      .filter((v): v is number => v != null && v >= 0)
+      .sort((a, b) => a - b);
+    const n = vals.length;
+    const avgDays = n ? Math.round(vals.reduce((s, v) => s + v, 0) / n) : null;
+    const medianDays = n ? (n % 2 ? vals[(n - 1) / 2] : Math.round((vals[n / 2 - 1] + vals[n / 2]) / 2)) : null;
+    return { key: leg.key, label: leg.label, n, avgDays, medianDays };
+  });
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
   "ca_appointments",
   "ca_clients",
   "ca_coaches",
+  "ca_engagements",
   "ca_offerings",
   "ca_offering_submissions",
   "coach_settings",

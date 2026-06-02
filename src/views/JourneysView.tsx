@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { useAuth } from "../auth";
 import {
   MENTEE_ACTIVE_WINDOW_DAYS,
+  aggregateJourneyDurations,
   clearMenteeOutcome,
   fetchMenteeJourneys,
   setMenteeOutcome,
@@ -215,6 +216,100 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
   );
 }
 
+function LegTooltip({ active, payload }: { active?: boolean; payload?: { payload: { leg: string; avg: number | null; median: number | null; n: number } }[] }) {
+  if (!active || !payload || !payload.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div style={{ ...TOOLTIP, padding: "6px 10px", fontSize: 13 }}>
+      <div style={{ marginBottom: 4 }}>{p.leg}</div>
+      <div>Average: {humanizeDays(p.avg)}</div>
+      <div>Median: {humanizeDays(p.median)}</div>
+      <div className="muted" style={{ marginTop: 2 }}>n = {p.n} mentees</div>
+    </div>
+  );
+}
+
+// Board-level roll-up of the pipeline-leg durations across every mentee.
+function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
+  const legs = useMemo(() => aggregateJourneyDurations(journeys), [journeys]);
+  const counts = useMemo(() => {
+    let active = 0;
+    let graduated = 0;
+    for (const j of journeys) {
+      if (j.resolvedStatus === "active") active++;
+      if (j.resolvedStatus === "graduated") graduated++;
+    }
+    return { total: journeys.length, active, graduated };
+  }, [journeys]);
+  const grad = legs.find((l) => l.key === "dc_grad");
+  const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n }));
+
+  return (
+    <div className="card card--inset" style={{ marginBottom: 18 }}>
+      <h2>Pipeline timing — all mentees</h2>
+      <p className="view__hint">
+        Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg). The
+        4x/2x/1x tiers aren’t recorded in the data, so the legs are the ones the data supports. “Discovery → graduation”
+        fills in as staff mark graduations on the timelines below.
+      </p>
+      <div className="stat-row">
+        <div className="stat">
+          <span className="stat__value">{counts.total}</span>
+          <span className="stat__label">Mentees</span>
+        </div>
+        <div className="stat">
+          <span className="stat__value">{counts.active}</span>
+          <span className="stat__label">Active</span>
+        </div>
+        <div className="stat">
+          <span className="stat__value">{counts.graduated}</span>
+          <span className="stat__label">Graduated</span>
+        </div>
+        <div className="stat">
+          <span className="stat__value">{humanizeDays(grad?.avgDays ?? null)}</span>
+          <span className="stat__label">Avg time to graduate</span>
+        </div>
+      </div>
+
+      <div className="chart-card__split chart-card__split--both">
+        <div style={{ width: "100%", height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <CartesianGrid stroke={GRID} horizontal={false} />
+              <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
+              <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
+              <Tooltip content={<LegTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+              <Bar dataKey="avg" fill="#38bdf8" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="table-scroll" style={{ width: "100%" }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Stage leg</th>
+                <th>Mentees</th>
+                <th>Average</th>
+                <th>Median</th>
+              </tr>
+            </thead>
+            <tbody>
+              {legs.map((l) => (
+                <tr key={l.key}>
+                  <td>{l.label}</td>
+                  <td className="num">{l.n}</td>
+                  <td className="num">{humanizeDays(l.avgDays)}</td>
+                  <td className="num">{humanizeDays(l.medianDays)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function JourneysView() {
   const { user } = useAuth();
   const [journeys, setJourneys] = useState<MenteeJourney[]>([]);
@@ -261,7 +356,9 @@ export function JourneysView() {
       {loading ? (
         <div className="loading">Loading…</div>
       ) : (
-        <div className="journeys">
+        <>
+          {journeys.length > 0 && <PipelineSummary journeys={journeys} />}
+          <div className="journeys">
           <div className="journeys__list">
             <input
               type="search"
@@ -294,7 +391,8 @@ export function JourneysView() {
               <div className="muted" style={{ padding: 24 }}>Select a mentee to view their journey.</div>
             )}
           </div>
-        </div>
+          </div>
+        </>
       )}
     </section>
   );
