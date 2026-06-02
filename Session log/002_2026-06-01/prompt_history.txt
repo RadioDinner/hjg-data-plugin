@@ -11,3 +11,12 @@ On feature work. I forget what we were doing with the discovery to conversion gr
 
 --- 2026-06-01 ---
 Let's build C and see what happens
+
+--- 2026-06-01 ---
+[attached caappointments20260601.csv] I think we've done enough on this for now. I want to move onto another feature set.
+
+This is a "time in HJG system" metric. I want to track, and display beautifully, how long a mentee spends in our pipeline. The "traditional" path, or expected/ideal path, is Discovery Call > JumpStart Your Freedom (Supervised) > 4x Mentoring > 2x Mentoring > 1x Mentoring > Graduation. I want a tool or metric built to see not only who converts from Discovery Call to JYF (Supervised) but how long it takes on average to go from DC to JYF, then how long they stay in JYF before moving onto 4x. Then how long they stay in 4x before going to 2x then how long from 2x to 1x and then 1x to graduation. Then I want a metric of how long the average is from Discovery Call to Graduation. And I want to be able to see a specific mentees timeline as well.
+
+To build this, I may have you analyze the raw_data .csv file to see what you can make of it.
+
+I'll attach it here
