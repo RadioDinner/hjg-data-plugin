@@ -23,3 +23,6 @@ I'll attach it here
 
 --- 2026-06-01 ---
 Journey's tab I think
+
+--- 2026-06-01 ---
+In the "Mentor capacity utilization" card, it says that Arthur Nisly has 33 active mentees. this isn't correct. Can you tell me, based on the raw data csv file, why or how it calculated that amount?
