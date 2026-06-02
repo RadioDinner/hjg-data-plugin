@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -36,7 +37,7 @@ type ChartCardView = "graph" | "table" | "both";
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
 const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
-const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b" };
+const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b", converted: "#34d399", rate: "#f472b6" };
 const PALETTE = ["#38bdf8", "#34d399", "#a78bfa", "#f59e0b", "#f472b6", "#22d3ee", "#fb7185", "#a3e635"];
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -542,6 +543,41 @@ export function MetricsView() {
     return { total, counts, manualCount, rate: total > 0 ? counts.converted / total : null };
   }, [discovery, outcomes]);
 
+  // Per-month conversion series for the Discovery → conversion ChartCard. Each
+  // discovery call is bucketed by signup month (same basis as the Discovery
+  // calls card) and its resolved outcome tallied, so the converted-count bars
+  // and the conversion-rate line track together as the range/filters move.
+  const convData = useMemo(
+    () =>
+      buckets.map((b) => {
+        const items = (byMonth.get(b.key) ?? []).filter((a) => a.category !== "mentoring");
+        const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+        for (const a of items) {
+          const o = outcomes.get(a.id);
+          if (o) counts[o.outcome]++;
+        }
+        const total = items.length;
+        return {
+          month: b.label,
+          Converted: counts.converted,
+          Pending: counts.pending,
+          "Not converted": counts.not_converted,
+          "No show": counts.no_show,
+          Total: total,
+          Rate: total > 0 ? Math.round((counts.converted / total) * 100) : 0,
+        };
+      }),
+    [buckets, byMonth, outcomes]
+  );
+
+  const conversionTable = useMemo<ChartCardTable>(
+    () => ({
+      columns: ["Month", "Converted", "Pending", "Not converted", "No show", "Total", "Rate %"],
+      rows: convData.map((d) => [d.month, d.Converted, d.Pending, d["Not converted"], d["No show"], d.Total, d.Rate]),
+    }),
+    [convData]
+  );
+
   function toggleType(name: string) {
     setSelectedTypes((prev) => {
       const next = new Set(prev ?? []);
@@ -886,23 +922,59 @@ export function MetricsView() {
             </ChartCard>
           </div>
 
-          <section className="card" style={{ marginTop: 18 }}>
-            <h2>Discovery → conversion</h2>
-            <p className="view__hint">
-              Auto-computed: a call converts when the prospect buys JumpStart Your Freedom (Waiting List) on or after the
-              call. With no purchase it stays pending for 30 days, then becomes not converted. Staff overrides on the
-              Discovery tab take precedence. Conversion rate: <strong>{pct(conv.rate)}</strong>
-              {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
-            </p>
-            <div className="stat-row">
-              {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
-                <div className="stat" key={k}>
-                  <span className="stat__value">{num(conv.counts[k])}</span>
-                  <span className="stat__label">{OUTCOME_LABELS[k]}</span>
-                </div>
-              ))}
-            </div>
-          </section>
+          <div style={{ marginTop: 18 }}>
+            <ChartCard
+              title="Discovery → conversion"
+              extra={
+                <>
+                  <p className="view__hint">
+                    Auto-computed: a call converts when the prospect buys JumpStart Your Freedom (Waiting List) on or
+                    after the call. With no purchase it stays pending for 30 days, then becomes not converted. Staff
+                    overrides on the Discovery tab take precedence. Overall conversion rate:{" "}
+                    <strong>{pct(conv.rate)}</strong>
+                    {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
+                  </p>
+                  <div className="stat-row">
+                    {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
+                      <div className="stat" key={k}>
+                        <span className="stat__value">{num(conv.counts[k])}</span>
+                        <span className="stat__label">{OUTCOME_LABELS[k]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              }
+              table={conversionTable}
+              onExplore={exploreDiscoveryRaw}
+            >
+              <ComposedChart data={convData}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="month" {...axisProps} />
+                <YAxis yAxisId="left" allowDecimals={false} width={28} {...axisProps} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  width={40}
+                  domain={[0, 100]}
+                  unit="%"
+                  {...axisProps}
+                />
+                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Legend />
+                <Bar yAxisId="left" dataKey="Converted" fill={C.converted} radius={[4, 4, 0, 0]} />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="Rate"
+                  name="Rate %"
+                  unit="%"
+                  stroke={C.rate}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </ComposedChart>
+            </ChartCard>
+          </div>
 
           <section className="card" style={{ marginTop: 18 }}>
             <div className="card__head">
