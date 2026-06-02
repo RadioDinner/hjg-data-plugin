@@ -29,3 +29,6 @@ In the "Mentor capacity utilization" card, it says that Arthur Nisly has 33 acti
 
 --- 2026-06-01 ---
 Let's build the aggregate stage duration metrics.
+
+--- 2026-06-01 ---
+You have the legs wrong. It is Discovery to JumpStart but then it is JumpStart to 4x mentoring, then from 4x to 2x, then from 2x to 1x, then 1x to graduation. Also Does the CoachAccountable API not have any ability to sync engagements? Like, open_engagements?
