@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { downloadCsv } from "../csv";
+import { downloadWorkbook, type WorkbookSheet } from "../xlsx";
 import { fetchAllRows, fetchTable, RAW_TABLES, type RawTable } from "../db";
 
 function renderCell(v: unknown): string {
@@ -24,6 +25,7 @@ export function RawDataView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,18 +65,47 @@ export function RawDataView() {
     }
   }
 
+  // Every raw table in one .xlsx workbook, each table on its own sheet.
+  async function exportWorkbook() {
+    setExportingAll(true);
+    setError(null);
+    try {
+      const sheets: WorkbookSheet[] = [];
+      for (const t of RAW_TABLES) {
+        const all = await fetchAllRows(t);
+        const cols = all.length > 0 ? Object.keys(all[0]) : [];
+        sheets.push({ name: t, columns: cols, rows: all.map((row) => cols.map((c) => csvCell(row[c]))) });
+      }
+      await downloadWorkbook("hjg-raw-data", sheets);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setExportingAll(false);
+    }
+  }
+
   return (
     <section className="card">
       <div className="card__head">
         <h2>Raw data</h2>
-        <button
-          className="btn btn--sm"
-          onClick={exportAll}
-          disabled={exporting || total === 0}
-          title={`Download all ${total} rows of ${table} as CSV`}
-        >
-          {exporting ? "Exporting…" : `Export CSV (${total})`}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="btn btn--sm"
+            onClick={exportAll}
+            disabled={exporting || total === 0}
+            title={`Download all ${total} rows of ${table} as CSV`}
+          >
+            {exporting ? "Exporting…" : `Export CSV (${total})`}
+          </button>
+          <button
+            className="btn btn--sm"
+            onClick={exportWorkbook}
+            disabled={exportingAll}
+            title="Download every table in one Excel workbook, each table on its own sheet"
+          >
+            {exportingAll ? "Exporting…" : "Export all (.xlsx)"}
+          </button>
+        </div>
       </div>
       <p className="view__hint">The data synced from CoachAccountable, straight from the database tables.</p>
 
