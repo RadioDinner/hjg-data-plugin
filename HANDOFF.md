@@ -1,46 +1,50 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-01 (session 002).
+2026-06-03 (session 003).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live state — 2026-06-01, session 002)
+## Resume here (live state — 2026-06-03, session 003)
 
 Picking this up cold — start here.
 
-**Repo state:** on branch **`claude/admiring-cray-nZJgk`** (working tree clean
-after the final handoff commit), **13 commits ahead of `main`**, all pushed.
-**Not yet merged to `main`.** `main` is still default + production.
+**Repo state:** on branch **`claude/magical-gauss-ELOiz`**. Session-002 work was
+**merged to `main` since the last handoff** (PR #7 — the prior "not yet merged"
+note is now stale). This branch carries that merge plus session 003's
+capacity fix.
 
-**Shipped this session (see `Session log/002_2026-06-01/session_log.md` for the
-full list + hashes):**
-- **Discovery → conversion ChartCard** (converted bars + rate line + table).
-- **Journeys tab** (new): per-mentee pipeline timeline + board-level aggregate.
-- **Engagement sync** (read-only) → new `ca_engagements` mirror.
-- **Real engagement-based pipeline stages** — `Discovery → JumpStart → 4x → 2x →
-  1x → Graduation` with real per-stage dates (the headline feature).
-- **Raw data: "Export all" → multi-sheet `.xlsx`** (one table per sheet).
-- **Interactive data map** at `public/data-map.html` → hosted at
-  `/data-map.html`, linked from the Raw data tab.
+**Shipped this session (003) — see `Session log/003_2026-06-03/session_log.md`:**
+- **Mentor-capacity inflation FIXED** (the Arthur Nisly bug). Group formats
+  ("In Depth Mentoring Session", "Tracking Together") now get their own
+  **`"group"` appointment category** at sync time. The data layer presents them
+  to the UI as `category:"mentoring"` + **`isGroup:true`**, so meeting/active-
+  mentee KPIs and the Journeys meeting-rhythm are **unchanged** — only the
+  per-mentor **capacity utilization** drops group attendees. Chosen scope:
+  *capacity only*. Commit `7b36854`.
+
+**⚠ ACTION REQUIRED for the fix to take effect:** categorization runs at sync
+time, so the capacity numbers won't change until a **re-sync** reclassifies
+existing `ca_appointments` rows (Admin → Sync now). No migration needed
+(`category` is a plain text column).
 
 **▶ Immediate next steps:**
-1. **Pick a fix for the mentor-capacity inflation** (see Open items). Diagnosed
-   this session, not yet built — the user needs to choose the approach.
+1. **Re-sync** in the app so existing rows pick up the new `"group"` category,
+   then **eyeball Arthur Nisly's capacity row** to confirm the inflation is gone.
 2. **Verify in a real browser / Vercel preview** (container is headless): the
-   Journeys tab, `/data-map.html`, and the Export-all `.xlsx`.
+   capacity card, Journeys tab, `/data-map.html`, and the Export-all `.xlsx`.
 3. **Apply migrations** in the Supabase SQL Editor if not done: `9995_mentee_
-   outcomes.sql` (needed for the status override) and `9994_ca_engagements.sql`
-   (engagements already synced, so likely applied — confirm).
+   outcomes.sql` and `9994_ca_engagements.sql` (likely already applied — confirm).
 4. Consider widening `SYNC_YEARS` so pre-window JumpStart engagements aren't
    missing a start date on the timeline.
 5. **Merge to `main`** when verified.
 
-**Verification status:** `npm run typecheck`, `npm run verify` (6 sections),
-`npm run build` all pass. UI not browser-tested this session.
+**Verification status:** `npm run typecheck`, `npm run verify` (now **7
+sections** — added [7] group categorization), `npm run build` all pass. UI not
+browser-tested this session (headless container).
 
 ## What this is
 
@@ -82,7 +86,7 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 | Path | Role |
 |---|---|
 | `lib/ca.ts` | CA API client (read-only). `getEngagements()` = Engagement.getAll. **CA payload under `return`, not `result`.** |
-| `lib/config.ts` | Categorization, exclusions, conversion knobs (`CONVERSION_OFFERING_IDS=[42840]`), **`engagementTier()` + `PIPELINE_TIERS`** (engagement-name → tier), CA function names. |
+| `lib/config.ts` | Categorization (incl. **`GROUP_SESSION_CONTAINS`** → `"group"` category), exclusions, conversion knobs (`CONVERSION_OFFERING_IDS=[42840]`), **`engagementTier()` + `PIPELINE_TIERS`** (engagement-name → tier), CA function names. |
 | `lib/conversion.ts` | Pure discovery→conversion resolver. Verify §5. |
 | `lib/sync.ts` | Sync orchestration; offerings/submissions + **engagements** are best-effort (warnings accumulate). |
 | `src/db.ts` | Browser data access. **`fetchMenteeJourneys`** (engagement-based stages) + **`aggregateJourneyDurations`**; mentee_outcomes read/write; `fetchAllRows`. |
@@ -90,7 +94,7 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 | `src/views/MetricsView.tsx` | Metrics dashboard (ChartCards, conversion, capacity). |
 | `src/xlsx.ts` | Multi-sheet `.xlsx` workbook export. |
 | `public/data-map.html` | Static interactive data-relationship graph (snapshot). |
-| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 = engagement tier mapping**. |
+| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 = engagement tier mapping, §7 = group vs 1-on-1 categorization**. |
 
 ## Important domain decisions
 
@@ -104,8 +108,10 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 - **Mentee activity:** active if a meeting OR open engagement within 45 days.
 - Discovery counted by **signup date**; mentee meetings/mentees/mentors by
   **scheduled date**. Conversion is automated read-time (offering 42840).
-- Group "In Depth" sessions inflate the per-mentor mentee count (Arthur Nisly
-  case) — **bug, not yet fixed.**
+- Group "In Depth" / "Tracking Together" sessions are categorized **`"group"`**
+  (not `"mentoring"`) so they don't inflate per-mentor capacity (Arthur Nisly).
+  They still count as mentoring meetings everywhere else via the `isGroup` flag.
+  **Fixed session 003 — needs a re-sync to take effect.**
 
 ## Database schema (Supabase)
 
@@ -136,11 +142,12 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
-- **Mentor capacity inflation (Arthur Nisly) — DIAGNOSED, NOT FIXED.** Group
-  "In Depth"/"Tracking Together" sessions + multi-client weekly slots count as
-  individual mentees. Options offered: (a) categorize group sessions separately
-  (config + re-sync), (b) exclude multi-client slots from capacity, (c) exclude
-  known group names. **User to pick.**
+- **Mentor capacity inflation (Arthur Nisly) — FIXED (session 003), pending
+  re-sync + browser verify.** Went with option (a): group sessions get a
+  separate `"group"` category at sync time, scoped to the capacity metric only
+  via the `isGroup` flag. **Still open:** the *multi-client weekly slot* case
+  (unnamed slots with several clients) is NOT yet handled — only the named
+  group formats are. Revisit with the time-slot heuristic if those still inflate.
 - **Data map is a static snapshot** — wire to live Supabase if wanted.
 - **Stage rail** has no explicit quit/fired exit marker (status pill covers it).
 - **`MENTOR_COACH_ID_WHITELIST`** in `lib/config.ts` is dead (empty); remove in
