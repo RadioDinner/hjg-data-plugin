@@ -477,6 +477,10 @@ export function MetricsView() {
   const capacityRows = useMemo(() => {
     const menteesByCoach = new Map<number, Set<number>>();
     for (const a of selectedMentoring) {
+      // Group sessions (In Depth / Tracking Together) are multi-mentee formats;
+      // counting their attendees would inflate a mentor's 1-on-1 capacity
+      // utilization (the "Arthur Nisly" bug), so they're excluded here only.
+      if (a.isGroup) continue;
       if (a.coachId == null) continue;
       if (!isMentor(a.coachId)) continue;
       let set = menteesByCoach.get(a.coachId);

@@ -189,6 +189,11 @@ export type ApptCategory = "mentoring" | "discoveryPhone" | "discoveryZoom";
 export interface RangeAppt {
   id: number;
   category: ApptCategory;
+  // True for multi-mentee GROUP sessions (In Depth / Tracking Together). These
+  // carry category "mentoring" so they count in meeting/mentee metrics, but the
+  // capacity calc excludes them so group attendees don't inflate a mentor's
+  // 1-on-1 utilization. See GROUP_SESSION_CONTAINS in lib/config.ts.
+  isGroup: boolean;
   name: string;
   date: string | null; // YYYY-MM-DD (account-local)
   clientId: number | null;
@@ -199,14 +204,18 @@ export interface RangeAppt {
 
 // Page ca_appointments for the given categories, filtering/normalizing on the
 // supplied date column. `date` in the result is the column we counted by.
+// `categories` are raw DB category values. The "group" category (multi-mentee
+// In-Depth / Tracking-Together sessions) is surfaced as `category: "mentoring"`
+// with `is_group: true`, so every mentoring metric keeps counting it while the
+// capacity calc can drop group attendees (see GROUP_SESSION_CONTAINS in config).
 async function pageAppts(
-  categories: ApptCategory[],
+  categories: string[],
   dateCol: "start_date" | "date_added",
   from: string,
   to: string
-): Promise<{ id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
+): Promise<{ id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
   const pageSize = 1000;
-  const out: { id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
+  const out: { id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
@@ -220,9 +229,11 @@ async function pageAppts(
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as Record<string, unknown>[];
     for (const r of batch) {
+      const isGroup = r.category === "group";
       out.push({
         id: r.id as number,
-        category: r.category as ApptCategory,
+        category: (isGroup ? "mentoring" : (r.category as ApptCategory)),
+        is_group: isGroup,
         name: r.name as string,
         date: (r[dateCol] as string | null) ?? null,
         client_id: (r.client_id as number | null) ?? null,
@@ -240,9 +251,9 @@ async function pageAppts(
 async function pageDiscovery(
   from: string,
   to: string
-): Promise<{ id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
+): Promise<{ id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
   const pageSize = 1000;
-  const out: { id: number; category: ApptCategory; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
+  const out: { id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
@@ -260,6 +271,7 @@ async function pageDiscovery(
       out.push({
         id: r.id as number,
         category: r.category as ApptCategory,
+        is_group: false,
         name: r.name as string,
         date: ((r.date_added as string | null) ?? (r.start_date as string | null)) ?? null,
         client_id: (r.client_id as number | null) ?? null,
@@ -278,7 +290,7 @@ async function pageDiscovery(
 // the row is counted by.
 export async function fetchRangeAppointments(from: string, to: string): Promise<RangeAppt[]> {
   const [mentoring, discovery] = await Promise.all([
-    pageAppts(["mentoring"], "start_date", from, to),
+    pageAppts(["mentoring", "group"], "start_date", from, to),
     pageDiscovery(from, to),
   ]);
   const rows = [...mentoring, ...discovery];
@@ -307,6 +319,7 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
     .map((r) => ({
       id: r.id,
       category: r.category,
+      isGroup: r.is_group,
       name: r.name,
       date: r.date,
       clientId: r.client_id,
@@ -591,7 +604,7 @@ async function fetchAllMentoring(): Promise<
     const { data, error } = await supabase
       .from("ca_appointments")
       .select("id,client_id,coach_id,engagement_id,name,start_date")
-      .eq("category", "mentoring")
+      .in("category", ["mentoring", "group"])
       .eq("status", "A")
       .order("start_date", { ascending: true })
       .range(f, f + pageSize - 1);

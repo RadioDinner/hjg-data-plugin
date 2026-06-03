@@ -90,6 +90,7 @@ export interface CAOfferingSubmission {
 
 export type AppointmentCategory =
   | "mentoring"
+  | "group"
   | "discoveryPhone"
   | "discoveryZoom"
   | "excluded"

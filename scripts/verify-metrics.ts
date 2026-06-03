@@ -9,7 +9,7 @@ import { computeMonthlyMetrics } from "../lib/metrics.js";
 import { computeFunnelReport } from "../lib/funnel.js";
 import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
-import { engagementTier } from "../lib/config.js";
+import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -200,6 +200,20 @@ console.log("[6] engagement → pipeline tier");
   eq(t("60 Minute BIWEEKLY Coaching Sessions - Pay in Advance Every 2 Appointments"), "2x", "legacy biweekly/every-2 is 2x");
   eq(t("Gain Momentum Group"), "group", "gain momentum group");
   eq(t(""), "other", "empty name");
+}
+
+console.log("[7] appointment categorization (group sessions vs 1-on-1)");
+{
+  const c = (name: string) => categorizeAppointmentName(name);
+  // Group formats get their own category so capacity can drop them.
+  eq(c("In Depth Mentoring Session"), "group", "In Depth is a group session");
+  eq(c("Tracking Together"), "group", "Tracking Together is a group session");
+  // True 1-on-1 mentoring stays "mentoring".
+  eq(c("Weekly Mentoring Call"), "mentoring", "1-on-1 mentoring call stays mentoring");
+  eq(c("Single Men Mentoring"), "mentoring", "single men stays mentoring");
+  // Discovery + exclusions are unaffected by the new group precedence.
+  eq(c("Discovery Call Appointment (Phone Call)"), "discoveryPhone", "discovery phone unaffected");
+  eq(c("Mentor Training Extra Teaching"), "excluded", "excluded type unaffected");
 }
 
 console.log("");
