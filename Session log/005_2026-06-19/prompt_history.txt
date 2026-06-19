@@ -12,3 +12,6 @@ Cleanup: Delete merged branches
 i am thinking all the migrations are run, merge everything to main for the rest of the session
 
 Is it possible to give you context to the data in supabase? I need your help figuring something out.
+
+--- 2026-06-19 ---
+[uploaded hjgrawdata20260619.xlsx] I am trying to figure out a payment system for our coaches. From the data I pull, I can see the ca_appointments table and the ca_coaches table should be linked. For example, coach ID of 29074 is Harry Shenk. I want to see a list of appointments that happened from the ca_appointments table under that coach ID. The other thing I'm trying to figure out is to see if I can export invoice data from coach accountable. Do you see anything in the "source of truth" API documentation on how to do that?
