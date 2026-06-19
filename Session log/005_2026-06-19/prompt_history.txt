@@ -7,3 +7,8 @@ wha are the status of the branches? I want evertying merged to main
 --- 2026-06-19 (AskUserQuestion answers) ---
 Merge method: Direct push to main
 Cleanup: Delete merged branches
+
+--- 2026-06-19 ---
+i am thinking all the migrations are run, merge everything to main for the rest of the session
+
+Is it possible to give you context to the data in supabase? I need your help figuring something out.
