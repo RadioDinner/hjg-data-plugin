@@ -12,6 +12,8 @@ import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import {
   computePayReport,
+  computePayTimeline,
+  distinctServiceMonths,
   splitForTenureMonth,
   tenureMonthsBetween,
   daysInMonth,
@@ -294,6 +296,48 @@ console.log("[8] staff payment engine (ramp, proration, collected revenue)");
   });
   eq(r5.mentors.length, 0, "no mentor paid when engagement doesn't overlap");
   eq(r5.unassigned.length, 1, "revenue surfaced as unassigned");
+}
+
+console.log("[9] staff payment timeline + flat ledger (by-month breakdown / explorer)");
+{
+  const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
+  const clientName = (id: number) => `Mentee ${id}`;
+
+  // Mentee 1: paid in both April and May, fully covered by Harry (60% by then).
+  // Mentee 2: collected in May only, with NO overlapping engagement -> unassigned.
+  const invoices: PayInvoiceInput[] = [
+    { clientId: 1, serviceYm: "2026-04", collected: 425 },
+    { clientId: 1, serviceYm: "2026-05", collected: 425 },
+    { clientId: 2, serviceYm: "2026-05", collected: 100 },
+  ];
+  const engagements: PayEngagementInput[] = [
+    { clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: null, isCanceled: false, name: "(4x Month)" },
+  ];
+
+  eq(distinctServiceMonths(invoices).join(","), "2026-05,2026-04", "distinct months newest-first");
+
+  const tl = computePayTimeline({ invoices, engagements, coachName, clientName });
+  eq(tl.months.length, 2, "timeline covers both service months");
+  eq(tl.months[0].ym, "2026-05", "newest month first");
+  // April: just mentee 1 (425*0.6=255). May: mentee 1 (255) + mentee 2 unassigned.
+  eq(tl.months[1].report.totals.payout, 255, "April payout rolls up to $255");
+  eq(tl.totals.payout, 510, "grand total payout across months = $510");
+  eq(tl.totals.collected, 950, "grand total collected = 425+425+100");
+
+  // Ledger: one row per mentee per month, including the unassigned bucket.
+  eq(tl.ledger.length, 3, "ledger has a row per mentee per month (incl. unassigned)");
+  const unassigned = tl.ledger.filter((r) => !r.assigned);
+  eq(unassigned.length, 1, "one unassigned ledger row");
+  eq(unassigned[0].clientId, 2, "unassigned row is mentee 2");
+  eq(unassigned[0].coachName, "—", "unassigned row has no coach");
+  const harryRows = tl.ledger.filter((r) => r.coachName === "Harry Shenk");
+  eq(harryRows.length, 2, "Harry has a ledger row in each month");
+  eq(harryRows.reduce((s, r) => s + r.payout, 0), 510, "Harry's ledger payouts sum to $510");
+
+  // An explicit months list scopes the timeline (e.g. a single-month explore).
+  const one = computePayTimeline({ invoices, engagements, coachName, clientName, months: ["2026-04"] });
+  eq(one.months.length, 1, "explicit months list scopes the timeline");
+  eq(one.ledger.length, 1, "scoped ledger only covers the requested month");
 }
 
 console.log("");

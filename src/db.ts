@@ -5,7 +5,7 @@
 import { supabase } from "./lib/supabase";
 import { CONVERSION_OFFERING_IDS, PIPELINE_TIERS, engagementTier, type PipelineTier } from "../lib/config";
 
-export { PIPELINE_TIERS };
+export { PIPELINE_TIERS, engagementTier };
 export type { PipelineTier };
 import {
   resolveDiscoveryOutcome,
@@ -18,10 +18,10 @@ import {
 export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
-import { computePayReport, PAY_RAMP } from "../lib/pay";
-import type { PayInvoiceInput, PayEngagementInput, PayReport } from "../lib/pay";
-export { computePayReport, PAY_RAMP };
-export type { PayReport };
+import { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP } from "../lib/pay";
+import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow } from "../lib/pay";
+export { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP };
+export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput };
 
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.

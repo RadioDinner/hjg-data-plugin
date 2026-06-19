@@ -1,20 +1,40 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-19 (session 005).
+2026-06-19 (session 005b).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live state — 2026-06-19, session 005)
+## Resume here (live state — 2026-06-19, session 005b)
 
 Picking this up cold — start here.
 
-**Repo state:** **everything is merged to `main`** (production); session 005
-works directly on `main` per the user's instruction. Verified before each push:
-`typecheck`, `verify` (now **8 sections**), `build` all pass.
+**Repo state:** session 005b works on branch **`claude/wonderful-wright-du8c1f`**
+(not `main`) per the session's branch instruction. Verified before push:
+`typecheck`, `verify` (now **9 sections**), `build` all pass.
+
+**Shipped this session (005b) — Pay-staff re-evaluation tooling:**
+- **By-month breakdown.** The Pay-staff tab no longer shows one month at a time.
+  It now leads with a **payout-by-month graph + an all-months expandable table**
+  (click a month → per-mentor breakdown inline). All-time summary tiles up top.
+- **"Explore source data" window** (`src/components/PayExploreModal.tsx`) — a
+  modal with three views: the **compiled payout ledger** (one row per mentee per
+  month: month, coach, mentee, tier, collected, active days, proration, split,
+  payout) plus the **raw `Invoices` and `Engagements` engine inputs** that fed it
+  (toggle between them). Every view is **sortable** (click any header) and
+  **filterable** by month range, coach, tier, and free text; each exports the
+  current (filtered+sorted) view to CSV.
+- **Reusable `src/components/SortableTable.tsx`** (tri-state header sort + CSV) —
+  available to reuse elsewhere (e.g. the Raw data tab) later.
+- **Engine:** new pure **`computePayTimeline`** + flat **`PayLedgerRow`** in
+  `lib/pay.ts` (a thin map over the untouched `computePayReport`, so per-month
+  math is identical). Covered by **verify §9**.
+- ⚠ Still gated on data: the tab is empty until **`9993_ca_invoices.sql`** is
+  applied + a re-sync runs (see below). The by-month view and explorer light up
+  with the same re-sync.
 
 **Shipped this session (005) — staff payment tool + invoice sync:**
 - **NEW "Pay staff" tab** (`src/views/PayStaffView.tsx`) — per-mentor monthly
@@ -67,9 +87,10 @@ GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing
 6. Later: **mentor-start override** in `coach_settings` (see Open items); widen
    `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a start date.
 
-**Verification status:** `npm run typecheck`, `npm run verify` (**8 sections** —
-added [8] staff payment), `npm run build` all pass. UI not browser-tested
-(headless container).
+**Verification status:** `npm run typecheck`, `npm run verify` (**9 sections** —
+added [9] staff payment timeline + ledger), `npm run build` all pass. UI not
+browser-tested (headless container) — **browser-verify the by-month table +
+Explore window once invoices are synced.**
 
 ## What this is
 
@@ -102,10 +123,13 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
   meeting-rhythm chart, and a status override (active/graduated/quit/fired).
   Top card = **board-level aggregate** leg durations (avg/median/n) as graph +
   table. Mentee search/list on the left.
-- **Pay staff** (NEW, session 005) — per-mentor monthly payout: ramped % (35/50/
-  60 by tenure) of **collected** mentee revenue, by invoice **service month**,
-  prorated by active days. Month picker, summary tiles, payout-by-mentor graph +
-  table, per-mentor mentee breakdown, CSV. Empty until `ca_invoices` is synced.
+- **Pay staff** (session 005; reworked 005b) — per-mentor payout: ramped % (35/
+  50/60 by tenure) of **collected** mentee revenue, by invoice **service month**,
+  prorated by active days. **By-month**: payout-by-month graph + all-months
+  expandable table (expand → per-mentor breakdown). **Explore source data**
+  window: sortable/filterable compiled ledger + raw invoice/engagement inputs
+  (filter by month/coach/tier/text, CSV per view). Empty until `ca_invoices` is
+  synced.
 - **Raw data** — browse `ca_*`/HJG tables (incl. **`ca_invoices`**); per-table
   CSV export; **Export all → `.xlsx`** (one table per sheet); **Data map ↗** link.
 - **Admin** — Sync now, run history, settings, Manual metrics, Mentor capacity.
@@ -125,7 +149,10 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 | `src/views/MetricsView.tsx` | Metrics dashboard (ChartCards, conversion, capacity). |
 | `src/xlsx.ts` | Multi-sheet `.xlsx` workbook export. |
 | `public/data-map.html` | Static interactive data-relationship graph (snapshot). |
-| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 tier mapping, §7 group categorization, §8 staff payment**. |
+| `lib/pay.ts` | …also **`computePayTimeline` + `PayLedgerRow`** (multi-month + flat ledger; verify §9). |
+| `src/components/SortableTable.tsx` | **Reusable** click-to-sort table + CSV export of the sorted view. |
+| `src/components/PayExploreModal.tsx` | **Pay-staff "Explore source data"** window (ledger / invoices / engagements; sort + filter). |
+| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 tier mapping, §7 group categorization, §8 staff payment, §9 pay timeline/ledger**. |
 
 ## Important domain decisions
 

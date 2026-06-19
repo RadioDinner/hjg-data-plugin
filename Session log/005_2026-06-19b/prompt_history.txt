@@ -1,0 +1,6 @@
+--- 2026-06-19 19:41 ---
+lets kick off another session. I want to re-evalute our pay system. I want to see a breakdown by month and I want to be able to explore the raw  data you've used to compile our numbers in a window in there or something. I also want to be able to sort and filter the data by date, coach, etc.
+
+--- 2026-06-19 19:46 (AskUserQuestion answers) ---
+Explore window: Compiled ledger + raw source toggle
+Month layout: All-months expandable table

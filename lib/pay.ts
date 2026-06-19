@@ -272,3 +272,121 @@ export function computePayReport(input: PayInputs): PayReport {
 
   return { ym, daysInMonth: dim, mentors: mentorList, unassigned, totals };
 }
+
+// --- Multi-month timeline + flat ledger ------------------------------------
+// The Pay-staff tab shows a breakdown by month (an all-months table) and an
+// "explore source data" window. Both are built from the same per-month math:
+// computePayTimeline is a thin map over computePayReport (so a month here is
+// byte-for-byte what the single-month view would show) plus a FLAT LEDGER — one
+// row per mentee per month, including the unassigned bucket — that powers the
+// sortable/filterable raw-data explorer. Still pure: no I/O.
+
+// One mentee's payout for one month, flattened with its coach + month attached
+// so the explorer can sort/filter the whole history in a single table.
+export interface PayLedgerRow {
+  ym: string;
+  coachId: number | null;
+  coachName: string; // "—" for the unassigned bucket
+  clientId: number;
+  clientName: string;
+  tier: string;
+  collected: number;
+  activeDays: number;
+  daysInMonth: number;
+  proration: number;
+  earned: number;
+  splitPct: number;
+  payout: number;
+  assigned: boolean; // false = collected revenue with no coach overlapping that month
+}
+
+export interface PayMonth {
+  ym: string;
+  report: PayReport;
+}
+
+export interface PayTimeline {
+  months: PayMonth[]; // one per requested month, in the requested order
+  ledger: PayLedgerRow[]; // every mentee line across all months (incl. unassigned)
+  totals: { collected: number; earned: number; payout: number };
+}
+
+export interface PayTimelineInput {
+  invoices: PayInvoiceInput[];
+  engagements: PayEngagementInput[];
+  coachName: (id: number) => string;
+  clientName: (id: number) => string;
+  startMonthOverride?: Map<number, string>;
+  // Months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
+  // month, newest first.
+  months?: string[];
+}
+
+// Distinct service months present in the invoices, newest first.
+export function distinctServiceMonths(invoices: PayInvoiceInput[]): string[] {
+  return [...new Set(invoices.map((i) => i.serviceYm))].sort((a, b) => b.localeCompare(a));
+}
+
+export function computePayTimeline(input: PayTimelineInput): PayTimeline {
+  const months = input.months ?? distinctServiceMonths(input.invoices);
+  const reports = months.map((ym) =>
+    computePayReport({
+      ym,
+      invoices: input.invoices,
+      engagements: input.engagements,
+      coachName: input.coachName,
+      clientName: input.clientName,
+      startMonthOverride: input.startMonthOverride,
+    })
+  );
+
+  const ledger: PayLedgerRow[] = [];
+  for (const r of reports) {
+    for (const m of r.mentors) {
+      for (const l of m.lines) {
+        ledger.push({
+          ym: r.ym,
+          coachId: m.coachId,
+          coachName: m.coachName,
+          clientId: l.clientId,
+          clientName: l.clientName,
+          tier: l.tier,
+          collected: l.collected,
+          activeDays: l.activeDays,
+          daysInMonth: l.daysInMonth,
+          proration: l.proration,
+          earned: l.earned,
+          splitPct: l.splitPct,
+          payout: l.payout,
+          assigned: true,
+        });
+      }
+    }
+    for (const u of r.unassigned) {
+      ledger.push({
+        ym: r.ym,
+        coachId: null,
+        coachName: "—",
+        clientId: u.clientId,
+        clientName: u.clientName,
+        tier: u.tier,
+        collected: u.collected,
+        activeDays: u.activeDays,
+        daysInMonth: u.daysInMonth,
+        proration: u.proration,
+        earned: u.earned,
+        splitPct: u.splitPct,
+        payout: u.payout,
+        assigned: false,
+      });
+    }
+  }
+
+  const totals = {
+    collected: round2(reports.reduce((s, r) => s + r.totals.collected, 0)),
+    earned: round2(reports.reduce((s, r) => s + r.totals.earned, 0)),
+    payout: round2(reports.reduce((s, r) => s + r.totals.payout, 0)),
+  };
+
+  return { months: reports.map((report) => ({ ym: report.ym, report })), ledger, totals };
+}

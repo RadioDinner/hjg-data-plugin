@@ -208,6 +208,30 @@ body {
 .modal__head h2 { margin: 0; font-size: 16px; }
 .modal__body { padding: 4px 20px; overflow: auto; }
 .modal__foot { padding: 10px 20px; border-top: 1px solid var(--line); font-size: 12px; }
+.modal__card--wide { max-width: 1120px; }
+
+/* --- sortable / filterable tables (Pay-staff explorer) --- */
+.table.sortable th { cursor: pointer; user-select: none; white-space: nowrap; }
+.table.sortable th:hover { color: var(--text); }
+.table.sortable th.th--sorted { color: var(--text); }
+.th__arrow { font-size: 10px; }
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 8px; }
+
+.filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.filter { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.filter input, .filter select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 9px; font-size: 13px; min-width: 130px;
+}
+.filter input:focus, .filter select:focus { outline: none; border-color: var(--accent); }
+
+/* --- expandable month rows (by-month breakdown) --- */
+.row--expandable { cursor: pointer; }
+.row--expandable:hover td { background: var(--panel-2); }
+.row__chevron { display: inline-block; width: 14px; color: var(--muted); }
+.row--detail > td { background: var(--panel-2); padding: 12px 16px; }
+.row--muted td { color: var(--muted); }
+.month-detail { display: flex; flex-direction: column; gap: 6px; }
 
 /* --- meeting-type filter --- */
 .type-filter { margin-bottom: 14px; }

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fetchPayData, computePayReport, PAY_RAMP, type PayData, type PayReport } from "../db";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimeline, type PayMonth } from "../db";
 import { downloadCsv } from "../csv";
+import { PayExploreModal } from "../components/PayExploreModal";
 
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
@@ -22,88 +23,6 @@ function currentYm(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-type CardView = "graph" | "table" | "both";
-
-// Graph + table side by side (north star), with a per-card toggle and CSV export.
-function PayCard({
-  title,
-  children,
-  table,
-}: {
-  title: string;
-  children: ReactElement;
-  table: { columns: string[]; rows: (string | number)[][] };
-}) {
-  const [view, setView] = useState<CardView>("both");
-  const showGraph = view !== "table";
-  const showTable = view !== "graph";
-  return (
-    <section className="card">
-      <div className="card__head">
-        <h2>{title}</h2>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button className="btn btn--sm" onClick={() => downloadCsv(title, table.columns, table.rows)}>
-            Export CSV
-          </button>
-          <div className="seg" role="tablist" aria-label="Card view">
-            {(["graph", "table", "both"] as const).map((k) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={view === k}
-                className={`seg__btn ${view === k ? "seg__btn--active" : ""}`}
-                onClick={() => setView(k)}
-              >
-                {k === "graph" ? "Graph" : k === "table" ? "Table" : "Both"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}>
-        {showGraph && (
-          <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              {children}
-            </ResponsiveContainer>
-          </div>
-        )}
-        {showTable && (
-          <div className="table-scroll" style={{ width: "100%" }}>
-            <table className="table table--center">
-              <thead>
-                <tr>
-                  {table.columns.map((c) => (
-                    <th key={c}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {table.rows.map((row, i) => (
-                  <tr key={i}>
-                    {row.map((cell, j) => (
-                      <td key={j} className={typeof cell === "number" ? "num" : ""}>
-                        {cell}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {table.rows.length === 0 && (
-                  <tr>
-                    <td colSpan={table.columns.length} className="muted">
-                      No rows.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="card" style={{ flex: 1, minWidth: 150 }}>
@@ -116,60 +35,65 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-// One mentor's payout breakdown: header line + a per-mentee table.
-function MentorCard({ mentor }: { mentor: PayReport["mentors"][number] }) {
-  const cols = ["Mentee", "Tier", "Collected", "Active days", "Proration", "Split", "Payout"];
-  const rows = mentor.lines.map((l) => [
-    l.clientName,
-    l.tier,
-    fmtUsd(l.collected),
-    `${l.activeDays}/${l.daysInMonth}`,
-    fmtPct(l.proration),
-    fmtPct(l.splitPct),
-    fmtUsd(l.payout),
-  ]);
+// The per-mentor breakdown revealed when a month row is expanded: one row per
+// mentor that month, the unassigned bucket if any, and a jump into the explorer
+// pre-filtered to this month.
+function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => void }) {
+  const r = month.report;
+  if (r.mentors.length === 0 && r.unassigned.length === 0) {
+    return <p className="muted" style={{ margin: "4px 0" }}>No payouts for {monthLabel(month.ym)}.</p>;
+  }
   return (
-    <section className="card">
-      <div className="card__head">
-        <h2 style={{ fontSize: 17 }}>{mentor.coachName}</h2>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="pill">
-            Split {fmtPct(mentor.splitPct)}
-            {mentor.tenureMonth != null ? ` · mo ${mentor.tenureMonth}` : ""}
-          </span>
-          <span className="muted" style={{ fontSize: 13 }}>
-            {mentor.menteeCount} mentee{mentor.menteeCount === 1 ? "" : "s"} · collected {fmtUsd(mentor.collected)}
-          </span>
-          <strong style={{ fontSize: 16 }}>{fmtUsd(mentor.payout)}</strong>
-          <button
-            className="btn btn--sm"
-            onClick={() => downloadCsv(`payout-${mentor.coachName}-${mentor.startMonth ?? ""}`, cols, rows)}
-          >
-            Export CSV
-          </button>
-        </div>
+    <div className="month-detail">
+      <div className="table-toolbar">
+        <span className="muted" style={{ fontSize: 13 }}>
+          {r.mentors.length} mentor{r.mentors.length === 1 ? "" : "s"} · {r.totals.menteeCount} paying mentee
+          {r.totals.menteeCount === 1 ? "" : "s"}
+        </span>
+        <button className="btn btn--sm" onClick={onExplore} title="Open the source-data explorer for this month">
+          Explore this month →
+        </button>
       </div>
       <div className="table-scroll">
         <table className="table table--center">
           <thead>
             <tr>
-              {cols.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
+              <th>Mentor</th>
+              <th>Tenure mo</th>
+              <th>Split</th>
+              <th>Mentees</th>
+              <th>Collected</th>
+              <th>Earned</th>
+              <th>Payout</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                {r.map((cell, j) => (
-                  <td key={j}>{cell}</td>
-                ))}
+            {r.mentors.map((m) => (
+              <tr key={m.coachId}>
+                <td>{m.coachName}</td>
+                <td className="num">{m.tenureMonth ?? "—"}</td>
+                <td className="num">{fmtPct(m.splitPct)}</td>
+                <td className="num">{m.menteeCount}</td>
+                <td className="num">{fmtUsd(m.collected)}</td>
+                <td className="num">{fmtUsd(m.earned)}</td>
+                <td className="num">{fmtUsd(m.payout)}</td>
               </tr>
             ))}
+            {r.unassigned.length > 0 && (
+              <tr className="row--muted">
+                <td>Unassigned ({r.unassigned.length})</td>
+                <td className="num">—</td>
+                <td className="num">—</td>
+                <td className="num">{r.unassigned.length}</td>
+                <td className="num">{fmtUsd(r.unassigned.reduce((s, u) => s + u.collected, 0))}</td>
+                <td className="num">—</td>
+                <td className="num">—</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -177,7 +101,8 @@ export function PayStaffView() {
   const [data, setData] = useState<PayData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ym, setYm] = useState<string>("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [explore, setExplore] = useState<{ initialMonth?: string } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -186,11 +111,11 @@ export function PayStaffView() {
       .then((d) => {
         if (!live) return;
         setData(d);
-        // Default to the newest service month that isn't the current month, else
-        // the newest available.
+        // Expand the newest closed (past) month by default, else the newest.
         const cur = currentYm();
-        const past = d.months.filter((m) => m < cur);
-        setYm(past[0] ?? d.months[0] ?? "");
+        const firstPast = d.months.find((m) => m < cur);
+        const open = firstPast ?? d.months[0];
+        setExpanded(open ? new Set([open]) : new Set());
         setError(null);
       })
       .catch((e) => live && setError(String(e)))
@@ -200,38 +125,58 @@ export function PayStaffView() {
     };
   }, []);
 
-  const report: PayReport | null = useMemo(() => {
-    if (!data || !ym) return null;
-    return computePayReport({
-      ym,
+  const timeline: PayTimeline | null = useMemo(() => {
+    if (!data) return null;
+    return computePayTimeline({
       invoices: data.invoices,
       engagements: data.engagements,
       coachName: data.coachName,
       clientName: data.clientName,
+      months: data.months,
     });
-  }, [data, ym]);
+  }, [data]);
+
+  // Payout by month, oldest -> newest so the time axis reads left to right.
+  const chartData = useMemo(() => {
+    if (!timeline) return [];
+    return [...timeline.months].reverse().map((m) => ({
+      month: monthLabel(m.ym),
+      collected: m.report.totals.collected,
+      payout: m.report.totals.payout,
+    }));
+  }, [timeline]);
 
   if (loading) return <div className="loading">Loading…</div>;
   if (error) return <div className="notice notice--warn">Failed to load payment data: {error}</div>;
 
   const noInvoices = !data || data.invoices.length === 0;
+  const cur = currentYm();
 
-  const mentorTable = report
-    ? {
-        columns: ["Mentor", "Tenure mo", "Split", "Mentees", "Collected", "Earned", "Payout"],
-        rows: report.mentors.map((m) => [
-          m.coachName,
-          m.tenureMonth ?? "—",
-          fmtPct(m.splitPct),
-          m.menteeCount,
-          fmtUsd(m.collected),
-          fmtUsd(m.earned),
-          fmtUsd(m.payout),
-        ] as (string | number)[]),
-      }
-    : { columns: [], rows: [] };
+  function toggle(ym: string) {
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (next.has(ym)) next.delete(ym);
+      else next.add(ym);
+      return next;
+    });
+  }
 
-  const chartData = report ? report.mentors.map((m) => ({ name: m.coachName, payout: m.payout })) : [];
+  const monthlyCsv = () => {
+    if (!timeline) return;
+    downloadCsv(
+      "payout-by-month",
+      ["Month", "Total payout", "Revenue collected", "Mentors paid", "Paying mentees"],
+      timeline.months.map((m) => [
+        monthLabel(m.ym),
+        m.report.totals.payout,
+        m.report.totals.collected,
+        m.report.totals.mentorCount,
+        m.report.totals.menteeCount,
+      ])
+    );
+  };
+
+  const distinctMentors = timeline ? new Set(timeline.ledger.filter((r) => r.assigned).map((r) => r.coachId)).size : 0;
 
   return (
     <div className="stack">
@@ -245,17 +190,10 @@ export function PayStaffView() {
               month</strong> and prorated by active days.
             </div>
           </div>
-          {data && data.months.length > 0 && (
-            <label className="year-select">
-              <span>Service month</span>
-              <select value={ym} onChange={(e) => setYm(e.target.value)}>
-                {data.months.map((m) => (
-                  <option key={m} value={m}>
-                    {monthLabel(m)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {!noInvoices && (
+            <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
+              Explore source data
+            </button>
           )}
         </div>
 
@@ -266,68 +204,106 @@ export function PayStaffView() {
             invoices are mirrored.
           </p>
         )}
-        {!noInvoices && ym >= currentYm() && (
-          <p className="muted" style={{ marginTop: 8 }}>
-            ⚠ {monthLabel(ym)} is the current/future month — proration counts engagement days through month-end, so
-            figures are projections until the month closes.
-          </p>
-        )}
       </section>
 
-      {report && !noInvoices && (
+      {timeline && !noInvoices && (
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <StatTile label="Total payout" value={fmtUsd(report.totals.payout)} sub={`${monthLabel(ym)}`} />
-            <StatTile label="Revenue collected" value={fmtUsd(report.totals.collected)} sub="across all mentees" />
-            <StatTile label="Mentors paid" value={String(report.totals.mentorCount)} />
-            <StatTile label="Paying mentees" value={String(report.totals.menteeCount)} />
+            <StatTile label="Total payout" value={fmtUsd(timeline.totals.payout)} sub={`${timeline.months.length} months`} />
+            <StatTile label="Revenue collected" value={fmtUsd(timeline.totals.collected)} sub="across all months" />
+            <StatTile label="Months covered" value={String(timeline.months.length)} />
+            <StatTile label="Mentors paid" value={String(distinctMentors)} sub="distinct, all-time" />
           </div>
 
-          <PayCard title={`Payout by mentor — ${monthLabel(ym)}`} table={mentorTable}>
-            <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
-              <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
-              <XAxis dataKey="name" stroke={AXIS} tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
-              <YAxis stroke={AXIS} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={TOOLTIP} formatter={(v) => fmtUsd(Number(v))} />
-              <Bar dataKey="payout" fill="#38bdf8" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </PayCard>
+          <section className="card">
+            <div className="card__head">
+              <h2>Payout by month</h2>
+              <button className="btn btn--sm" onClick={monthlyCsv} disabled={timeline.months.length === 0}>
+                Export CSV
+              </button>
+            </div>
 
-          {report.unassigned.length > 0 && (
-            <section className="card">
-              <div className="card__head">
-                <h2 style={{ fontSize: 16 }}>Unassigned revenue</h2>
-                <span className="muted" style={{ fontSize: 13 }}>
-                  Collected revenue with no engagement active in {monthLabel(ym)} — can't attribute to a mentor.
-                </span>
-              </div>
-              <div className="table-scroll">
-                <table className="table table--center">
-                  <thead>
+            <div style={{ width: "100%", height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+                  <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
+                  <XAxis dataKey="month" stroke={AXIS} tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
+                  <YAxis stroke={AXIS} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={TOOLTIP} formatter={(v) => fmtUsd(Number(v))} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar name="Collected" dataKey="collected" fill="#334155" radius={[4, 4, 0, 0]} />
+                  <Bar name="Payout" dataKey="payout" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <p className="view__hint" style={{ marginBottom: 4 }}>
+              Click a month to expand its per-mentor breakdown. Months at or after {monthLabel(cur)} are projections
+              (proration runs through month-end until the month closes).
+            </p>
+            <div className="table-scroll">
+              <table className="table table--center">
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left" }}>Month</th>
+                    <th>Total payout</th>
+                    <th>Revenue collected</th>
+                    <th>Mentors paid</th>
+                    <th>Paying mentees</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeline.months.map((m) => {
+                    const t = m.report.totals;
+                    const isOpen = expanded.has(m.ym);
+                    const projection = m.ym >= cur;
+                    return (
+                      <Fragment key={m.ym}>
+                        <tr className="row--expandable" onClick={() => toggle(m.ym)}>
+                          <td style={{ textAlign: "left", fontWeight: 600 }}>
+                            <span className="row__chevron">{isOpen ? "▾" : "▸"}</span> {monthLabel(m.ym)}
+                            {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
+                          </td>
+                          <td className="num"><strong>{fmtUsd(t.payout)}</strong></td>
+                          <td className="num">{fmtUsd(t.collected)}</td>
+                          <td className="num">{t.mentorCount}</td>
+                          <td className="num">{t.menteeCount}</td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="row--detail">
+                            <td colSpan={5} style={{ textAlign: "left" }}>
+                              <MonthDetail month={m} onExplore={() => setExplore({ initialMonth: m.ym })} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                  {timeline.months.length === 0 && (
                     <tr>
-                      <th>Mentee</th>
-                      <th>Collected</th>
+                      <td colSpan={5} className="muted">
+                        No months with collected revenue yet.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {report.unassigned.map((u) => (
-                      <tr key={u.clientId}>
-                        <td>{u.clientName}</td>
-                        <td>{fmtUsd(u.collected)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          <h2 style={{ margin: "8px 4px 0" }}>Per-mentor breakdown</h2>
-          {report.mentors.length === 0 && <p className="muted">No payouts for {monthLabel(ym)}.</p>}
-          {report.mentors.map((m) => (
-            <MentorCard key={m.coachId} mentor={m} />
-          ))}
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
+      )}
+
+      {explore && data && timeline && (
+        <PayExploreModal
+          ledger={timeline.ledger}
+          invoices={data.invoices}
+          engagements={data.engagements}
+          coachName={data.coachName}
+          clientName={data.clientName}
+          months={data.months}
+          initialMonth={explore.initialMonth}
+          onClose={() => setExplore(null)}
+        />
       )}
     </div>
   );
