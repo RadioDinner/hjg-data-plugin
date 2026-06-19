@@ -51,11 +51,20 @@ from branch `claude/wonderful-wright-du8c1f`). Verified before push: `typecheck`
   `amount_paid`, `date_of` service month, line items + payments (jsonb).
 
 **⚠ ACTION REQUIRED for Pay staff to show data:** apply **`9993_ca_invoices.sql`**
-in the Supabase SQL Editor, then **re-sync** (Admin → Sync now). Until then the
-tab shows an empty-state banner. **Then export `ca_invoices` and confirm the
-invoices actually carry the monthly subscription charges** ($425 = 4x, etc.) — if
-CA bills subscriptions elsewhere, we switch the revenue source to a tier→price
-config (engine unchanged). Decisions captured in `Session log/005_2026-06-19/`.
+(and **`9992_appointment_counts_in_engagement.sql`**, new this session) in the
+Supabase SQL Editor, then **re-sync** (Admin → Sync now). Until then the tab shows
+an empty-state banner. **Then export `ca_invoices` and confirm the invoices
+actually carry the monthly subscription charges** ($425 = 4x, etc.) — if CA bills
+subscriptions elsewhere, we switch the revenue source to a tier→price config
+(engine unchanged). Decisions captured in `Session log/005_2026-06-19/`.
+
+**Delivery signal (session 005b):** the sync now mirrors CA's
+**`countsInEngagement`** as `ca_appointments.counts_in_engagement` (1 = delivered/
+credited, -1 = not counted, 0 = no judgement, null = pre-sync). After applying
+`9992` + a re-sync, **export `ca_appointments` and eyeball the 1 / -1 / 0
+distribution** — it's only useful for "did the paid-for sessions happen?" if the
+coaches actually maintain that flag in CA. If they do, it unlocks a *pay-on-
+delivered* verification layer over the collected-revenue model.
 
 **Branch cleanup (partial):** the three feature branches
 (`admiring-lovelace-3tb4iy`, `magical-gauss-ELOiz`, `practical-meitner-toynll`)
@@ -174,7 +183,8 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 ## Database schema (Supabase)
 
 Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
-`ca_appointments`, `ca_offerings`, `ca_offering_submissions`, `ca_engagements`
+`ca_appointments` (+ **`counts_in_engagement`**, 9992 — apply + re-sync),
+`ca_offerings`, `ca_offering_submissions`, `ca_engagements`
 (9994), **`ca_invoices` (9993 — apply + re-sync to populate)**. Ops: `sync_runs`,
 `app_settings`. HJG-owned (staff RLS): `discovery_outcomes`, `mentee_outcomes`
 (9995), `coach_settings` (9996), `manual_metrics` (9997), plus dormant
@@ -189,9 +199,10 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Present = `9993`…`9999`. **Next
-  new one is `9992_…`.** Run by copy-paste into the Supabase SQL Editor; make
-  re-runnable (`drop … if exists`). `9993_ca_invoices.sql` still needs applying.
+- **Migrations DESCENDING** (newest = lowest). Present = `9992`…`9999`. **Next
+  new one is `9991_…`.** Run by copy-paste into the Supabase SQL Editor; make
+  re-runnable (`drop … if exists` / `add column if not exists`). **`9993_ca_invoices.sql`
+  and `9992_appointment_counts_in_engagement.sql` still need applying + a re-sync.**
 - **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
   pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
   consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use

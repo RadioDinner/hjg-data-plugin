@@ -32,6 +32,13 @@ export interface CAAppointment {
   endDate?: string;
   dateAdded?: string; // when the appointment was booked (signup date)
   status: CAAppointmentStatus;
+  // Whether CA has credited this appointment against its Engagement's allocation:
+  //   1  = DOES count (a delivered session toward what the mentee paid for)
+  //  -1  = does NOT count
+  //   0  = no judgement applied yet
+  // This is CA's closest signal to "the session actually happened." See docs/
+  // coachaccountable-api.md (Appointment.getAll return values).
+  countsInEngagement?: number;
 }
 
 export interface CAAppointmentType {
@@ -223,6 +230,10 @@ export interface CaAppointmentRow {
   name: string;
   category: AppointmentCategory;
   status: string;
+  // CA Appointment.countsInEngagement: 1 = credited toward the engagement
+  // (delivered), -1 = explicitly not counted, 0 = no judgement yet, null = not
+  // yet synced. The delivery signal behind "did the paid-for sessions happen?".
+  counts_in_engagement: number | null;
   start_raw: string | null;
   start_date: string | null; // YYYY-MM-DD (account-local)
   start_year: number | null;

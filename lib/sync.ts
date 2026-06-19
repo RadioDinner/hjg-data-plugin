@@ -161,6 +161,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         name: a.name ?? "",
         category: categorizeAppointmentName(a.name),
         status: a.status,
+        counts_in_engagement: a.countsInEngagement ?? null,
         start_raw: a.startDate ?? null,
         start_date: dp.date,
         start_year: dp.year,

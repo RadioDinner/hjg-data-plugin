@@ -44,7 +44,29 @@ viewing/auditing.
 Verified: `npm run typecheck`, `npm run verify` (9 sections), `npm run build` all
 pass. **Not** browser-tested (headless container + no invoice data yet).
 
+## Also shipped 005b — delivery signal (`countsInEngagement`)
+
+The user wants to verify that the sessions a mentee *paid for* were actually
+*delivered* (and by the same coach) — a "pay on delivered" basis beyond Clayton's
+"billed" and our app's "collected". Investigated the CA data model: there's no
+literal attended/no-show flag, but `Appointment.getAll` returns
+**`countsInEngagement`** (1 = credited toward the engagement, -1 = not, 0 = no
+judgement). CA already returns it in the response we sync — we were dropping it.
+
+Wired it up end-to-end:
+- `lib/types.ts`: `CAAppointment.countsInEngagement?` + `CaAppointmentRow.counts_in_engagement`.
+- `lib/sync.ts`: map `a.countsInEngagement ?? null` into the appointment rows.
+- `supabase/migrations/9992_appointment_counts_in_engagement.sql`: add the column
+  + an `(engagement_id, counts_in_engagement)` index. Re-runnable.
+
+Lands in the Raw-data tab automatically (`select *`). **Needs apply `9992` +
+re-sync.** Then eyeball the 1/-1/0 distribution — only useful if coaches actually
+maintain the flag in CA. Migration numbering: next new one is now `9991_…`.
+
 ## Open / next
+- **Pending: align `lib/pay.ts` to Clayton's logic, ramp by mentee-month** (the
+  AskUserQuestion decision). Not started — confirmed the ramp interpretation in
+  chat first. Also still owed: the plain-English legacy-logic doc.
 
 - **Still gated on data:** the tab stays empty until `9993_ca_invoices.sql` is
   applied in Supabase + a re-sync runs. The by-month view and Explore window
