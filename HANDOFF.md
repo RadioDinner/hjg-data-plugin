@@ -1,21 +1,29 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-03 (session 003).
+2026-06-19 (session 005).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live state — 2026-06-03, session 003)
+## Resume here (live state — 2026-06-19, session 005)
 
 Picking this up cold — start here.
 
-**Repo state:** on branch **`claude/magical-gauss-ELOiz`**. Session-002 work was
-**merged to `main` since the last handoff** (PR #7 — the prior "not yet merged"
-note is now stale). This branch carries that merge plus session 003's
-capacity fix.
+**Repo state:** **everything is merged to `main`** (production). Session 005
+fast-forwarded `main` to the old `claude/admiring-lovelace-3tb4iy` tip — which
+carried session 003's **mentor-capacity fix** plus the session 003/004 logs —
+and added this session's log (`005_2026-06-19`). Verified before the push:
+`typecheck`, `verify` (7 sections), `build` all pass. `main` tip ≈ `07be701`.
+
+**Branch cleanup (partial):** the three feature branches
+(`admiring-lovelace-3tb4iy`, `magical-gauss-ELOiz`, `practical-meitner-toynll`)
+are fully captured in `main`. The local branch was deleted, but **remote
+deletion was blocked by the git proxy (HTTP 403)** and there's no branch-delete
+GitHub tool in this environment — **delete the three remote branches via the
+GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing.
 
 **Shipped this session (003) — see `Session log/003_2026-06-03/session_log.md`:**
 - **Mentor-capacity inflation FIXED** (the Arthur Nisly bug). Group formats
@@ -40,7 +48,8 @@ existing `ca_appointments` rows (Admin → Sync now). No migration needed
    outcomes.sql` and `9994_ca_engagements.sql` (likely already applied — confirm).
 4. Consider widening `SYNC_YEARS` so pre-window JumpStart engagements aren't
    missing a start date on the timeline.
-5. **Merge to `main`** when verified.
+5. **Delete the three stale remote branches** via the GitHub UI (proxy blocked
+   `git push --delete` here). ~~Merge to `main`~~ — done in session 005.
 
 **Verification status:** `npm run typecheck`, `npm run verify` (now **7
 sections** — added [7] group categorization), `npm run build` all pass. UI not
