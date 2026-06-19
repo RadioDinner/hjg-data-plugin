@@ -60,6 +60,15 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
   const monthInRange = (ym: string) => (!lo || ym >= lo) && (!hi || ym <= hi);
   const coachId = coach === "all" ? null : Number(coach);
 
+  // Coach the engine attributed each mentee+month to (from the ledger). Raw
+  // invoices carry no coach, so the Invoices view borrows this to show which
+  // coach an invoice's revenue is paid to.
+  const coachByClientMonth = useMemo(() => {
+    const m = new Map<string, { coachId: number | null; coachName: string }>();
+    for (const r of ledger) m.set(`${r.ym}|${r.clientId}`, { coachId: r.coachId, coachName: r.coachName });
+    return m;
+  }, [ledger]);
+
   // --- Ledger view ---
   const ledgerData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
     const rows = ledger
@@ -98,26 +107,35 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ledger, lo, hi, coachId, tier, q]);
 
-  // --- Invoices view (raw engine input: collected revenue by service month) ---
+  // --- Invoices view (raw engine input: collected revenue by service month).
+  // Coach is the engine's attribution for that mentee+month, "—" when nothing
+  // was attributed (e.g. no engagement overlapped that month). ---
   const invoiceData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
     const rows = invoices
       .filter((inv) => monthInRange(inv.serviceYm))
-      .map<Row>((inv) => ({
-        serviceYm: inv.serviceYm,
-        clientName: clientName(inv.clientId),
-        clientId: inv.clientId,
-        collected: inv.collected,
-      }))
-      .filter((r) => !q || String(r.clientName).toLowerCase().includes(q));
+      .map<Row>((inv) => {
+        const c = coachByClientMonth.get(`${inv.serviceYm}|${inv.clientId}`);
+        return {
+          serviceYm: inv.serviceYm,
+          clientName: clientName(inv.clientId),
+          coachName: c?.coachName ?? "—",
+          coachId: c?.coachId ?? null,
+          clientId: inv.clientId,
+          collected: inv.collected,
+        };
+      })
+      .filter((r) => coachId == null || r.coachId === coachId)
+      .filter((r) => !q || `${r.clientName} ${r.coachName}`.toLowerCase().includes(q));
     const columns: SortColumn[] = [
       { key: "serviceYm", label: "Service month", format: (r) => monthLabel(String(r.serviceYm)) },
       { key: "clientName", label: "Mentee" },
+      { key: "coachName", label: "Coach" },
       { key: "clientId", label: "Client ID", numeric: true },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
     ];
     return { columns, rows };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoices, lo, hi, q, clientName]);
+  }, [invoices, lo, hi, q, clientName, coachByClientMonth, coachId]);
 
   // --- Engagements view (raw engine input: mentee↔mentor↔tier spans) ---
   const engagementData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
@@ -154,8 +172,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
   }, [engagements, lo, hi, coachId, tier, q, coachName, clientName]);
 
   const active = view === "ledger" ? ledgerData : view === "invoices" ? invoiceData : engagementData;
-  const showCoach = view !== "invoices";
-  const showTier = view !== "invoices";
+  const showTier = view !== "invoices"; // raw invoices carry no tier
   const exportName = `pay-${view}`;
 
   return (
@@ -217,19 +234,17 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
               </label>
             </>
           )}
-          {showCoach && (
-            <label className="filter">
-              <span>Coach</span>
-              <select value={coach} onChange={(e) => setCoach(e.target.value)}>
-                <option value="all">All coaches</option>
-                {coachOptions.map(([id, name]) => (
-                  <option key={id} value={String(id)}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label className="filter">
+            <span>Coach</span>
+            <select value={coach} onChange={(e) => setCoach(e.target.value)}>
+              <option value="all">All coaches</option>
+              {coachOptions.map(([id, name]) => (
+                <option key={id} value={String(id)}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
           {showTier && (
             <label className="filter">
               <span>Tier</span>

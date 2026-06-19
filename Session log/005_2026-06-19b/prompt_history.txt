@@ -4,3 +4,12 @@ lets kick off another session. I want to re-evalute our pay system. I want to se
 --- 2026-06-19 19:46 (AskUserQuestion answers) ---
 Explore window: Compiled ledger + raw source toggle
 Month layout: All-months expandable table
+
+--- 2026-06-19 20:33 ---
+commit to main
+
+--- 2026-06-19 20:33 ---
+direct to main
+
+--- 2026-06-19 20:33 ---
+in Invoices tab of the "explore source data" I don't see the coach column, I want that addee
