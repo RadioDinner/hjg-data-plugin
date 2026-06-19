@@ -889,6 +889,7 @@ export const RAW_TABLES = [
   "ca_clients",
   "ca_coaches",
   "ca_engagements",
+  "ca_invoices",
   "ca_offerings",
   "ca_offering_submissions",
   "coach_settings",

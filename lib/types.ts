@@ -72,6 +72,42 @@ export interface CAEngagement {
   dateAdded?: string;
 }
 
+// Invoice line item and payment, as nested in Invoice.getAll / Invoice.get.
+export interface CAInvoiceLineItem {
+  item?: string;
+  amount?: number;
+}
+export interface CAInvoicePayment {
+  datePaid?: string;
+  amount?: number;
+  method?: string;
+  checkNumber?: string;
+}
+
+// A CoachAccountable Invoice (Invoice.getAll). For HJG this is typically one per
+// mentee per month for their subscription tier. `dateOf` is the service date
+// (which month the revenue belongs to); `amount` is billed, `amountPaid` is
+// collected so far.
+export interface CAInvoice {
+  ID: number;
+  invoiceNumber?: string;
+  dateAdded?: string;
+  dateOf?: string;
+  dateDue?: string;
+  currency?: string;
+  amount?: number;
+  amountPaid?: number;
+  taxRate?: number;
+  ClientID?: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  CompanyID?: number;
+  companyName?: string;
+  lineItemSet?: CAInvoiceLineItem[];
+  paymentSet?: CAInvoicePayment[];
+}
+
 // "Submissions" = signups and/or purchases for an Offering.
 export interface CAOfferingSubmission {
   ID: number;
@@ -245,6 +281,33 @@ export interface CaEngagementRow {
   date_closed: string | null;
   date_added_raw: string | null;
   date_added: string | null;
+  synced_at?: string;
+}
+
+export interface CaInvoiceRow {
+  id: number;
+  invoice_number: string | null;
+  client_id: number | null;
+  company_id: number | null;
+  first_name: string | null;
+  last_name: string | null;
+  client_name: string | null;
+  email: string | null;
+  company_name: string | null;
+  currency: string | null;
+  amount: number | null;
+  amount_paid: number | null;
+  tax_rate: number | null;
+  date_added_raw: string | null;
+  date_added: string | null;
+  date_of_raw: string | null;
+  date_of: string | null;
+  date_of_year: number | null;
+  date_of_month: number | null;
+  date_due_raw: string | null;
+  date_due: string | null;
+  line_items: CAInvoiceLineItem[] | null;
+  payments: CAInvoicePayment[] | null;
   synced_at?: string;
 }
 

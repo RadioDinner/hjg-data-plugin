@@ -15,6 +15,7 @@ import type {
   CaOfferingRow,
   CaOfferingSubmissionRow,
   CaEngagementRow,
+  CaInvoiceRow,
 } from "./types.js";
 
 export class SyncInProgressError extends Error {
@@ -252,6 +253,49 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
     } catch (e) {
       if (e instanceof BudgetExhaustedError) throw e;
       warnings.push(`Engagements skipped: ${sanitizeError(e)}`);
+    }
+
+    // Invoices feed the staff/mentor payment tool (a coach earns a % of a
+    // mentee's monthly revenue). READ-ONLY: only Invoice.getAll is called.
+    // `dateOf` is the service month the revenue belongs to. Best-effort like
+    // engagements — a failure here leaves the core sync intact and is reported
+    // as a warning. Budget exhaustion still hard-stops.
+    try {
+      const invoices = await ca.getInvoices({ dateFrom: from, dateTo: to });
+      const invoiceRows: CaInvoiceRow[] = invoices.map((inv) => {
+        const dof = dateParts(inv.dateOf);
+        const dad = dateParts(inv.dateAdded);
+        const ddu = dateParts(inv.dateDue);
+        return {
+          id: inv.ID,
+          invoice_number: inv.invoiceNumber ?? null,
+          client_id: inv.ClientID ?? null,
+          company_id: inv.CompanyID ?? null,
+          first_name: inv.firstName ?? null,
+          last_name: inv.lastName ?? null,
+          client_name: fullName(inv.firstName, inv.lastName) || null,
+          email: inv.email ?? null,
+          company_name: inv.companyName ?? null,
+          currency: inv.currency ?? null,
+          amount: inv.amount ?? null,
+          amount_paid: inv.amountPaid ?? null,
+          tax_rate: inv.taxRate ?? null,
+          date_added_raw: inv.dateAdded ?? null,
+          date_added: dad.date,
+          date_of_raw: inv.dateOf ?? null,
+          date_of: dof.date,
+          date_of_year: dof.year,
+          date_of_month: dof.month,
+          date_due_raw: inv.dateDue ?? null,
+          date_due: ddu.date,
+          line_items: inv.lineItemSet ?? null,
+          payments: inv.paymentSet ?? null,
+        };
+      });
+      records += await chunkedUpsert(admin, "ca_invoices", invoiceRows);
+    } catch (e) {
+      if (e instanceof BudgetExhaustedError) throw e;
+      warnings.push(`Invoices skipped: ${sanitizeError(e)}`);
     }
 
     await admin
