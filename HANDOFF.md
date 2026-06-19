@@ -12,9 +12,9 @@ Working notes for resuming this project in a future session. Last updated
 
 Picking this up cold — start here.
 
-**Repo state:** session 005b works on branch **`claude/wonderful-wright-du8c1f`**
-(not `main`) per the session's branch instruction. Verified before push:
-`typecheck`, `verify` (now **9 sections**), `build` all pass.
+**Repo state:** session 005b is **committed to `main`** (the user moved it there
+from branch `claude/wonderful-wright-du8c1f`). Verified before push: `typecheck`,
+`verify` (now **9 sections**), `build` all pass.
 
 **Shipped this session (005b) — Pay-staff re-evaluation tooling:**
 - **By-month breakdown.** The Pay-staff tab no longer shows one month at a time.
