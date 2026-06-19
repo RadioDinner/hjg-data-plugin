@@ -23,3 +23,6 @@ Scaffold the invoice sync and I want to start building a mentor/staff payment to
 Accrual basis: Pay on collected (credited to service month)
 Partial months: Daily proration
 Split rate: Varies. New mentor ramp -> month 1 = 35%, month 2 = 50%, month 3+ = 60%
+
+--- 2026-06-19 ---
+write the handoff, merge/commit to main and wrap the session

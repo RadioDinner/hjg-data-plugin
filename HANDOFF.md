@@ -44,35 +44,32 @@ deletion was blocked by the git proxy (HTTP 403)** and there's no branch-delete
 GitHub tool in this environment — **delete the three remote branches via the
 GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing.
 
-**Shipped this session (003) — see `Session log/003_2026-06-03/session_log.md`:**
-- **Mentor-capacity inflation FIXED** (the Arthur Nisly bug). Group formats
-  ("In Depth Mentoring Session", "Tracking Together") now get their own
-  **`"group"` appointment category** at sync time. The data layer presents them
-  to the UI as `category:"mentoring"` + **`isGroup:true`**, so meeting/active-
-  mentee KPIs and the Journeys meeting-rhythm are **unchanged** — only the
-  per-mentor **capacity utilization** drops group attendees. Chosen scope:
-  *capacity only*. Commit `7b36854`.
-
-**⚠ ACTION REQUIRED for the fix to take effect:** categorization runs at sync
-time, so the capacity numbers won't change until a **re-sync** reclassifies
-existing `ca_appointments` rows (Admin → Sync now). No migration needed
-(`category` is a plain text column).
-
-**▶ Immediate next steps:**
-1. **Re-sync** in the app so existing rows pick up the new `"group"` category,
-   then **eyeball Arthur Nisly's capacity row** to confirm the inflation is gone.
-2. **Verify in a real browser / Vercel preview** (container is headless): the
-   capacity card, Journeys tab, `/data-map.html`, and the Export-all `.xlsx`.
-3. **Apply migrations** in the Supabase SQL Editor if not done: `9995_mentee_
-   outcomes.sql` and `9994_ca_engagements.sql` (likely already applied — confirm).
-4. Consider widening `SYNC_YEARS` so pre-window JumpStart engagements aren't
-   missing a start date on the timeline.
+**▶ Immediate next steps (prioritized):**
+1. **Apply `9993_ca_invoices.sql` in the Supabase SQL Editor, then re-sync**
+   (Admin → Sync now). This one re-sync does double duty: it **populates the Pay
+   staff tab** AND finally reclassifies appointments into the `"group"` category
+   for the session-003 **capacity fix** (which also needed a re-sync). After it,
+   eyeball Arthur Nisly's capacity row to confirm the inflation is gone.
+2. **Export `ca_invoices` and send it to verify the Pay staff revenue source** —
+   confirm CA invoices actually carry the monthly subscription charges
+   ($425 = 4x, etc.). If not, point the engine at a tier→price config (no engine
+   change). The tab shows an empty-state banner until invoices land.
+3. **Confirm the ramp basis (OPEN QUESTION).** The 35/50/60 ramp is implemented
+   as **mentor tenure** (months since the mentor's earliest engagement, applied
+   across all their mentees). The user was asked whether it should instead reset
+   **per new mentee relationship** — unanswered at session end. If per-mentee,
+   it's a small change in `lib/pay.ts`.
+4. **Browser / Vercel-preview verify** (container is headless): the **Pay staff**
+   tab, the capacity card, Journeys, `/data-map.html`, the Export-all `.xlsx`.
 5. **Delete the three stale remote branches** via the GitHub UI (proxy blocked
-   `git push --delete` here). ~~Merge to `main`~~ — done in session 005.
+   `git push --delete`): `admiring-lovelace-3tb4iy`, `magical-gauss-ELOiz`,
+   `practical-meitner-toynll` — all fully captured in `main`.
+6. Later: **mentor-start override** in `coach_settings` (see Open items); widen
+   `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a start date.
 
-**Verification status:** `npm run typecheck`, `npm run verify` (now **7
-sections** — added [7] group categorization), `npm run build` all pass. UI not
-browser-tested this session (headless container).
+**Verification status:** `npm run typecheck`, `npm run verify` (**8 sections** —
+added [8] staff payment), `npm run build` all pass. UI not browser-tested
+(headless container).
 
 ## What this is
 
