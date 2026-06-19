@@ -133,6 +133,7 @@ export function PayStaffView() {
       coachName: data.coachName,
       clientName: data.clientName,
       months: data.months,
+      startMonthOverride: data.startMonthOverride,
     });
   }, [data]);
 

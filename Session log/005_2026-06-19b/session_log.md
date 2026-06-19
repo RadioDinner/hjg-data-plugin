@@ -81,6 +81,30 @@ engine accordingly:
 
 typecheck, verify (9 sections), build all pass.
 
+## Also shipped 005b — ramp resolved (per-MENTOR) + mentor-start override + legacy doc
+
+User confirmed the ramp is built on the **MENTOR's** tenure (35% the mentor's 1st
+month of work across ALL their mentees, 50% the 2nd, 60% the 3rd+) — Clayton's
+per-mentee reset was wrong. The engine already worked this way, so "the rework"
+was: (a) lock it with tests, (b) make the mentor start explicit/overridable.
+
+- `lib/pay.ts`: clearer comment; no logic change (already per-mentor; the
+  `startMonthOverride` hook existed).
+- `scripts/verify-metrics.ts` §8: new tests — one mentor / two mentees both at 35%
+  ($297.50 = 35% of $850); and the start-month override (April-start mentor looks
+  new → 35%, but pinning Jan start → month 4 → 60%).
+- **Mentor-start override (the real rework):** `coach_settings.pay_start_month`
+  ('YYYY-MM', migration **9991**), edited in Admin → Mentor capacity → "Pay start"
+  (a `<input type="month">`). Threaded `fetchPayData.startMonthOverride` →
+  `computePayTimeline`. Only well-formed 'YYYY-MM' values are honored; blank =
+  derive from earliest engagement.
+- `docs/legacy-pay-calculator.md`: plain-English decode of Clayton's sheet (6-row
+  block, roll-forward trick, catch-up, the per-mentee ramp mistake, tier drops),
+  plus a legacy→app mapping table.
+
+⚠ **Apply migration 9991** before this deploys — the Pay-staff data layer now
+selects `pay_start_month`. typecheck, verify (9 sections), build all pass.
+
 ## Open / next
 - **Pending: align `lib/pay.ts` to Clayton's logic, ramp by mentee-month** (the
   AskUserQuestion decision). Not started — confirmed the ramp interpretation in

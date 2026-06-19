@@ -472,21 +472,22 @@ export interface CoachWithSettings {
   isMentor: boolean;
   capacity: number | null;
   notes: string | null;
+  payStartMonth: string | null; // 'YYYY-MM' override for the pay-ramp start; null = derived
 }
 
 // Every coach from ca_coaches with their HJG-owned mentor flag + capacity
 // (left-join). Coaches with no coach_settings row come back as
-// is_mentor=false, capacity=null, notes=null.
+// is_mentor=false, capacity=null, notes=null, payStartMonth=null.
 export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
   const [coachesRes, settingsRes] = await Promise.all([
     supabase.from("ca_coaches").select("id,name").order("name", { ascending: true }),
-    supabase.from("coach_settings").select("coach_id,is_mentor,capacity,notes"),
+    supabase.from("coach_settings").select("coach_id,is_mentor,capacity,notes,pay_start_month"),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (settingsRes.error) throw new Error(settingsRes.error.message);
-  const settings = new Map<number, { is_mentor: boolean; capacity: number | null; notes: string | null }>();
-  for (const s of (settingsRes.data ?? []) as { coach_id: number; is_mentor: boolean; capacity: number | null; notes: string | null }[]) {
-    settings.set(s.coach_id, { is_mentor: s.is_mentor, capacity: s.capacity, notes: s.notes });
+  const settings = new Map<number, { is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null }>();
+  for (const s of (settingsRes.data ?? []) as { coach_id: number; is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null }[]) {
+    settings.set(s.coach_id, { is_mentor: s.is_mentor, capacity: s.capacity, notes: s.notes, pay_start_month: s.pay_start_month });
   }
   return ((coachesRes.data ?? []) as { id: number; name: string | null }[]).map((c) => {
     const s = settings.get(c.id);
@@ -496,6 +497,7 @@ export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
       isMentor: s?.is_mentor ?? false,
       capacity: s?.capacity ?? null,
       notes: s?.notes ?? null,
+      payStartMonth: s?.pay_start_month ?? null,
     };
   });
 }
@@ -514,7 +516,7 @@ export async function fetchMentorCoachIds(): Promise<Set<number>> {
 
 export async function upsertCoachSettings(
   coachId: number,
-  patch: { isMentor: boolean; capacity: number | null; notes: string | null }
+  patch: { isMentor: boolean; capacity: number | null; notes: string | null; payStartMonth: string | null }
 ): Promise<void> {
   const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
   const { error } = await supabase
@@ -525,6 +527,7 @@ export async function upsertCoachSettings(
         is_mentor: patch.isMentor,
         capacity: patch.capacity,
         notes: patch.notes,
+        pay_start_month: patch.payStartMonth,
         created_by: createdBy,
         updated_by: createdBy,
       },
@@ -898,6 +901,9 @@ export interface PayData {
   coachName: (id: number) => string;
   clientName: (id: number) => string;
   months: string[]; // distinct service months present in invoices, newest first
+  // coachId -> 'YYYY-MM' staff override for the pay-ramp start (coach_settings).
+  // The engine falls back to the mentor's earliest engagement when absent.
+  startMonthOverride: Map<number, string>;
 }
 
 async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
@@ -964,19 +970,28 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
 }
 
 export async function fetchPayData(): Promise<PayData> {
-  const [invoices, engagements, coachesRes, clientsRes] = await Promise.all([
+  const [invoices, engagements, coachesRes, clientsRes, settingsRes] = await Promise.all([
     fetchAllPayInvoices(),
     fetchAllPayEngagements(),
     supabase.from("ca_coaches").select("id,name"),
     supabase.from("ca_clients").select("id,name"),
+    supabase.from("coach_settings").select("coach_id,pay_start_month"),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
+  if (settingsRes.error) throw new Error(settingsRes.error.message);
 
   const coaches = new Map<number, string>();
   for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coaches.set(c.id, c.name ?? `#${c.id}`);
   const clients = new Map<number, string>();
   for (const c of (clientsRes.data ?? []) as { id: number; name: string | null }[]) clients.set(c.id, c.name ?? `#${c.id}`);
+
+  // Staff overrides for the mentor pay-ramp start. Only well-formed 'YYYY-MM'
+  // values are honored; anything else falls back to the derived start.
+  const startMonthOverride = new Map<number, string>();
+  for (const s of (settingsRes.data ?? []) as { coach_id: number; pay_start_month: string | null }[]) {
+    if (s.pay_start_month && /^\d{4}-\d{2}$/.test(s.pay_start_month)) startMonthOverride.set(s.coach_id, s.pay_start_month);
+  }
 
   const months = [...new Set(invoices.map((i) => i.serviceYm))].sort((a, b) => b.localeCompare(a));
 
@@ -986,6 +1001,7 @@ export async function fetchPayData(): Promise<PayData> {
     coachName: (id) => coaches.get(id) ?? `#${id}`,
     clientName: (id) => clients.get(id) ?? `#${id}`,
     months,
+    startMonthOverride,
   };
 }
 

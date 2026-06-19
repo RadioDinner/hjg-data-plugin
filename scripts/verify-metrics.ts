@@ -298,6 +298,46 @@ console.log("[8] staff payment engine (ramp, proration, billed revenue)");
   });
   eq(r5.mentors.length, 0, "no mentor paid when engagement doesn't overlap");
   eq(r5.unassigned.length, 1, "revenue surfaced as unassigned");
+
+  // Per-MENTOR ramp (confirmed 2026-06-19): the split tracks the MENTOR's tenure
+  // and applies to ALL their mentees that month, NOT each mentee's own timeline.
+  // A mentor in their first month of work pays 35% across every assigned mentee.
+  const r6 = computePayReport({
+    ym: "2026-03",
+    invoices: [
+      { clientId: 10, serviceYm: "2026-03", billed: 425, collected: 425 },
+      { clientId: 11, serviceYm: "2026-03", billed: 425, collected: 425 },
+    ],
+    engagements: [
+      { clientId: 10, coachId: 60000, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "(4x Month)" },
+      { clientId: 11, coachId: 60000, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "(2x Month)" },
+    ],
+    coachName: (id) => `#${id}`,
+    clientName,
+  });
+  eq(r6.mentors.length, 1, "one mentor for two mentees");
+  eq(r6.mentors[0].menteeCount, 2, "mentor has two mentees this month");
+  eq(r6.mentors[0].splitPct, 0.35, "mentor's 1st month -> 35% across ALL mentees");
+  eq(r6.mentors[0].payout, 297.5, "35% of combined billed (850) = $297.50");
+
+  // Mentor-start override: a veteran whose earliest *synced* engagement is April
+  // would look brand-new (35%); pinning the true start to January makes April
+  // their 4th tenure month -> established 60%.
+  const lateSync: PayEngagementInput[] = [
+    { clientId: 1, coachId: 70000, startDate: "2026-04-01", endDate: null, isCanceled: false, name: "(4x)" },
+  ];
+  const noOv = computePayReport({ ym: "2026-04", invoices, engagements: lateSync, coachName: (id) => `#${id}`, clientName });
+  eq(noOv.mentors[0].splitPct, 0.35, "without override, an April-start mentor looks new -> 35%");
+  const ov = computePayReport({
+    ym: "2026-04",
+    invoices,
+    engagements: lateSync,
+    coachName: (id) => `#${id}`,
+    clientName,
+    startMonthOverride: new Map([[70000, "2026-01"]]),
+  });
+  eq(ov.mentors[0].splitPct, 0.6, "override start (Jan) -> April is tenure month 4 -> 60%");
+  eq(ov.mentors[0].payout, 255, "override pays the veteran rate: 425 * 0.60 = $255");
 }
 
 console.log("[9] staff payment timeline + flat ledger (by-month breakdown / explorer)");

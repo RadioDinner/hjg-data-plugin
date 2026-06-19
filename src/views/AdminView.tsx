@@ -53,7 +53,7 @@ export function AdminView() {
   // `coaches` is the canonical roster joined with current saved settings.
   // `mcEdits` mirrors what's in the inputs; rows are saved by Save changes.
   const [coaches, setCoaches] = useState<CoachWithSettings[]>([]);
-  const [mcEdits, setMcEdits] = useState<Record<number, { isMentor: boolean; capacity: string; notes: string }>>({});
+  const [mcEdits, setMcEdits] = useState<Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string }>>({});
   const [mcDirty, setMcDirty] = useState<Set<number>>(new Set());
   const [mcSaving, setMcSaving] = useState(false);
   const [mcMsg, setMcMsg] = useState<string | null>(null);
@@ -75,12 +75,13 @@ export function AdminView() {
   async function loadCoaches() {
     const all = await fetchCoachesWithSettings();
     setCoaches(all);
-    const edits: Record<number, { isMentor: boolean; capacity: string; notes: string }> = {};
+    const edits: Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string }> = {};
     for (const c of all) {
       edits[c.coachId] = {
         isMentor: c.isMentor,
         capacity: c.capacity == null ? "" : String(c.capacity),
         notes: c.notes ?? "",
+        payStart: c.payStartMonth ?? "",
       };
     }
     setMcEdits(edits);
@@ -114,6 +115,7 @@ export function AdminView() {
             isMentor: e.isMentor,
             capacity: Number.isFinite(cap as number) || cap === null ? cap : null,
             notes: e.notes.trim() === "" ? null : e.notes.trim(),
+            payStartMonth: e.payStart.trim() === "" ? null : e.payStart.trim(),
           });
         })
       );
@@ -382,7 +384,9 @@ export function AdminView() {
         </div>
         <p className="view__hint">
           Mark which CoachAccountable coaches actually count as mentors, and set how many concurrent mentees each can
-          take. The Metrics tab&apos;s Mentors metric is filtered to flagged mentors once any are set, and the new
+          take. <strong>Pay start</strong> anchors the staff-payment ramp (35→50→60%) to a mentor&apos;s true first
+          month of work — leave it blank to infer from their earliest engagement. The Metrics tab&apos;s Mentors metric
+          is filtered to flagged mentors once any are set, and the
           <strong> Mentor capacity utilization </strong>card reads these capacities. Saves write to the HJG-owned
           <code> coach_settings</code> table, untouched by CA sync.
         </p>
@@ -393,6 +397,7 @@ export function AdminView() {
                 <th>Coach</th>
                 <th>Mentor?</th>
                 <th className="num">Capacity</th>
+                <th>Pay start</th>
                 <th>Notes</th>
               </tr>
             </thead>
@@ -400,7 +405,7 @@ export function AdminView() {
               {coaches
                 .filter((c) => mcShowOnly === "all" || mcEdits[c.coachId]?.isMentor)
                 .map((c) => {
-                  const e = mcEdits[c.coachId] ?? { isMentor: false, capacity: "", notes: "" };
+                  const e = mcEdits[c.coachId] ?? { isMentor: false, capacity: "", notes: "", payStart: "" };
                   return (
                     <tr key={c.coachId}>
                       <td>
@@ -439,6 +444,21 @@ export function AdminView() {
                       </td>
                       <td>
                         <input
+                          type="month"
+                          value={e.payStart}
+                          title="Mentor's first month of work — anchors the 35/50/60 pay ramp. Blank = inferred from earliest engagement."
+                          style={{ width: 130 }}
+                          onChange={(ev) => {
+                            setMcEdits((prev) => ({
+                              ...prev,
+                              [c.coachId]: { ...e, payStart: ev.target.value },
+                            }));
+                            markDirty(c.coachId);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
                           type="text"
                           value={e.notes}
                           placeholder=""
@@ -457,7 +477,7 @@ export function AdminView() {
                 })}
               {coaches.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="muted">
+                  <td colSpan={5} className="muted">
                     No coaches synced yet. Run a sync first.
                   </td>
                 </tr>

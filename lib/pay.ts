@@ -12,9 +12,12 @@
 //  - Partial months are prorated by active service days: (active days in month /
 //    days in month). A full month => factor 1 => the whole monthly share. This
 //    handles mid-month starts, quits/graduations, and tier changes.
-//  - The split RAMPS with the mentor's tenure: their 1st month = 35%, 2nd = 50%,
-//    3rd month onward = 60%. Tenure is measured from the mentor's earliest
-//    engagement start (overridable per coach).
+//  - The split RAMPS with the MENTOR's tenure and applies to ALL of that mentor's
+//    mentees that month: their 1st month of work = 35%, 2nd = 50%, 3rd month
+//    onward = 60%. Tenure is the mentor's, measured from their earliest engagement
+//    start (overridable per coach) — NOT each mentee's own timeline. (The legacy
+//    Clayton spreadsheet ramped per-mentee; that was wrong — see
+//    docs/legacy-pay-calculator.md.)
 //  - A mentee is attributed to the coach who covered the most active days that
 //    month (handles a mid-month hand-off). Billed revenue with no overlapping
 //    engagement is reported as "unassigned" rather than silently dropped.

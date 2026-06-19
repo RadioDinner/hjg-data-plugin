@@ -83,18 +83,20 @@ GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing
    confirm CA invoices actually carry the monthly subscription charges
    ($425 = 4x, etc.). If not, point the engine at a tier→price config (no engine
    change). The tab shows an empty-state banner until invoices land.
-3. **Confirm the ramp basis (OPEN QUESTION).** The 35/50/60 ramp is implemented
-   as **mentor tenure** (months since the mentor's earliest engagement, applied
-   across all their mentees). The user was asked whether it should instead reset
-   **per new mentee relationship** — unanswered at session end. If per-mentee,
-   it's a small change in `lib/pay.ts`.
+3. **Ramp basis — RESOLVED (session 005b): per-MENTOR.** The 35/50/60 ramp tracks
+   the **mentor's** tenure and applies to ALL their mentees that month (Clayton's
+   per-mentee reset was wrong). Already how `lib/pay.ts` worked; now locked by
+   verify §8 tests + decoded in `docs/legacy-pay-calculator.md`. The **mentor-start
+   override** is now SHIPPED (`coach_settings.pay_start_month`, migration **9991**,
+   editable in Admin → Mentor capacity → "Pay start"). **Apply `9991` before this
+   deploys** — `fetchPayData`/`fetchCoachesWithSettings` now select the column.
 4. **Browser / Vercel-preview verify** (container is headless): the **Pay staff**
-   tab, the capacity card, Journeys, `/data-map.html`, the Export-all `.xlsx`.
+   tab, the capacity card (now with the Pay-start column), Journeys, the Export-all.
 5. **Delete the three stale remote branches** via the GitHub UI (proxy blocked
    `git push --delete`): `admiring-lovelace-3tb4iy`, `magical-gauss-ELOiz`,
    `practical-meitner-toynll` — all fully captured in `main`.
-6. Later: **mentor-start override** in `coach_settings` (see Open items); widen
-   `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a start date.
+6. Later: widen `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a
+   start date (the Pay-start override now covers the worst case manually).
 
 **Verification status:** `npm run typecheck`, `npm run verify` (**9 sections** —
 added [9] staff payment timeline + ledger), `npm run build` all pass. UI not
@@ -200,10 +202,11 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Present = `9992`…`9999`. **Next
-  new one is `9991_…`.** Run by copy-paste into the Supabase SQL Editor; make
-  re-runnable (`drop … if exists` / `add column if not exists`). **`9993_ca_invoices.sql`
-  and `9992_appointment_counts_in_engagement.sql` still need applying + a re-sync.**
+- **Migrations DESCENDING** (newest = lowest). Present = `9991`…`9999`. **Next
+  new one is `9990_…`.** Run by copy-paste into the Supabase SQL Editor; make
+  re-runnable (`drop … if exists` / `add column if not exists`). User reports
+  9999–9992 applied; **`9991_coach_pay_start_month.sql` is new this session and
+  MUST be applied** (the Pay-staff data layer now selects `pay_start_month`).
 - **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
   pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
   consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use
@@ -230,11 +233,13 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
   subscription charges** ($425 = 4x, etc.). If CA doesn't invoice the
   subscriptions, swap the revenue source to a `tier → price` config (engine + UI
   unchanged).
-- **Pay staff — mentor-start override.** Tenure (for the 35/50/60 ramp) is
-  currently derived from a coach's earliest engagement. A veteran whose first
-  engagement is *within the synced window but who actually started earlier* could
-  look "new". Add a per-coach `pay_start_month` (+ optional split override) to
-  `coach_settings` and an editor once the derived dates are eyeballed.
+- **Pay staff — mentor-start override — SHIPPED (session 005b).** Tenure for the
+  35/50/60 ramp defaults to the coach's earliest engagement, but can be pinned via
+  `coach_settings.pay_start_month` ('YYYY-MM', migration 9991), edited in Admin →
+  Mentor capacity → "Pay start". Threaded through `fetchPayData.startMonthOverride`
+  → `computePayTimeline`. **Eyeball the derived dates and set overrides for any
+  veteran who looks "new".** (A per-coach split-table override is still possible
+  later if the 35/50/60 values ever vary by mentor.)
 - **Pay staff — multi-coach month.** A mentee with a mid-month hand-off is
   attributed 100% to the majority-day coach (not split). Revisit if it matters.
 - **Mentor capacity inflation (Arthur Nisly) — FIXED (session 003), pending

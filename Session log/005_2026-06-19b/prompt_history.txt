@@ -36,3 +36,13 @@ I applied the migration. I think it makes the most sense to calculate it as bill
 I want to build a "compare" tool, into the metrics page. I want to be able to switch into and out of comparison mode. For example, I want to be able to compare this month against last month, or this quarter against last quarter.  Put this on a feature build out list to build sometime in the future
 
 Also, a second feature to build out, is a feature so that when I open "Explore this month" on the "Pay staff" page, I want only the coaches with more than zero rows to be in the drop down. Add this to the feature list as well.
+
+--- 2026-06-19 22:27 ---
+9993 is applied. All migrations are applied actually.
+
+On the ramp payment basis, Clayton did it wrong. The ramp is built on the MENTOR start. NOT mentee timeline.
+
+So the mentors first month of work is paid at 35% of total revenue for his assigned mentees, then 50% the following month, then 60%
+
+--- 2026-06-19 22:27 ---
+Do the ramp rework and then write the legacy pay caluclator doc.
