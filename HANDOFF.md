@@ -133,7 +133,8 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
   Top card = **board-level aggregate** leg durations (avg/median/n) as graph +
   table. Mentee search/list on the left.
 - **Pay staff** (session 005; reworked 005b) — per-mentor payout: ramped % (35/
-  50/60 by tenure) of **collected** mentee revenue, by invoice **service month**,
+  50/60 by tenure) of **billed** mentee revenue (collected shown for reference),
+  by invoice **service month**,
   prorated by active days. **By-month**: payout-by-month graph + all-months
   expandable table (expand → per-mentor breakdown). **Explore source data**
   window: sortable/filterable compiled ledger + raw invoice/engagement inputs
@@ -150,7 +151,7 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 | `lib/ca.ts` | CA API client (read-only). `getEngagements()`, **`getInvoices()` = Invoice.getAll**. **CA payload under `return`, not `result`.** |
 | `lib/config.ts` | Categorization (incl. **`GROUP_SESSION_CONTAINS`** → `"group"`), exclusions, conversion knobs (`CONVERSION_OFFERING_IDS=[42840]`), **`engagementTier()` + `PIPELINE_TIERS`**, CA function names (incl. **`invoiceGetAll`**). |
 | `lib/conversion.ts` | Pure discovery→conversion resolver. Verify §5. |
-| `lib/pay.ts` | **Pure staff-payment engine** (`computePayReport`): ramp 35/50/60 by tenure, daily proration, pay-on-collected. Verify §8. |
+| `lib/pay.ts` | **Pure staff-payment engine** (`computePayReport`): ramp 35/50/60 by tenure, daily proration, **pay-on-billed** (invoice `amount`; collected carried for reference). Verify §8. |
 | `lib/sync.ts` | Sync orchestration; offerings/submissions + **engagements** + **invoices** are best-effort (warnings accumulate). |
 | `src/db.ts` | Browser data access. `fetchMenteeJourneys`, `aggregateJourneyDurations`, **`fetchPayData`** (+ re-exports `computePayReport`); mentee_outcomes read/write; `fetchAllRows`. |
 | `src/views/JourneysView.tsx` | The Journeys tab (timeline + aggregate). |
@@ -217,11 +218,14 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
-- **Pay staff — verify the revenue source.** The payout engine reads `ca_invoices`
-  (collected, by service month). After applying `9993` + re-syncing, **export
-  `ca_invoices` and confirm invoices carry the monthly subscription charges**
-  ($425 = 4x, etc.). If CA doesn't invoice the subscriptions, swap the revenue
-  source to a `tier → price` config (engine + UI unchanged).
+- **Pay staff — revenue basis = BILLED (decided session 005b).** The engine now
+  pays on the invoice's billed `amount` (what's owed for the service month "in a
+  perfect world"), credited to `date_of`; `amount_paid` is carried only for
+  reference (shown alongside, never drives payout). Still to confirm after `9993`
+  + re-sync: **export `ca_invoices` and verify invoices carry the monthly
+  subscription charges** ($425 = 4x, etc.). If CA doesn't invoice the
+  subscriptions, swap the revenue source to a `tier → price` config (engine + UI
+  unchanged).
 - **Pay staff — mentor-start override.** Tenure (for the 35/50/60 ramp) is
   currently derived from a coach's earliest engagement. A veteran whose first
   engagement is *within the synced window but who actually started earlier* could

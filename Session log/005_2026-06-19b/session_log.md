@@ -63,6 +63,24 @@ Lands in the Raw-data tab automatically (`select *`). **Needs apply `9992` +
 re-sync.** Then eyeball the 1/-1/0 distribution — only useful if coaches actually
 maintain the flag in CA. Migration numbering: next new one is now `9991_…`.
 
+## Also shipped 005b — revenue basis switched to BILLED
+
+User decided to pay on **billed** (invoice `amount`), not **collected**
+(`amount_paid`) — "that's when, in a perfect world, they'd pay." Switched the
+engine accordingly:
+- `lib/pay.ts`: `PayInvoiceInput` now carries `billed` + `collected`; the engine
+  pays on `billed` (earned = billed × proration), and carries `collected` through
+  every output (line/summary/totals/ledger) for reference. Comments updated.
+- `src/db.ts`: `fetchAllPayInvoices` selects `amount` + `amount_paid`.
+- `scripts/verify-metrics.ts` §8/§9: updated to billed; the old "pay on collected
+  (partial)" case is now "billed basis ignores partial collection → $255", and a
+  new check confirms collected is carried for reference.
+- UI (`PayStaffView`, `PayExploreModal`): "Revenue billed" is the headline /
+  pay basis; "Collected so far" shown alongside (tile, ledger + invoices columns,
+  CSV) so the billed-vs-paid gap stays auditable.
+
+typecheck, verify (9 sections), build all pass.
+
 ## Open / next
 - **Pending: align `lib/pay.ts` to Clayton's logic, ramp by mentee-month** (the
   AskUserQuestion decision). Not started — confirmed the ramp interpretation in

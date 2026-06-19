@@ -226,7 +226,7 @@ console.log("[7] appointment categorization (group sessions vs 1-on-1)");
   eq(c("Mentor Training Extra Teaching"), "excluded", "excluded type unaffected");
 }
 
-console.log("[8] staff payment engine (ramp, proration, collected revenue)");
+console.log("[8] staff payment engine (ramp, proration, billed revenue)");
 {
   // Ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60%.
   eq(splitForTenureMonth(1), 0.35, "tenure month 1 -> 35%");
@@ -241,9 +241,9 @@ console.log("[8] staff payment engine (ramp, proration, collected revenue)");
   const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
   const clientName = (id: number) => `Mentee ${id}`;
 
-  // Alex on a 4x engagement ($425 collected) for a full April; Harry started in
+  // Alex on a 4x engagement ($425 billed) for a full April; Harry started in
   // Feb (so by April he's at the 60% established rate). 425 * 1.0 * 0.60 = 255.
-  const invoices: PayInvoiceInput[] = [{ clientId: 1, serviceYm: "2026-04", collected: 425 }];
+  const invoices: PayInvoiceInput[] = [{ clientId: 1, serviceYm: "2026-04", billed: 425, collected: 425 }];
   const engagements: PayEngagementInput[] = [
     { clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
   ];
@@ -276,15 +276,17 @@ console.log("[8] staff payment engine (ramp, proration, collected revenue)");
   eq(r3.mentors[0].splitPct, 0.35, "brand-new mentor at 35%");
   eq(r3.mentors[0].payout, 148.75, "new-mentor payout = 425 * 0.35");
 
-  // Pay on COLLECTED: a partially-paid invoice pays on amount_paid only.
+  // Pay on BILLED: a partially-paid invoice still pays on the full billed amount;
+  // the collected figure is carried for reference but doesn't change the payout.
   const r4 = computePayReport({
     ym: "2026-04",
-    invoices: [{ clientId: 1, serviceYm: "2026-04", collected: 200 }],
+    invoices: [{ clientId: 1, serviceYm: "2026-04", billed: 425, collected: 200 }],
     engagements,
     coachName,
     clientName,
   });
-  eq(r4.mentors[0].payout, 120, "partial collection ($200) -> 200 * 0.60 = $120");
+  eq(r4.mentors[0].payout, 255, "billed basis ignores partial collection: 425 * 0.60 = $255");
+  eq(r4.mentors[0].collected, 200, "collected ($200) carried through for reference");
 
   // Collected revenue with no engagement that month -> unassigned, not dropped.
   const r5 = computePayReport({
@@ -303,12 +305,12 @@ console.log("[9] staff payment timeline + flat ledger (by-month breakdown / expl
   const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
   const clientName = (id: number) => `Mentee ${id}`;
 
-  // Mentee 1: paid in both April and May, fully covered by Harry (60% by then).
-  // Mentee 2: collected in May only, with NO overlapping engagement -> unassigned.
+  // Mentee 1: billed in both April and May, fully covered by Harry (60% by then).
+  // Mentee 2: billed in May only, with NO overlapping engagement -> unassigned.
   const invoices: PayInvoiceInput[] = [
-    { clientId: 1, serviceYm: "2026-04", collected: 425 },
-    { clientId: 1, serviceYm: "2026-05", collected: 425 },
-    { clientId: 2, serviceYm: "2026-05", collected: 100 },
+    { clientId: 1, serviceYm: "2026-04", billed: 425, collected: 425 },
+    { clientId: 1, serviceYm: "2026-05", billed: 425, collected: 425 },
+    { clientId: 2, serviceYm: "2026-05", billed: 100, collected: 100 },
   ];
   const engagements: PayEngagementInput[] = [
     { clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: null, isCanceled: false, name: "(4x Month)" },
@@ -322,6 +324,7 @@ console.log("[9] staff payment timeline + flat ledger (by-month breakdown / expl
   // April: just mentee 1 (425*0.6=255). May: mentee 1 (255) + mentee 2 unassigned.
   eq(tl.months[1].report.totals.payout, 255, "April payout rolls up to $255");
   eq(tl.totals.payout, 510, "grand total payout across months = $510");
+  eq(tl.totals.billed, 950, "grand total billed = 425+425+100");
   eq(tl.totals.collected, 950, "grand total collected = 425+425+100");
 
   // Ledger: one row per mentee per month, including the unassigned bucket.

@@ -5,8 +5,10 @@
 //
 // Model (decided with the user, 2026-06-19):
 //  - Revenue belongs to the invoice's SERVICE month (date_of), never the payment
-//    date. We pay coaches on money actually COLLECTED (amount_paid), credited to
-//    that service month.
+//    date. We pay coaches on the amount BILLED (invoice `amount`) — what the
+//    mentee owes for that service month "in a perfect world" — credited to that
+//    service month. The amount COLLECTED (amount_paid) is carried alongside for
+//    reference/reconciliation but does NOT drive the payout.
 //  - Partial months are prorated by active service days: (active days in month /
 //    days in month). A full month => factor 1 => the whole monthly share. This
 //    handles mid-month starts, quits/graduations, and tier changes.
@@ -14,7 +16,7 @@
 //    3rd month onward = 60%. Tenure is measured from the mentor's earliest
 //    engagement start (overridable per coach).
 //  - A mentee is attributed to the coach who covered the most active days that
-//    month (handles a mid-month hand-off). Collected revenue with no overlapping
+//    month (handles a mid-month hand-off). Billed revenue with no overlapping
 //    engagement is reported as "unassigned" rather than silently dropped.
 
 import { engagementTier } from "./config";
@@ -54,7 +56,8 @@ function ymOf(dateYmd: string): string {
 export interface PayInvoiceInput {
   clientId: number;
   serviceYm: string; // 'YYYY-MM' from the invoice date_of
-  collected: number; // amount_paid (collected so far)
+  billed: number; // invoice `amount` — what was billed; the PAY BASIS
+  collected: number; // amount_paid (collected so far) — reference only
 }
 
 export interface PayEngagementInput {
@@ -83,11 +86,12 @@ export interface PayMenteeLine {
   clientId: number;
   clientName: string;
   coachId: number | null;
-  collected: number;
+  billed: number; // invoice amount billed (pay basis)
+  collected: number; // amount paid so far (reference)
   activeDays: number;
   daysInMonth: number;
   proration: number; // activeDays / daysInMonth, 0..1
-  earned: number; // collected * proration (revenue credited to this month)
+  earned: number; // billed * proration (revenue credited to this month)
   splitPct: number;
   payout: number; // earned * splitPct
   tier: string;
@@ -100,6 +104,7 @@ export interface PayMentorSummary {
   tenureMonth: number | null;
   splitPct: number;
   menteeCount: number;
+  billed: number;
   collected: number;
   earned: number;
   payout: number;
@@ -110,8 +115,8 @@ export interface PayReport {
   ym: string;
   daysInMonth: number;
   mentors: PayMentorSummary[];
-  unassigned: PayMenteeLine[]; // collected revenue with no overlapping engagement
-  totals: { collected: number; earned: number; payout: number; mentorCount: number; menteeCount: number };
+  unassigned: PayMenteeLine[]; // billed revenue with no overlapping engagement
+  totals: { billed: number; collected: number; earned: number; payout: number; mentorCount: number; menteeCount: number };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -134,10 +139,12 @@ export function computePayReport(input: PayInputs): PayReport {
     return s ? ymOf(s) : null;
   };
 
-  // Collected revenue for this service month, per mentee.
+  // Billed (pay basis) and collected (reference) for this service month, per mentee.
+  const billedByClient = new Map<number, number>();
   const collectedByClient = new Map<number, number>();
   for (const inv of input.invoices) {
     if (inv.serviceYm !== ym) continue;
+    billedByClient.set(inv.clientId, (billedByClient.get(inv.clientId) ?? 0) + (inv.billed || 0));
     collectedByClient.set(inv.clientId, (collectedByClient.get(inv.clientId) ?? 0) + (inv.collected || 0));
   }
 
@@ -154,8 +161,9 @@ export function computePayReport(input: PayInputs): PayReport {
   const mentors = new Map<number, PayMentorSummary>();
   const unassigned: PayMenteeLine[] = [];
 
-  for (const [clientId, collected] of collectedByClient) {
-    if (collected <= 0) continue; // pay on collected: nothing collected, nothing owed
+  for (const [clientId, billed] of billedByClient) {
+    if (billed <= 0) continue; // pay on billed: nothing billed, nothing owed
+    const collected = round2(collectedByClient.get(clientId) ?? 0);
     const engs = engByClient.get(clientId) ?? [];
 
     // Walk each day of the month: count active days (union across engagements)
@@ -197,15 +205,16 @@ export function computePayReport(input: PayInputs): PayReport {
     }
 
     const proration = dim ? Math.min(1, activeDays / dim) : 0;
-    const earned = round2(collected * proration);
+    const earned = round2(billed * proration);
 
     if (coachId == null) {
-      // Collected revenue we can't tie to a coach this month — surface it.
+      // Billed revenue we can't tie to a coach this month — surface it.
       unassigned.push({
         clientId,
         clientName: input.clientName(clientId),
         coachId: null,
-        collected: round2(collected),
+        billed: round2(billed),
+        collected,
         activeDays,
         daysInMonth: dim,
         proration,
@@ -233,6 +242,7 @@ export function computePayReport(input: PayInputs): PayReport {
         tenureMonth: tenure,
         splitPct,
         menteeCount: 0,
+        billed: 0,
         collected: 0,
         earned: 0,
         payout: 0,
@@ -241,6 +251,7 @@ export function computePayReport(input: PayInputs): PayReport {
       mentors.set(coachId, m);
     }
     m.menteeCount++;
+    m.billed = round2(m.billed + billed);
     m.collected = round2(m.collected + collected);
     m.earned = round2(m.earned + earned);
     m.payout = round2(m.payout + payout);
@@ -248,7 +259,8 @@ export function computePayReport(input: PayInputs): PayReport {
       clientId,
       clientName: input.clientName(clientId),
       coachId,
-      collected: round2(collected),
+      billed: round2(billed),
+      collected,
       activeDays,
       daysInMonth: dim,
       proration,
@@ -263,6 +275,7 @@ export function computePayReport(input: PayInputs): PayReport {
   for (const m of mentorList) m.lines.sort((a, b) => b.payout - a.payout);
 
   const totals = {
+    billed: round2(mentorList.reduce((s, m) => s + m.billed, 0) + unassigned.reduce((s, u) => s + u.billed, 0)),
     collected: round2(mentorList.reduce((s, m) => s + m.collected, 0) + unassigned.reduce((s, u) => s + u.collected, 0)),
     earned: round2(mentorList.reduce((s, m) => s + m.earned, 0)),
     payout: round2(mentorList.reduce((s, m) => s + m.payout, 0)),
@@ -290,6 +303,7 @@ export interface PayLedgerRow {
   clientId: number;
   clientName: string;
   tier: string;
+  billed: number;
   collected: number;
   activeDays: number;
   daysInMonth: number;
@@ -297,7 +311,7 @@ export interface PayLedgerRow {
   earned: number;
   splitPct: number;
   payout: number;
-  assigned: boolean; // false = collected revenue with no coach overlapping that month
+  assigned: boolean; // false = billed revenue with no coach overlapping that month
 }
 
 export interface PayMonth {
@@ -308,7 +322,7 @@ export interface PayMonth {
 export interface PayTimeline {
   months: PayMonth[]; // one per requested month, in the requested order
   ledger: PayLedgerRow[]; // every mentee line across all months (incl. unassigned)
-  totals: { collected: number; earned: number; payout: number };
+  totals: { billed: number; collected: number; earned: number; payout: number };
 }
 
 export interface PayTimelineInput {
@@ -351,6 +365,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
           clientId: l.clientId,
           clientName: l.clientName,
           tier: l.tier,
+          billed: l.billed,
           collected: l.collected,
           activeDays: l.activeDays,
           daysInMonth: l.daysInMonth,
@@ -370,6 +385,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
         clientId: u.clientId,
         clientName: u.clientName,
         tier: u.tier,
+        billed: u.billed,
         collected: u.collected,
         activeDays: u.activeDays,
         daysInMonth: u.daysInMonth,
@@ -383,6 +399,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
   }
 
   const totals = {
+    billed: round2(reports.reduce((s, r) => s + r.totals.billed, 0)),
     collected: round2(reports.reduce((s, r) => s + r.totals.collected, 0)),
     earned: round2(reports.reduce((s, r) => s + r.totals.earned, 0)),
     payout: round2(reports.reduce((s, r) => s + r.totals.payout, 0)),

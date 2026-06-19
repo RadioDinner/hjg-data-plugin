@@ -62,7 +62,7 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
               <th>Tenure mo</th>
               <th>Split</th>
               <th>Mentees</th>
-              <th>Collected</th>
+              <th>Billed</th>
               <th>Earned</th>
               <th>Payout</th>
             </tr>
@@ -74,7 +74,7 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
                 <td className="num">{m.tenureMonth ?? "—"}</td>
                 <td className="num">{fmtPct(m.splitPct)}</td>
                 <td className="num">{m.menteeCount}</td>
-                <td className="num">{fmtUsd(m.collected)}</td>
+                <td className="num">{fmtUsd(m.billed)}</td>
                 <td className="num">{fmtUsd(m.earned)}</td>
                 <td className="num">{fmtUsd(m.payout)}</td>
               </tr>
@@ -85,7 +85,7 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
                 <td className="num">—</td>
                 <td className="num">—</td>
                 <td className="num">{r.unassigned.length}</td>
-                <td className="num">{fmtUsd(r.unassigned.reduce((s, u) => s + u.collected, 0))}</td>
+                <td className="num">{fmtUsd(r.unassigned.reduce((s, u) => s + u.billed, 0))}</td>
                 <td className="num">—</td>
                 <td className="num">—</td>
               </tr>
@@ -141,7 +141,7 @@ export function PayStaffView() {
     if (!timeline) return [];
     return [...timeline.months].reverse().map((m) => ({
       month: monthLabel(m.ym),
-      collected: m.report.totals.collected,
+      billed: m.report.totals.billed,
       payout: m.report.totals.payout,
     }));
   }, [timeline]);
@@ -165,10 +165,11 @@ export function PayStaffView() {
     if (!timeline) return;
     downloadCsv(
       "payout-by-month",
-      ["Month", "Total payout", "Revenue collected", "Mentors paid", "Paying mentees"],
+      ["Month", "Total payout", "Revenue billed", "Collected so far", "Mentors paid", "Paying mentees"],
       timeline.months.map((m) => [
         monthLabel(m.ym),
         m.report.totals.payout,
+        m.report.totals.billed,
         m.report.totals.collected,
         m.report.totals.mentorCount,
         m.report.totals.menteeCount,
@@ -186,8 +187,8 @@ export function PayStaffView() {
             <h2>Pay staff</h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
               Mentors earn a ramped share ({PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by tenure month)
-              of revenue <strong>collected</strong> from each mentee, credited to the invoice's <strong>service
-              month</strong> and prorated by active days.
+              of revenue <strong>billed</strong> to each mentee, credited to the invoice's <strong>service
+              month</strong> and prorated by active days. (Collected is shown alongside for reference.)
             </div>
           </div>
           {!noInvoices && (
@@ -200,7 +201,7 @@ export function PayStaffView() {
         {noInvoices && (
           <p className="muted" style={{ marginTop: 8 }}>
             No invoice data yet. Apply migration <code>9993_ca_invoices.sql</code> in the Supabase SQL Editor, then run a
-            sync (Admin → Sync now). Payouts are computed from collected invoice revenue, so this stays empty until
+            sync (Admin → Sync now). Payouts are computed from billed invoice revenue, so this stays empty until
             invoices are mirrored.
           </p>
         )}
@@ -210,7 +211,8 @@ export function PayStaffView() {
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <StatTile label="Total payout" value={fmtUsd(timeline.totals.payout)} sub={`${timeline.months.length} months`} />
-            <StatTile label="Revenue collected" value={fmtUsd(timeline.totals.collected)} sub="across all months" />
+            <StatTile label="Revenue billed" value={fmtUsd(timeline.totals.billed)} sub="pay basis, all months" />
+            <StatTile label="Collected so far" value={fmtUsd(timeline.totals.collected)} sub="reference" />
             <StatTile label="Months covered" value={String(timeline.months.length)} />
             <StatTile label="Mentors paid" value={String(distinctMentors)} sub="distinct, all-time" />
           </div>
@@ -231,7 +233,7 @@ export function PayStaffView() {
                   <YAxis stroke={AXIS} tick={{ fontSize: 11 }} />
                   <Tooltip contentStyle={TOOLTIP} formatter={(v) => fmtUsd(Number(v))} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar name="Collected" dataKey="collected" fill="#334155" radius={[4, 4, 0, 0]} />
+                  <Bar name="Billed" dataKey="billed" fill="#334155" radius={[4, 4, 0, 0]} />
                   <Bar name="Payout" dataKey="payout" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -247,7 +249,7 @@ export function PayStaffView() {
                   <tr>
                     <th style={{ textAlign: "left" }}>Month</th>
                     <th>Total payout</th>
-                    <th>Revenue collected</th>
+                    <th>Revenue billed</th>
                     <th>Mentors paid</th>
                     <th>Paying mentees</th>
                   </tr>
@@ -265,7 +267,7 @@ export function PayStaffView() {
                             {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
                           </td>
                           <td className="num"><strong>{fmtUsd(t.payout)}</strong></td>
-                          <td className="num">{fmtUsd(t.collected)}</td>
+                          <td className="num">{fmtUsd(t.billed)}</td>
                           <td className="num">{t.mentorCount}</td>
                           <td className="num">{t.menteeCount}</td>
                         </tr>

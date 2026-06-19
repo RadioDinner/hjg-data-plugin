@@ -28,3 +28,6 @@ is there any way to tell in our data, whether or not the mentee had a confirmed 
 
 --- 2026-06-19 21:01 ---
 wire it up, and then I want a comprehensive explaination on how it works. commit it to main when you have it completed
+
+--- 2026-06-19 22:15 ---
+I applied the migration. I think it makes the most sense to calculate it as billed because that is when, in a perfect world, that they would pay. So I'm good with keeping the "as billed" date to calculate totals.

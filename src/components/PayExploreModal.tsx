@@ -81,6 +81,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
         coachName: r.coachName,
         clientName: r.clientName,
         tier: r.tier,
+        billed: r.billed,
         collected: r.collected,
         activeDays: r.activeDays,
         daysInMonth: r.daysInMonth,
@@ -95,11 +96,12 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       { key: "coachName", label: "Coach" },
       { key: "clientName", label: "Mentee" },
       { key: "tier", label: "Tier" },
+      { key: "billed", label: "Billed", numeric: true, format: (r) => fmtUsd(r.billed) },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
       { key: "activeDays", label: "Active days", numeric: true, format: (r) => `${r.activeDays}/${r.daysInMonth}` },
       { key: "proration", label: "Proration", numeric: true, format: (r) => fmtPct(r.proration) },
       { key: "splitPct", label: "Split", numeric: true, format: (r) => fmtPct(r.splitPct) },
-      { key: "earned", label: "Earned", numeric: true, format: (r) => fmtUsd(r.earned) },
+      { key: "earned", label: "Earned (billed × prorate)", numeric: true, format: (r) => fmtUsd(r.earned) },
       { key: "payout", label: "Payout", numeric: true, format: (r) => fmtUsd(r.payout) },
       { key: "assigned", label: "Status", format: (r) => (r.assigned ? "assigned" : "unassigned") },
     ];
@@ -107,9 +109,9 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ledger, lo, hi, coachId, tier, q]);
 
-  // --- Invoices view (raw engine input: collected revenue by service month).
-  // Coach is the engine's attribution for that mentee+month, "—" when nothing
-  // was attributed (e.g. no engagement overlapped that month). ---
+  // --- Invoices view (raw engine input: billed + collected revenue by service
+  // month). Coach is the engine's attribution for that mentee+month, "—" when
+  // nothing was attributed (e.g. no engagement overlapped that month). ---
   const invoiceData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
     const rows = invoices
       .filter((inv) => monthInRange(inv.serviceYm))
@@ -121,6 +123,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
           coachName: c?.coachName ?? "—",
           coachId: c?.coachId ?? null,
           clientId: inv.clientId,
+          billed: inv.billed,
           collected: inv.collected,
         };
       })
@@ -131,6 +134,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       { key: "clientName", label: "Mentee" },
       { key: "coachName", label: "Coach" },
       { key: "clientId", label: "Client ID", numeric: true },
+      { key: "billed", label: "Billed", numeric: true, format: (r) => fmtUsd(r.billed) },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
     ];
     return { columns, rows };

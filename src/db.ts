@@ -888,7 +888,7 @@ export function aggregateJourneyDurations(journeys: MenteeJourney[]): LegStat[] 
 }
 
 // --- Staff payment (Pay staff tab) ---
-// Pulls the raw inputs the pure payroll engine (lib/pay) needs: collected
+// Pulls the raw inputs the pure payroll engine (lib/pay) needs: billed + collected
 // invoice revenue by service month, the mentee↔mentor↔tier engagements, and the
 // coach/client name lookups. The view computes a per-month report from these.
 
@@ -939,13 +939,14 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_invoices")
-      .select("client_id,date_of_year,date_of_month,amount_paid")
+      .select("client_id,date_of_year,date_of_month,amount,amount_paid")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as {
       client_id: number | null;
       date_of_year: number | null;
       date_of_month: number | null;
+      amount: number | null;
       amount_paid: number | null;
     }[];
     for (const inv of batch) {
@@ -953,6 +954,7 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
       out.push({
         clientId: inv.client_id,
         serviceYm: `${inv.date_of_year}-${String(inv.date_of_month).padStart(2, "0")}`,
+        billed: Number(inv.amount) || 0,
         collected: Number(inv.amount_paid) || 0,
       });
     }
