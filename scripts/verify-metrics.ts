@@ -10,6 +10,14 @@ import { computeFunnelReport } from "../lib/funnel.js";
 import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
+import {
+  computePayReport,
+  splitForTenureMonth,
+  tenureMonthsBetween,
+  daysInMonth,
+  type PayInvoiceInput,
+  type PayEngagementInput,
+} from "../lib/pay.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -214,6 +222,78 @@ console.log("[7] appointment categorization (group sessions vs 1-on-1)");
   // Discovery + exclusions are unaffected by the new group precedence.
   eq(c("Discovery Call Appointment (Phone Call)"), "discoveryPhone", "discovery phone unaffected");
   eq(c("Mentor Training Extra Teaching"), "excluded", "excluded type unaffected");
+}
+
+console.log("[8] staff payment engine (ramp, proration, collected revenue)");
+{
+  // Ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60%.
+  eq(splitForTenureMonth(1), 0.35, "tenure month 1 -> 35%");
+  eq(splitForTenureMonth(2), 0.5, "tenure month 2 -> 50%");
+  eq(splitForTenureMonth(3), 0.6, "tenure month 3 -> 60%");
+  eq(splitForTenureMonth(12), 0.6, "established mentor -> 60%");
+  eq(tenureMonthsBetween("2026-04", "2026-04"), 1, "start month is tenure month 1");
+  eq(tenureMonthsBetween("2026-04", "2026-06"), 3, "two months later is tenure month 3");
+  eq(daysInMonth("2026-04"), 30, "April has 30 days");
+  eq(daysInMonth("2026-02"), 28, "Feb 2026 has 28 days");
+
+  const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
+  const clientName = (id: number) => `Mentee ${id}`;
+
+  // Alex on a 4x engagement ($425 collected) for a full April; Harry started in
+  // Feb (so by April he's at the 60% established rate). 425 * 1.0 * 0.60 = 255.
+  const invoices: PayInvoiceInput[] = [{ clientId: 1, serviceYm: "2026-04", collected: 425 }];
+  const engagements: PayEngagementInput[] = [
+    { clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+  ];
+  const r = computePayReport({ ym: "2026-04", invoices, engagements, coachName, clientName });
+  eq(r.mentors.length, 1, "one mentor paid");
+  eq(r.mentors[0].coachName, "Harry Shenk", "attributed to Harry");
+  eq(r.mentors[0].splitPct, 0.6, "Harry at established 60%");
+  eq(r.mentors[0].payout, 255, "full-month 4x payout = $255");
+
+  // Mid-month quit: engagement ends 2026-04-15 -> 15/30 active days -> proration
+  // 0.5 -> 425 * 0.5 * 0.60 = 127.5.
+  const r2 = computePayReport({
+    ym: "2026-04",
+    invoices,
+    engagements: [{ clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: "2026-04-15", isCanceled: false, name: "(4x Month)" }],
+    coachName,
+    clientName,
+  });
+  eq(r2.mentors[0].lines[0].activeDays, 15, "active 15 of 30 days");
+  eq(r2.mentors[0].payout, 127.5, "half-month payout = $127.50");
+
+  // New mentor (started this service month) -> tenure month 1 -> 35%.
+  const r3 = computePayReport({
+    ym: "2026-04",
+    invoices,
+    engagements: [{ clientId: 1, coachId: 30000, startDate: "2026-04-01", endDate: null, isCanceled: false, name: "(2x Month)" }],
+    coachName: (id) => `#${id}`,
+    clientName,
+  });
+  eq(r3.mentors[0].splitPct, 0.35, "brand-new mentor at 35%");
+  eq(r3.mentors[0].payout, 148.75, "new-mentor payout = 425 * 0.35");
+
+  // Pay on COLLECTED: a partially-paid invoice pays on amount_paid only.
+  const r4 = computePayReport({
+    ym: "2026-04",
+    invoices: [{ clientId: 1, serviceYm: "2026-04", collected: 200 }],
+    engagements,
+    coachName,
+    clientName,
+  });
+  eq(r4.mentors[0].payout, 120, "partial collection ($200) -> 200 * 0.60 = $120");
+
+  // Collected revenue with no engagement that month -> unassigned, not dropped.
+  const r5 = computePayReport({
+    ym: "2026-04",
+    invoices,
+    engagements: [{ clientId: 1, coachId: 29074, startDate: "2026-05-01", endDate: null, isCanceled: false, name: "(4x)" }],
+    coachName,
+    clientName,
+  });
+  eq(r5.mentors.length, 0, "no mentor paid when engagement doesn't overlap");
+  eq(r5.unassigned.length, 1, "revenue surfaced as unassigned");
 }
 
 console.log("");

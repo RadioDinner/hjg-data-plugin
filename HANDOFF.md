@@ -12,11 +12,30 @@ Working notes for resuming this project in a future session. Last updated
 
 Picking this up cold — start here.
 
-**Repo state:** **everything is merged to `main`** (production). Session 005
-fast-forwarded `main` to the old `claude/admiring-lovelace-3tb4iy` tip — which
-carried session 003's **mentor-capacity fix** plus the session 003/004 logs —
-and added this session's log (`005_2026-06-19`). Verified before the push:
-`typecheck`, `verify` (7 sections), `build` all pass. `main` tip ≈ `07be701`.
+**Repo state:** **everything is merged to `main`** (production); session 005
+works directly on `main` per the user's instruction. Verified before each push:
+`typecheck`, `verify` (now **8 sections**), `build` all pass.
+
+**Shipped this session (005) — staff payment tool + invoice sync:**
+- **NEW "Pay staff" tab** (`src/views/PayStaffView.tsx`) — per-mentor monthly
+  payout. Each mentor earns a **ramped share** of revenue **collected** from each
+  mentee, credited to the invoice's **service month** (`date_of`) and **prorated
+  by active engagement days**. Graph + table (north star), per-mentor mentee
+  breakdown, CSV export, month picker.
+- **Payout engine** `lib/pay.ts` (pure, tested in verify §8): ramp **35% → 50% →
+  60%** by mentor tenure month (derived from earliest engagement, overridable
+  later); daily proration; pay-on-collected; "unassigned" bucket for collected
+  revenue with no overlapping engagement.
+- **Invoice sync** (read-only) → new **`ca_invoices`** mirror (migration
+  **`9993_ca_invoices.sql`**). `Invoice.getAll` → billed `amount`, collected
+  `amount_paid`, `date_of` service month, line items + payments (jsonb).
+
+**⚠ ACTION REQUIRED for Pay staff to show data:** apply **`9993_ca_invoices.sql`**
+in the Supabase SQL Editor, then **re-sync** (Admin → Sync now). Until then the
+tab shows an empty-state banner. **Then export `ca_invoices` and confirm the
+invoices actually carry the monthly subscription charges** ($425 = 4x, etc.) — if
+CA bills subscriptions elsewhere, we switch the revenue source to a tier→price
+config (engine unchanged). Decisions captured in `Session log/005_2026-06-19/`.
 
 **Branch cleanup (partial):** the three feature branches
 (`admiring-lovelace-3tb4iy`, `magical-gauss-ELOiz`, `practical-meitner-toynll`)
@@ -79,31 +98,37 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 - **Metrics** — date-range KPIs + charts; every ChartCard has Graph/Table/Both +
   Export CSV + Explore. Includes the **Discovery → conversion** ChartCard
   (converted bars + conversion-rate line), Resource engagement, and Mentor
-  capacity utilization (⚠ inflation bug — see Open items).
+  capacity utilization (group-session inflation fixed session 003).
 - **Discovery** — discovery calls; auto outcome + manual override.
-- **Journeys** (NEW) — per-mentee pipeline timeline `Discovery → JumpStart → 4x
+- **Journeys** — per-mentee pipeline timeline `Discovery → JumpStart → 4x
   → 2x → 1x → Graduation` from engagement stage dates, current tier, observed
   meeting-rhythm chart, and a status override (active/graduated/quit/fired).
   Top card = **board-level aggregate** leg durations (avg/median/n) as graph +
   table. Mentee search/list on the left.
-- **Raw data** — browse `ca_*`/HJG tables; per-table CSV export; **Export all
-  → `.xlsx`** (one table per sheet); **Data map ↗** link.
+- **Pay staff** (NEW, session 005) — per-mentor monthly payout: ramped % (35/50/
+  60 by tenure) of **collected** mentee revenue, by invoice **service month**,
+  prorated by active days. Month picker, summary tiles, payout-by-mentor graph +
+  table, per-mentor mentee breakdown, CSV. Empty until `ca_invoices` is synced.
+- **Raw data** — browse `ca_*`/HJG tables (incl. **`ca_invoices`**); per-table
+  CSV export; **Export all → `.xlsx`** (one table per sheet); **Data map ↗** link.
 - **Admin** — Sync now, run history, settings, Manual metrics, Mentor capacity.
 
 ## Key files
 
 | Path | Role |
 |---|---|
-| `lib/ca.ts` | CA API client (read-only). `getEngagements()` = Engagement.getAll. **CA payload under `return`, not `result`.** |
-| `lib/config.ts` | Categorization (incl. **`GROUP_SESSION_CONTAINS`** → `"group"` category), exclusions, conversion knobs (`CONVERSION_OFFERING_IDS=[42840]`), **`engagementTier()` + `PIPELINE_TIERS`** (engagement-name → tier), CA function names. |
+| `lib/ca.ts` | CA API client (read-only). `getEngagements()`, **`getInvoices()` = Invoice.getAll**. **CA payload under `return`, not `result`.** |
+| `lib/config.ts` | Categorization (incl. **`GROUP_SESSION_CONTAINS`** → `"group"`), exclusions, conversion knobs (`CONVERSION_OFFERING_IDS=[42840]`), **`engagementTier()` + `PIPELINE_TIERS`**, CA function names (incl. **`invoiceGetAll`**). |
 | `lib/conversion.ts` | Pure discovery→conversion resolver. Verify §5. |
-| `lib/sync.ts` | Sync orchestration; offerings/submissions + **engagements** are best-effort (warnings accumulate). |
-| `src/db.ts` | Browser data access. **`fetchMenteeJourneys`** (engagement-based stages) + **`aggregateJourneyDurations`**; mentee_outcomes read/write; `fetchAllRows`. |
+| `lib/pay.ts` | **Pure staff-payment engine** (`computePayReport`): ramp 35/50/60 by tenure, daily proration, pay-on-collected. Verify §8. |
+| `lib/sync.ts` | Sync orchestration; offerings/submissions + **engagements** + **invoices** are best-effort (warnings accumulate). |
+| `src/db.ts` | Browser data access. `fetchMenteeJourneys`, `aggregateJourneyDurations`, **`fetchPayData`** (+ re-exports `computePayReport`); mentee_outcomes read/write; `fetchAllRows`. |
 | `src/views/JourneysView.tsx` | The Journeys tab (timeline + aggregate). |
+| `src/views/PayStaffView.tsx` | **The Pay staff tab** (payout graph+table, per-mentor breakdown). |
 | `src/views/MetricsView.tsx` | Metrics dashboard (ChartCards, conversion, capacity). |
 | `src/xlsx.ts` | Multi-sheet `.xlsx` workbook export. |
 | `public/data-map.html` | Static interactive data-relationship graph (snapshot). |
-| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 = engagement tier mapping, §7 = group vs 1-on-1 categorization**. |
+| `scripts/verify-metrics.ts` | Pure-logic checks; **§6 tier mapping, §7 group categorization, §8 staff payment**. |
 
 ## Important domain decisions
 
@@ -125,10 +150,11 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 ## Database schema (Supabase)
 
 Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
-`ca_appointments`, `ca_offerings`, `ca_offering_submissions`, **`ca_engagements`
-(migration 9994)**. Ops: `sync_runs`, `app_settings`. HJG-owned (staff RLS):
-`discovery_outcomes`, **`mentee_outcomes` (9995)**, `coach_settings` (9996),
-`manual_metrics` (9997), plus dormant `graduations`/`cadence_status_log`.
+`ca_appointments`, `ca_offerings`, `ca_offering_submissions`, `ca_engagements`
+(9994), **`ca_invoices` (9993 — apply + re-sync to populate)**. Ops: `sync_runs`,
+`app_settings`. HJG-owned (staff RLS): `discovery_outcomes`, `mentee_outcomes`
+(9995), `coach_settings` (9996), `manual_metrics` (9997), plus dormant
+`graduations`/`cadence_status_log`.
 
 ## Environment variables
 
@@ -139,11 +165,16 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Applied = `9994`…`9999`. **Next
-  new one is `9993_…`.** Run by copy-paste into the Supabase SQL Editor; make
-  re-runnable (`drop … if exists`).
-- **Vercel functions are native ESM** → every relative import in `lib/`/`api/`/
-  `scripts/` MUST end in `.js`. Frontend `src/` (Vite) does not.
+- **Migrations DESCENDING** (newest = lowest). Present = `9993`…`9999`. **Next
+  new one is `9992_…`.** Run by copy-paste into the Supabase SQL Editor; make
+  re-runnable (`drop … if exists`). `9993_ca_invoices.sql` still needs applying.
+- **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
+  pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
+  consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use
+  **extensionless** imports — under Vite's "Bundler" resolution a `.js` specifier
+  leaves the module untyped (everything `any`). Match the file's neighbors.
+  Frontend (`src/`) imports lib via `src/db.ts`; note `src/lib/` also exists, so
+  from `src/views/` the repo-root lib is `../../lib` — re-export through `db.ts`.
 - `public/*` is copied to the build root → served at `/<file>`; the SPA rewrite
   in `vercel.json` only applies when no real file matches.
 - Env var changes need a redeploy; after a schema migration, re-sync.
@@ -151,12 +182,23 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
+- **Pay staff — verify the revenue source.** The payout engine reads `ca_invoices`
+  (collected, by service month). After applying `9993` + re-syncing, **export
+  `ca_invoices` and confirm invoices carry the monthly subscription charges**
+  ($425 = 4x, etc.). If CA doesn't invoice the subscriptions, swap the revenue
+  source to a `tier → price` config (engine + UI unchanged).
+- **Pay staff — mentor-start override.** Tenure (for the 35/50/60 ramp) is
+  currently derived from a coach's earliest engagement. A veteran whose first
+  engagement is *within the synced window but who actually started earlier* could
+  look "new". Add a per-coach `pay_start_month` (+ optional split override) to
+  `coach_settings` and an editor once the derived dates are eyeballed.
+- **Pay staff — multi-coach month.** A mentee with a mid-month hand-off is
+  attributed 100% to the majority-day coach (not split). Revisit if it matters.
 - **Mentor capacity inflation (Arthur Nisly) — FIXED (session 003), pending
-  re-sync + browser verify.** Went with option (a): group sessions get a
-  separate `"group"` category at sync time, scoped to the capacity metric only
-  via the `isGroup` flag. **Still open:** the *multi-client weekly slot* case
-  (unnamed slots with several clients) is NOT yet handled — only the named
-  group formats are. Revisit with the time-slot heuristic if those still inflate.
+  re-sync + browser verify.** Group sessions get a separate `"group"` category,
+  scoped to capacity via `isGroup`. **Still open:** the *multi-client weekly slot*
+  case (unnamed slots w/ several clients) is NOT handled — only named group
+  formats. Revisit with a time-slot heuristic if those still inflate.
 - **Data map is a static snapshot** — wire to live Supabase if wanted.
 - **Stage rail** has no explicit quit/fired exit marker (status pill covers it).
 - **`MENTOR_COACH_ID_WHITELIST`** in `lib/config.ts` is dead (empty); remove in

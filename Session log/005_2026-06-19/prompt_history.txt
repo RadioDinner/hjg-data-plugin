@@ -18,3 +18,8 @@ Is it possible to give you context to the data in supabase? I need your help fig
 
 --- 2026-06-19 ---
 Scaffold the invoice sync and I want to start building a mentor/staff payment tool. Our agreement on how we pay staff is that we pay them 60% of revenue from a specific mentee for the month. An example is, if Alex Rieff is a mentee on a 4x engagement, he is paying $425 a month. Whoever his coach is, in this case Harry, he should receive $255. BUT, here is the big kicker, using the system of 60% of revenue per month, if Alex would pay his month on 4/15, how do you decide which month to credit that? The month of payment? Or should you break down the income per day in the month. April has 30 days. That would be $8.50 per day to Harry. I had originally paid them per appointment, but that isn't right.  A confirmed appointtment would pay out Harry even if it is cancelled. We have a policy that the mentee pays for 4 appointments and if they miss one, they dont get that back. Is this making sense?
+
+--- 2026-06-19 (AskUserQuestion answers) ---
+Accrual basis: Pay on collected (credited to service month)
+Partial months: Daily proration
+Split rate: Varies. New mentor ramp -> month 1 = 35%, month 2 = 50%, month 3+ = 60%

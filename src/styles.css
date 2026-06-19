@@ -170,6 +170,7 @@ body {
 
 .topbar__user { font-size: 13px; color: var(--muted); }
 .view { margin-top: 18px; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
 .view__controls { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 4px; }
 .view__hint { margin: -4px 0 14px; color: var(--muted); font-size: 13px; }
 

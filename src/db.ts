@@ -18,6 +18,11 @@ import {
 export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
+import { computePayReport, PAY_RAMP } from "../lib/pay";
+import type { PayInvoiceInput, PayEngagementInput, PayReport } from "../lib/pay";
+export { computePayReport, PAY_RAMP };
+export type { PayReport };
+
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
 async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
@@ -880,6 +885,106 @@ export function aggregateJourneyDurations(journeys: MenteeJourney[]): LegStat[] 
     const medianDays = n ? (n % 2 ? vals[(n - 1) / 2] : Math.round((vals[n / 2 - 1] + vals[n / 2]) / 2)) : null;
     return { key: leg.key, label: leg.label, n, avgDays, medianDays };
   });
+}
+
+// --- Staff payment (Pay staff tab) ---
+// Pulls the raw inputs the pure payroll engine (lib/pay) needs: collected
+// invoice revenue by service month, the mentee↔mentor↔tier engagements, and the
+// coach/client name lookups. The view computes a per-month report from these.
+
+export interface PayData {
+  invoices: PayInvoiceInput[];
+  engagements: PayEngagementInput[];
+  coachName: (id: number) => string;
+  clientName: (id: number) => string;
+  months: string[]; // distinct service months present in invoices, newest first
+}
+
+async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
+  const pageSize = 1000;
+  const out: PayEngagementInput[] = [];
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_engagements")
+      .select("client_id,coach_id,start_date,end_date,is_canceled,name")
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as {
+      client_id: number | null;
+      coach_id: number | null;
+      start_date: string | null;
+      end_date: string | null;
+      is_canceled: boolean | null;
+      name: string | null;
+    }[];
+    for (const e of batch) {
+      if (e.client_id == null) continue;
+      out.push({
+        clientId: e.client_id,
+        coachId: e.coach_id,
+        startDate: e.start_date,
+        endDate: e.end_date,
+        isCanceled: e.is_canceled ?? false,
+        name: e.name,
+      });
+    }
+    if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
+async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
+  const pageSize = 1000;
+  const out: PayInvoiceInput[] = [];
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_invoices")
+      .select("client_id,date_of_year,date_of_month,amount_paid")
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as {
+      client_id: number | null;
+      date_of_year: number | null;
+      date_of_month: number | null;
+      amount_paid: number | null;
+    }[];
+    for (const inv of batch) {
+      if (inv.client_id == null || inv.date_of_year == null || inv.date_of_month == null) continue;
+      out.push({
+        clientId: inv.client_id,
+        serviceYm: `${inv.date_of_year}-${String(inv.date_of_month).padStart(2, "0")}`,
+        collected: Number(inv.amount_paid) || 0,
+      });
+    }
+    if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
+export async function fetchPayData(): Promise<PayData> {
+  const [invoices, engagements, coachesRes, clientsRes] = await Promise.all([
+    fetchAllPayInvoices(),
+    fetchAllPayEngagements(),
+    supabase.from("ca_coaches").select("id,name"),
+    supabase.from("ca_clients").select("id,name"),
+  ]);
+  if (coachesRes.error) throw new Error(coachesRes.error.message);
+  if (clientsRes.error) throw new Error(clientsRes.error.message);
+
+  const coaches = new Map<number, string>();
+  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coaches.set(c.id, c.name ?? `#${c.id}`);
+  const clients = new Map<number, string>();
+  for (const c of (clientsRes.data ?? []) as { id: number; name: string | null }[]) clients.set(c.id, c.name ?? `#${c.id}`);
+
+  const months = [...new Set(invoices.map((i) => i.serviceYm))].sort((a, b) => b.localeCompare(a));
+
+  return {
+    invoices,
+    engagements,
+    coachName: (id) => coaches.get(id) ?? `#${id}`,
+    clientName: (id) => clients.get(id) ?? `#${id}`,
+    months,
+  };
 }
 
 // --- Raw data viewer ---
