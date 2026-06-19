@@ -31,3 +31,8 @@ wire it up, and then I want a comprehensive explaination on how it works. commit
 
 --- 2026-06-19 22:15 ---
 I applied the migration. I think it makes the most sense to calculate it as billed because that is when, in a perfect world, that they would pay. So I'm good with keeping the "as billed" date to calculate totals.
+
+--- 2026-06-19 22:17 ---
+I want to build a "compare" tool, into the metrics page. I want to be able to switch into and out of comparison mode. For example, I want to be able to compare this month against last month, or this quarter against last quarter.  Put this on a feature build out list to build sometime in the future
+
+Also, a second feature to build out, is a feature so that when I open "Explore this month" on the "Pay staff" page, I want only the coaches with more than zero rows to be in the drop down. Add this to the feature list as well.

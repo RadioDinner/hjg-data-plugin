@@ -218,6 +218,10 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
+- **Planned features live in `FEATURE_BACKLOG.md`** (build-later list). Currently:
+  Metrics **Compare mode** (period vs period), and the Pay-staff Explore **coach
+  dropdown** filtered to coaches with rows. Check that file when picking up new work.
+
 - **Pay staff — revenue basis = BILLED (decided session 005b).** The engine now
   pays on the invoice's billed `amount` (what's owed for the service month "in a
   perfect world"), credited to `date_of`; `amount_paid` is carried only for
