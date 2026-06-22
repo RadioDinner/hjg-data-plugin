@@ -44,3 +44,14 @@ On the "Journeys" tab, evaluating Seth Lehman. Where does the Journey's system g
 
 --- 2026-06-22 16:07 ---
 [Uploaded hjgrawdata20260622.xlsx — full raw-data export] So, here is all the raw data for you to review, review the data before we start on a fix
+
+--- 2026-06-22 16:25 ---
+I want another item on the feature backlog, on the "Raw data" tab, the button opens a whole different page. I want that changed to it's own tab, rather than being a button on the raw data tab
+
+On the answer to #4, I want a toggle in the "Journeys" tab to set the metrics to be evaluated by first meeting or by the engagement start date. Then I can go in and flip it on or off and back and forth. I want you to build a "Company options" tab, in which you'll give EACH SECTION OF THE DASHBOARD a drop down with options like this. Then I can go in and edit the settings myself, rather than prompt you to change the logic.
+
+--- 2026-06-22 16:35 (AskUserQuestion answers) ---
+Q: How should the "Company options" tab store and scope settings?
+A: Registry-driven, org-wide (app_settings, jsonb; quick toggle also on Journeys)
+Q: When the basis is "first meeting", how should a stage's date be defined?
+A: First 1-on-1 mentoring meeting under that tier's engagement (group sessions excluded), fallback to engagement start when no meeting

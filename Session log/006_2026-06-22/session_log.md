@@ -6,6 +6,12 @@ rundown of **open items** + the **feature list**, then a CoachAccountable API
 question, then "write the first feature on the list."
 
 ## What shipped (commits, newest first)
+- `5031ba9` — **Company options tab + Journeys stage-date basis** (engagement
+  start vs first meeting) — new org-wide settings tab, registry-driven; the
+  Seth-Lehman question turned into a self-serve toggle. Verify §12.
+- `a40f2f4` — Backlog: added 5 planned items (Data map → own tab; "?" help;
+  journey exclude-mentee; conversion column drill-down; sticky range bar).
+- `c58aefb` — log raw-data review prompt.
 - `32fd0eb` — **Fix capacity weekly-slot inflation (#1) + remove dead funnel
   endpoint (#2) + whitelist cleanup.** Two of the documented open bugs + the
   cleanup, on request "fix those two open bugs and leave 3, 4 and 5; do the
@@ -90,6 +96,35 @@ After "are there open bugs", the user said: "Fix those two open bugs and leave
   mid-month hand-off split, mentor-start eyeballing — all hinge on a re-sync +
   `ca_invoices` spot-check, not code.
 
+## Raw-data review — Seth Lehman stage date (7/2 vs 7/7)
+User uploaded the full raw-data xlsx and said "review before we start on a fix."
+Findings from the real data (parsed with openpyxl):
+- Seth's `2026-07-02` is the **genuine `start_date` of his active (4x) engagement
+  67727**, mirrored verbatim from CA `Engagement.getAll` (synced 2026-06-19). Not
+  canceled, not a timezone shift, not a duplicate. **No 7/7 exists** anywhere in
+  his data (4x appts: 7/2 group "Tracking Together", then 7/3/10/24/31 weekly).
+  Most likely 7/7 is a **post-sync edit** (mirror was 3 days stale) or the
+  first-session date in CA's UI.
+- **My prior "exclude canceled engagements" fix would have been a disaster:** 214
+  of 474 engagements (45%) are canceled, but in CA "canceled" = *ended/closed* —
+  **169 had delivered sessions**, 115 have appointments, all have `date_closed`.
+  Excluding them would wipe ~133 mentees' stage dates. **Scrapped that idea.**
+- Discovery 5/9 (signup `date_added`) vs scheduled 5/13 is **correct by design**
+  (discovery counted by signup). Rest of Seth's timeline checks out.
+
+## Company options tab + Journeys stage-date basis (5031ba9)
+The user's fix for #4: instead of me changing logic, a **self-serve org-wide
+"Company options" tab** with per-section dropdowns. v1 (confirmed via
+AskUserQuestion): registry-driven (`src/companyOptions.ts`), org-wide in
+`app_settings` (jsonb), seeded by migration `9990`. First option: **Journeys →
+stage-date basis** (`engagement_start` | `first_meeting`). "First meeting" =
+first 1-on-1 mentoring meeting under that tier's engagement (group sessions
+excluded), fallback to engagement start. Pure logic in **`lib/journey.ts`**
+(verify §12); `db.ts` `buildClientStages` replaces `stagesByClient` and
+`fetchMenteeJourneys(basis)`; inline segmented toggle on Journeys writes the same
+setting. ⚠ **Apply migration 9990** or the toggle won't persist (staff can UPDATE
+`app_settings` but not INSERT — keys are migration-seeded).
+
 ## Implementation notes for next time
 - Pure math lives in **`lib/compare.ts`** (`shiftMonths`, `derivePeriodB`,
   `delta`, `COMPARE_PRESETS`), re-exported through `src/db.ts` (same pattern as
@@ -112,7 +147,8 @@ After "are there open bugs", the user said: "Fix those two open bugs and leave
   coaches with rows.
 
 ## Verification
-`npm run typecheck`, `npm run verify` (**11 sections** — added §11 capacity
-1-on-1 vs group slots), `npm run build` — all pass locally. UI not
-browser-tested; the capacity weekly-slot fix needs a **re-sync + browser
-verify** on live data (it depends on `start_raw` being populated).
+`npm run typecheck`, `npm run verify` (**12 sections** — added §11 capacity
+1-on-1 vs group slots, §12 journey stage-date basis), `npm run build` — all pass
+locally. UI not browser-tested; the capacity weekly-slot fix needs a **re-sync +
+browser verify** (depends on `start_raw`), and the **Company options tab +
+Journeys toggle need migration 9990 applied** to persist.
