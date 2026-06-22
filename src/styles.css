@@ -307,6 +307,7 @@ body {
 }
 .journeys__row:hover { background: var(--panel-2); }
 .journeys__row--active { background: var(--panel-2); border-color: var(--line); }
+.journeys__row--excluded .journeys__row-name { opacity: 0.5; text-decoration: line-through; }
 .journeys__row-name { font-size: 14px; font-weight: 600; }
 .journeys__row-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 

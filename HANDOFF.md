@@ -54,13 +54,18 @@ migrations as 006b ships features.
 - **Metrics — sticky range/preset bar (backlog, old #6).** The presets + date inputs +
   Compare toggle freeze to the top while scrolling (`.range` is `position: sticky`).
   Pure CSS, no markup change. **No migration.** ⚠ Not browser-verified.
+- **Journeys — exclude a mentee (test/placeholder), dashboard-wide (backlog, old #4).**
+  New HJG-owned **`mentee_exclusions`** table (**migration `9988_…`**) — a reversible,
+  staff-owned sibling of `ca_clients.is_excluded`. Excluded clients drop from Metrics
+  range appointments and the Journeys pipeline aggregates; the mentee stays listed
+  (greyed) with an **Exclude/Include** toggle in the detail panel.
+  `fetchExcludedClientIds` is honored by `fetchRangeAppointments` + flagged on
+  `fetchMenteeJourneys`. Added to the Raw-data viewer. ⚠ **Needs 9988 applied**; not
+  browser-verified.
 
-**Backlog now has ONE planned item left: Journeys — exclude a mentee** (test/
-placeholder) from the list + metrics. ⚠ **Deferred for a decision** — it needs (a) a
-NEW migration (an HJG-owned `is_excluded`-style table the user must apply, next number
-**`9988_…`**) and (b) a choice of *Journeys-only vs dashboard-wide* scope, plus it
-threads exclusion through the metrics pipeline (harder to verify headless). Confirm
-the approach with the user before building.
+**The session-006/006b FEATURE_BACKLOG is now fully shipped — no planned items left.**
+Two new migrations this session that MUST be applied: **`9989_payout_builds.sql`**
+(Build payout) and **`9988_mentee_exclusions.sql`** (Journeys exclude).
 
 Everything below is the prior session-006 wrap (still current unless noted above).
 
@@ -348,12 +353,13 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Present = `9989`…`9999`. **Next
-  new one is `9988_…`.** Run by copy-paste into the Supabase SQL Editor; make
+- **Migrations DESCENDING** (newest = lowest). Present = `9988`…`9999`. **Next
+  new one is `9987_…`.** Run by copy-paste into the Supabase SQL Editor; make
   re-runnable (`drop … if exists` / `add column if not exists`). User reports
-  9999–9990 applied (start of 006b). **`9989_payout_builds.sql` is new this session
-  (006b) and MUST be applied** — it backs the Build payout reviewer (staff RLS, one
-  row per coach+month); Save/Approve/Discard error until it exists.
+  9999–9990 applied (start of 006b). **Two NEW this session (006b) — both MUST be
+  applied:** `9989_payout_builds.sql` (Build payout — Save/Approve/Discard error
+  until it exists) and `9988_mentee_exclusions.sql` (Journeys exclude — Exclude/
+  Include errors until it exists). Both are staff-RLS, one row per key, re-runnable.
 - **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
   pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
   consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use

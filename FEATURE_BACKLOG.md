@@ -11,43 +11,28 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-## 1. Journeys — exclude a mentee (test/placeholder) from the list + metrics
-
-**Status:** Planned · **Area:** Journeys tab (+ Metrics aggregates)
-
-**What:** A way to **remove a mentee** (e.g. **Arthur Nisly**, a test account) from
-the Journeys search list **and** from the data used to build pipeline metrics —
-especially the "time in system" / pipeline-timing aggregates.
-
-**Why:** Test/placeholder accounts muddy the board-level pipeline-leg averages and
-clutter the searchable list.
-
-**Where (code):**
-- There's already an exclusion mechanism: **`ca_clients.is_excluded`** (honored by
-  `fetchRangeAppointments` and `fetchMenteeJourneys`, which skip excluded clients)
-  and **`EXCLUDE_CLIENT_NAMES`** in `lib/config.ts` (compile-time list). Two ways to
-  do the UI version:
-  - **(a)** A per-mentee **"Exclude from metrics"** toggle persisted to an HJG-owned
-    table (like `mentee_outcomes` — RLS, staff-writable), checked everywhere
-    journeys/metrics are built. Cleanest reversible UI path.
-  - **(b)** A button that sets `ca_clients.is_excluded` — but that column is
-    sync-owned and a re-sync could flip it back; avoid unless sync preserves it.
-- Touch points: `JourneysView` list (`filtered`) + `PipelineSummary`
-  (`aggregateJourneyDurations`) + ideally the Metrics tab so the same client is
-  excluded dashboard-wide.
-
-**Acceptance criteria / notes:**
-- Clicking "exclude" on a mentee removes them from the Journeys list (or greys them
-  with an "excluded" badge + an "include" toggle to undo); **persisted** across
-  reloads; **reversible**.
-- Excluded mentees drop out of **PipelineSummary** aggregates and the per-mentee
-  "time in system" stats.
-- Decide whether exclusion is **Journeys-only** or **dashboard-wide** (recommend
-  dashboard-wide, mirroring how `is_excluded` already works) — confirm during build.
+_No planned items right now — the session-006/006b backlog is fully shipped (see
+below). Add new ideas here, newest on top._
 
 ---
 
 ## Shipped
+
+### Journeys — exclude a mentee (test/placeholder), dashboard-wide — session 006b, 2026-06-22
+
+A reversible, persisted way to hide a test/placeholder mentee (e.g. Arthur Nisly)
+from the dashboard. New HJG-owned **`mentee_exclusions`** table (**migration
+`9988_…`**, staff RLS, one row per `client_id`) — a staff-owned sibling of the
+compile-time `ca_clients.is_excluded` flag, so excluding is a click, not a code
+change or a re-sync risk. **Dashboard-wide:** an excluded client is dropped from
+`fetchRangeAppointments` (Metrics) and from the Journeys pipeline-timing aggregates
+(`aggregateJourneyDurations` + the active/graduated counts). In the **Journeys** tab
+the mentee stays in the list **greyed + struck-through with an "excluded" badge**,
+and the detail panel gains an **"Exclude from metrics" / "Include in metrics"**
+toggle, so it's fully reversible. The pipeline-timing card notes how many mentees are
+excluded. `mentee_exclusions` added to the Raw-data viewer. `src/db.ts`
+(`fetchExcludedClientIds` / `addMenteeExclusion` / `removeMenteeExclusion`),
+`src/views/JourneysView.tsx`. ⚠ Needs **9988 applied**; not browser-verified.
 
 ### Metrics — sticky range/preset bar — session 006b, 2026-06-22
 

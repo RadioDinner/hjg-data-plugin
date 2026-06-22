@@ -3,10 +3,12 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { useAuth } from "../auth";
 import {
   MENTEE_ACTIVE_WINDOW_DAYS,
+  addMenteeExclusion,
   aggregateJourneyDurations,
   clearMenteeOutcome,
   fetchCompanyOptions,
   fetchMenteeJourneys,
+  removeMenteeExclusion,
   setCompanyOption,
   setMenteeOutcome,
   type MenteeJourney,
@@ -82,6 +84,7 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
   const [notes, setNotes] = useState(journey.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [excluding, setExcluding] = useState(false);
 
   // Reset the editor when a different mentee is selected.
   useEffect(() => {
@@ -114,6 +117,18 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
       setClearing(false);
     }
   }
+  async function toggleExclude() {
+    setExcluding(true);
+    try {
+      if (journey.excluded) await removeMenteeExclusion(journey.clientId);
+      else await addMenteeExclusion(userId, journey.clientId, null);
+      onSaved();
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setExcluding(false);
+    }
+  }
 
   // Observed meeting rhythm: meetings per calendar month across the engagement.
   const rhythm = useMemo(() => {
@@ -132,13 +147,30 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
     <div className="journey">
       <div className="journey__head">
         <div>
-          <h2>{journey.name}</h2>
+          <h2>
+            {journey.name}
+            {journey.excluded && <span className="pill" style={{ marginLeft: 8 }}>excluded</span>}
+          </h2>
           <div className="journey__sub muted">
             {journey.meetingCount} meeting{journey.meetingCount === 1 ? "" : "s"}
             {journey.engagementIds.length > 1 && <> · {journey.engagementIds.length} engagements</>}
           </div>
         </div>
-        <StatusPill status={journey.resolvedStatus} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <StatusPill status={journey.resolvedStatus} />
+          <button
+            className="btn btn--sm"
+            onClick={toggleExclude}
+            disabled={excluding}
+            title={
+              journey.excluded
+                ? "Re-include this mentee in metrics and pipeline aggregates"
+                : "Hide this test/placeholder mentee from metrics and pipeline aggregates (reversible)"
+            }
+          >
+            {excluding ? "…" : journey.excluded ? "Include in metrics" : "Exclude from metrics"}
+          </button>
+        </div>
       </div>
 
       <div className="stat-row">
@@ -249,11 +281,18 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
   const counts = useMemo(() => {
     let active = 0;
     let graduated = 0;
+    let total = 0;
+    let excluded = 0;
     for (const j of journeys) {
+      if (j.excluded) {
+        excluded++;
+        continue; // excluded mentees don't count toward the board roll-up
+      }
+      total++;
       if (j.resolvedStatus === "active") active++;
       if (j.resolvedStatus === "graduated") graduated++;
     }
-    return { total: journeys.length, active, graduated };
+    return { total, active, graduated, excluded };
   }, [journeys]);
   const grad = legs.find((l) => l.key === "dc_grad");
   const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n }));
@@ -267,6 +306,9 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
         Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg).
         Stages come from CoachAccountable engagements (JumpStart → 4x → 2x → 1x), and graduation from an “After Graduation
         Care” engagement.
+        {counts.excluded > 0 && (
+          <> · {counts.excluded} mentee{counts.excluded === 1 ? "" : "s"} excluded from these figures.</>
+        )}
       </p>
       <div className="stat-row">
         <div className="stat">
@@ -439,12 +481,15 @@ export function JourneysView() {
               {filtered.map((j) => (
                 <button
                   key={j.clientId}
-                  className={`journeys__row ${j.clientId === selected ? "journeys__row--active" : ""}`}
+                  className={`journeys__row ${j.clientId === selected ? "journeys__row--active" : ""} ${
+                    j.excluded ? "journeys__row--excluded" : ""
+                  }`}
                   onClick={() => setSelected(j.clientId)}
+                  title={j.excluded ? "Excluded from metrics" : undefined}
                 >
                   <span className="journeys__row-name">{j.name}</span>
                   <span className="journeys__row-meta">
-                    <StatusPill status={j.resolvedStatus} />
+                    {j.excluded ? <span className="pill">excluded</span> : <StatusPill status={j.resolvedStatus} />}
                     <span className="muted">{j.lastMeeting ?? "—"}</span>
                   </span>
                 </button>

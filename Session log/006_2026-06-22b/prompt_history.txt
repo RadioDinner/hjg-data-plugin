@@ -11,3 +11,6 @@ A: Allow per-line amount override + note
 
 --- 2026-06-22 17:10 ---
 Ok, run the next feature on the list, it doesn't matter which one, while I apply the migrations
+
+--- 2026-06-22 17:25 ---
+Ok, run the next feature on the list, it doesn't matter which one, while I apply the migrations

@@ -339,9 +339,10 @@ async function pageDiscovery(
 // counted by the SIGNUP/booking date (dateAdded). `date` carries whichever date
 // the row is counted by.
 export async function fetchRangeAppointments(from: string, to: string): Promise<RangeAppt[]> {
-  const [mentoring, discovery] = await Promise.all([
+  const [mentoring, discovery, excludedSet] = await Promise.all([
     pageAppts(["mentoring", "group"], "start_date", from, to),
     pageDiscovery(from, to),
+    fetchExcludedClientIds(),
   ]);
   const rows = [...mentoring, ...discovery];
 
@@ -365,7 +366,7 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
   }
 
   return rows
-    .filter((r) => r.client_id == null || !clientMap.get(r.client_id)?.is_excluded)
+    .filter((r) => r.client_id == null || (!clientMap.get(r.client_id)?.is_excluded && !excludedSet.has(r.client_id)))
     .map((r) => ({
       id: r.id,
       category: r.category,
@@ -633,6 +634,9 @@ export interface MenteeJourney {
   // Durations in whole days (null when an endpoint is missing).
   activeSpanDays: number | null; // first -> last meeting
   daysInSystem: number | null; // earliest start -> exit / last activity / today
+  // Staff-set exclusion (mentee_exclusions): test/placeholder mentee hidden from
+  // metrics + the pipeline aggregates. Still listed (greyed) so it's reversible.
+  excluded: boolean;
 }
 
 // Whole days from `a` to `b` (both YYYY-MM-DD), parsed at UTC midnight.
@@ -780,13 +784,14 @@ function buildClientStages(
 // pipeline engagement), sorted by most-recent activity first. Excludes
 // placeholder/group "clients". Reads the full mirror once; the tab filters it.
 export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_start"): Promise<MenteeJourney[]> {
-  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomesRes] = await Promise.all([
+  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomesRes, excludedSet] = await Promise.all([
     fetchAllMentoring(),
     fetchAllEngagements(),
     fetchDiscoveryDatesByClient(),
     supabase.from("ca_clients").select("id,name,is_excluded"),
     supabase.from("ca_coaches").select("id,name"),
     supabase.from("mentee_outcomes").select("id,client_id,status,status_date,notes"),
+    fetchExcludedClientIds(),
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
@@ -886,6 +891,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       source,
       activeSpanDays: dayspan(firstMeeting, lastMeeting),
       daysInSystem: dayspan(startDate, exitDate),
+      excluded: excludedSet.has(clientId),
     });
   }
 
@@ -918,6 +924,31 @@ export async function clearMenteeOutcome(clientId: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// --- Mentee exclusions (test/placeholder mentees hidden dashboard-wide) ---
+// Reversible, staff-owned sibling of ca_clients.is_excluded. The returned set is
+// honored by fetchRangeAppointments (Metrics) and flagged on fetchMenteeJourneys
+// (Journeys keeps showing the mentee greyed so it can be re-included).
+
+export async function fetchExcludedClientIds(): Promise<Set<number>> {
+  const { data, error } = await supabase.from("mentee_exclusions").select("client_id");
+  if (error) throw new Error(error.message);
+  return new Set((data ?? []).map((r) => (r as { client_id: number }).client_id));
+}
+
+// Exclude a mentee (idempotent — one row per client_id).
+export async function addMenteeExclusion(createdBy: string, clientId: number, reason: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("mentee_exclusions")
+    .upsert({ client_id: clientId, reason, created_by: createdBy || null }, { onConflict: "client_id" });
+  if (error) throw new Error(error.message);
+}
+
+// Re-include a previously excluded mentee.
+export async function removeMenteeExclusion(clientId: number): Promise<void> {
+  const { error } = await supabase.from("mentee_exclusions").delete().eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+}
+
 // Board-level roll-up of how long each pipeline leg takes, across all mentees.
 // Each leg is averaged only over mentees where BOTH endpoints exist (so a small
 // n is honest, not zero-padded), and negative spans (data anomalies) are dropped.
@@ -930,7 +961,8 @@ export interface LegStat {
   medianDays: number | null;
 }
 
-export function aggregateJourneyDurations(journeys: MenteeJourney[]): LegStat[] {
+export function aggregateJourneyDurations(allJourneys: MenteeJourney[]): LegStat[] {
+  const journeys = allJourneys.filter((j) => !j.excluded); // excluded mentees don't skew the board aggregate
   const legs: { key: string; label: string; pick: (j: MenteeJourney) => number | null }[] = [
     { key: "dc_js", label: "Discovery → JumpStart", pick: (j) => dayspan(j.discoveryDate, j.stageDates.jumpstart) },
     { key: "js_4x", label: "JumpStart → 4x", pick: (j) => dayspan(j.stageDates.jumpstart, j.stageDates["4x"]) },
@@ -1182,6 +1214,7 @@ export const RAW_TABLES = [
   "coach_settings",
   "discovery_outcomes",
   "manual_metrics",
+  "mentee_exclusions",
   "mentee_outcomes",
   "payout_builds",
   "sync_runs",

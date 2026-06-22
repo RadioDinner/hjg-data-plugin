@@ -48,6 +48,17 @@ a local `claude/compassionate-hawking-ze8a1j` branch pointing at the same commit
      built from the exact rows that made the bar. Single-period only (inert in compare
      mode). No migration.
 
+5. **`<wrap>` — Journeys: exclude a mentee (test/placeholder), dashboard-wide (backlog, was #4).**
+   New HJG-owned **`mentee_exclusions`** table (**migration `9988_…`**, staff RLS, one
+   row per `client_id`) — reversible, staff-owned sibling of `ca_clients.is_excluded`.
+   Dashboard-wide: excluded clients drop from `fetchRangeAppointments` (Metrics) and
+   from the Journeys pipeline aggregates (`aggregateJourneyDurations` + counts). In the
+   Journeys tab the mentee stays listed (greyed + struck-through, "excluded" badge) with
+   an **Exclude/Include** toggle in the detail panel — fully reversible. `db.ts`:
+   `fetchExcludedClientIds` / `addMenteeExclusion` / `removeMenteeExclusion`;
+   `mentee_exclusions` added to the Raw-data viewer. Built with the backlog's
+   recommended default (dashboard-wide) per the user's "it doesn't matter which one."
+
 ## Directional decisions
 
 - **Build payout (AskUserQuestion):** full **sub-view/tab** (not modal); **persist**
@@ -69,13 +80,13 @@ container) — browser/Vercel-preview check all five features.
 
 ## Open / next
 
-- **Apply `9989_payout_builds.sql`** (Build payout persistence). The user was applying
-  migrations during the session.
-- **Backlog now has ONE planned item: Journeys — exclude a mentee.** Deferred for a
-  **decision** (asked at session end): it needs a NEW migration (`9988_…`, an
-  HJG-owned exclusion table the user must apply) and a **Journeys-only vs
-  dashboard-wide** scope choice, and it threads exclusion through the metrics pipeline
-  (harder to verify headless). Build once the user picks the approach.
+- **Apply BOTH new migrations** (user was applying migrations during the session):
+  `9989_payout_builds.sql` (Build payout) and `9988_mentee_exclusions.sql` (Journeys
+  exclude). Until each is applied its writes error (Save/Approve/Discard; Exclude/
+  Include).
+- **FEATURE_BACKLOG is now fully shipped — no planned items left.** Six features this
+  session (Build payout, Data map tab, Contextual help, conversion drill-down, sticky
+  range bar, Journeys exclude). Add new ideas to the backlog, newest on top.
 - Carry-over from session 006 still pending: re-sync to populate Pay staff / capacity
   fix / delivery signal; export `ca_invoices` to confirm subscription charges; delete
   the three stale remote branches (proxy-blocked) — though the remote now shows only
