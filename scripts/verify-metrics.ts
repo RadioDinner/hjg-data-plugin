@@ -23,6 +23,14 @@ import {
   type PayInvoiceInput,
   type PayEngagementInput,
 } from "../lib/pay.js";
+import {
+  summarizeBuild,
+  effectiveLinePayout,
+  isDefaultLineState,
+  DEFAULT_LINE_STATE,
+  type BuildLineInput,
+  type BuildLineState,
+} from "../lib/payBuild.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -479,6 +487,47 @@ console.log("[12] journey stage-date basis (engagement start vs first 1-on-1 mee
 
   eq(highestTier(es), "4x", "highest tier reached = 4x");
   eq(highestTier(computeStageDates("first_meeting", engs, meets)), "4x", "highest tier stable across bases");
+}
+
+console.log("[13] build-payout reviewer math (include/exclude, override, totals)");
+{
+  const lines: BuildLineInput[] = [
+    { clientId: 1, payout: 100 },
+    { clientId: 2, payout: 50 },
+    { clientId: 3, payout: 200 },
+  ];
+  const states = new Map<number, BuildLineState>([
+    [2, { included: false, override: null, note: "no-show month — drop" }], // excluded
+    [3, { included: true, override: 150, note: "prorate fix" }], // overridden down
+  ]);
+  // client 1 has no state -> default (included, engine number).
+
+  // effectiveLinePayout: default uses engine; excluded -> 0; override wins; 0-override stays 0.
+  eq(effectiveLinePayout(100), 100, "no state -> engine payout");
+  eq(effectiveLinePayout(100, DEFAULT_LINE_STATE), 100, "default state -> engine payout");
+  eq(effectiveLinePayout(50, states.get(2)), 0, "excluded line contributes 0");
+  eq(effectiveLinePayout(200, states.get(3)), 150, "override wins over engine number");
+  eq(effectiveLinePayout(200, { included: true, override: 0, note: null }), 0, "override of 0 zeroes an included line");
+
+  const s = summarizeBuild(lines, states);
+  eq(s.computedTotal, 350, "computed total = Σ engine payout over ALL lines");
+  eq(s.builtTotal, 250, "built total = 100 (engine) + 0 (excluded) + 150 (override)");
+  eq(s.delta, -100, "delta = built - computed");
+  eq(s.lineCount, 3, "line count");
+  eq(s.includedCount, 2, "included = client 1 + client 3");
+  eq(s.excludedCount, 1, "excluded = client 2");
+  eq(s.overriddenCount, 1, "overridden = client 3 only (override on an included line)");
+
+  // An all-default build equals the engine total exactly (review is a no-op).
+  const clean = summarizeBuild(lines, new Map());
+  eq(clean.builtTotal, clean.computedTotal, "all-default build == engine total");
+  eq(clean.delta, 0, "no-op review has zero drift");
+
+  // isDefaultLineState: only the untouched line is default (compact persistence).
+  eq(isDefaultLineState(DEFAULT_LINE_STATE), true, "default state is default");
+  eq(isDefaultLineState({ included: false, override: null, note: null }), false, "excluded is not default");
+  eq(isDefaultLineState({ included: true, override: 0, note: null }), false, "override (even 0) is not default");
+  eq(isDefaultLineState({ included: true, override: null, note: "checked" }), false, "noted line is not default");
 }
 
 console.log("");

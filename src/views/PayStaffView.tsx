@@ -97,7 +97,7 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
   );
 }
 
-export function PayStaffView() {
+export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } = {}) {
   const [data, setData] = useState<PayData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,9 +193,16 @@ export function PayStaffView() {
             </div>
           </div>
           {!noInvoices && (
-            <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
-              Explore source data
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              {onBuildPayout && (
+                <button className="btn btn--sm btn--primary" onClick={onBuildPayout} title="Review and sign off a mentor's payout line by line">
+                  Build payout →
+                </button>
+              )}
+              <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
+                Explore source data
+              </button>
+            </div>
           )}
         </div>
 

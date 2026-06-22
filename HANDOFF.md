@@ -1,12 +1,41 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-22 (session 006).
+2026-06-22 (session 006b).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
+
+## Resume here (live state — 2026-06-22, session 006b — IN PROGRESS)
+
+Picking this up cold — start here. **Session 006b is committing straight to `main`**
+(per the user) and working down `FEATURE_BACKLOG.md` newest-first.
+
+**⚠ NEW migration this session — `9989_payout_builds.sql` MUST be applied** (Supabase
+SQL Editor). It backs the new **Build payout** reviewer (HJG-owned table, staff RLS,
+one row per coach+month). Until applied, the builder works in-session but **Save
+draft / Approve / Discard will error** (no table). The user said they're applying
+migrations as 006b ships features.
+
+**Shipped this session (006b):**
+- **Build payout — interactive review/builder (backlog #1).** A full top-nav tab
+  ("Build payout") that layers human review over the payroll engine: pick a mentor +
+  month → every engine line is listed with an include/exclude checkbox, a per-line
+  **override + note**, and a live **running-total** side panel (built vs engine total,
+  delta, counts). **Persists** to `payout_builds` (migration 9989): **Save draft →
+  Approve → Reopen**, **Discard**, **CSV export**; month dropdown badges saved
+  months. Engine numbers are never mutated (overrides live only in the review record;
+  read-only toward CA). Pure math in **`lib/payBuild.ts`** (re-exported via `db.ts`),
+  locked by **verify §13**. Cross-linked from the Pay-staff tab via a "Build payout →"
+  button. New tab in `src/App.tsx`; `payout_builds` added to the Raw-data viewer.
+  ⚠ **Not browser-verified** (headless container) — browser/Vercel-preview check the
+  tab, the save/approve/reopen/discard round-trip (after 9989), overrides, CSV.
+
+Everything below is the prior session-006 wrap (still current unless noted above).
+
+---
 
 ## Resume here (live state — 2026-06-22, session 006 — WRAPPED)
 
@@ -290,13 +319,12 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Present = `9990`…`9999`. **Next
-  new one is `9989_…`.** Run by copy-paste into the Supabase SQL Editor; make
+- **Migrations DESCENDING** (newest = lowest). Present = `9989`…`9999`. **Next
+  new one is `9988_…`.** Run by copy-paste into the Supabase SQL Editor; make
   re-runnable (`drop … if exists` / `add column if not exists`). User reports
-  9999–9991 applied; **`9990_company_options.sql` is new this session and MUST be
-  applied** — it seeds the `journeys_stage_basis` key. The Company-options toggle
-  works in-session without it, but **won't persist** until the key exists (staff
-  can UPDATE `app_settings` but not INSERT, so the key must be seeded by migration).
+  9999–9990 applied (start of 006b). **`9989_payout_builds.sql` is new this session
+  (006b) and MUST be applied** — it backs the Build payout reviewer (staff RLS, one
+  row per coach+month); Save/Approve/Discard error until it exists.
 - **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
   pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
   consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use

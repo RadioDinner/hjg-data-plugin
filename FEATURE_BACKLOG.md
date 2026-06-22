@@ -11,62 +11,7 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-## 1. Pay staff — "Build payout" interactive review / builder
-
-**Status:** Planned · **Area:** Pay staff tab → new builder flow (modal or sub-view)
-
-**What:** A **"Build payout"** button that opens a guided process: load a specific
-**mentor/coach**, pick a **month**, and pull up that coach's payout **line items**
-for the month (one per mentee: tier, billed, collected, active days, proration,
-split %, payout). The user can **select / deselect** individual lines and a
-**running total updates live on the side**. In effect, a human review-and-assemble
-layer on top of the automated engine — confirm the good lines, drop anomalies, and
-arrive at a payout figure you've personally checked.
-
-**Why:** The user wants to **manually review every mentor payment for a while** to
-catch mistakes ("so I don't mess this up again"). The engine computes the number;
-this adds a deliberate human checkpoint before money goes out — and a record of
-what was reviewed.
-
-**Where (code):**
-- Reuse the **pure engine** `lib/pay.ts` — `computePayTimeline` / `computePayReport`
-  already emit the per-mentee-per-month **`PayLedgerRow`** (billed, collected,
-  activeDays, proration, splitPct, earned, payout, assigned). The builder is a UI
-  over those rows scoped to **one coach + one month**. Data via `src/db.ts`
-  `fetchPayData`.
-- New `src/components/PayBuildModal.tsx` — mirror `PayExploreModal.tsx`'s shape
-  (coach + month pickers, a line table, CSV export). Add the **"Build payout"**
-  button to `src/views/PayStaffView.tsx` (near the month picker / per-mentor
-  breakdown).
-- Per-line selection state (default: all included); **running total = Σ payout of
-  included lines**, shown with an included-count and per-line subtotals in a side
-  panel.
-- **Persistence — decide v1 vs v2.** To make reviews auditable, add an HJG-owned
-  table (e.g. `payout_builds`: `coach_id`, `service_month`, `status`
-  draft|approved, `total`, `reviewed_by`, `notes`, plus included line ids /
-  per-line overrides as jsonb) with staff RLS — **new migration, next number
-  `9989_…`**. v1 could ship the interactive builder + CSV with **no DB**; v2 adds
-  save / approve / revisit.
-
-**Acceptance criteria / notes:**
-- Pick coach + month → every ledger line for that coach/month is listed, including
-  the **"unassigned"** bucket and any zero/edge cases (surfaced, not hidden).
-- A checkbox per line includes/excludes it; the **running total updates instantly**;
-  per-line and grand totals shown side-by-side.
-- Optional per-line **override** (adjust a payout) + note — overrides live in the
-  review record and must **NOT** mutate the engine's computed numbers (the engine
-  stays the source of truth; this is a review layer).
-- **Export** the built payout to CSV; if persisted, support **draft → approved** so
-  a month can be signed off and reopened later.
-- **Read-only toward CoachAccountable** — internal HJG review state only, never
-  written back to CA (consistent with the project's read-only stance).
-- This is the *actionable* sibling of the existing read-only **"Explore source
-  data"** window — confirm **modal vs full sub-view** and **v1 scope (save or not)**
-  with the user during build.
-
----
-
-## 2. Raw data — make the Data map its OWN TAB (not a button to a separate page)
+## 1. Raw data — make the Data map its OWN TAB (not a button to a separate page)
 
 **Status:** Planned · **Area:** Raw data tab → "Data map ↗" button / top-nav tabs
 
@@ -96,7 +41,7 @@ browser tab is jarring and breaks the app shell (no nav, no auth chrome).
 
 ---
 
-## 3. Contextual help — a "?" on every card that side-loads an explainer article
+## 2. Contextual help — a "?" on every card that side-loads an explainer article
 
 **Status:** Planned · **Area:** Whole dashboard (cross-cutting)
 
@@ -134,7 +79,7 @@ north star (*be a weapon with the data* — a weapon you understand).
 
 ---
 
-## 4. Journeys — exclude a mentee (test/placeholder) from the list + metrics
+## 3. Journeys — exclude a mentee (test/placeholder) from the list + metrics
 
 **Status:** Planned · **Area:** Journeys tab (+ Metrics aggregates)
 
@@ -170,7 +115,7 @@ clutter the searchable list.
 
 ---
 
-## 5. Discovery → conversion chart — click a column to explore that month's calls
+## 4. Discovery → conversion chart — click a column to explore that month's calls
 
 **Status:** Planned · **Area:** Metrics page → "Discovery → conversion" card
 
@@ -197,7 +142,7 @@ month (more targeted than the card-level "Explore", which shows the whole range)
 
 ---
 
-## 6. Sticky range/preset bar — "freeze" the period + mode controls to the top
+## 5. Sticky range/preset bar — "freeze" the period + mode controls to the top
 
 **Status:** Planned · **Area:** Metrics page (consider other tabs later)
 
@@ -224,6 +169,26 @@ the way up.
 ---
 
 ## Shipped
+
+### Pay staff — "Build payout" interactive review / builder — session 006b, 2026-06-22
+
+A human review-and-assemble layer over the automated payroll engine, shipped as a
+**full top-nav tab** ("Build payout") — the user's choice over a modal. Pick a
+**mentor + service month** and every engine-computed line for that coach/month is
+listed (mentee, tier, billed, active days, split, engine payout). Each line has an
+**include/exclude checkbox** and a **per-line override + note**; a **running total
+side panel** updates live (built total, engine total, review delta, included/
+dropped/overridden counts). Reviews **persist** to a new HJG-owned `payout_builds`
+table (**migration `9989_payout_builds.sql`**, staff RLS, one row per coach+month):
+**Save draft → Approve → Reopen**, plus **Discard** and **CSV export**. The month
+dropdown badges saved months (draft / approved ✓). The engine's numbers are **never
+mutated** — overrides live only in the review record (read-only toward CA). Pure
+math in **`lib/payBuild.ts`** (`summarizeBuild`, `effectiveLinePayout`,
+`isDefaultLineState`), re-exported through `src/db.ts` and locked by **verify §13**.
+Unassigned (no-coach) billed revenue for the month is surfaced as an info banner,
+not silently hidden. A **"Build payout →"** button on the Pay-staff tab cross-links
+in. ⚠ Needs **9989 applied** + (as ever) invoices synced; **not browser-verified**
+(headless container). `src/views/BuildPayoutView.tsx`, `src/App.tsx`.
 
 ### Pay staff "Explore" — coach dropdown scoped to the active view — session 006, 2026-06-22
 

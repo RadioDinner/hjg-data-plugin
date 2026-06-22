@@ -19,9 +19,16 @@ export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
 import { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP } from "../lib/pay";
-import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow } from "../lib/pay";
+import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine } from "../lib/pay";
 export { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP };
-export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput };
+export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine };
+
+// Pure "Build payout" review math (per-line include/exclude/override + totals),
+// re-exported so the frontend imports lib through db.ts — same pattern as above.
+import { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE } from "../lib/payBuild";
+import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus } from "../lib/payBuild";
+export { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE };
+export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus };
 
 // Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
 // frontend imports lib through db.ts — same pattern as the pay engine above.
@@ -1059,6 +1066,109 @@ export async function fetchPayData(): Promise<PayData> {
   };
 }
 
+// --- Build payout (review records) ---
+// A saved human review of one coach's payout for one service month: which lines
+// were included, any per-line overrides + notes, the signed-off total, and a
+// draft/approved status. One row per (coachId, serviceMonth). The engine numbers
+// are recomputed live from fetchPayData; this only persists the human decisions.
+
+export interface PayoutBuildRecord {
+  coachId: number;
+  serviceMonth: string; // 'YYYY-MM'
+  status: BuildStatus;
+  builtTotal: number; // signed-off total at save time
+  computedTotal: number; // engine total at save time (drift reference)
+  lineStates: Record<number, BuildLineState>; // clientId -> review decision (non-default only)
+  notes: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null; // updated_at
+}
+
+function buildKey(coachId: number, serviceMonth: string): string {
+  return `${coachId}|${serviceMonth}`;
+}
+export { buildKey as payoutBuildKey };
+
+// All saved builds, indexed by `${coachId}|${serviceMonth}`. The table is small
+// (one row per reviewed coach-month), so a single fetch backs the whole view.
+export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord>> {
+  const { data, error } = await supabase
+    .from("payout_builds")
+    .select("coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at");
+  if (error) throw new Error(error.message);
+  const out = new Map<string, PayoutBuildRecord>();
+  for (const r of (data ?? []) as {
+    coach_id: number;
+    service_month: string;
+    status: BuildStatus;
+    built_total: number | null;
+    computed_total: number | null;
+    line_states: Record<string, BuildLineState> | null;
+    notes: string | null;
+    reviewed_by: string | null;
+    updated_at: string | null;
+  }[]) {
+    const lineStates: Record<number, BuildLineState> = {};
+    for (const [k, v] of Object.entries(r.line_states ?? {})) lineStates[Number(k)] = v;
+    out.set(buildKey(r.coach_id, r.service_month), {
+      coachId: r.coach_id,
+      serviceMonth: r.service_month,
+      status: r.status,
+      builtTotal: Number(r.built_total) || 0,
+      computedTotal: Number(r.computed_total) || 0,
+      lineStates,
+      notes: r.notes,
+      reviewedBy: r.reviewed_by,
+      reviewedAt: r.updated_at,
+    });
+  }
+  return out;
+}
+
+// Upsert one coach-month's review (draft or approved). line_states keeps only
+// non-default decisions so the JSON stays compact and a clean review is empty.
+export async function savePayoutBuild(
+  reviewedBy: string,
+  rec: {
+    coachId: number;
+    serviceMonth: string;
+    status: BuildStatus;
+    builtTotal: number;
+    computedTotal: number;
+    lineStates: Record<number, BuildLineState>;
+    notes: string | null;
+  }
+): Promise<void> {
+  const compact: Record<string, BuildLineState> = {};
+  for (const [k, v] of Object.entries(rec.lineStates)) {
+    if (!isDefaultLineState(v)) compact[k] = v;
+  }
+  const { error } = await supabase.from("payout_builds").upsert(
+    {
+      coach_id: rec.coachId,
+      service_month: rec.serviceMonth,
+      status: rec.status,
+      built_total: rec.builtTotal,
+      computed_total: rec.computedTotal,
+      line_states: compact,
+      notes: rec.notes,
+      reviewed_by: reviewedBy || null,
+    },
+    { onConflict: "coach_id,service_month" }
+  );
+  if (error) throw new Error(error.message);
+}
+
+// Discard a saved review (RLS lets a reviewer delete only their own records).
+export async function deletePayoutBuild(coachId: number, serviceMonth: string): Promise<void> {
+  const { error } = await supabase
+    .from("payout_builds")
+    .delete()
+    .eq("coach_id", coachId)
+    .eq("service_month", serviceMonth);
+  if (error) throw new Error(error.message);
+}
+
 // --- Raw data viewer ---
 
 export const RAW_TABLES = [
@@ -1073,6 +1183,7 @@ export const RAW_TABLES = [
   "discovery_outcomes",
   "manual_metrics",
   "mentee_outcomes",
+  "payout_builds",
   "sync_runs",
 ] as const;
 

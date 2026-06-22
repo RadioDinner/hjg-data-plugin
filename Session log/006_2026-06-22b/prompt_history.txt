@@ -1,0 +1,13 @@
+--- 2026-06-22 16:51 ---
+Alright, I'm ready to kick off a new session. I have applied all migrations. Let's start working down the feature list with the most recently added feature first. Commit to main at all points of this session
+
+--- 2026-06-22 16:55 (AskUserQuestion answers) ---
+Q: How should the 'Build payout' reviewer be presented?
+A: Full sub-view / tab
+Q: What should v1 of the builder save?
+A: Persist drafts + approvals (new payout_builds table / migration 9989)
+Q: Beyond include/exclude per line, adjust an individual line's payout amount?
+A: Allow per-line amount override + note
+
+--- 2026-06-22 17:10 ---
+Ok, run the next feature on the list, it doesn't matter which one, while I apply the migrations
