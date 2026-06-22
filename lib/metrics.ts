@@ -1,11 +1,7 @@
 // Pure monthly-metrics computation. Reproduces the known-good values in SPEC.md
 // s4 when fed equivalent data. No I/O here, so it is unit-testable in isolation.
 
-import {
-  categorizeAppointmentName,
-  isExcludedClientName,
-  MENTOR_COACH_ID_WHITELIST,
-} from "./config.js";
+import { categorizeAppointmentName, isExcludedClientName } from "./config.js";
 import type { CAAppointment, CAClient, MonthlyMetrics } from "./types.js";
 
 export const MONTHS = [
@@ -56,7 +52,6 @@ export function computeMonthlyMetrics(
   const excludedClients = new Set<string>();
   const uncategorized = new Set<string>();
   const unmatchedClientIds = new Set<number>();
-  const whitelist = new Set(MENTOR_COACH_ID_WHITELIST);
   let appointmentsConsidered = 0;
 
   for (const appt of appointments) {
@@ -92,9 +87,7 @@ export function computeMonthlyMetrics(
       case "mentoring":
         menteeMeetings[m]++;
         menteesByMonth[m].add(appt.ClientID);
-        if (whitelist.size === 0 || whitelist.has(appt.CoachID)) {
-          mentorsByMonth[m].add(appt.CoachID);
-        }
+        mentorsByMonth[m].add(appt.CoachID);
         break;
     }
   }

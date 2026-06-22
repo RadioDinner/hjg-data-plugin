@@ -11,6 +11,7 @@ import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
+import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
 import {
   computePayReport,
   computePayTimeline,
@@ -408,6 +409,41 @@ console.log("[10] compare-mode period math (shiftMonths, presets, delta)");
   eq(dn.abs, -20, "delta abs negative when down");
   eq(dn.pct, -20, "delta pct = -20%");
   eq(delta(5, 0).pct, null, "delta pct is null when the baseline is 0");
+}
+
+console.log("[11] mentor capacity — 1-on-1 vs group slots (weekly-slot fix)");
+{
+  const appts: CapacityAppt[] = [
+    { coachId: 1, clientId: 10, isGroup: false, slot: "2026-02-15 10:00:00" }, // multi-client slot
+    { coachId: 1, clientId: 11, isGroup: false, slot: "2026-02-15 10:00:00" }, // multi-client slot
+    { coachId: 1, clientId: 12, isGroup: false, slot: "2026-02-16 09:00:00" }, // genuine 1-on-1
+    { coachId: 2, clientId: 20, isGroup: true, slot: "2026-02-15 18:00:00" }, // named group format
+    { coachId: 2, clientId: 21, isGroup: false, slot: "2026-02-17 09:00:00" }, // genuine 1-on-1
+    { coachId: 3, clientId: 30, isGroup: false, slot: "2026-02-18 09:00:00" }, // same client...
+    { coachId: 3, clientId: 30, isGroup: false, slot: "2026-02-18 09:00:00" }, // ...twice in a slot
+  ];
+  const groups = groupSlotKeys(appts);
+  eq(groups.has("1|2026-02-15 10:00:00"), true, "coach1 10:00 slot is a group (2 distinct clients)");
+  eq(groups.has("3|2026-02-18 09:00:00"), false, "same client booked twice is NOT a group");
+  eq(groups.size, 1, "exactly one group slot detected");
+
+  const byCoach = oneOnOneMenteesByCoach(appts);
+  eq(byCoach.get(1)?.size ?? 0, 1, "coach1 1-on-1 mentees = 1 (multi-client slot excluded)");
+  eq(byCoach.get(1)?.has(12) ?? false, true, "coach1's counted mentee is the genuine 1-on-1");
+  eq(byCoach.get(2)?.size ?? 0, 1, "coach2 1-on-1 mentees = 1 (named group excluded)");
+  eq(byCoach.get(3)?.size ?? 0, 1, "coach3 1-on-1 mentees = 1 (duplicate booking counts once)");
+
+  const groupOnly: CapacityAppt[] = [
+    { coachId: 9, clientId: 90, isGroup: false, slot: "2026-03-01 12:00:00" },
+    { coachId: 9, clientId: 91, isGroup: false, slot: "2026-03-01 12:00:00" },
+  ];
+  eq(oneOnOneMenteesByCoach(groupOnly).get(9)?.size ?? 0, 0, "all-group coach has 0 capacity mentees");
+
+  const nullSlots: CapacityAppt[] = [
+    { coachId: 5, clientId: 50, isGroup: false, slot: null },
+    { coachId: 5, clientId: 51, isGroup: false, slot: null },
+  ];
+  eq(oneOnOneMenteesByCoach(nullSlots).get(5)?.size ?? 0, 2, "null-slot appts counted individually (no merge)");
 }
 
 console.log("");

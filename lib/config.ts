@@ -76,10 +76,6 @@ export function isExcludedClientName(
   return targets.has(norm(full)) || targets.has(norm(first)) || targets.has(norm(last));
 }
 
-// --- Optional mentor whitelist ---
-// If non-empty, only these CoachIDs count toward activeMentors. Empty = all.
-export const MENTOR_COACH_ID_WHITELIST: number[] = [];
-
 // --- Graduation ---
 // CoachAccountable has no "graduated" field; HJG's 4x->2x->1x->Graduated cadence
 // is operational. Until a rule is agreed, the funnel reports graduated as null

@@ -23,6 +23,8 @@ import {
   fetchMentorCoachIds,
   fetchRangeAppointments,
   fetchResolvedOutcomes,
+  oneOnOneMenteesByCoach,
+  type CapacityAppt,
   type CompareKey,
   type CoachWithSettings,
   type DiscoveryOutcomeValue,
@@ -674,21 +676,20 @@ export function MetricsView() {
   // count of mentees they're actively meeting with — so unfilled capacity
   // jumps out. Sorted by utilization desc so the most-loaded mentors are top.
   const capacityRows = useMemo(() => {
-    const menteesByCoach = new Map<number, Set<number>>();
-    for (const a of selectedMentoring) {
-      // Group sessions (In Depth / Tracking Together) are multi-mentee formats;
-      // counting their attendees would inflate a mentor's 1-on-1 capacity
-      // utilization (the "Arthur Nisly" bug), so they're excluded here only.
-      if (a.isGroup) continue;
-      if (a.coachId == null) continue;
-      if (!isMentor(a.coachId)) continue;
-      let set = menteesByCoach.get(a.coachId);
-      if (!set) {
-        set = new Set();
-        menteesByCoach.set(a.coachId, set);
-      }
-      if (a.clientId != null) set.add(a.clientId);
-    }
+    // Distinct 1-on-1 mentees per coach, excluding both named group formats
+    // (In Depth / Tracking Together) AND unnamed multi-client time slots — a
+    // coach with 2+ mentees booked at the same start time is running a group,
+    // not several 1-on-1s. Both otherwise inflate capacity (the "Arthur Nisly"
+    // bug + its residual weekly-slot case). Capacity-only; these still count as
+    // mentoring meetings/active mentees everywhere else.
+    const menteesByCoach = oneOnOneMenteesByCoach(
+      selectedMentoring.map<CapacityAppt>((a) => ({
+        coachId: a.coachId,
+        clientId: a.clientId,
+        isGroup: a.isGroup,
+        slot: a.startRaw,
+      }))
+    );
     return coachSettings
       .filter((c) => c.isMentor)
       .map((c) => {
@@ -703,7 +704,7 @@ export function MetricsView() {
         if (bu !== au) return bu - au;
         return b.mentees - a.mentees;
       });
-  }, [coachSettings, selectedMentoring, mentorIds]);
+  }, [coachSettings, selectedMentoring]);
 
   const capacityTotals = useMemo(() => {
     const totalCapacity = capacityRows.reduce((s, r) => s + (r.capacity ?? 0), 0);

@@ -28,6 +28,10 @@ export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, P
 export { COMPARE_PRESETS, derivePeriodB, delta, shiftMonths } from "../lib/compare";
 export type { CompareKey, ComparePreset, Delta, Range as ComparePeriod } from "../lib/compare";
 
+// Pure mentor-capacity helpers (1-on-1 mentees per coach, excluding group slots).
+export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
+export type { CapacityAppt } from "../lib/capacity";
+
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
 async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
@@ -206,10 +210,27 @@ export interface RangeAppt {
   isGroup: boolean;
   name: string;
   date: string | null; // YYYY-MM-DD (account-local)
+  // Exact CA start datetime (mentoring rows only; null for discovery). Lets the
+  // capacity calc spot multi-client time slots that `date` (day-only) can't.
+  startRaw: string | null;
   clientId: number | null;
   clientName: string;
   coachId: number | null;
   coachName: string;
+}
+
+// Shape returned by the appointment pagers below. `start_raw` is the exact CA
+// start datetime (mentoring rows only; null for discovery) — used by the capacity
+// calc to detect multi-client time slots.
+interface PagedAppt {
+  id: number;
+  category: ApptCategory;
+  is_group: boolean;
+  name: string;
+  date: string | null;
+  start_raw: string | null;
+  client_id: number | null;
+  coach_id: number | null;
 }
 
 // Page ca_appointments for the given categories, filtering/normalizing on the
@@ -223,13 +244,13 @@ async function pageAppts(
   dateCol: "start_date" | "date_added",
   from: string,
   to: string
-): Promise<{ id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
+): Promise<PagedAppt[]> {
   const pageSize = 1000;
-  const out: { id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
+  const out: PagedAppt[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
-      .select(`id,category,name,client_id,coach_id,${dateCol}`)
+      .select(`id,category,name,client_id,coach_id,start_raw,${dateCol}`)
       .in("category", categories)
       .eq("status", "A")
       .gte(dateCol, from)
@@ -246,6 +267,7 @@ async function pageAppts(
         is_group: isGroup,
         name: r.name as string,
         date: (r[dateCol] as string | null) ?? null,
+        start_raw: (r.start_raw as string | null) ?? null,
         client_id: (r.client_id as number | null) ?? null,
         coach_id: (r.coach_id as number | null) ?? null,
       });
@@ -261,9 +283,9 @@ async function pageAppts(
 async function pageDiscovery(
   from: string,
   to: string
-): Promise<{ id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[]> {
+): Promise<PagedAppt[]> {
   const pageSize = 1000;
-  const out: { id: number; category: ApptCategory; is_group: boolean; name: string; date: string | null; client_id: number | null; coach_id: number | null }[] = [];
+  const out: PagedAppt[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
@@ -284,6 +306,7 @@ async function pageDiscovery(
         is_group: false,
         name: r.name as string,
         date: ((r.date_added as string | null) ?? (r.start_date as string | null)) ?? null,
+        start_raw: null,
         client_id: (r.client_id as number | null) ?? null,
         coach_id: (r.coach_id as number | null) ?? null,
       });
@@ -332,6 +355,7 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
       isGroup: r.is_group,
       name: r.name,
       date: r.date,
+      startRaw: r.start_raw,
       clientId: r.client_id,
       clientName:
         (r.client_id != null ? clientMap.get(r.client_id)?.name : null) ??

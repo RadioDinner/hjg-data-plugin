@@ -55,6 +55,23 @@ data just needs to land. After the re-sync, do the eyeball checks under
   "All coaches". This **emptied the `FEATURE_BACKLOG.md` planned list** (both items
   now shipped). ⚠ browser-verify alongside Compare mode.
 
+**Also shipped this session (006) — two bug fixes + a cleanup:**
+- **Capacity weekly-slot fix (bug #1).** New pure **`lib/capacity.ts`**
+  (`oneOnOneMenteesByCoach`, `groupSlotKeys`) drops unnamed **multi-client time
+  slots** (same coach + same exact `start_raw`, 2+ distinct clients) from 1-on-1
+  capacity, closing the residual Arthur-Nisly inflation the named-format fix
+  missed. `RangeAppt` now carries `startRaw` (fetched from `ca_appointments.start_raw`;
+  `start_date` is day-only). Capacity-only — still counts as mentoring everywhere
+  else. Verify **§11**.
+- **Client/server divergence fix (bug #2).** Deleted the dead `api/reports/funnel.ts`
+  endpoint (only consumer of `computeFunnelReport`, never called by the UI, counted
+  mentors differently). Pure funnel/metrics logic kept (verify + C# port).
+- **Cleanup.** Removed the dead `MENTOR_COACH_ID_WHITELIST` from `lib/config.ts`
+  and its (empty/no-op) gate in `computeMonthlyMetrics`.
+- Left as requested: pay-staff revenue-basis confirmation, mid-month hand-off
+  split, and mentor-start eyeballing (bugs #3–5 — they hinge on a re-sync +
+  `ca_invoices` spot-check). ⚠ the capacity fix needs a re-sync + browser verify.
+
 **Shipped this session (005b) — Pay-staff re-evaluation tooling:**
 - **By-month breakdown.** The Pay-staff tab no longer shows one month at a time.
   It now leads with a **payout-by-month graph + an all-months expandable table**
@@ -137,10 +154,11 @@ GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing
 6. Later: widen `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a
    start date (the Pay-start override now covers the worst case manually).
 
-**Verification status:** `npm run typecheck`, `npm run verify` (**10 sections** —
-added [10] compare-mode period math), `npm run build` all pass. UI not
-browser-tested (headless container) — **browser-verify the by-month table +
-Explore window once invoices are synced, and the new Metrics Compare mode.**
+**Verification status:** `npm run typecheck`, `npm run verify` (**11 sections** —
+added [10] compare-mode period math, [11] capacity 1-on-1 vs group slots),
+`npm run build` all pass. UI not browser-tested (headless container) —
+**browser-verify the by-month table + Explore window once invoices are synced,
+the new Metrics Compare mode, and the capacity card after a re-sync.**
 
 ## What this is
 
@@ -281,15 +299,20 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
   later if the 35/50/60 values ever vary by mentor.)
 - **Pay staff — multi-coach month.** A mentee with a mid-month hand-off is
   attributed 100% to the majority-day coach (not split). Revisit if it matters.
-- **Mentor capacity inflation (Arthur Nisly) — FIXED (session 003), pending
-  re-sync + browser verify.** Group sessions get a separate `"group"` category,
-  scoped to capacity via `isGroup`. **Still open:** the *multi-client weekly slot*
-  case (unnamed slots w/ several clients) is NOT handled — only named group
-  formats. Revisit with a time-slot heuristic if those still inflate.
+- **Mentor capacity inflation (Arthur Nisly) — FIXED.** Named group formats get a
+  separate `"group"` category scoped to capacity via `isGroup` (session 003), AND
+  the residual **multi-client weekly-slot** case is now handled too (session 006):
+  `lib/capacity.ts` treats any (coach, exact `start_raw`) slot with 2+ distinct
+  clients as a group and drops it from 1-on-1 capacity. Both still need a **re-sync
+  + browser verify** to confirm on live data. (Slot detection keys on `start_raw`;
+  a slot with no time is treated as a 1-on-1.)
 - **Data map is a static snapshot** — wire to live Supabase if wanted.
 - **Stage rail** has no explicit quit/fired exit marker (status pill covers it).
-- **`MENTOR_COACH_ID_WHITELIST`** in `lib/config.ts` is dead (empty); remove in
-  a cleanup pass.
-- **Client vs server metric divergence** (`/api/reports/funnel` unused by UI).
+- **`MENTOR_COACH_ID_WHITELIST` — REMOVED (session 006).** Was dead/empty;
+  `computeMonthlyMetrics` no longer references it (behavior identical).
+- **Client vs server metric divergence — RESOLVED (session 006)** by deleting the
+  dead `api/reports/funnel.ts` endpoint (the only consumer of `computeFunnelReport`,
+  never called by the UI; it counted mentors differently than the UI). The pure
+  `lib/funnel.ts` / `lib/metrics.ts` stay (verify §1/§3, needed for the C# port).
 - Bundle > 500 kB (recharts + write-excel-file) — cosmetic.
 - **C# rebuild** — separate track, not started (`CSHARP_PORT.md`).
