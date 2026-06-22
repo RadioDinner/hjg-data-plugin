@@ -14,3 +14,7 @@ Ok, run the next feature on the list, it doesn't matter which one, while I apply
 
 --- 2026-06-22 17:25 ---
 Ok, run the next feature on the list, it doesn't matter which one, while I apply the migrations
+
+--- 2026-06-22 17:35 (AskUserQuestion answer) ---
+Q: Journeys exclude — dashboard-wide vs Journeys-only vs hold off?
+A: Dashboard-wide  (matches what was already shipped in 3e523d9 — no change needed)
