@@ -11,39 +11,26 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-## 1. Pay staff "Explore" — coach dropdown shows only coaches with rows
-
-**Status:** Planned · **Area:** Pay staff page → "Explore source data" window
-
-**What:** When the explorer is opened (especially via **"Explore this month"**,
-which pre-filters to one month), the **Coach** filter dropdown should list **only
-coaches that actually have ≥1 row in the current view** — not every coach in the
-whole dataset. Empty-result coaches shouldn't be selectable.
-
-**Why:** Opening "Explore this month" for, say, April and seeing 30 coaches in the
-dropdown when only 4 had payouts that month is noise. The dropdown should reflect
-what's actually on screen.
-
-**Where (code):**
-- `src/components/PayExploreModal.tsx` — the `coachOptions` `useMemo` currently
-  derives from the *entire* `ledger` + `engagements` regardless of filters. Change
-  it to derive from the rows that match the **current month range and active view**
-  (ledger / invoices / engagements).
-
-**Acceptance criteria / notes:**
-- Open "Explore this month" → the Coach dropdown contains only coaches with rows
-  in that month; changing the From/To month range updates the available coaches.
-- Switching the view tab (Ledger / Invoices / Engagements) updates the options to
-  that view's coaches.
-- **Subtlety:** compute the options from rows filtered by everything **except the
-  coach filter itself** — otherwise selecting a coach would collapse the dropdown
-  to just that coach and you couldn't switch. (Invoices have no native coach; they
-  borrow the engine's per-month attribution, so use that.)
-- Keep "All coaches" as the first option.
+_No planned items right now — the backlog is clear. Add new ideas above this line
+(newest on top), then move them to "Shipped" when done._
 
 ---
 
 ## Shipped
+
+### Pay staff "Explore" — coach dropdown scoped to the active view — session 006, 2026-06-22
+
+The **Coach** filter in the Pay-staff "Explore source data" window now lists only
+coaches with **≥1 row in the active view** (Ledger / Invoices / Engagements) under
+the **current month range, tier, and text filters** — not every coach in the whole
+dataset. The options are computed from everything **except** the coach filter
+itself, so picking a coach never collapses the dropdown to just that coach. "All
+coaches" stays first; if the selected coach drops out of the options (e.g. after
+narrowing the month range or switching views) it auto-falls-back to All coaches so
+the table isn't stuck empty behind a stale selection. Invoices (no native coach)
+use the engine's per-month attribution (`coachByClientMonth`). The `overlaps`
+month-range predicate was factored out and shared with the Engagements view.
+`src/components/PayExploreModal.tsx`.
 
 ### Metrics "Compare" mode (period vs period) — session 006, 2026-06-22
 

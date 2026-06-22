@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { engagementTier, type PayLedgerRow, type PayInvoiceInput, type PayEngagementInput } from "../db";
 import { SortableTable, type Row, type SortColumn } from "./SortableTable";
 
@@ -42,14 +42,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
   const hi = fromYm <= toYm ? toYm : fromYm;
   const q = text.trim().toLowerCase();
 
-  // Coach + tier options, drawn from whatever the data actually contains.
-  const coachOptions = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const r of ledger) if (r.coachId != null) m.set(r.coachId, r.coachName);
-    for (const e of engagements) if (e.coachId != null) m.set(e.coachId, coachName(e.coachId));
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [ledger, engagements, coachName]);
-
+  // Tier options: the full set the data contains (stable; not scoped to filters).
   const tierOptions = useMemo(() => {
     const s = new Set<string>();
     for (const r of ledger) s.add(r.tier);
@@ -60,6 +53,15 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
   const monthInRange = (ym: string) => (!lo || ym >= lo) && (!hi || ym <= hi);
   const coachId = coach === "all" ? null : Number(coach);
 
+  // An engagement overlaps the selected month range if it starts on/before the
+  // range end and ends on/after the range start (open-ended dates are ±∞). Shared
+  // by the Engagements view and the coach-option derivation below.
+  const overlaps = (e: PayEngagementInput) => {
+    const s = (e.startDate ?? "0000-01").slice(0, 7);
+    const en = (e.endDate ?? "9999-12").slice(0, 7);
+    return (!hi || s <= hi) && (!lo || en >= lo);
+  };
+
   // Coach the engine attributed each mentee+month to (from the ledger). Raw
   // invoices carry no coach, so the Invoices view borrows this to show which
   // coach an invoice's revenue is paid to.
@@ -68,6 +70,52 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
     for (const r of ledger) m.set(`${r.ym}|${r.clientId}`, { coachId: r.coachId, coachName: r.coachName });
     return m;
   }, [ledger]);
+
+  // Coach options reflect only coaches with ≥1 row in the ACTIVE view under the
+  // current month/tier/text filters — i.e. everything EXCEPT the coach filter
+  // itself, so picking a coach never collapses the dropdown to just that coach.
+  // (Invoices have no native coach; they borrow the engine's per-month attribution
+  // via coachByClientMonth.)
+  const coachOptions = useMemo(() => {
+    const m = new Map<number, string>();
+    if (view === "ledger") {
+      for (const r of ledger) {
+        if (!monthInRange(r.ym)) continue;
+        if (tier !== "all" && r.tier !== tier) continue;
+        if (q && !`${r.coachName} ${r.clientName} ${r.tier}`.toLowerCase().includes(q)) continue;
+        if (r.coachId != null) m.set(r.coachId, r.coachName);
+      }
+    } else if (view === "invoices") {
+      for (const inv of invoices) {
+        if (!monthInRange(inv.serviceYm)) continue;
+        const c = coachByClientMonth.get(`${inv.serviceYm}|${inv.clientId}`);
+        const cName = c?.coachName ?? "—";
+        if (q && !`${clientName(inv.clientId)} ${cName}`.toLowerCase().includes(q)) continue;
+        if (c?.coachId != null) m.set(c.coachId, cName);
+      }
+    } else {
+      for (const e of engagements) {
+        if (!overlaps(e)) continue;
+        if (tier !== "all" && engagementTier(e.name) !== tier) continue;
+        if (e.coachId == null) continue;
+        const cName = coachName(e.coachId);
+        if (q && !`${cName} ${clientName(e.clientId)} ${e.name ?? "—"} ${engagementTier(e.name)}`.toLowerCase().includes(q))
+          continue;
+        m.set(e.coachId, cName);
+      }
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, ledger, invoices, engagements, lo, hi, tier, q, coachByClientMonth, coachName, clientName]);
+
+  // If the selected coach falls out of the available options (e.g. after
+  // narrowing the month range or switching views), fall back to All coaches so
+  // the table isn't stuck empty behind a stale selection.
+  useEffect(() => {
+    if (coach !== "all" && !coachOptions.some(([id]) => String(id) === coach)) {
+      setCoach("all");
+    }
+  }, [coachOptions, coach]);
 
   // --- Ledger view ---
   const ledgerData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
@@ -143,11 +191,6 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
 
   // --- Engagements view (raw engine input: mentee↔mentor↔tier spans) ---
   const engagementData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
-    const overlaps = (e: PayEngagementInput) => {
-      const s = (e.startDate ?? "0000-01").slice(0, 7);
-      const en = (e.endDate ?? "9999-12").slice(0, 7);
-      return (!hi || s <= hi) && (!lo || en >= lo);
-    };
     const rows = engagements
       .filter(overlaps)
       .filter((e) => coachId == null || e.coachId === coachId)

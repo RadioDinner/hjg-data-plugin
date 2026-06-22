@@ -46,6 +46,15 @@ data just needs to land. After the re-sync, do the eyeball checks under
   the Meetings card only renders in **"Total"** mode (compare-types mode keeps its
   per-type bars; its Δ table still compares total meetings A vs B).
 
+**Also shipped this session (006) — Pay-staff Explore coach dropdown scoped:**
+- The **Coach** filter in the Pay-staff "Explore source data" window
+  (`src/components/PayExploreModal.tsx`) now lists only coaches with **≥1 row in
+  the active view** under the current month/tier/text filters — computed from
+  everything **except** the coach filter itself (so picking a coach doesn't
+  collapse the dropdown). Selecting a coach that drops out of range auto-resets to
+  "All coaches". This **emptied the `FEATURE_BACKLOG.md` planned list** (both items
+  now shipped). ⚠ browser-verify alongside Compare mode.
+
 **Shipped this session (005b) — Pay-staff re-evaluation tooling:**
 - **By-month breakdown.** The Pay-staff tab no longer shows one month at a time.
   It now leads with a **payout-by-month graph + an all-months expandable table**
@@ -251,10 +260,9 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
-- **Planned features live in `FEATURE_BACKLOG.md`** (build-later list). Currently
-  one open: the Pay-staff Explore **coach dropdown** filtered to coaches with rows.
-  Metrics **Compare mode** (period vs period) **shipped this session (006)** — now
-  in the file's "Shipped" section. Check `FEATURE_BACKLOG.md` when picking up new work.
+- **`FEATURE_BACKLOG.md` planned list is now CLEAR** — both items shipped in
+  session 006 (Metrics **Compare mode**, and the Pay-staff Explore **coach
+  dropdown** scoping). Add new ideas there (newest on top) when they come up.
 
 - **Pay staff — revenue basis = BILLED (decided session 005b).** The engine now
   pays on the invoice's billed `amount` (what's owed for the service month "in a
