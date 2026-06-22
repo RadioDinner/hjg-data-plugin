@@ -17,3 +17,9 @@ Q: How should Compare mode present period-vs-period on the Metrics page?
 A: Both (board scorecard + per-chart overlays)
 Q: Which comparison presets should the period picker offer in v1?
 A: MoM + QoQ + YoY + custom
+
+--- 2026-06-22 15:38 ---
+hello
+
+--- 2026-06-22 15:39 ---
+Build and commit the next feature

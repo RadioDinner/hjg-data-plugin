@@ -6,11 +6,26 @@ rundown of **open items** + the **feature list**, then a CoachAccountable API
 question, then "write the first feature on the list."
 
 ## What shipped (commits, newest first)
+- `b57b32a` — **Pay-staff Explore: scope Coach dropdown to the active view's
+  rows** (FEATURE_BACKLOG item #2). Built on request "build and commit the next
+  feature." This **emptied the backlog's planned list**.
 - `2d6175c` — **Metrics: add Compare mode (period vs period) — scorecard +
-  per-chart overlays.** The session's main deliverable (FEATURE_BACKLOG item #1).
-- (bookkeeping commit) — session 006 prompt history + this log.
+  per-chart overlays** (FEATURE_BACKLOG item #1, the session's main deliverable).
+- (bookkeeping commits) — session 006 prompt history + this log.
 - `cded3b1` — Session 006: log CA API / client-access question.
 - `48fee0c` — Session 006: kick off, log opening prompt.
+
+## Pay-staff Explore coach dropdown (item #2)
+The Coach `<select>` in `src/components/PayExploreModal.tsx` previously derived
+from the entire `ledger` + `engagements`. Now `coachOptions` is **view-aware**:
+for the active view (Ledger / Invoices / Engagements) it collects only coaches
+present in rows passing the current **month-range, tier, and text** filters —
+i.e. everything **except** the coach filter itself (the spec's subtlety: avoids
+collapsing the dropdown to the selected coach). Invoices borrow the engine's
+per-month coach attribution (`coachByClientMonth`). Added a `useEffect` that
+resets `coach` to "all" when the selection drops out of the options. Factored the
+month-`overlaps` predicate to component scope (shared with the Engagements view).
+No new pure-logic surface, so no verify section; covered by typecheck + build.
 
 ## Repo / branch state
 - Worked on **`main`** per the user's explicit instruction. At session start the
