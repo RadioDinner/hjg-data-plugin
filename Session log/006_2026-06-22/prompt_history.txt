@@ -41,3 +41,6 @@ Add another feature to the backlog, I want the "This month" "Last month" this qu
 
 Then, work on the following:
 On the "Journeys" tab, evaluating Seth Lehman. Where does the Journey's system get the date for the stage__date 2026-07-02 element? In CoachAccountable his engagement is scheduled to start 7/7 but the stage__date shows 7/2. (44 days time in system; 6 days Discovery→JumpStart; 4x current tier; 29 days mentoring span. Discovery 2026-05-09; JumpStart 2026-05-15; 4x mentoring 2026-07-02.)
+
+--- 2026-06-22 16:07 ---
+[Uploaded hjgrawdata20260622.xlsx — full raw-data export] So, here is all the raw data for you to review, review the data before we start on a fix
