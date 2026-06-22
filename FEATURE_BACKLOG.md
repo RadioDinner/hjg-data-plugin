@@ -11,45 +11,7 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-## 1. Contextual help — a "?" on every card that side-loads an explainer article
-
-**Status:** Planned · **Area:** Whole dashboard (cross-cutting)
-
-**What:** A small **question-mark icon** on every card / metric / feature. Clicking
-it **side-loads** (slide-in drawer, not a navigation) a short **article** explaining
-(a) how that function works, (b) the logic behind it, and (c) **exactly which
-numbers/columns feed the value** (e.g. "Active mentees = distinct `client_id`s with
-a mentoring appointment in the range, placeholder clients excluded").
-
-**Why:** Board users and staff need to *trust* the numbers. Self-serve docs cut
-"where does this come from?" questions (literally the Seth-Lehman stage-date
-question) and make the dashboard legible without a guided tour. Squarely on the
-north star (*be a weapon with the data* — a weapon you understand).
-
-**Where (code):**
-- New reusable `HelpButton` + a right-side **drawer** component (reuse the modal
-  CSS patterns in `src/styles.css`; the drawer slides from the right rather than
-  centering like `ExploreModal`).
-- Article content keyed by a stable `helpId`. Start as local **Markdown/MDX** under
-  e.g. `src/help/<helpId>.md` (bundled, versioned with the code) — a `help_articles`
-  table is overkill for v1 and means another write path. Render with a tiny MD
-  component.
-- Wire a `helpId` into the existing card chrome: `ChartCard` header actions in
-  `MetricsView.tsx` (next to Export CSV / Explore), the Journeys stage rail +
-  stat tiles, Pay-staff cards, the capacity card, etc.
-
-**Acceptance criteria / notes:**
-- Every card/metric exposes a "?"; clicking opens a side drawer **without leaving
-  the page or losing chart state**; Esc / click-away / a close button dismiss it.
-- Each article covers **definition + logic + source tables/columns** (and any
-  exclusions/edge cases, e.g. group-session handling, `is_excluded`).
-- Keyboard-accessible (focus trap in the drawer, `aria-label` on the button).
-- Content is authored per feature — ship the framework + a few seed articles, then
-  fill in. Keep articles close to the code they describe so they don't rot.
-
----
-
-## 2. Journeys — exclude a mentee (test/placeholder) from the list + metrics
+## 1. Journeys — exclude a mentee (test/placeholder) from the list + metrics
 
 **Status:** Planned · **Area:** Journeys tab (+ Metrics aggregates)
 
@@ -85,7 +47,7 @@ clutter the searchable list.
 
 ---
 
-## 3. Discovery → conversion chart — click a column to explore that month's calls
+## 2. Discovery → conversion chart — click a column to explore that month's calls
 
 **Status:** Planned · **Area:** Metrics page → "Discovery → conversion" card
 
@@ -112,7 +74,7 @@ month (more targeted than the card-level "Explore", which shows the whole range)
 
 ---
 
-## 4. Sticky range/preset bar — "freeze" the period + mode controls to the top
+## 3. Sticky range/preset bar — "freeze" the period + mode controls to the top
 
 **Status:** Planned · **Area:** Metrics page (consider other tabs later)
 
@@ -139,6 +101,23 @@ the way up.
 ---
 
 ## Shipped
+
+### Contextual help — "?" drawer framework + seed articles — session 006b, 2026-06-22
+
+A reusable **`HelpButton`** ("?") that side-loads a short explainer into a **right-side
+slide-in drawer** (not a navigation — chart state is preserved; Esc / click-away /
+Close dismiss it; focus moves into the drawer; `aria-label` + `role="dialog"`).
+Articles are authored as Markdown strings in **`src/help/articles.ts`** keyed by a
+stable `helpId` (bundled/versioned with the code — no `help_articles` table, no extra
+write path), rendered by a tiny dependency-free Markdown renderer in
+**`src/components/HelpDrawer.tsx`** (## / ### / - lists / **bold** / \`code\` / >
+notes). Each article covers **definition + logic + source tables/columns**. Wired in
+additively via an optional **`helpId` prop on `ChartCard`** (zero change for cards
+that don't opt in) across the Metrics cards (Discovery, Meetings, Active mentees,
+Mentors, Discovery→conversion, Compare), plus standalone buttons on **Pay staff**,
+**Build payout**, and the **Journeys** pipeline-timing card. Framework is ready —
+drop a `HelpButton` + an article entry to cover more cards later. ⚠ Not
+browser-verified (headless container).
 
 ### Raw data — Data map promoted to its own in-app tab — session 006b, 2026-06-22
 

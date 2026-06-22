@@ -38,6 +38,14 @@ migrations as 006b ships features.
   embeds the static D3 page in an **iframe** (fast/faithful; native-React + live
   Supabase is the later upgrade) with a "Full screen ↗" link; the old Raw-data button
   is removed. **No migration.** ⚠ Not browser-verified.
+- **Contextual help — "?" drawer framework + seed articles (backlog, the old #3).** A
+  reusable **`HelpButton`** opens a right-side **slide-in drawer** with a short
+  explainer (definition + logic + source tables). Articles are Markdown strings in
+  **`src/help/articles.ts`** (keyed by `helpId`); tiny renderer + drawer in
+  **`src/components/HelpDrawer.tsx`**. Wired additively via an optional **`helpId` on
+  `ChartCard`** (Metrics cards) + standalone buttons on Pay staff, Build payout, and
+  Journeys pipeline-timing. **No migration.** Add a `HelpButton` + an article to cover
+  more cards. ⚠ Not browser-verified.
 
 Everything below is the prior session-006 wrap (still current unless noted above).
 

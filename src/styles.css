@@ -245,6 +245,23 @@ body {
 .input--note { width: 100%; min-width: 120px; text-align: left; }
 @media (max-width: 900px) { .builder { grid-template-columns: 1fr; } .builder__side { position: static; } }
 
+/* --- contextual help ("?" + side drawer) --- */
+.help-btn { width: 18px; height: 18px; flex: 0 0 auto; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.help-btn:hover { color: var(--text); border-color: var(--accent); }
+.drawer-overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.5); z-index: 60; display: flex; justify-content: flex-end; }
+.drawer { width: 440px; max-width: 92vw; height: 100%; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0, 0, 0, 0.35); outline: none; animation: drawer-in 0.18s ease-out; }
+@keyframes drawer-in { from { transform: translateX(24px); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
+.drawer__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.drawer__head h2 { margin: 0; font-size: 16px; }
+.drawer__body { padding: 8px 20px 28px; overflow: auto; font-size: 14px; line-height: 1.6; }
+.drawer__body h3 { font-size: 14px; margin: 16px 0 6px; }
+.drawer__body h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 4px; color: var(--muted); }
+.drawer__body p { margin: 8px 0; }
+.drawer__body ul { margin: 6px 0; padding-left: 20px; }
+.drawer__body li { margin: 3px 0; }
+.drawer__body code { background: rgba(255, 255, 255, 0.08); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.drawer__note { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 0 8px 8px 0; color: var(--muted); font-size: 13px; }
+
 /* --- meeting-type filter --- */
 .type-filter { margin-bottom: 14px; }
 .type-filter__head { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 8px; }

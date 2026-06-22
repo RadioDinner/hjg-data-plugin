@@ -1,0 +1,153 @@
+// Contextual-help articles (backlog feature: a "?" on cards that side-loads an
+// explainer). Each article covers: what the number is, the logic behind it, and
+// exactly which tables/columns feed it — so board users and staff can trust the
+// dashboard without a guided tour.
+//
+// Articles are authored here as Markdown strings (a tiny renderer in
+// src/components/HelpDrawer.tsx handles ## / ### headings, - lists, **bold**, and
+// `code`). Keyed by a stable helpId so a <HelpButton id="…" /> anywhere resolves
+// to the right article. Bundled with the code on purpose — versioned alongside the
+// logic it describes, no extra write path or fetch. Add a card's help by adding an
+// entry here and dropping a HelpButton with the matching id.
+
+export interface HelpArticle {
+  title: string;
+  body: string; // Markdown
+}
+
+export const HELP_ARTICLES: Record<string, HelpArticle> = {
+  "metrics.discovery": {
+    title: "Discovery calls",
+    body: `Intro / discovery calls in the selected date range.
+
+### How it's counted
+- Counted by the date the call was **booked** (the prospect's signup), not the date the call happened — so a month reflects demand that came in that month.
+- Split **Phone** vs **Zoom** by the appointment type.
+
+### Source
+- \`ca_appointments\` rows categorized as *discovery* (the rules live in \`lib/config.ts\`).
+- Placeholder / excluded clients are left out (\`ca_clients.is_excluded\` + the exclusion list in \`lib/config.ts\`).`,
+  },
+
+  "metrics.meetings": {
+    title: "Mentee meetings",
+    body: `The number of mentoring meetings that occurred in the range.
+
+### How it's counted
+- Counted by the meeting's **scheduled date**.
+- Includes **1-on-1 and group** mentoring. Group "In Depth" / "Tracking Together" sessions count as mentoring meetings here — they're only carved out of *per-coach capacity* (so one group session doesn't look like many 1-on-1s).
+
+### Source
+- \`ca_appointments\` categorized as *mentoring* or *group* (\`lib/config.ts\`). Discovery calls are excluded.`,
+  },
+
+  "metrics.mentees": {
+    title: "Active mentees",
+    body: `Distinct mentees who had at least one mentoring meeting in the range.
+
+### Logic
+- A mentee is counted once no matter how many meetings they had.
+- Counted by the meeting's **scheduled date**.
+- Placeholder / test accounts are excluded (\`ca_clients.is_excluded\` + the name exclusion list in \`lib/config.ts\`).
+
+> Note: the **Journeys** tab uses a broader "active" definition (a meeting *or* an open engagement within 45 days). This card is strictly "had a mentoring meeting in the range".`,
+  },
+
+  "metrics.mentors": {
+    title: "Mentors",
+    body: `Distinct coaches who ran at least one mentoring meeting in the range.
+
+### Logic
+- A coach is counted once regardless of how many mentees or meetings.
+- Counted by the meeting's **scheduled date**.
+
+### Source
+- The \`coach_id\` on \`ca_appointments\` categorized as mentoring/group.`,
+  },
+
+  "metrics.conversion": {
+    title: "Discovery → conversion",
+    body: `Of the discovery calls in the range, how many turned into a sale.
+
+### When a call converts
+- A call **converts** when the prospect purchases **JumpStart Your Freedom (Waiting List)** (offering \`42840\`) on or after the call date.
+- No purchase yet, still within 30 days of the call → **pending**.
+- 30 days elapsed with no purchase → **not converted**.
+- A **staff override** on the Discovery tab always wins over the automatic result.
+
+### Rate
+- **Conversion rate = converted ÷ resolved calls** (pending calls aren't counted against the rate until they resolve).
+
+### Source
+- \`ca_offering_submissions\` for offering \`42840\`, the discovery appointments, and any \`discovery_outcomes\` overrides. Pure resolver in \`lib/conversion.ts\`.`,
+  },
+
+  "metrics.compare": {
+    title: "Compare mode (Period A vs Period B)",
+    body: `Compares two periods side by side.
+
+### Periods
+- **Period A** is the period you picked. **Period B** is what it's compared against.
+- Presets **MoM / QoQ / YoY** derive Period B from A and **span-align** it — a year-to-date Period A is compared to the same year-to-date slice of the prior year, not a full year.
+- Or set **custom** A and B ranges.
+
+### The numbers
+- **Δ** is the absolute change (A − B). **Δ%** is the change relative to Period B.
+- Conversion-rate Δ is shown in **percentage points**, not percent-of-percent.
+- Every time-series card also overlays Period B (a paired bar or a dashed line), and its table gains B + Δ columns.
+
+Pure math lives in \`lib/compare.ts\`.`,
+  },
+
+  "pay.payout": {
+    title: "How staff pay is computed",
+    body: `Each mentor earns a **ramped share of the revenue billed** to their mentees.
+
+### The split (ramp)
+- The share **ramps with the mentor's tenure**: month 1 = **35%**, month 2 = **50%**, month 3 onward = **60%**.
+- Tenure is the *mentor's* (from their earliest engagement, or a pinned start in Admin → Mentor capacity), and the rate applies to **all** their mentees that month.
+
+### The revenue
+- Pay is on the amount **billed** (invoice \`amount\`), credited to the invoice's **service month** (\`date_of\`). The amount *collected* is shown for reference only.
+- A partial month is **prorated by active engagement days** (active days ÷ days in month) — handles mid-month starts, quits, and tier changes.
+- A mentee is attributed to the coach who covered the **most active days** that month. Billed revenue with no overlapping engagement shows as **"unassigned"** rather than being dropped.
+
+### Source
+- \`ca_invoices\` (billed/collected, service month) + \`ca_engagements\` (mentee ↔ mentor ↔ tier spans). Pure engine in \`lib/pay.ts\`.`,
+  },
+
+  "pay.build": {
+    title: "Build payout — the review layer",
+    body: `A deliberate **human checkpoint** over the automated pay engine, so every payment can be personally checked before money goes out.
+
+### What you do
+- Pick a **mentor + service month**; every engine-computed line for that coach/month is listed.
+- **Include / exclude** each line with the checkbox, or **override** a line's payout and add a **note** explaining why.
+- The side panel shows the **built (signed-off) total** vs the **engine total**, the **delta**, and how many lines were dropped / overridden.
+
+### Saving
+- **Save draft** to come back later; **Approve** to sign the month off; **Reopen** to edit an approved month again. **Discard** removes the saved review.
+
+### Important
+- This **never changes the engine's numbers** — overrides and exclusions live only in the review record (\`payout_builds\`). It's read-only toward CoachAccountable; the engine stays the source of truth.`,
+  },
+
+  "journeys.aggregate": {
+    title: "Pipeline leg durations",
+    body: `Board-level view of how long mentees take to move through the pipeline: **Discovery → JumpStart → 4x → 2x → 1x → Graduation**.
+
+### Logic
+- For each leg, the **average / median** are computed only over mentees where **both endpoints exist**, so a small **n** stays honest rather than zero-padded. Negative spans (data anomalies) are dropped.
+
+### Stage-date basis
+- Stage dates can be read two ways (toggle on this tab, set org-wide in Company options):
+  - **Engagement start** — the CA engagement's start date for that tier.
+  - **First meeting** — the first 1-on-1 mentoring meeting under that tier (group sessions excluded), falling back to the engagement start.
+
+Pure logic in \`lib/journey.ts\`.`,
+  },
+};
+
+export function getHelpArticle(id: string): HelpArticle | undefined {
+  return HELP_ARTICLES[id];
+}

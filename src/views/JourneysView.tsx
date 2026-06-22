@@ -15,6 +15,7 @@ import {
   type ResolvedMenteeStatus,
   type StageBasis,
 } from "../db";
+import { HelpButton } from "../components/HelpDrawer";
 
 const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
 
@@ -259,7 +260,9 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
 
   return (
     <div className="card card--inset" style={{ marginBottom: 18 }}>
-      <h2>Pipeline timing — all mentees</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        Pipeline timing — all mentees <HelpButton id="journeys.aggregate" label="Pipeline timing" />
+      </h2>
       <p className="view__hint">
         Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg).
         Stages come from CoachAccountable engagements (JumpStart → 4x → 2x → 1x), and graduation from an “After Graduation

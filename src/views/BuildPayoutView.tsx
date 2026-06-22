@@ -18,6 +18,7 @@ import {
 } from "../db";
 import { useAuth } from "../auth";
 import { downloadCsv } from "../csv";
+import { HelpButton } from "../components/HelpDrawer";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -271,7 +272,9 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
       <section className="card">
         <div className="card__head">
           <div>
-            <h2>Build payout</h2>
+            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Build payout <HelpButton id="pay.build" label="Build payout" />
+            </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
               A deliberate human checkpoint over the automated engine: pick a mentor and a month, confirm or drop each
               line (override an amount if you must, with a note), and sign off the payout you've personally checked. The

@@ -33,6 +33,7 @@ import {
   type ResolvedOutcome,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
+import { HelpButton } from "../components/HelpDrawer";
 import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp } from "../format";
 
@@ -233,12 +234,14 @@ function ChartCard({
   extra,
   table,
   onExplore,
+  helpId,
 }: {
   title: string;
   children: ReactElement;
   extra?: ReactElement;
   table?: ChartCardTable;
   onExplore?: () => void;
+  helpId?: string;
 }) {
   const storageKey = `hjg.chartcard.view:${title}`;
   const [view, setView] = useState<ChartCardView>(() => {
@@ -259,6 +262,7 @@ function ChartCard({
       <div className="card__head">
         <h2>{title}</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {helpId && <HelpButton id={helpId} label={title} />}
           {table && (
             <button
               className="btn btn--sm"
@@ -1211,6 +1215,7 @@ export function MetricsView() {
             <div style={{ marginBottom: 18 }}>
               <ChartCard
                 title="Compare: Period A vs Period B"
+                helpId="metrics.compare"
                 table={scoreTable}
                 extra={
                   <p className="view__hint" style={{ marginTop: 0 }}>
@@ -1258,6 +1263,7 @@ export function MetricsView() {
           <div style={{ marginTop: 18 }}>
             <ChartCard
               title="Discovery calls"
+              helpId="metrics.discovery"
               table={compareMode ? discoveryCompareTable : discoveryTable}
               onExplore={exploreDiscoveryRaw}
             >
@@ -1281,6 +1287,7 @@ export function MetricsView() {
           <div style={{ marginTop: 18 }}>
             <ChartCard
               title="Mentee meetings"
+              helpId="metrics.meetings"
               extra={meetingsExtra}
               table={compareMode ? meetingsCompareTable : meetingsTable}
               onExplore={exploreMeetingsRaw}
@@ -1292,6 +1299,7 @@ export function MetricsView() {
           <div className="grid" style={{ marginTop: 18 }}>
             <ChartCard
               title="Active mentees"
+              helpId="metrics.mentees"
               table={compareMode ? menteesCompareTable : menteesTable}
               onExplore={exploreMenteesRaw}
             >
@@ -1318,6 +1326,7 @@ export function MetricsView() {
 
             <ChartCard
               title="Mentors"
+              helpId="metrics.mentors"
               table={compareMode ? mentorsCompareTable : mentorsTable}
               onExplore={exploreMentorsRaw}
             >
@@ -1336,6 +1345,7 @@ export function MetricsView() {
           <div style={{ marginTop: 18 }}>
             <ChartCard
               title="Discovery → conversion"
+              helpId="metrics.conversion"
               extra={
                 <>
                   <p className="view__hint">

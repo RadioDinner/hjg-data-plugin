@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimeline, type PayMonth } from "../db";
 import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
+import { HelpButton } from "../components/HelpDrawer";
 
 const AXIS = "#94a3b8";
 const GRID = "#1e293b";
@@ -185,7 +186,9 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
       <section className="card">
         <div className="card__head">
           <div>
-            <h2>Pay staff</h2>
+            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Pay staff <HelpButton id="pay.payout" label="Pay staff" />
+            </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
               Mentors earn a ramped share ({PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by tenure month)
               of revenue <strong>billed</strong> to each mentee, credited to the invoice's <strong>service
