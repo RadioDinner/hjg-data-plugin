@@ -13,13 +13,17 @@ import {
   YAxis,
 } from "recharts";
 import {
+  COMPARE_PRESETS,
   MANUAL_METRICS,
+  derivePeriodB,
+  delta,
   fetchCoachesWithSettings,
   fetchLastSyncedAt,
   fetchManualMetrics,
   fetchMentorCoachIds,
   fetchRangeAppointments,
   fetchResolvedOutcomes,
+  type CompareKey,
   type CoachWithSettings,
   type DiscoveryOutcomeValue,
   type ManualMetricRow,
@@ -28,7 +32,7 @@ import {
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { downloadCsv } from "../csv";
-import { num, pct } from "../format";
+import { num, pct, signed, signedPct, signedPp } from "../format";
 
 type ChartCardCell = string | number;
 type ChartCardTable = { columns: string[]; rows: ChartCardCell[][] };
@@ -39,6 +43,10 @@ const GRID = "#1e293b";
 const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
 const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b", converted: "#34d399", rate: "#f472b6" };
 const PALETTE = ["#38bdf8", "#34d399", "#a78bfa", "#f59e0b", "#f472b6", "#22d3ee", "#fb7185", "#a3e635"];
+// Period B in compare mode — a neutral "reference" tone that reads as the prior
+// period across every card (dashed line for line/composed charts, paired bar for
+// bar charts) without colliding with any series' own accent.
+const CMP = "#cbd5e1";
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function shortType(name: string): string {
@@ -120,6 +128,101 @@ function monthBuckets(from: string, to: string): { key: string; label: string }[
     if (out.length > 60) break; // safety
   }
   return out;
+}
+
+// --- per-period reductions (shared by Period A and Period B so a comparison is
+// always apples-to-apples — identical logic, just different inputs) ---
+
+interface MonthRow {
+  month: string;
+  Phone: number;
+  Zoom: number;
+  Meetings: number;
+  Mentees: number;
+  Mentors: number;
+}
+
+function groupByMonth(appts: RangeAppt[]): Map<string, RangeAppt[]> {
+  const m = new Map<string, RangeAppt[]>();
+  for (const a of appts) {
+    if (!a.date) continue;
+    const k = a.date.slice(0, 7);
+    let arr = m.get(k);
+    if (!arr) {
+      arr = [];
+      m.set(k, arr);
+    }
+    arr.push(a);
+  }
+  return m;
+}
+
+function reduceMonthRows(
+  buckets: { key: string; label: string }[],
+  byMonth: Map<string, RangeAppt[]>,
+  selectedTypes: Set<string> | null,
+  isMentor: (coachId: number | null) => boolean
+): MonthRow[] {
+  return buckets.map((b) => {
+    const items = byMonth.get(b.key) ?? [];
+    let phone = 0;
+    let zoom = 0;
+    let meetings = 0;
+    const mentees = new Set<number>();
+    const mentors = new Set<number>();
+    for (const a of items) {
+      if (a.category === "discoveryPhone") phone++;
+      else if (a.category === "discoveryZoom") zoom++;
+      else if (a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))) {
+        meetings++;
+        mentees.add(a.clientId ?? -1);
+        if (isMentor(a.coachId)) mentors.add(a.coachId ?? -1);
+      }
+    }
+    return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
+  });
+}
+
+// Per-month converted count + conversion rate (%) — enough to overlay Period B's
+// rate line on the conversion card.
+function reduceConvRate(
+  buckets: { key: string; label: string }[],
+  byMonth: Map<string, RangeAppt[]>,
+  outcomes: Map<number, ResolvedOutcome>
+): { month: string; Rate: number }[] {
+  return buckets.map((b) => {
+    const items = (byMonth.get(b.key) ?? []).filter((a) => a.category !== "mentoring");
+    let converted = 0;
+    for (const a of items) {
+      if (outcomes.get(a.id)?.outcome === "converted") converted++;
+    }
+    const total = items.length;
+    return { month: b.label, Rate: total > 0 ? Math.round((converted / total) * 100) : 0 };
+  });
+}
+
+function rangeLabel(from: string, to: string): string {
+  return `${from} → ${to}`;
+}
+
+// A per-month Δ table for a single metric, zipping Period A and Period B by month
+// index (presets keep the spans equal; custom ranges align as far as they go).
+function buildCompareTable(
+  label: string,
+  aRows: { month: string; value: number }[],
+  bRows: { month: string; value: number }[],
+  deltaFmt: (a: number, b: number) => string
+): ChartCardTable {
+  const n = Math.max(aRows.length, bRows.length);
+  const rows: ChartCardCell[][] = [];
+  for (let i = 0; i < n; i++) {
+    const a = aRows[i];
+    const b = bRows[i];
+    const av = a?.value ?? 0;
+    const bv = b?.value ?? 0;
+    rows.push([a?.month ?? "—", av, b?.month ?? "—", bv, deltaFmt(av, bv)]);
+  }
+  return { columns: ["Month (A)", `A ${label}`, "Month (B)", `B ${label}`, "Δ"], rows };
 }
 
 function ChartCard({
@@ -274,6 +377,29 @@ export function MetricsView() {
     null
   );
 
+  // --- Compare mode (period vs period). Period A is the primary from/to above;
+  // Period B is derived from A by the active preset (or free in "custom"). B's
+  // data is fetched separately and only while compare mode is on. ---
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareKey, setCompareKey] = useState<CompareKey>("yoy");
+  const cmpInit = derivePeriodB("yoy", { from: INITIAL.from, to: INITIAL.to })!;
+  const [cmpFrom, setCmpFrom] = useState(cmpInit.from); // custom-mode store / last derived
+  const [cmpTo, setCmpTo] = useState(cmpInit.to);
+  const [apptsB, setApptsB] = useState<RangeAppt[]>([]);
+  const [manualB, setManualB] = useState<ManualMetricRow[]>([]);
+  const [outcomesB, setOutcomesB] = useState<Map<number, ResolvedOutcome>>(new Map());
+  const [loadingB, setLoadingB] = useState(false);
+
+  // Effective Period B range: derived from A while a preset is active, otherwise
+  // the user-edited custom range.
+  const periodB = useMemo<{ from: string; to: string }>(() => {
+    if (compareKey !== "custom") {
+      const d = derivePeriodB(compareKey, { from, to });
+      if (d) return d;
+    }
+    return { from: cmpFrom, to: cmpTo };
+  }, [compareKey, from, to, cmpFrom, cmpTo]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -315,6 +441,56 @@ export function MetricsView() {
     };
   }, [from, to]);
 
+  // Period B (comparison) data — mirrors the Period A fetches, only while compare
+  // mode is on. Clearing on toggle-off guarantees the view returns to the exact
+  // single-period state.
+  useEffect(() => {
+    if (!compareMode) {
+      setApptsB([]);
+      setOutcomesB(new Map());
+      return;
+    }
+    let cancelled = false;
+    setLoadingB(true);
+    fetchRangeAppointments(periodB.from, periodB.to)
+      .then(async (rows) => {
+        const disc = rows
+          .filter((a) => a.category !== "mentoring")
+          .map((a) => ({ id: a.id, clientId: a.clientId, date: a.date }));
+        const out = await fetchResolvedOutcomes(disc);
+        if (cancelled) return;
+        setApptsB(rows);
+        setOutcomesB(out);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingB(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compareMode, periodB.from, periodB.to]);
+
+  useEffect(() => {
+    if (!compareMode) {
+      setManualB([]);
+      return;
+    }
+    let cancelled = false;
+    fetchManualMetrics(periodB.from, periodB.to)
+      .then((rows) => {
+        if (!cancelled) setManualB(rows);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compareMode, periodB.from, periodB.to]);
+
   useEffect(() => {
     let cancelled = false;
     fetchLastSyncedAt()
@@ -350,6 +526,23 @@ export function MetricsView() {
     setPreset(key);
   }
 
+  function applyComparePreset(key: CompareKey) {
+    setCompareKey(key);
+    const p = COMPARE_PRESETS.find((x) => x.key === key);
+    if (p?.base) {
+      const a = presetRange(p.base);
+      setFrom(a.from);
+      setTo(a.to);
+      setPreset("custom");
+      const b = derivePeriodB(key, a);
+      if (b) {
+        setCmpFrom(b.from);
+        setCmpTo(b.to);
+      }
+    }
+    // "custom": keep the current Period A and Period B as-is.
+  }
+
   const mentoring = useMemo(() => appts.filter((a) => a.category === "mentoring"), [appts]);
   const discovery = useMemo(() => appts.filter((a) => a.category !== "mentoring"), [appts]);
 
@@ -366,20 +559,7 @@ export function MetricsView() {
 
   const buckets = useMemo(() => monthBuckets(from, to), [from, to]);
 
-  const byMonth = useMemo(() => {
-    const m = new Map<string, RangeAppt[]>();
-    for (const a of appts) {
-      if (!a.date) continue;
-      const k = a.date.slice(0, 7);
-      let arr = m.get(k);
-      if (!arr) {
-        arr = [];
-        m.set(k, arr);
-      }
-      arr.push(a);
-    }
-    return m;
-  }, [appts]);
+  const byMonth = useMemo(() => groupByMonth(appts), [appts]);
 
   // When staff have flagged any coaches as is_mentor, restrict the Mentors
   // metric to that whitelist (fixes the long-standing inflated-mentor-count
@@ -388,27 +568,46 @@ export function MetricsView() {
     mentorIds.size === 0 || (coachId != null && mentorIds.has(coachId));
 
   const data = useMemo(
-    () =>
-      buckets.map((b) => {
-        const items = byMonth.get(b.key) ?? [];
-        let phone = 0;
-        let zoom = 0;
-        const mentees = new Set<number>();
-        const mentors = new Set<number>();
-        let meetings = 0;
-        for (const a of items) {
-          if (a.category === "discoveryPhone") phone++;
-          else if (a.category === "discoveryZoom") zoom++;
-          else if (a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))) {
-            meetings++;
-            mentees.add(a.clientId ?? -1);
-            if (isMentor(a.coachId)) mentors.add(a.coachId ?? -1);
-          }
-        }
-        return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
-      }),
+    () => reduceMonthRows(buckets, byMonth, selectedTypes, isMentor),
     [byMonth, buckets, selectedTypes, mentorIds]
   );
+
+  // --- Period B equivalents (compare mode). Same reducers as A, fed B's data. ---
+  const bBuckets = useMemo(() => monthBuckets(periodB.from, periodB.to), [periodB.from, periodB.to]);
+  const bByMonth = useMemo(() => groupByMonth(apptsB), [apptsB]);
+  const bData = useMemo(
+    () => reduceMonthRows(bBuckets, bByMonth, selectedTypes, isMentor),
+    [bBuckets, bByMonth, selectedTypes, mentorIds]
+  );
+  const bConvRate = useMemo(() => reduceConvRate(bBuckets, bByMonth, outcomesB), [bBuckets, bByMonth, outcomesB]);
+
+  const bSelectedMentoring = useMemo(
+    () => apptsB.filter((a) => a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))),
+    [apptsB, selectedTypes]
+  );
+  const bDiscovery = useMemo(() => apptsB.filter((a) => a.category !== "mentoring"), [apptsB]);
+  const bKpis = useMemo(
+    () => ({
+      discoveryTotal: bDiscovery.length,
+      meetingsTotal: bSelectedMentoring.length,
+      mentees: new Set(bSelectedMentoring.map((a) => a.clientId ?? -1)).size,
+      mentors: new Set(bSelectedMentoring.filter((a) => isMentor(a.coachId)).map((a) => a.coachId ?? -1)).size,
+    }),
+    [bDiscovery, bSelectedMentoring, mentorIds]
+  );
+  const bConvRateTotal = useMemo(() => {
+    let converted = 0;
+    for (const a of bDiscovery) {
+      if (outcomesB.get(a.id)?.outcome === "converted") converted++;
+    }
+    return bDiscovery.length > 0 ? converted / bDiscovery.length : null;
+  }, [bDiscovery, outcomesB]);
+  const bManualTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const def of MANUAL_METRICS) totals.set(def.key, 0);
+    for (const r of manualB) totals.set(r.metric, (totals.get(r.metric) ?? 0) + r.value);
+    return totals;
+  }, [manualB]);
 
   const selectedTypeList = useMemo(
     () => meetingTypes.filter((t) => selectedTypes?.has(t.name)).map((t) => t.name),
@@ -580,6 +779,99 @@ export function MetricsView() {
       rows: convData.map((d) => [d.month, d.Converted, d.Pending, d["Not converted"], d["No show"], d.Total, d.Rate]),
     }),
     [convData]
+  );
+
+  // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
+  // per-chart Period-B overlay datasets (aligned to A by month index), and
+  // per-card Δ tables. All inert unless compareMode is on. ---
+  const scoreBars = useMemo(
+    () => [
+      { metric: "Discovery", A: kpis.discoveryTotal, B: bKpis.discoveryTotal },
+      { metric: "Meetings", A: kpis.meetingsTotal, B: bKpis.meetingsTotal },
+      { metric: "Mentees", A: kpis.mentees, B: bKpis.mentees },
+      { metric: "Mentors", A: kpis.mentors, B: bKpis.mentors },
+    ],
+    [kpis, bKpis]
+  );
+
+  const scoreTable = useMemo<ChartCardTable>(() => {
+    const rows: ChartCardCell[][] = [];
+    const countRow = (label: string, a: number, b: number) => {
+      const d = delta(a, b);
+      rows.push([label, a, b, signed(d.abs), signedPct(d.pct)]);
+    };
+    countRow("Discovery calls", kpis.discoveryTotal, bKpis.discoveryTotal);
+    countRow("Mentee meetings", kpis.meetingsTotal, bKpis.meetingsTotal);
+    countRow("Active mentees", kpis.mentees, bKpis.mentees);
+    countRow("Mentors", kpis.mentors, bKpis.mentors);
+    const aRate = Math.round((conv.rate ?? 0) * 100);
+    const bRate = Math.round((bConvRateTotal ?? 0) * 100);
+    rows.push(["Conversion rate", `${aRate}%`, `${bRate}%`, signedPp(aRate - bRate), "—"]);
+    for (const m of MANUAL_METRICS) {
+      countRow(m.label, manualTotals.get(m.key) ?? 0, bManualTotals.get(m.key) ?? 0);
+    }
+    return { columns: ["Metric", "Period A", "Period B", "Δ", "Δ%"], rows };
+  }, [kpis, bKpis, conv.rate, bConvRateTotal, manualTotals, bManualTotals]);
+
+  // Overlay datasets: A's per-month rows carry a `cmp` field = Period B's value
+  // for the same metric at the same month index (presets keep spans equal).
+  const cmpDiscovery = useMemo(
+    () => data.map((d, i) => ({ ...d, cmp: (bData[i]?.Phone ?? 0) + (bData[i]?.Zoom ?? 0) })),
+    [data, bData]
+  );
+  const cmpMentees = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentees ?? 0 })), [data, bData]);
+  const cmpMentors = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentors ?? 0 })), [data, bData]);
+  const cmpConv = useMemo(() => convData.map((d, i) => ({ ...d, cmp: bConvRate[i]?.Rate ?? 0 })), [convData, bConvRate]);
+
+  const discoveryCompareTable = useMemo(
+    () =>
+      buildCompareTable(
+        "calls",
+        data.map((d) => ({ month: d.month, value: d.Phone + d.Zoom })),
+        bData.map((d) => ({ month: d.month, value: d.Phone + d.Zoom })),
+        (a, b) => signed(a - b)
+      ),
+    [data, bData]
+  );
+  const meetingsCompareTable = useMemo(
+    () =>
+      buildCompareTable(
+        "meetings",
+        data.map((d) => ({ month: d.month, value: d.Meetings })),
+        bData.map((d) => ({ month: d.month, value: d.Meetings })),
+        (a, b) => signed(a - b)
+      ),
+    [data, bData]
+  );
+  const menteesCompareTable = useMemo(
+    () =>
+      buildCompareTable(
+        "mentees",
+        data.map((d) => ({ month: d.month, value: d.Mentees })),
+        bData.map((d) => ({ month: d.month, value: d.Mentees })),
+        (a, b) => signed(a - b)
+      ),
+    [data, bData]
+  );
+  const mentorsCompareTable = useMemo(
+    () =>
+      buildCompareTable(
+        "mentors",
+        data.map((d) => ({ month: d.month, value: d.Mentors })),
+        bData.map((d) => ({ month: d.month, value: d.Mentors })),
+        (a, b) => signed(a - b)
+      ),
+    [data, bData]
+  );
+  const conversionCompareTable = useMemo(
+    () =>
+      buildCompareTable(
+        "rate %",
+        convData.map((d) => ({ month: d.month, value: d.Rate })),
+        bConvRate.map((d) => ({ month: d.month, value: d.Rate })),
+        (a, b) => signedPp(a - b)
+      ),
+    [convData, bConvRate]
   );
 
   function toggleType(name: string) {
@@ -788,12 +1080,14 @@ export function MetricsView() {
 
   const meetingsChart =
     meetingsMode === "total" ? (
-      <BarChart data={data}>
+      <BarChart data={compareMode ? data.map((d, i) => ({ ...d, cmp: bData[i]?.Meetings ?? 0 })) : data}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="month" {...axisProps} />
         <YAxis allowDecimals={false} width={28} {...axisProps} />
         <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-        <Bar dataKey="Meetings" fill={C.meetings} radius={[4, 4, 0, 0]} />
+        {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
+        <Bar dataKey="Meetings" name="Period A" fill={C.meetings} radius={[4, 4, 0, 0]} />
+        {compareMode && <Bar dataKey="cmp" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />}
       </BarChart>
     ) : (
       <BarChart data={compareData}>
@@ -812,19 +1106,36 @@ export function MetricsView() {
     <section>
       <div className="range">
         <div className="range__presets">
-          {PRESETS.map((p) => (
-            <button
-              key={p.key}
-              className={`chip ${preset === p.key ? "chip--active" : ""}`}
-              onClick={() => applyPreset(p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
+          {compareMode
+            ? COMPARE_PRESETS.map((p) => (
+                <button
+                  key={p.key}
+                  className={`chip ${compareKey === p.key ? "chip--active" : ""}`}
+                  onClick={() => applyComparePreset(p.key)}
+                >
+                  {p.label}
+                </button>
+              ))
+            : PRESETS.map((p) => (
+                <button
+                  key={p.key}
+                  className={`chip ${preset === p.key ? "chip--active" : ""}`}
+                  onClick={() => applyPreset(p.key)}
+                >
+                  {p.label}
+                </button>
+              ))}
         </div>
         <div className="range__dates">
+          <button
+            className={`chip ${compareMode ? "chip--active" : ""}`}
+            onClick={() => setCompareMode((v) => !v)}
+            title="Compare two periods side by side"
+          >
+            {compareMode ? "Comparing ✓" : "Compare"}
+          </button>
           <label className="field field--inline">
-            <span>From</span>
+            <span>{compareMode ? "A from" : "From"}</span>
             <input
               type="date"
               value={from}
@@ -836,7 +1147,7 @@ export function MetricsView() {
             />
           </label>
           <label className="field field--inline">
-            <span>To</span>
+            <span>{compareMode ? "A to" : "To"}</span>
             <input
               type="date"
               value={to}
@@ -847,7 +1158,39 @@ export function MetricsView() {
               }}
             />
           </label>
-          {loading && <span className="muted">Loading…</span>}
+          {compareMode && (
+            <>
+              <label className="field field--inline">
+                <span>B from</span>
+                <input
+                  type="date"
+                  value={periodB.from}
+                  max={periodB.to}
+                  onChange={(e) => {
+                    // Seed the other endpoint from the currently-shown range so a
+                    // preset→custom switch doesn't snap B to a stale value.
+                    setCmpTo(periodB.to);
+                    setCmpFrom(e.target.value);
+                    setCompareKey("custom");
+                  }}
+                />
+              </label>
+              <label className="field field--inline">
+                <span>B to</span>
+                <input
+                  type="date"
+                  value={periodB.to}
+                  min={periodB.from}
+                  onChange={(e) => {
+                    setCmpFrom(periodB.from);
+                    setCmpTo(e.target.value);
+                    setCompareKey("custom");
+                  }}
+                />
+              </label>
+            </>
+          )}
+          {(loading || loadingB) && <span className="muted">Loading…</span>}
         </div>
       </div>
 
@@ -863,6 +1206,33 @@ export function MetricsView() {
         <div className="loading">Loading…</div>
       ) : (
         <>
+          {compareMode && (
+            <div style={{ marginBottom: 18 }}>
+              <ChartCard
+                title="Compare: Period A vs Period B"
+                table={scoreTable}
+                extra={
+                  <p className="view__hint" style={{ marginTop: 0 }}>
+                    <strong>Period A</strong> {rangeLabel(from, to)} &nbsp;vs&nbsp; <strong>Period B</strong>{" "}
+                    {rangeLabel(periodB.from, periodB.to)}. Bars compare the four headline KPIs; the table covers
+                    every metric with Δ (absolute) and Δ% (change vs Period B). Conversion-rate Δ is in percentage
+                    points.{loadingB && <> · loading Period B…</>}
+                  </p>
+                }
+              >
+                <BarChart data={scoreBars}>
+                  <CartesianGrid stroke={GRID} vertical={false} />
+                  <XAxis dataKey="metric" {...axisProps} />
+                  <YAxis allowDecimals={false} width={28} {...axisProps} />
+                  <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="A" name="Period A" fill={C.mentees} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="B" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartCard>
+            </div>
+          )}
+
           <section className="card">
             <div className="stat-row">
               <div className="stat">
@@ -885,43 +1255,79 @@ export function MetricsView() {
           </section>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Discovery calls" table={discoveryTable} onExplore={exploreDiscoveryRaw}>
-              <BarChart data={data}>
+            <ChartCard
+              title="Discovery calls"
+              table={compareMode ? discoveryCompareTable : discoveryTable}
+              onExplore={exploreDiscoveryRaw}
+            >
+              <BarChart data={compareMode ? cmpDiscovery : data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
-                <Tooltip content={<DiscoveryTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                {compareMode ? (
+                  <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                ) : (
+                  <Tooltip content={<DiscoveryTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                )}
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="Phone" stackId="calls" fill={C.phone} />
                 <Bar dataKey="Zoom" stackId="calls" fill={C.zoom} radius={[4, 4, 0, 0]} />
+                {compareMode && <Bar dataKey="cmp" name="Period B (total)" fill={CMP} radius={[4, 4, 0, 0]} />}
               </BarChart>
             </ChartCard>
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <ChartCard title="Mentee meetings" extra={meetingsExtra} table={meetingsTable} onExplore={exploreMeetingsRaw}>
+            <ChartCard
+              title="Mentee meetings"
+              extra={meetingsExtra}
+              table={compareMode ? meetingsCompareTable : meetingsTable}
+              onExplore={exploreMeetingsRaw}
+            >
               {meetingsChart}
             </ChartCard>
           </div>
 
           <div className="grid" style={{ marginTop: 18 }}>
-            <ChartCard title="Active mentees" table={menteesTable} onExplore={exploreMenteesRaw}>
-              <LineChart data={data}>
+            <ChartCard
+              title="Active mentees"
+              table={compareMode ? menteesCompareTable : menteesTable}
+              onExplore={exploreMenteesRaw}
+            >
+              <LineChart data={compareMode ? cmpMentees : data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
                 <Tooltip contentStyle={TOOLTIP} />
-                <Line type="monotone" dataKey="Mentees" stroke={C.mentees} strokeWidth={2} dot={{ r: 3 }} />
+                {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                <Line type="monotone" dataKey="Mentees" name="Period A" stroke={C.mentees} strokeWidth={2} dot={{ r: 3 }} />
+                {compareMode && (
+                  <Line
+                    type="monotone"
+                    dataKey="cmp"
+                    name="Period B"
+                    stroke={CMP}
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={{ r: 2 }}
+                  />
+                )}
               </LineChart>
             </ChartCard>
 
-            <ChartCard title="Mentors" table={mentorsTable} onExplore={exploreMentorsRaw}>
-              <BarChart data={data}>
+            <ChartCard
+              title="Mentors"
+              table={compareMode ? mentorsCompareTable : mentorsTable}
+              onExplore={exploreMentorsRaw}
+            >
+              <BarChart data={compareMode ? cmpMentors : data}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                <Bar dataKey="Mentors" fill={C.mentors} radius={[4, 4, 0, 0]} />
+                {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                <Bar dataKey="Mentors" name="Period A" fill={C.mentors} radius={[4, 4, 0, 0]} />
+                {compareMode && <Bar dataKey="cmp" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />}
               </BarChart>
             </ChartCard>
           </div>
@@ -948,10 +1354,10 @@ export function MetricsView() {
                   </div>
                 </>
               }
-              table={conversionTable}
+              table={compareMode ? conversionCompareTable : conversionTable}
               onExplore={exploreDiscoveryRaw}
             >
-              <ComposedChart data={convData}>
+              <ComposedChart data={compareMode ? cmpConv : convData}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis yAxisId="left" allowDecimals={false} width={28} {...axisProps} />
@@ -976,6 +1382,19 @@ export function MetricsView() {
                   strokeWidth={2}
                   dot={{ r: 3 }}
                 />
+                {compareMode && (
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="cmp"
+                    name="Period B rate %"
+                    unit="%"
+                    stroke={CMP}
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={{ r: 2 }}
+                  />
+                )}
               </ComposedChart>
             </ChartCard>
           </div>

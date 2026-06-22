@@ -23,6 +23,11 @@ import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMo
 export { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP };
 export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput };
 
+// Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
+// frontend imports lib through db.ts — same pattern as the pay engine above.
+export { COMPARE_PRESETS, derivePeriodB, delta, shiftMonths } from "../lib/compare";
+export type { CompareKey, ComparePreset, Delta, Range as ComparePeriod } from "../lib/compare";
+
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
 async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {

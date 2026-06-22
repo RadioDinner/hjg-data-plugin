@@ -11,44 +11,7 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-## 1. Metrics "Compare" mode (period vs period)
-
-**Status:** Planned · **Area:** Metrics page
-
-**What:** A toggle on the Metrics page to switch **into and out of comparison
-mode**. In comparison mode the user picks two periods and every metric is shown
-for both, with the delta. Preset comparisons:
-- **This month vs last month** (MoM)
-- **This quarter vs last quarter** (QoQ)
-- (natural extensions: year-over-year, and two custom date ranges)
-
-**Why:** Board-grade decisions need "are we up or down, and by how much?" at a
-glance — not just the absolute shape. This is squarely on the north star
-(*be a weapon with the data*).
-
-**Where (code):**
-- `src/views/MetricsView.tsx` — owns the date-range controls and the `ChartCard`
-  components. Add a compare toggle + a period picker (presets + custom). Each
-  `ChartCard` would render period A vs period B (overlaid series or grouped bars)
-  and a delta (absolute **and** %).
-- `src/db.ts` — the range fetchers (`fetchRangeAppointments`, etc.) are already
-  date-bounded, so comparison = fetch the metric for two ranges and diff. No
-  schema change expected.
-- `lib/metrics.ts` — pure metric computation; reuse per period.
-
-**Acceptance criteria / notes:**
-- Toggling compare mode off returns to the current single-period view unchanged.
-- Honor the north star: show graph **and** table together; the table gets a
-  delta column (Δ and Δ%). Keep the existing Graph/Table/Both + Export CSV +
-  Explore affordances.
-- Presets compute the comparison period automatically from the selected period
-  (MoM/QoQ/YoY); also allow two arbitrary custom ranges.
-- Decide overlay vs side-by-side per chart type (lines overlay cleanly; bars may
-  read better grouped) — confirm with the user during build.
-
----
-
-## 2. Pay staff "Explore" — coach dropdown shows only coaches with rows
+## 1. Pay staff "Explore" — coach dropdown shows only coaches with rows
 
 **Status:** Planned · **Area:** Pay staff page → "Explore source data" window
 
@@ -82,4 +45,16 @@ what's actually on screen.
 
 ## Shipped
 
-_(none yet — move completed items here with the commit/date.)_
+### Metrics "Compare" mode (period vs period) — session 006, 2026-06-22
+
+Toggle on the Metrics page to compare **Period A vs Period B**. Shipped as
+**"Both"** (the user's choice): a board **scorecard** card — grouped A/B bars for
+the four headline KPIs plus a delta table covering *every* metric with Δ
+(absolute) and Δ% (vs Period B) — **and per-chart overlays**: Period B is drawn
+as a paired bar on the bar charts and a dashed reference line on the line /
+composed charts, and each card's table gains B + Δ columns in compare mode.
+Presets **MoM / QoQ / YoY** auto-derive a **span-aligned** Period B from Period A
+(so year-to-date stays comparable to year-to-date), plus free **custom** A/B
+ranges. Pure math in `lib/compare.ts` (`shiftMonths`, `derivePeriodB`, `delta`),
+re-exported through `src/db.ts`; locked by **verify §10**. Toggling compare off
+returns the view to the exact single-period state (acceptance #1).

@@ -10,6 +10,7 @@ import { computeFunnelReport } from "../lib/funnel.js";
 import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
+import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
 import {
   computePayReport,
   computePayTimeline,
@@ -381,6 +382,32 @@ console.log("[9] staff payment timeline + flat ledger (by-month breakdown / expl
   const one = computePayTimeline({ invoices, engagements, coachName, clientName, months: ["2026-04"] });
   eq(one.months.length, 1, "explicit months list scopes the timeline");
   eq(one.ledger.length, 1, "scoped ledger only covers the requested month");
+}
+
+console.log("[10] compare-mode period math (shiftMonths, presets, delta)");
+{
+  // Span-aligned month shifting, with day clamped to the target month length.
+  eq(shiftMonths("2026-06-22", 1), "2026-05-22", "MoM: shift back one month");
+  eq(shiftMonths("2026-01-15", 1), "2025-12-15", "shift across the year boundary");
+  eq(shiftMonths("2026-03-31", 1), "2026-02-28", "clamp day to a short month (Feb 2026)");
+  eq(shiftMonths("2024-03-31", 1), "2024-02-29", "clamp to Feb 29 in a leap year");
+  eq(shiftMonths("2026-06-22", 3), "2026-03-22", "QoQ: shift back one quarter");
+  eq(shiftMonths("2026-06-22", 12), "2025-06-22", "YoY: shift back one year");
+
+  // Period B derives from Period A for presets; null for custom.
+  const b = derivePeriodB("yoy", { from: "2026-01-01", to: "2026-06-22" });
+  eq(b?.from, "2025-01-01", "YoY Period B from = same day last year");
+  eq(b?.to, "2025-06-22", "YoY Period B to = same day last year (year-to-date aligned)");
+  eq(derivePeriodB("custom", { from: "2026-01-01", to: "2026-06-22" }), null, "custom derives no Period B");
+
+  // Δ against a baseline (Period B).
+  const up = delta(120, 100);
+  eq(up.abs, 20, "delta abs = a - b");
+  eq(up.pct, 20, "delta pct = +20% vs baseline");
+  const dn = delta(80, 100);
+  eq(dn.abs, -20, "delta abs negative when down");
+  eq(dn.pct, -20, "delta pct = -20%");
+  eq(delta(5, 0).pct, null, "delta pct is null when the baseline is 0");
 }
 
 console.log("");

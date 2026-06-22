@@ -1,20 +1,50 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-19 (session 005b).
+2026-06-22 (session 006).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live state — 2026-06-19, session 005b)
+## Resume here (live state — 2026-06-22, session 006)
 
 Picking this up cold — start here.
 
-**Repo state:** session 005b is **committed to `main`** (the user moved it there
-from branch `claude/wonderful-wright-du8c1f`). Verified before push: `typecheck`,
-`verify` (now **9 sections**), `build` all pass.
+**Repo state:** session 006 is **committed to `main`** (the user asked for all
+work on `main` this session; `main` now also carries everything from sessions
+003–005b). Verified before push: `typecheck`, `verify` (now **10 sections**),
+`build` all pass.
+
+**Migrations: ALL APPLIED.** The user confirmed `9999`–`9991` are applied in
+Supabase. The remaining gate for the **Pay staff** tab + capacity/group reclass +
+delivery signal is a **re-sync** (Admin → Sync now) — the schema is ready, the
+data just needs to land. After the re-sync, do the eyeball checks under
+"Immediate next steps".
+
+**Shipped this session (006) — Metrics "Compare" mode (period vs period):**
+- **Compare toggle** on the Metrics page. On → pick **Period A vs Period B**.
+  Presets **MoM / QoQ / YoY** auto-derive a **span-aligned** Period B from A
+  (year-to-date stays comparable to year-to-date); plus free **custom** A/B
+  ranges. Off → the view returns to the exact single-period state.
+- **Board scorecard** card at the top (`ChartCard`): grouped A/B bars for the four
+  headline KPIs + a **delta table** covering every metric (KPIs, conversion rate,
+  manual resource metrics) with **Δ** (absolute) and **Δ%** (vs Period B);
+  conversion-rate Δ is in percentage points.
+- **Per-chart overlays**: every time-series card draws Period B too — a **paired
+  bar** on bar charts (Discovery, Meetings[total], Mentors) and a **dashed
+  reference line** on the line/composed charts (Active mentees, Discovery →
+  conversion). Each card's **table gains B + Δ columns** in compare mode.
+- **Pure math** in **`lib/compare.ts`** (`shiftMonths`, `derivePeriodB`, `delta`,
+  `COMPARE_PRESETS`), re-exported through `src/db.ts` (same pattern as the pay
+  engine). New format helpers `signed`/`signedPct`/`signedPp`. Locked by
+  **verify §10**. Period A computation refactored to share `reduceMonthRows` /
+  `groupByMonth` with Period B so a comparison is always apples-to-apples.
+- ⚠ **Not browser-verified** (headless container) — **browser/Vercel-preview
+  check** the compare toggle, scorecard, overlays, and Δ tables. The B-overlay on
+  the Meetings card only renders in **"Total"** mode (compare-types mode keeps its
+  per-type bars; its Δ table still compares total meetings A vs B).
 
 **Shipped this session (005b) — Pay-staff re-evaluation tooling:**
 - **By-month breakdown.** The Pay-staff tab no longer shows one month at a time.
@@ -98,10 +128,10 @@ GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing
 6. Later: widen `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a
    start date (the Pay-start override now covers the worst case manually).
 
-**Verification status:** `npm run typecheck`, `npm run verify` (**9 sections** —
-added [9] staff payment timeline + ledger), `npm run build` all pass. UI not
+**Verification status:** `npm run typecheck`, `npm run verify` (**10 sections** —
+added [10] compare-mode period math), `npm run build` all pass. UI not
 browser-tested (headless container) — **browser-verify the by-month table +
-Explore window once invoices are synced.**
+Explore window once invoices are synced, and the new Metrics Compare mode.**
 
 ## What this is
 
@@ -221,9 +251,10 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
-- **Planned features live in `FEATURE_BACKLOG.md`** (build-later list). Currently:
-  Metrics **Compare mode** (period vs period), and the Pay-staff Explore **coach
-  dropdown** filtered to coaches with rows. Check that file when picking up new work.
+- **Planned features live in `FEATURE_BACKLOG.md`** (build-later list). Currently
+  one open: the Pay-staff Explore **coach dropdown** filtered to coaches with rows.
+  Metrics **Compare mode** (period vs period) **shipped this session (006)** — now
+  in the file's "Shipped" section. Check `FEATURE_BACKLOG.md` when picking up new work.
 
 - **Pay staff — revenue basis = BILLED (decided session 005b).** The engine now
   pays on the invoice's billed `amount` (what's owed for the service month "in a
