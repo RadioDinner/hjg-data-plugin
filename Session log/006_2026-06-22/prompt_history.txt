@@ -55,3 +55,6 @@ Q: How should the "Company options" tab store and scope settings?
 A: Registry-driven, org-wide (app_settings, jsonb; quick toggle also on Journeys)
 Q: When the basis is "first meeting", how should a stage's date be defined?
 A: First 1-on-1 mentoring meeting under that tier's engagement (group sessions excluded), fallback to engagement start when no meeting
+
+--- 2026-06-22 16:55 ---
+Another feature for the back log. I want to build a "Build payout" button that I can click and enter into a process in which I can load a specific mentor/coach and then pull up the data from that month, and "Build" a payout. Meaning that I could select or deselect certain engagements and it would have a running total on the side, etc. I want this because I need to review all payments to mentors for awhile so that I don't mess this up again.
