@@ -26,3 +26,6 @@ Build and commit the next feature
 
 --- 2026-06-22 15:47 ---
 are there open bugs
+
+--- 2026-06-22 15:55 ---
+Fix those two open bugs and leave 3, 4 and 5. Do the cleanup as well

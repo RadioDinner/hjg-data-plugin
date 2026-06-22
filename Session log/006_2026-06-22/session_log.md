@@ -6,6 +6,10 @@ rundown of **open items** + the **feature list**, then a CoachAccountable API
 question, then "write the first feature on the list."
 
 ## What shipped (commits, newest first)
+- `32fd0eb` — **Fix capacity weekly-slot inflation (#1) + remove dead funnel
+  endpoint (#2) + whitelist cleanup.** Two of the documented open bugs + the
+  cleanup, on request "fix those two open bugs and leave 3, 4 and 5; do the
+  cleanup as well."
 - `b57b32a` — **Pay-staff Explore: scope Coach dropdown to the active view's
   rows** (FEATURE_BACKLOG item #2). Built on request "build and commit the next
   feature." This **emptied the backlog's planned list**.
@@ -63,6 +67,29 @@ already deactivated; `Client.activate` restores full access. Doc URL:
 - **Meetings overlay** only renders in **"Total"** mode; compare-types mode keeps
   its per-type bars (its Δ table still compares total meetings A vs B).
 
+## Bug fixes + cleanup (#1, #2, cleanup)
+After "are there open bugs", the user said: "Fix those two open bugs and leave
+3, 4 and 5. Do the cleanup as well." Done in `32fd0eb`:
+- **#1 — capacity weekly-slot inflation.** New pure **`lib/capacity.ts`**:
+  `groupSlotKeys` flags any (coach, exact `start_raw`) slot with 2+ distinct
+  clients as a group; `oneOnOneMenteesByCoach` returns per-coach 1-on-1 mentees
+  excluding named groups AND those slots. The capacity card (`MetricsView`) now
+  uses it. Needed a data-layer change: `RangeAppt` gained `startRaw` (from
+  `ca_appointments.start_raw`; `start_date` is day-only so it can't tell a 10am
+  from a 2pm appt). Capacity-only — group slots still count as mentoring
+  meetings / active mentees everywhere else (same scoping as named groups).
+  A null slot (unknown time) is treated as a 1-on-1, never merged. Verify §11.
+- **#2 — client/server divergence.** Deleted the dead **`api/reports/funnel.ts`**
+  (the only consumer of `computeFunnelReport`; the UI never called it; it counted
+  mentors via the raw coach set while the UI uses the `is_mentor` flag). The pure
+  `lib/funnel.ts` + `lib/metrics.ts` stay (verify §1/§3 + the C# port plan).
+- **Cleanup.** Removed the dead `MENTOR_COACH_ID_WHITELIST` (empty) from
+  `lib/config.ts` and its no-op gate in `computeMonthlyMetrics` — behavior
+  identical, just less dead code.
+- **Left untouched on purpose (#3–5):** pay-staff revenue-basis confirmation,
+  mid-month hand-off split, mentor-start eyeballing — all hinge on a re-sync +
+  `ca_invoices` spot-check, not code.
+
 ## Implementation notes for next time
 - Pure math lives in **`lib/compare.ts`** (`shiftMonths`, `derivePeriodB`,
   `delta`, `COMPARE_PRESETS`), re-exported through `src/db.ts` (same pattern as
@@ -85,5 +112,7 @@ already deactivated; `Client.activate` restores full access. Doc URL:
   coaches with rows.
 
 ## Verification
-`npm run typecheck`, `npm run verify` (**10 sections**), `npm run build` — all
-pass locally. UI not browser-tested.
+`npm run typecheck`, `npm run verify` (**11 sections** — added §11 capacity
+1-on-1 vs group slots), `npm run build` — all pass locally. UI not
+browser-tested; the capacity weekly-slot fix needs a **re-sync + browser
+verify** on live data (it depends on `start_raw` being populated).
