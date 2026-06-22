@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { COMPANY_OPTIONS, companyOptionDefault, type CompanyOption } from "../companyOptions";
 import { fetchCompanyOptions, setCompanyOption } from "../db";
+import { HelpButton } from "../components/HelpDrawer";
 
 // Self-serve, organization-wide dashboard settings. Every option is declared in
 // src/companyOptions.ts (the registry); this tab just renders them grouped by
@@ -61,7 +62,9 @@ export function CompanyOptionsView() {
 
   return (
     <section className="card">
-      <h2>Company options</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        Company options <HelpButton id="company.options" label="Company options" />
+      </h2>
       <p className="view__hint">
         Dashboard settings you can change yourself — no code change needed. These are{" "}
         <strong>organization-wide</strong>: a change here applies for everyone. Each setting saves

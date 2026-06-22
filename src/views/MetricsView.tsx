@@ -1451,7 +1451,9 @@ export function MetricsView() {
 
           <section className="card" style={{ marginTop: 18 }}>
             <div className="card__head">
-              <h2>Mentor capacity utilization</h2>
+              <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                Mentor capacity utilization <HelpButton id="metrics.capacity" label="Mentor capacity utilization" />
+              </h2>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   className="btn btn--sm"
@@ -1541,6 +1543,7 @@ export function MetricsView() {
           <div style={{ marginTop: 18 }}>
             <ChartCard
               title="Resource engagement"
+              helpId="metrics.resource"
               table={manualTable}
               onExplore={exploreManualRaw}
               extra={

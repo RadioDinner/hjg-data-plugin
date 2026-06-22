@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { downloadCsv } from "../csv";
 import { downloadWorkbook, type WorkbookSheet } from "../xlsx";
 import { fetchAllRows, fetchTable, RAW_TABLES, type RawTable } from "../db";
+import { HelpButton } from "../components/HelpDrawer";
 
 function renderCell(v: unknown): string {
   if (v === null || v === undefined) return "—";
@@ -87,7 +88,9 @@ export function RawDataView() {
   return (
     <section className="card">
       <div className="card__head">
-        <h2>Raw data</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Raw data <HelpButton id="raw.data" label="Raw data" />
+        </h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             className="btn btn--sm"

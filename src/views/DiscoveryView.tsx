@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
+import { HelpButton } from "../components/HelpDrawer";
 import {
   clearDiscoveryOutcome,
   fetchDiscoveryCalls,
@@ -146,7 +147,9 @@ export function DiscoveryView() {
 
   return (
     <section className="card">
-      <h2>Discovery calls</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        Discovery calls <HelpButton id="discovery.tab" label="Discovery calls" />
+      </h2>
       <p className="view__hint">
         Every discovery call synced from CoachAccountable. Status is computed automatically — a call converts when the
         prospect buys JumpStart Your Freedom (Waiting List) on or after the call, stays pending for 30 days otherwise,

@@ -8,6 +8,18 @@ Working notes for resuming this project in a future session. Last updated
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
+## Resume here (live state — 2026-06-22, session 006c — WRAPPED)
+
+Picking this up cold — start here. Both session-006b migrations (`9989`, `9988`) are
+**applied** (per the user). **Session 006c** was a small follow-up after the backlog
+emptied: it **expanded the contextual-help "?" coverage** to the cards/tabs the 006b
+framework didn't reach — Mentor capacity, Resource engagement, the Discovery tab, the
+Raw data tab, and the Company options tab (new articles in `src/help/articles.ts`).
+**No migration, no schema change.** `typecheck` + `build` pass; UI not browser-tested.
+**`FEATURE_BACKLOG.md` has no planned items** — add new ideas before building.
+
+---
+
 ## Resume here (live state — 2026-06-22, session 006b — WRAPPED)
 
 Picking this up cold — start here. **Session 006b shipped 6 features straight to

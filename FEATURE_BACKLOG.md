@@ -18,6 +18,16 @@ below). Add new ideas here, newest on top._
 
 ## Shipped
 
+### Contextual help — expanded coverage (capacity, resource, Discovery, Raw data, Company options) — session 006c, 2026-06-22
+
+Followed up the session-006b help framework by wiring the "?" drawer into the cards/
+tabs it didn't cover yet, with new articles in `src/help/articles.ts`: **Mentor
+capacity utilization** (`metrics.capacity` — the group-session/Arthur-Nisly fix),
+**Resource engagement** (`metrics.resource`), the **Discovery tab** (`discovery.tab`),
+the **Raw data tab** (`raw.data`), and the **Company options tab** (`company.options`).
+Each covers definition + logic + source tables. Additive (same `HelpButton`); no
+migration. ⚠ Not browser-verified.
+
 ### Journeys — exclude a mentee (test/placeholder), dashboard-wide — session 006b, 2026-06-22
 
 A reversible, persisted way to hide a test/placeholder mentee (e.g. Arthur Nisly)

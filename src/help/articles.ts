@@ -146,6 +146,59 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 Pure logic in \`lib/journey.ts\`.`,
   },
+
+  "metrics.capacity": {
+    title: "Mentor capacity utilization",
+    body: `How loaded each mentor is: distinct **1-on-1 mentees** they're serving vs. their **configured capacity**.
+
+### Logic
+- **Utilization = active 1-on-1 mentees ÷ capacity.** Capacity is set per coach in **Admin → Mentor capacity**.
+- **Group sessions don't count.** "In Depth" / "Tracking Together" and any multi-client time slot (same coach, same exact start time, 2+ clients) are treated as group and excluded — so one group session of 10 doesn't look like 10 1-on-1s (the Arthur-Nisly inflation fix).
+
+### Source
+- \`ca_appointments\` categorized as 1-on-1 mentoring, per \`lib/capacity.ts\` (\`oneOnOneMenteesByCoach\`). Capacity from \`coach_settings\`.`,
+  },
+
+  "metrics.resource": {
+    title: "Resource engagement",
+    body: `Manually-tracked engagement metrics that don't come from CoachAccountable (e.g. resource downloads, event attendance), shown by month.
+
+### How it's entered
+- Staff type these in **Admin → Manual metrics** for a given month; the chart and table here read them back.
+
+### Source
+- The \`manual_metrics\` table (HJG-owned). The metric set is defined in code (\`MANUAL_METRICS\`).`,
+  },
+
+  "discovery.tab": {
+    title: "Discovery tab",
+    body: `Every discovery (intro) call synced from CoachAccountable, with its outcome.
+
+### Outcome
+- Computed **automatically**: a call converts when the prospect buys **JumpStart Your Freedom (Waiting List)** (offering \`42840\`) on or after the call; otherwise it's **pending** for 30 days, then **not converted**. A **manual override** here always wins.
+- This is the same logic that feeds the **Discovery → conversion** card on Metrics.
+
+### Source
+- \`ca_appointments\` (discovery) + \`ca_offering_submissions\` (offering \`42840\`) + your \`discovery_outcomes\` overrides. Resolver in \`lib/conversion.ts\`.`,
+  },
+
+  "raw.data": {
+    title: "Raw data",
+    body: `A direct browser of the underlying database — the mirrored CoachAccountable tables (\`ca_*\`) and the HJG-owned tables (outcomes, settings, manual metrics, payout builds, exclusions).
+
+### Notes
+- These are **read-only snapshots** of what's in Supabase right now (the mirror is refreshed by **Admin → Sync now**).
+- Export any single table to **CSV**, or every table to one **.xlsx** workbook (one sheet per table).`,
+  },
+
+  "company.options": {
+    title: "Company options",
+    body: `Self-serve, **organization-wide** dashboard settings — change them here instead of editing code. A change applies for everyone.
+
+### How it works
+- Each option is a dropdown declared in a registry (\`src/companyOptions.ts\`) and saved to the \`app_settings\` table.
+- First option: **Journeys → stage-date basis** (engagement start vs. first 1-on-1 meeting), also togglable inline on the Journeys tab.`,
+  },
 };
 
 export function getHelpArticle(id: string): HelpArticle | undefined {
