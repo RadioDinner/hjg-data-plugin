@@ -8,20 +8,24 @@ Working notes for resuming this project in a future session. Last updated
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live state — 2026-06-22, session 006)
+## Resume here (live state — 2026-06-22, session 006 — WRAPPED)
 
 Picking this up cold — start here.
 
-**Repo state:** session 006 is **committed to `main`** (the user asked for all
-work on `main` this session; `main` now also carries everything from sessions
-003–005b). Verified before push: `typecheck`, `verify` (now **10 sections**),
-`build` all pass.
+**Repo state:** session 006 is **wrapped and fully on `main`** (all work this
+session went straight to `main`; `main` also carries everything from sessions
+003–005b). Working tree clean, everything pushed. Before push: `typecheck`,
+`verify` (**12 sections**), `build` all pass. **UI not browser-tested** (headless
+container) — see the browser-verify list in "Immediate next steps".
 
-**Migrations: ALL APPLIED.** The user confirmed `9999`–`9991` are applied in
-Supabase. The remaining gate for the **Pay staff** tab + capacity/group reclass +
-delivery signal is a **re-sync** (Admin → Sync now) — the schema is ready, the
-data just needs to land. After the re-sync, do the eyeball checks under
-"Immediate next steps".
+**⚠ Migrations — one NEW this session.** `9999`–`9991` are applied (per the user).
+**`9990_company_options.sql` is NEW and MUST be applied** — it seeds the
+`journeys_stage_basis` key; the Company-options / Journeys stage-date toggle works
+in-session but **won't persist** until it exists (staff can UPDATE `app_settings`
+but not INSERT). After applying, a **re-sync** (Admin → Sync now) is still the gate
+that (a) populates the **Pay staff** tab, (b) takes the capacity/group reclass +
+delivery signal live, and (c) feeds the **capacity weekly-slot fix** (needs
+`start_raw`). Then do the eyeball checks under "Immediate next steps".
 
 **Shipped this session (006) — Metrics "Compare" mode (period vs period):**
 - **Compare toggle** on the Metrics page. On → pick **Period A vs Period B**.
@@ -148,30 +152,31 @@ deletion was blocked by the git proxy (HTTP 403)** and there's no branch-delete
 GitHub tool in this environment — **delete the three remote branches via the
 GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing.
 
-**▶ Immediate next steps (prioritized):**
-1. **Apply `9993_ca_invoices.sql` in the Supabase SQL Editor, then re-sync**
-   (Admin → Sync now). This one re-sync does double duty: it **populates the Pay
-   staff tab** AND finally reclassifies appointments into the `"group"` category
-   for the session-003 **capacity fix** (which also needed a re-sync). After it,
-   eyeball Arthur Nisly's capacity row to confirm the inflation is gone.
-2. **Export `ca_invoices` and send it to verify the Pay staff revenue source** —
-   confirm CA invoices actually carry the monthly subscription charges
-   ($425 = 4x, etc.). If not, point the engine at a tier→price config (no engine
-   change). The tab shows an empty-state banner until invoices land.
-3. **Ramp basis — RESOLVED (session 005b): per-MENTOR.** The 35/50/60 ramp tracks
-   the **mentor's** tenure and applies to ALL their mentees that month (Clayton's
-   per-mentee reset was wrong). Already how `lib/pay.ts` worked; now locked by
-   verify §8 tests + decoded in `docs/legacy-pay-calculator.md`. The **mentor-start
-   override** is now SHIPPED (`coach_settings.pay_start_month`, migration **9991**,
-   editable in Admin → Mentor capacity → "Pay start"). **Apply `9991` before this
-   deploys** — `fetchPayData`/`fetchCoachesWithSettings` now select the column.
-4. **Browser / Vercel-preview verify** (container is headless): the **Pay staff**
-   tab, the capacity card (now with the Pay-start column), Journeys, the Export-all.
+**▶ Immediate next steps (prioritized, end of session 006):**
+1. **Apply `9990_company_options.sql`** in the Supabase SQL Editor (seeds
+   `journeys_stage_basis`) — until then the Company-options / Journeys stage-date
+   toggle won't persist.
+2. **Re-sync (Admin → Sync now)** — the one gate that's still pending. It (a)
+   populates the **Pay staff** tab, (b) takes the **capacity/group reclass** +
+   **delivery signal** live, and (c) feeds the **capacity weekly-slot fix** (needs
+   `start_raw`). After it: eyeball **Arthur Nisly's** capacity row (inflation gone),
+   and **export `ca_invoices`** to confirm invoices carry the subscription charges
+   ($425 = 4x, etc.) — else swap the engine to a `tier→price` config (no engine
+   change; tab shows an empty-state banner until invoices land).
+3. **Browser / Vercel-preview verify** the session-006 UI (container is headless):
+   - **Metrics Compare mode** — toggle, scorecard, per-chart overlays, Δ tables,
+     MoM/QoQ/YoY/custom.
+   - **Company options** tab + **Journeys stage-date toggle** (engagement start vs
+     first 1-on-1 meeting) — re-check **Seth Lehman** (4x shows 7/2 on engagement
+     basis, 7/3 on first-meeting basis).
+   - **Pay-staff Explore** coach-dropdown scoping; the **capacity** card.
+4. **Pick the next build from `FEATURE_BACKLOG.md`** (6 planned items). The user has
+   flagged **#1 "Build payout" interactive review/builder** as wanted next.
 5. **Delete the three stale remote branches** via the GitHub UI (proxy blocked
    `git push --delete`): `admiring-lovelace-3tb4iy`, `magical-gauss-ELOiz`,
    `practical-meitner-toynll` — all fully captured in `main`.
 6. Later: widen `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a
-   start date (the Pay-start override now covers the worst case manually).
+   start date.
 
 **Verification status:** `npm run typecheck`, `npm run verify` (**12 sections** —
 added [10] compare-mode period math, [11] capacity 1-on-1 vs group slots,
@@ -306,9 +311,12 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Open items / TODO
 
-- **`FEATURE_BACKLOG.md` planned list is now CLEAR** — both items shipped in
-  session 006 (Metrics **Compare mode**, and the Pay-staff Explore **coach
-  dropdown** scoping). Add new ideas there (newest on top) when they come up.
+- **`FEATURE_BACKLOG.md` has 6 planned items** (added late in session 006). Newest
+  first: **#1 "Build payout"** interactive review/builder (Pay staff — the user
+  wants this next), #2 Data map → own tab, #3 contextual "?" help, #4 Journeys
+  exclude-mentee, #5 conversion column drill-down, #6 sticky range bar. Two items
+  already **shipped** this session (Compare mode, Pay-staff coach-dropdown scoping)
+  are in that file's "Shipped" section.
 
 - **Pay staff — revenue basis = BILLED (decided session 005b).** The engine now
   pays on the invoice's billed `amount` (what's owed for the service month "in a

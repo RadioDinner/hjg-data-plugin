@@ -6,6 +6,8 @@ rundown of **open items** + the **feature list**, then a CoachAccountable API
 question, then "write the first feature on the list."
 
 ## What shipped (commits, newest first)
+- `bdc62c9` — Backlog: added **#1 "Build payout"** interactive review/builder
+  (Pay staff) — the user wants to manually review every mentor payout for a while.
 - `5031ba9` — **Company options tab + Journeys stage-date basis** (engagement
   start vs first meeting) — new org-wide settings tab, registry-driven; the
   Seth-Lehman question turned into a self-serve toggle. Verify §12.
@@ -137,14 +139,18 @@ setting. ⚠ **Apply migration 9990** or the toggle won't persist (staff can UPD
 - All compare additions are guarded by `compareMode`; toggling off clears B data
   and returns the view to the exact single-period state (acceptance #1).
 
-## Open questions / next step
-- **Browser/Vercel-preview verify Compare mode** (headless container here):
-  toggle, scorecard, overlays, Δ tables, MoM/QoQ/YoY/custom.
-- **Migrations: user confirmed ALL applied.** Remaining gate for Pay-staff data /
-  capacity reclass / delivery signal is a **re-sync** (Admin → Sync now), then the
-  eyeball checks in HANDOFF "Immediate next steps."
-- Backlog now has one open item: Pay-staff Explore **coach dropdown** filtered to
-  coaches with rows.
+## Open questions / next step (session wrapped — see HANDOFF "Immediate next steps")
+- **Apply `9990_company_options.sql`** (NEW) — else the Company-options / Journeys
+  toggle won't persist. (`9999`–`9991` already applied per the user.)
+- **Re-sync** (Admin → Sync now) — still the gate that populates Pay-staff data,
+  takes the capacity/group reclass + delivery signal live, and feeds the capacity
+  weekly-slot fix (`start_raw`). Then the eyeball checks (Arthur Nisly capacity,
+  `ca_invoices` subscription charges).
+- **Browser/Vercel-preview verify** the session's UI (headless here): Compare mode,
+  Company options + Journeys stage-date toggle (re-check Seth Lehman 7/2↔7/3),
+  Pay-staff Explore dropdown, capacity card.
+- **Next build:** `FEATURE_BACKLOG.md` has **6 planned items**; the user flagged
+  **#1 "Build payout"** as next.
 
 ## Verification
 `npm run typecheck`, `npm run verify` (**12 sections** — added §11 capacity
