@@ -315,3 +315,16 @@ body {
 .journey__notes { flex: 1; min-width: 180px; }
 .journey__notes input { width: 100%; }
 .journey__status-actions { display: flex; gap: 6px; }
+
+/* --- Company options tab --- */
+.options-grid { display: flex; flex-direction: column; gap: 18px; }
+.option-row { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.option-row__label { max-width: 600px; }
+.option-row__label label { font-weight: 600; }
+.option-row__label p { margin: 4px 0 0; font-size: 13px; }
+.option-row__control { display: flex; align-items: center; gap: 10px; }
+.option-row__control select {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 10px; font-size: 14px;
+}
+.option-row__status { font-size: 12px; min-width: 56px; }

@@ -12,6 +12,7 @@ import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
 import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
+import { computeStageDates, highestTier, type EngagementStageInput, type MeetingStageInput } from "../lib/journey.js";
 import {
   computePayReport,
   computePayTimeline,
@@ -444,6 +445,40 @@ console.log("[11] mentor capacity — 1-on-1 vs group slots (weekly-slot fix)");
     { coachId: 5, clientId: 51, isGroup: false, slot: null },
   ];
   eq(oneOnOneMenteesByCoach(nullSlots).get(5)?.size ?? 0, 2, "null-slot appts counted individually (no merge)");
+}
+
+console.log("[12] journey stage-date basis (engagement start vs first 1-on-1 meeting)");
+{
+  // Seth-Lehman-shaped: 4x engagement starts 7/2; first appt under it is a 7/2
+  // GROUP session, first 1-on-1 mentoring is 7/3; JumpStart has no meeting.
+  const engs: EngagementStageInput[] = [
+    { tier: "jumpstart", startDate: "2026-05-15" },
+    { tier: "4x", startDate: "2026-07-02" },
+  ];
+  const meets: MeetingStageInput[] = [
+    { tier: "4x", date: "2026-07-02", isGroup: true }, // group — excluded
+    { tier: "4x", date: "2026-07-03", isGroup: false }, // first 1-on-1
+    { tier: "4x", date: "2026-07-10", isGroup: false },
+  ];
+
+  const es = computeStageDates("engagement_start", engs, meets);
+  eq(es["4x"], "2026-07-02", "engagement_start: 4x = engagement start date");
+  eq(es.jumpstart, "2026-05-15", "engagement_start: jumpstart = engagement start date");
+
+  const fm = computeStageDates("first_meeting", engs, meets);
+  eq(fm["4x"], "2026-07-03", "first_meeting: 4x = first 1-on-1 meeting (7/2 group ignored)");
+  eq(fm.jumpstart, "2026-05-15", "first_meeting: jumpstart falls back to engagement start (no meeting)");
+
+  // A tier whose only meeting is a group session falls back to the engagement start.
+  const fm2 = computeStageDates(
+    "first_meeting",
+    [{ tier: "2x", startDate: "2026-08-01" }],
+    [{ tier: "2x", date: "2026-08-01", isGroup: true }]
+  );
+  eq(fm2["2x"], "2026-08-01", "first_meeting: group-only tier falls back to engagement start");
+
+  eq(highestTier(es), "4x", "highest tier reached = 4x");
+  eq(highestTier(computeStageDates("first_meeting", engs, meets)), "4x", "highest tier stable across bases");
 }
 
 console.log("");

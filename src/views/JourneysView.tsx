@@ -5,12 +5,15 @@ import {
   MENTEE_ACTIVE_WINDOW_DAYS,
   aggregateJourneyDurations,
   clearMenteeOutcome,
+  fetchCompanyOptions,
   fetchMenteeJourneys,
+  setCompanyOption,
   setMenteeOutcome,
   type MenteeJourney,
   type MenteeStatus,
   type PipelineTier,
   type ResolvedMenteeStatus,
+  type StageBasis,
 } from "../db";
 
 const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
@@ -327,12 +330,13 @@ export function JourneysView() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stageBasis, setStageBasis] = useState<StageBasis>("engagement_start");
 
-  async function load() {
+  async function load(basis: StageBasis) {
     setLoading(true);
     setError(null);
     try {
-      const js = await fetchMenteeJourneys();
+      const js = await fetchMenteeJourneys(basis);
       setJourneys(js);
       setSelected((cur) => cur ?? js[0]?.clientId ?? null);
     } catch (e) {
@@ -340,10 +344,40 @@ export function JourneysView() {
     }
     setLoading(false);
   }
+
+  // On mount, read the org-wide stage-date basis (Company options), then load.
   useEffect(() => {
-    load();
+    let cancelled = false;
+    (async () => {
+      let basis: StageBasis = "engagement_start";
+      try {
+        const v = (await fetchCompanyOptions())["journeys_stage_basis"];
+        if (v === "first_meeting" || v === "engagement_start") basis = v;
+      } catch {
+        /* fall back to the default basis */
+      }
+      if (cancelled) return;
+      setStageBasis(basis);
+      await load(basis);
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Flip the stage-date basis. Persists org-wide (same app_settings key the
+  // Company options tab edits), then reloads with the new basis.
+  async function changeBasis(basis: StageBasis) {
+    if (basis === stageBasis) return;
+    setStageBasis(basis);
+    try {
+      await setCompanyOption("journeys_stage_basis", basis);
+    } catch (e) {
+      setError(String(e));
+    }
+    await load(basis);
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -360,6 +394,27 @@ export function JourneysView() {
         leg took. Pick a mentee to see their timeline. (Stages come from CoachAccountable engagements; graduation from an
         “After Graduation Care” engagement. Exit status can still be overridden for quits/fires.)
       </p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0 14px", flexWrap: "wrap" }}>
+        <span className="muted">Stage dates from:</span>
+        <div className="seg" role="tablist" aria-label="Stage-date basis">
+          <button
+            className={`seg__btn ${stageBasis === "engagement_start" ? "seg__btn--active" : ""}`}
+            onClick={() => changeBasis("engagement_start")}
+          >
+            Engagement start
+          </button>
+          <button
+            className={`seg__btn ${stageBasis === "first_meeting" ? "seg__btn--active" : ""}`}
+            onClick={() => changeBasis("first_meeting")}
+          >
+            First 1-on-1 meeting
+          </button>
+        </div>
+        <span className="muted" style={{ fontSize: 12 }}>
+          · org-wide setting (also in Company options)
+        </span>
+      </div>
 
       {error && <div className="notice notice--warn">{error}</div>}
 
@@ -396,7 +451,7 @@ export function JourneysView() {
           </div>
           <div className="journeys__detail">
             {current ? (
-              <Timeline journey={current} userId={user?.id ?? ""} onSaved={load} onError={setError} />
+              <Timeline journey={current} userId={user?.id ?? ""} onSaved={() => load(stageBasis)} onError={setError} />
             ) : (
               <div className="muted" style={{ padding: 24 }}>Select a mentee to view their journey.</div>
             )}

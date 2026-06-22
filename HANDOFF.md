@@ -72,6 +72,25 @@ data just needs to land. After the re-sync, do the eyeball checks under
   split, and mentor-start eyeballing (bugs #3–5 — they hinge on a re-sync +
   `ca_invoices` spot-check). ⚠ the capacity fix needs a re-sync + browser verify.
 
+**Also shipped this session (006) — Company options tab + Journeys stage-date basis:**
+- **NEW "Company options" tab** (`src/views/CompanyOptionsView.tsx`) — self-serve,
+  **org-wide** settings as dropdowns grouped by section. Registry-driven: declare an
+  option in **`src/companyOptions.ts`** (key/section/label/help/choices/default) + seed
+  its key in a migration → it appears automatically. Persisted in `app_settings` (jsonb)
+  via `fetchCompanyOptions`/`setCompanyOption`. **Migration `9990_company_options.sql`
+  seeds `journeys_stage_basis` and MUST be applied** for changes to persist.
+- **Journeys stage-date basis** — pure **`lib/journey.ts`** (`computeStageDates`,
+  `highestTier`) with two bases: `engagement_start` (CA engagement start, the prior
+  behavior) and `first_meeting` (first 1-on-1 mentoring meeting under that tier's
+  engagement, group sessions excluded, fallback to engagement start). `db.ts`
+  `fetchMenteeJourneys(basis)` + `buildClientStages` (replaces `stagesByClient`;
+  `RangeAppt`/meetings now carry `isGroup`, engagements carry `id`). A segmented
+  toggle on the Journeys tab flips it and persists the same org-wide setting.
+  Verify **§12**. **This is the answer to the Seth-Lehman question** — see the data
+  review: 7/2 is his 4x engagement's real start date; "first meeting" shows 7/3.
+- **Backlog:** added **5 planned items** (Data map → own tab; contextual "?" help;
+  Journeys exclude-mentee; conversion column drill-down; sticky range bar).
+
 **Shipped this session (005b) — Pay-staff re-evaluation tooling:**
 - **By-month breakdown.** The Pay-staff tab no longer shows one month at a time.
   It now leads with a **payout-by-month graph + an all-months expandable table**
@@ -154,11 +173,12 @@ GitHub UI** (Branches page) when convenient. They're redundant, not load-bearing
 6. Later: widen `SYNC_YEARS` so pre-window JumpStart engagements aren't missing a
    start date (the Pay-start override now covers the worst case manually).
 
-**Verification status:** `npm run typecheck`, `npm run verify` (**11 sections** —
-added [10] compare-mode period math, [11] capacity 1-on-1 vs group slots),
-`npm run build` all pass. UI not browser-tested (headless container) —
-**browser-verify the by-month table + Explore window once invoices are synced,
-the new Metrics Compare mode, and the capacity card after a re-sync.**
+**Verification status:** `npm run typecheck`, `npm run verify` (**12 sections** —
+added [10] compare-mode period math, [11] capacity 1-on-1 vs group slots,
+[12] journey stage-date basis), `npm run build` all pass. UI not browser-tested
+(headless container) — **browser-verify the by-month table + Explore window once
+invoices are synced, the Metrics Compare mode, the capacity card after a re-sync,
+and the new Company options tab + Journeys stage-date toggle (after applying 9990).**
 
 ## What this is
 
@@ -202,6 +222,10 @@ Staff log in, data syncs from CA on demand, the dashboard reads the mirror.
 - **Raw data** — browse `ca_*`/HJG tables (incl. **`ca_invoices`**); per-table
   CSV export; **Export all → `.xlsx`** (one table per sheet); **Data map ↗** link.
 - **Admin** — Sync now, run history, settings, Manual metrics, Mentor capacity.
+- **Company options** (session 006) — self-serve, **org-wide** dashboard settings as
+  dropdowns, grouped by section. Registry-driven (`src/companyOptions.ts`); persisted
+  in `app_settings` (jsonb). First option: **Journeys → stage-date basis** (engagement
+  start vs first 1-on-1 meeting), also togglable inline on the Journeys tab.
 
 ## Key files
 
@@ -246,7 +270,9 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 `ca_appointments` (+ **`counts_in_engagement`**, 9992 — apply + re-sync),
 `ca_offerings`, `ca_offering_submissions`, `ca_engagements`
 (9994), **`ca_invoices` (9993 — apply + re-sync to populate)**. Ops: `sync_runs`,
-`app_settings`. HJG-owned (staff RLS): `discovery_outcomes`, `mentee_outcomes`
+`app_settings` (budget/sync knobs + **Company options** like `journeys_stage_basis`,
+9990 — string jsonb values; staff UPDATE-only, keys seeded by migration). HJG-owned
+(staff RLS): `discovery_outcomes`, `mentee_outcomes`
 (9995), `coach_settings` (9996), `manual_metrics` (9997), plus dormant
 `graduations`/`cadence_status_log`.
 
@@ -259,11 +285,13 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Present = `9991`…`9999`. **Next
-  new one is `9990_…`.** Run by copy-paste into the Supabase SQL Editor; make
+- **Migrations DESCENDING** (newest = lowest). Present = `9990`…`9999`. **Next
+  new one is `9989_…`.** Run by copy-paste into the Supabase SQL Editor; make
   re-runnable (`drop … if exists` / `add column if not exists`). User reports
-  9999–9992 applied; **`9991_coach_pay_start_month.sql` is new this session and
-  MUST be applied** (the Pay-staff data layer now selects `pay_start_month`).
+  9999–9991 applied; **`9990_company_options.sql` is new this session and MUST be
+  applied** — it seeds the `journeys_stage_basis` key. The Company-options toggle
+  works in-session without it, but **won't persist** until the key exists (staff
+  can UPDATE `app_settings` but not INSERT, so the key must be seeded by migration).
 - **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
   pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
   consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use

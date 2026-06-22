@@ -32,6 +32,16 @@ export type { CompareKey, ComparePreset, Delta, Range as ComparePeriod } from ".
 export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
 export type { CapacityAppt } from "../lib/capacity";
 
+// Pure pipeline stage-date logic (engagement-start vs first-meeting basis).
+import {
+  computeStageDates,
+  highestTier,
+  type StageBasis,
+  type EngagementStageInput,
+  type MeetingStageInput,
+} from "../lib/journey";
+export type { StageBasis };
+
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
 async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
@@ -585,6 +595,7 @@ export interface MenteeMeeting {
   date: string; // YYYY-MM-DD (scheduled)
   name: string;
   engagementId: number | null;
+  isGroup: boolean; // group session (In Depth / Tracking Together) vs 1-on-1
   coachName: string;
 }
 
@@ -633,14 +644,14 @@ function maxDate(ds: (string | null)[]): string | null {
 // Page every active mentoring appointment across all history (the pipeline spans
 // years, so this is not date-bounded). Used only by the Journeys tab.
 async function fetchAllMentoring(): Promise<
-  { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; start_date: string | null }[]
+  { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; category: string; start_date: string | null }[]
 > {
   const pageSize = 1000;
-  const out: { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; start_date: string | null }[] = [];
+  const out: { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; category: string; start_date: string | null }[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
-      .select("id,client_id,coach_id,engagement_id,name,start_date")
+      .select("id,client_id,coach_id,engagement_id,name,category,start_date")
       .in("category", ["mentoring", "group"])
       .eq("status", "A")
       .order("start_date", { ascending: true })
@@ -682,6 +693,7 @@ async function fetchDiscoveryDatesByClient(): Promise<Map<number, string>> {
 }
 
 interface EngagementRow {
+  id: number | null;
   client_id: number | null;
   name: string | null;
   start_date: string | null;
@@ -696,7 +708,7 @@ async function fetchAllEngagements(): Promise<EngagementRow[]> {
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_engagements")
-      .select("client_id,name,start_date,is_complete,is_canceled")
+      .select("id,client_id,name,start_date,is_complete,is_canceled")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as EngagementRow[];
@@ -714,33 +726,45 @@ interface ClientStages {
   currentTier: PipelineTier | null;
   hasOpen: boolean;
 }
-function stagesByClient(engagements: EngagementRow[]): Map<number, ClientStages> {
-  const tierOrder = new Map(PIPELINE_TIERS.map((t, i) => [t, i] as const));
-  const out = new Map<number, ClientStages>();
+// Build per-client stages for the chosen basis. Engagements give each tier's
+// start date + the engagement→tier map; meetings (tagged with their engagement's
+// tier) feed the "first meeting" basis. currentTier = highest tier with a date.
+function buildClientStages(
+  engagements: EngagementRow[],
+  meetingsByClient: Map<number, MenteeMeeting[]>,
+  basis: StageBasis
+): Map<number, ClientStages> {
+  const pipeline = new Set<string>(PIPELINE_TIERS);
+  const engTierById = new Map<number, PipelineTier>();
+  const engByClient = new Map<number, EngagementStageInput[]>();
+  const hasOpen = new Map<number, boolean>();
   for (const e of engagements) {
     if (e.client_id == null) continue;
     const tier = engagementTier(e.name);
-    if (!tierOrder.has(tier as PipelineTier)) continue; // skip mentor_training/group/other
+    if (!pipeline.has(tier)) continue; // skip mentor_training/group/other
     const pt = tier as PipelineTier;
-    let cur = out.get(e.client_id);
-    if (!cur) {
-      cur = { stageDates: { jumpstart: null, "4x": null, "2x": null, "1x": null, graduated: null }, currentTier: null, hasOpen: false };
-      out.set(e.client_id, cur);
-    }
-    if (e.start_date && (!cur.stageDates[pt] || e.start_date < cur.stageDates[pt]!)) cur.stageDates[pt] = e.start_date;
-    if (!e.is_complete && !e.is_canceled) cur.hasOpen = true;
+    if (e.id != null) engTierById.set(e.id, pt);
+    const arr = engByClient.get(e.client_id) ?? [];
+    arr.push({ tier: pt, startDate: e.start_date });
+    engByClient.set(e.client_id, arr);
+    if (!e.is_complete && !e.is_canceled) hasOpen.set(e.client_id, true);
   }
-  // Resolve the highest tier reached (latest in PIPELINE_TIERS order with a date).
-  for (const s of out.values()) {
-    let best: PipelineTier | null = null;
-    let bestIdx = -1;
-    for (const t of PIPELINE_TIERS) {
-      if (s.stageDates[t] && tierOrder.get(t)! > bestIdx) {
-        best = t;
-        bestIdx = tierOrder.get(t)!;
-      }
-    }
-    s.currentTier = best;
+  // Tag each meeting with its engagement's tier so "first meeting" can date stages.
+  const meetByClient = new Map<number, MeetingStageInput[]>();
+  for (const [clientId, meetings] of meetingsByClient) {
+    meetByClient.set(
+      clientId,
+      meetings.map<MeetingStageInput>((m) => ({
+        tier: m.engagementId != null ? engTierById.get(m.engagementId) ?? null : null,
+        date: m.date || null,
+        isGroup: m.isGroup,
+      }))
+    );
+  }
+  const out = new Map<number, ClientStages>();
+  for (const clientId of new Set<number>([...engByClient.keys(), ...meetByClient.keys()])) {
+    const stageDates = computeStageDates(basis, engByClient.get(clientId) ?? [], meetByClient.get(clientId) ?? []);
+    out.set(clientId, { stageDates, currentTier: highestTier(stageDates), hasOpen: hasOpen.get(clientId) ?? false });
   }
   return out;
 }
@@ -748,7 +772,7 @@ function stagesByClient(engagements: EngagementRow[]): Map<number, ClientStages>
 // Assemble a journey per mentee (any client with a mentoring meeting or a
 // pipeline engagement), sorted by most-recent activity first. Excludes
 // placeholder/group "clients". Reads the full mirror once; the tab filters it.
-export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
+export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_start"): Promise<MenteeJourney[]> {
   const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomesRes] = await Promise.all([
     fetchAllMentoring(),
     fetchAllEngagements(),
@@ -785,12 +809,13 @@ export async function fetchMenteeJourneys(): Promise<MenteeJourney[]> {
       date: a.start_date ?? "",
       name: a.name,
       engagementId: a.engagement_id,
+      isGroup: a.category === "group",
       coachName: (a.coach_id != null ? coachMap.get(a.coach_id) : null) ?? (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
     });
     byClient.set(a.client_id, arr);
   }
 
-  const stages = stagesByClient(engagements);
+  const stages = buildClientStages(engagements, byClient, stageBasis);
   const today = todayYmd();
   const emptyStages = (): Record<PipelineTier, string | null> => ({ jumpstart: null, "4x": null, "2x": null, "1x": null, graduated: null });
   const clientIds = new Set<number>([...byClient.keys(), ...stages.keys()]);
@@ -1100,6 +1125,22 @@ export async function fetchSettings(): Promise<Record<string, number | null>> {
 }
 
 export async function updateSetting(key: string, value: number | null): Promise<void> {
+  const { error } = await supabase.from("app_settings").update({ value }).eq("key", key);
+  if (error) throw new Error(error.message);
+}
+
+// --- Company options (org-wide dashboard settings; string-valued app_settings) ---
+
+// All string-valued settings (the Company options live alongside the numeric
+// budget/sync settings in app_settings; we surface only the string ones here).
+export async function fetchCompanyOptions(): Promise<Record<string, string>> {
+  const rows = err<{ key: string; value: unknown }[]>(await supabase.from("app_settings").select("key,value"));
+  const out: Record<string, string> = {};
+  for (const r of rows) if (typeof r.value === "string") out[r.key] = r.value;
+  return out;
+}
+
+export async function setCompanyOption(key: string, value: string): Promise<void> {
   const { error } = await supabase.from("app_settings").update({ value }).eq("key", key);
   if (error) throw new Error(error.message);
 }

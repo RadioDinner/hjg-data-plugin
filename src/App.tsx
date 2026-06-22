@@ -7,8 +7,9 @@ import { JourneysView } from "./views/JourneysView";
 import { PayStaffView } from "./views/PayStaffView";
 import { RawDataView } from "./views/RawDataView";
 import { AdminView } from "./views/AdminView";
+import { CompanyOptionsView } from "./views/CompanyOptionsView";
 
-type Tab = "metrics" | "discovery" | "journeys" | "paystaff" | "raw" | "admin";
+type Tab = "metrics" | "discovery" | "journeys" | "paystaff" | "raw" | "admin" | "options";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "metrics", label: "Metrics" },
@@ -17,6 +18,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "paystaff", label: "Pay staff" },
   { key: "raw", label: "Raw data" },
   { key: "admin", label: "Admin" },
+  { key: "options", label: "Company options" },
 ];
 
 export function App() {
@@ -60,6 +62,7 @@ export function App() {
         {tab === "paystaff" && <PayStaffView />}
         {tab === "raw" && <RawDataView />}
         {tab === "admin" && <AdminView />}
+        {tab === "options" && <CompanyOptionsView />}
       </div>
 
       <footer className="footer">Read-only toward CoachAccountable · data mirrored into Supabase</footer>
