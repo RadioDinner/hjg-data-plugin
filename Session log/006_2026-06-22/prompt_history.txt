@@ -5,3 +5,15 @@ I am evaluating some features to add to this project. Open a new session and mak
 all migrations are applied.
 
 On the API question, is there an option to give a client access to their account, even after deactivation? I want this answered with strict adherenance to the guidance given in the API source of truth. TRIPLE check you answer
+
+--- 2026-06-22 13:40 ---
+give me the url in the documentation where this exists
+
+--- 2026-06-22 13:45 ---
+write the first feature on the list
+
+--- 2026-06-22 13:50 (AskUserQuestion answers) ---
+Q: How should Compare mode present period-vs-period on the Metrics page?
+A: Both (board scorecard + per-chart overlays)
+Q: Which comparison presets should the period picker offer in v1?
+A: MoM + QoQ + YoY + custom
