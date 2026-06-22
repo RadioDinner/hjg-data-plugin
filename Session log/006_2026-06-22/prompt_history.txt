@@ -1,2 +1,7 @@
 --- 2026-06-22 13:23 ---
 I am evaluating some features to add to this project. Open a new session and make all your commits/merges to main. Tell me what items are open, what items on on the feature list, and then I have a question about the CoachAccountable API from the "source of truth"
+
+--- 2026-06-22 13:30 ---
+all migrations are applied.
+
+On the API question, is there an option to give a client access to their account, even after deactivation? I want this answered with strict adherenance to the guidance given in the API source of truth. TRIPLE check you answer
