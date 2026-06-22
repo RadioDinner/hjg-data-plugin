@@ -767,6 +767,7 @@ export function MetricsView() {
         const total = items.length;
         return {
           month: b.label,
+          _key: b.key, // YYYY-MM bucket key, for click-to-drill-down (not charted)
           Converted: counts.converted,
           Pending: counts.pending,
           "Not converted": counts.not_converted,
@@ -949,6 +950,30 @@ export function MetricsView() {
       });
     setExplore({
       title: "Discovery calls — source data",
+      columns: ["Signup date", "Prospect", "Type", "Outcome", "Reason"],
+      rows,
+    });
+  }
+  // Drill-down: clicking a bar in the Discovery → conversion chart opens the
+  // Explore modal scoped to just that month's discovery calls (same columns as
+  // the card-level explore, filtered to the clicked month — built from the exact
+  // rows that made the bar, so it always reconciles).
+  function exploreConversionMonth(key: string, label: string) {
+    const items = (byMonth.get(key) ?? []).filter((a) => a.category !== "mentoring");
+    const rows = [...items]
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+      .map((a) => {
+        const o = outcomes.get(a.id);
+        return [
+          a.date ?? "",
+          a.clientName,
+          a.category === "discoveryPhone" ? "phone" : a.category === "discoveryZoom" ? "zoom" : a.category,
+          o ? `${OUTCOME_LABELS[o.outcome]} (${o.source})` : "—",
+          o?.reason ?? "",
+        ] as (string | number)[];
+      });
+    setExplore({
+      title: `Discovery calls — ${label}`,
       columns: ["Signup date", "Prospect", "Type", "Outcome", "Reason"],
       rows,
     });
@@ -1354,6 +1379,7 @@ export function MetricsView() {
                     overrides on the Discovery tab take precedence. Overall conversion rate:{" "}
                     <strong>{pct(conv.rate)}</strong>
                     {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
+                    {!compareMode && <> · <em>click a bar to see that month's calls</em></>}
                   </p>
                   <div className="stat-row">
                     {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
@@ -1368,7 +1394,20 @@ export function MetricsView() {
               table={compareMode ? conversionCompareTable : conversionTable}
               onExplore={exploreDiscoveryRaw}
             >
-              <ComposedChart data={compareMode ? cmpConv : convData}>
+              <ComposedChart
+                data={compareMode ? cmpConv : convData}
+                onClick={
+                  compareMode
+                    ? undefined
+                    : // recharts' click state isn't cleanly typed; read the active row defensively.
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (s: any) => {
+                        const p = s?.activePayload?.[0]?.payload as { _key?: string; month?: string } | undefined;
+                        if (p?._key) exploreConversionMonth(p._key, p.month ?? p._key);
+                      }
+                }
+                style={compareMode ? undefined : { cursor: "pointer" }}
+              >
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="month" {...axisProps} />
                 <YAxis yAxisId="left" allowDecimals={false} width={28} {...axisProps} />

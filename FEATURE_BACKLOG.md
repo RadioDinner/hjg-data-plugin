@@ -47,60 +47,27 @@ clutter the searchable list.
 
 ---
 
-## 2. Discovery → conversion chart — click a column to explore that month's calls
-
-**Status:** Planned · **Area:** Metrics page → "Discovery → conversion" card
-
-**What:** Clicking a **column** in the Discovery → conversion chart opens a
-**popout** listing the **discovery calls that built that column** — date, prospect,
-type, and **outcome** (converted / pending / not converted / no-show + source).
-
-**Why:** Drill-down to audit *what made a bar that height*, scoped to the clicked
-month (more targeted than the card-level "Explore", which shows the whole range).
-
-**Where (code):**
-- `MetricsView.tsx` — the conversion `ComposedChart`. Recharts gives an `onClick`
-  with the active payload (the month label) on the chart or `<Bar>`. Reuse the
-  existing **`ExploreModal`** and the **`exploreDiscoveryRaw()`** builder, but
-  **filter to the clicked month** (`byMonth` already buckets appts by `YYYY-MM`).
-
-**Acceptance criteria / notes:**
-- Clicking a column opens the Explore modal **pre-filtered to that month's**
-  discovery calls (sortable, CSV — same affordances as today).
-- A clear title (e.g. "Discovery calls — Jun 2026"); clicking other charts is
-  unaffected.
-- In **compare mode**, click uses Period A's month (and could note Period B) —
-  confirm the exact behavior during build.
-
----
-
-## 3. Sticky range/preset bar — "freeze" the period + mode controls to the top
-
-**Status:** Planned · **Area:** Metrics page (consider other tabs later)
-
-**What:** The range presets (**This month / Last month / This quarter / …**) and the
-**Compare** toggle (+ Period A/B inputs) should **freeze to the top** of the page so
-that when you scroll down you don't have to scroll back up to change the time period
-or the mode.
-
-**Why:** The Metrics page is long; changing the period currently means scrolling all
-the way up.
-
-**Where (code):**
-- `MetricsView.tsx` — the `.range` block (and the compare Period B row). CSS
-  `position: sticky; top: <header offset>` on a wrapper, with a **solid background**
-  + `z-index` so charts don't bleed through, in `src/styles.css` (`.range`).
-- Mind the app's existing top nav/header height so the sticky bar sits **below** it,
-  not under it.
-
-**Acceptance criteria / notes:**
-- The preset/date/compare controls stay pinned and usable while scrolling Metrics
-  content; solid background; no awkward overlap with card headers.
-- Works on the Metrics tab; decide later whether Journeys/Pay-staff get the same.
-
----
-
 ## Shipped
+
+### Metrics — sticky range/preset bar — session 006b, 2026-06-22
+
+The range presets + date inputs + **Compare** toggle now **freeze to the top** of the
+Metrics page while you scroll (the top nav isn't fixed, so the `.range` block is
+`position: sticky; top: 0`). Solid page background + `z-index: 20` + a bottom border
+so charts don't bleed through. Pure CSS in `src/styles.css` (`.range`); no markup
+change. Applies to the Metrics tab (the only place `.range` is used). ⚠ Not
+browser-verified.
+
+### Metrics — Discovery→conversion drill-down (click a bar) — session 006b, 2026-06-22
+
+Clicking a **bar** in the Discovery → conversion chart opens the existing **Explore**
+modal **pre-filtered to that month's** discovery calls (signup date, prospect, type,
+outcome + source — sortable, CSV), titled e.g. "Discovery calls — Jun 2026". The
+month key is threaded through the chart row (`_key`) so the click maps the label back
+to `YYYY-MM`, and the drill-down is built from the exact rows that made the bar (it
+always reconciles). Single-period only — inert in **compare mode** (the chart shows
+the index-aligned A/B overlay there). `src/views/MetricsView.tsx`
+(`exploreConversionMonth`). ⚠ Not browser-verified.
 
 ### Contextual help — "?" drawer framework + seed articles — session 006b, 2026-06-22
 

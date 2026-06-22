@@ -178,7 +178,10 @@ body {
 .entry { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
 
 /* --- date range picker --- */
-.range { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+/* Sticky so the period presets + Compare toggle stay reachable while scrolling
+   the (long) Metrics page. The top nav isn't fixed, so top:0 pins this once the
+   nav scrolls away. Solid page-bg + z-index keep charts from bleeding through. */
+.range { position: sticky; top: 0; z-index: 20; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; background: var(--bg); padding: 10px 0; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
 .range__presets { display: flex; gap: 6px; flex-wrap: wrap; }
 .range__dates { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .chip { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; }

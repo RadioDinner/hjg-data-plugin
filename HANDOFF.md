@@ -46,6 +46,21 @@ migrations as 006b ships features.
   `ChartCard`** (Metrics cards) + standalone buttons on Pay staff, Build payout, and
   Journeys pipeline-timing. **No migration.** Add a `HelpButton` + an article to cover
   more cards. ⚠ Not browser-verified.
+- **Metrics — Discovery→conversion drill-down (backlog, old #5).** Clicking a bar in
+  the conversion chart opens the Explore modal **pre-filtered to that month's**
+  discovery calls. Month key threaded via a `_key` field on the chart row; built from
+  the exact rows that made the bar. Single-period only (inert in compare mode). **No
+  migration.** ⚠ Not browser-verified.
+- **Metrics — sticky range/preset bar (backlog, old #6).** The presets + date inputs +
+  Compare toggle freeze to the top while scrolling (`.range` is `position: sticky`).
+  Pure CSS, no markup change. **No migration.** ⚠ Not browser-verified.
+
+**Backlog now has ONE planned item left: Journeys — exclude a mentee** (test/
+placeholder) from the list + metrics. ⚠ **Deferred for a decision** — it needs (a) a
+NEW migration (an HJG-owned `is_excluded`-style table the user must apply, next number
+**`9988_…`**) and (b) a choice of *Journeys-only vs dashboard-wide* scope, plus it
+threads exclusion through the metrics pipeline (harder to verify headless). Confirm
+the approach with the user before building.
 
 Everything below is the prior session-006 wrap (still current unless noted above).
 
