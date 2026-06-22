@@ -11,37 +11,7 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-## 1. Raw data — make the Data map its OWN TAB (not a button to a separate page)
-
-**Status:** Planned · **Area:** Raw data tab → "Data map ↗" button / top-nav tabs
-
-**What:** Today the **Data map** is a `btn` on the Raw data tab that opens a whole
-separate static page (`/data-map.html`) in a new browser tab. Make it a **first-class
-in-app tab** ("Data map") in the top nav instead, so it lives alongside Metrics /
-Journeys / etc. — no jumping to a different page.
-
-**Why:** It's a core view, not an afterthought; opening a raw `.html` file in a new
-browser tab is jarring and breaks the app shell (no nav, no auth chrome).
-
-**Where (code):**
-- `src/App.tsx` — add `"datamap"` to the `Tab` union + `TABS` array + the render
-  switch (mirrors how every other tab is wired).
-- New `src/views/DataMapView.tsx`. Simplest faithful port: embed the existing
-  static page in an `<iframe src="/data-map.html">` sized to the view. Better
-  (later): render the map natively in React so it shares auth/theme and can read
-  live Supabase (ties into the existing "Data map is a static snapshot" TODO).
-- `src/views/RawDataView.tsx` — remove the `Data map ↗` button (lines ~92-93).
-
-**Acceptance criteria / notes:**
-- "Data map" appears as a top-nav tab; clicking it shows the map **in-app** (no new
-  browser tab); the old button on Raw data is gone.
-- Decide iframe (fast, keeps the static snapshot) vs native React (more work, live
-  data) — confirm during build. The static page is still served at `/data-map.html`
-  either way.
-
----
-
-## 2. Contextual help — a "?" on every card that side-loads an explainer article
+## 1. Contextual help — a "?" on every card that side-loads an explainer article
 
 **Status:** Planned · **Area:** Whole dashboard (cross-cutting)
 
@@ -79,7 +49,7 @@ north star (*be a weapon with the data* — a weapon you understand).
 
 ---
 
-## 3. Journeys — exclude a mentee (test/placeholder) from the list + metrics
+## 2. Journeys — exclude a mentee (test/placeholder) from the list + metrics
 
 **Status:** Planned · **Area:** Journeys tab (+ Metrics aggregates)
 
@@ -115,7 +85,7 @@ clutter the searchable list.
 
 ---
 
-## 4. Discovery → conversion chart — click a column to explore that month's calls
+## 3. Discovery → conversion chart — click a column to explore that month's calls
 
 **Status:** Planned · **Area:** Metrics page → "Discovery → conversion" card
 
@@ -142,7 +112,7 @@ month (more targeted than the card-level "Explore", which shows the whole range)
 
 ---
 
-## 5. Sticky range/preset bar — "freeze" the period + mode controls to the top
+## 4. Sticky range/preset bar — "freeze" the period + mode controls to the top
 
 **Status:** Planned · **Area:** Metrics page (consider other tabs later)
 
@@ -169,6 +139,18 @@ the way up.
 ---
 
 ## Shipped
+
+### Raw data — Data map promoted to its own in-app tab — session 006b, 2026-06-22
+
+The interactive data-relationship map is now a **first-class top-nav tab** ("Data
+map") instead of a button that launched the static `/data-map.html` in a separate
+browser tab (which broke the app shell — no nav, no auth chrome). New
+`src/views/DataMapView.tsx` embeds the existing static D3 page in an **iframe**
+sized to the view (the fast, faithful option — keeps the snapshot; native-React
+rendering with live Supabase is the later upgrade), with a **"Full screen ↗"**
+convenience link that still opens `/data-map.html` directly. The old "Data map ↗"
+button on the Raw data tab is gone. Tab wired in `src/App.tsx` (between Raw data and
+Admin). ⚠ Not browser-verified (headless container).
 
 ### Pay staff — "Build payout" interactive review / builder — session 006b, 2026-06-22
 

@@ -32,6 +32,12 @@ migrations as 006b ships features.
   button. New tab in `src/App.tsx`; `payout_builds` added to the Raw-data viewer.
   ⚠ **Not browser-verified** (headless container) — browser/Vercel-preview check the
   tab, the save/approve/reopen/discard round-trip (after 9989), overrides, CSV.
+- **Data map → its own in-app tab (backlog #1, the old #2).** The data-relationship
+  map is now a **top-nav tab** ("Data map", between Raw data and Admin) instead of a
+  button opening `/data-map.html` in a new browser tab. `src/views/DataMapView.tsx`
+  embeds the static D3 page in an **iframe** (fast/faithful; native-React + live
+  Supabase is the later upgrade) with a "Full screen ↗" link; the old Raw-data button
+  is removed. **No migration.** ⚠ Not browser-verified.
 
 Everything below is the prior session-006 wrap (still current unless noted above).
 
