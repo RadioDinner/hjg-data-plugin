@@ -8,16 +8,18 @@ Working notes for resuming this project in a future session. Last updated
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
-## Resume here (live state — 2026-06-22, session 006b — IN PROGRESS)
+## Resume here (live state — 2026-06-22, session 006b — WRAPPED)
 
-Picking this up cold — start here. **Session 006b is committing straight to `main`**
-(per the user) and working down `FEATURE_BACKLOG.md` newest-first.
+Picking this up cold — start here. **Session 006b shipped 6 features straight to
+`main`** (per the user) and **emptied `FEATURE_BACKLOG.md`** (everything moved to its
+"Shipped" section). Working tree clean, all pushed. Before push each commit passed
+`typecheck` + `verify` (now **13 sections**) + `build`. **UI not browser-tested**
+(headless container) — eyeball the 6 features on a Vercel preview.
 
-**⚠ NEW migration this session — `9989_payout_builds.sql` MUST be applied** (Supabase
-SQL Editor). It backs the new **Build payout** reviewer (HJG-owned table, staff RLS,
-one row per coach+month). Until applied, the builder works in-session but **Save
-draft / Approve / Discard will error** (no table). The user said they're applying
-migrations as 006b ships features.
+**⚠ TWO new migrations this session — both MUST be applied** (Supabase SQL Editor):
+`9989_payout_builds.sql` (Build payout) and `9988_mentee_exclusions.sql` (Journeys
+exclude). Until each is applied its writes error (Save/Approve/Discard; Exclude/
+Include). Both staff-RLS, one row per key, re-runnable.
 
 **Shipped this session (006b):**
 - **Build payout — interactive review/builder (backlog #1).** A full top-nav tab
