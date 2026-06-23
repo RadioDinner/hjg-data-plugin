@@ -2,6 +2,27 @@
 
 ## What shipped
 
+- **NEW "JYF vs Active Mentoring" Metrics card** (committed to `main`).
+  A current-state cohort snapshot comparing **distinct people with an open JumpStart Your
+  Freedom (JYF) engagement** vs **distinct people with an open 4x/2x/1x mentoring
+  engagement**. "Open" = an engagement that is neither complete nor canceled, so
+  completed JumpStarts and graduated mentees drop out. Implementation:
+  - **`lib/cohort.ts`** — pure `computeJyfVsMentoring(engagements)` returns
+    `{ jyf, mentoring, byTier{4x,2x,1x}, total }`. Counts distinct **people** (Sets), tier
+    via `engagementTier()`. `mentoring` is the de-duplicated union; `byTier` can total
+    slightly more if a person has two open tiers (noted). **Verify §15** (now 15 sections).
+  - **`src/db.ts`** — `fetchJyfVsMentoring()` reads all `ca_engagements`, drops
+    `ca_clients.is_excluded` + `mentee_exclusions` clients, runs the pure fn. Re-exports
+    `computeJyfVsMentoring` + types.
+  - **`src/views/MetricsView.tsx`** — loads once (all-time, not range-scoped), renders a
+    ChartCard below "Meetings to Freedom!": two color-coded bars (`Cell`), stat tiles
+    (JYF / Active Mentoring / 4x / 2x / 1x), and a table with the per-tier breakdown +
+    distinct pipeline total.
+  - **`src/help/articles.ts`** — `metrics.jyfVsMentoring` "?" article.
+  Decision: counts **open engagements** directly (faithful to the user's "active, open …
+  engagements" wording) rather than deriving from journey `currentTier`/`hasOpen`; counts
+  **people** (distinct clients), not engagements. No migration, no schema change.
+
 - **`07db473` Metrics: toggle outcome coloring + channel split on the conversion card.**
   The "Discovery calls → conversion" card now has two independent on/off checkboxes:
   - **Color by outcome** — stack the bars by converted / pending / not-converted /

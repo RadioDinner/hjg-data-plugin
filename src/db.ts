@@ -4,6 +4,7 @@
 
 import { supabase } from "./lib/supabase";
 import { CONVERSION_OFFERING_IDS, PIPELINE_TIERS, engagementTier, type PipelineTier } from "../lib/config";
+import { computeJyfVsMentoring, type CohortEngagementInput, type JyfVsMentoring } from "../lib/cohort";
 
 export { PIPELINE_TIERS, engagementTier };
 export type { PipelineTier };
@@ -42,6 +43,13 @@ export type { CapacityAppt } from "../lib/capacity";
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
 export { computeMeetingsToFreedom } from "../lib/freedom";
 export type { FreedomMenteeInput, FreedomRow, FreedomReport } from "../lib/freedom";
+
+// Pure "JYF vs Active Mentoring" cohort snapshot (open engagements by phase).
+// computeJyfVsMentoring / the input + result types are imported at the top (used
+// by fetchJyfVsMentoring below) and re-exported here for the view.
+export { computeJyfVsMentoring };
+export type { CohortEngagementInput, JyfVsMentoring };
+export type { MentoringTier } from "../lib/cohort";
 
 // Pure pipeline stage-date logic (engagement-start vs first-meeting basis).
 import {
@@ -918,6 +926,30 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
 
   journeys.sort((a, b) => (b.lastMeeting ?? b.discoveryDate ?? "").localeCompare(a.lastMeeting ?? a.discoveryDate ?? ""));
   return journeys;
+}
+
+// "JYF vs Active Mentoring" — a current-state cohort snapshot. Reads every
+// engagement, drops placeholder/group clients (ca_clients.is_excluded) and
+// staff-excluded test mentees (mentee_exclusions), then counts distinct people
+// with an OPEN JumpStart engagement vs an open 4x/2x/1x engagement. Pure math in
+// lib/cohort.ts; not date-range scoped.
+export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
+  const [engagements, excludedSet, clientsRes] = await Promise.all([
+    fetchAllEngagements(),
+    fetchExcludedClientIds(),
+    supabase.from("ca_clients").select("id,is_excluded"),
+  ]);
+  if (clientsRes.error) throw new Error(clientsRes.error.message);
+  const isExcluded = new Map<number, boolean>();
+  for (const c of (clientsRes.data ?? []) as { id: number; is_excluded: boolean }[]) isExcluded.set(c.id, c.is_excluded);
+
+  const inputs: CohortEngagementInput[] = [];
+  for (const e of engagements) {
+    if (e.client_id == null) continue;
+    if (isExcluded.get(e.client_id) || excludedSet.has(e.client_id)) continue;
+    inputs.push({ clientId: e.client_id, name: e.name, isComplete: e.is_complete, isCanceled: e.is_canceled });
+  }
+  return computeJyfVsMentoring(inputs);
 }
 
 // Set (or update) a mentee's pipeline outcome override. One row per client.

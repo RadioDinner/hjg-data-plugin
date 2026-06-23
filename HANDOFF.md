@@ -10,10 +10,20 @@ Working notes for resuming this project in a future session. Last updated
 
 ## Resume here (live state — 2026-06-23, session 007 — WRAPPED)
 
-Picking this up cold — start here. **Session 007 shipped one Metrics tweak.**
-`typecheck` + `verify` (14 sections) + `build` all pass. **No migration, no schema
+Picking this up cold — start here. **Session 007 shipped two Metrics changes.**
+`typecheck` + `verify` (**15 sections**) + `build` all pass. **No migration, no schema
 change. UI NOT browser-tested** (headless) — eyeball on a Vercel preview.
 
+- **NEW "JYF vs Active Mentoring" card** (Metrics tab, below "Meetings to Freedom!"). A
+  current-state cohort snapshot: **distinct people with an OPEN JumpStart Your Freedom
+  engagement** vs **distinct people with an open 4x/2x/1x mentoring engagement** (open =
+  not complete, not canceled). Two color-coded bars + stat tiles (JYF / Active Mentoring /
+  per-tier 4x·2x·1x) + a table (adds the de-duplicated pipeline total). Pure math in
+  **`lib/cohort.ts`** (`computeJyfVsMentoring`, **verify §15**), re-exported via `db.ts`;
+  data via new `fetchJyfVsMentoring()` (reads `ca_engagements`, drops `is_excluded` +
+  `mentee_exclusions` clients). **All-time, not range-scoped.** Has a "?" help article
+  (`metrics.jyfVsMentoring`). `MetricsView.tsx` + `db.ts` + `lib/cohort.ts` +
+  `articles.ts` + verify. **No migration.**
 - **Discovery → conversion card: toggle outcome coloring + channel split.** The card
   gained **two independent on/off checkboxes** ("Bar coding:"): **Color by outcome**
   (stack by converted/pending/not-converted/no-show, each its own color) and **Split by
@@ -38,8 +48,9 @@ was replaced. **Going forward, `main` is primary** — develop from it.
 **▶ Next-session checklist:**
 1. **Branch from `main`** — it is now the primary branch and holds everything (PR #8
    merged 2026-06-23). The `claude/*` working branch is fully captured in `main`.
-2. **Browser-verify** the conversion card's two new toggles (all 4 combinations, light +
-   dark, single + compare mode).
+2. **Browser-verify** (a) the new **JYF vs Active Mentoring** card numbers against CA
+   reality, and (b) the conversion card's two toggles (all 4 combinations, light + dark,
+   single + compare mode).
 3. The session-006c checklist below is still open (browser-verify themes, re-sync for
    `ca_invoices.date_of` day, optional pay-color polish).
 

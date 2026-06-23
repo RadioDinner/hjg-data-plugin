@@ -14,6 +14,7 @@ import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
 import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
 import { computeStageDates, highestTier, type EngagementStageInput, type MeetingStageInput } from "../lib/journey.js";
 import { computeMeetingsToFreedom, type FreedomMenteeInput } from "../lib/freedom.js";
+import { computeJyfVsMentoring, type CohortEngagementInput } from "../lib/cohort.js";
 import {
   computePayReport,
   computePayTimeline,
@@ -581,6 +582,41 @@ console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduati
 
   eq(computeMeetingsToFreedom([]).n, 0, "empty input -> n 0");
   eq(computeMeetingsToFreedom([]).avg, null, "empty input -> avg null");
+}
+
+console.log("[15] JYF vs Active Mentoring cohort (open engagements by phase, distinct people)");
+{
+  const engs: CohortEngagementInput[] = [
+    // Two distinct people in open JumpStart.
+    { clientId: 1, name: "JumpStart Your Freedom", isComplete: false, isCanceled: false },
+    { clientId: 2, name: "MN Subscription | (0x Month) JYF", isComplete: false, isCanceled: false },
+    // Completed / canceled JumpStarts drop out (client 3 also has an open 4x -> mentoring).
+    { clientId: 3, name: "JumpStart Your Freedom", isComplete: true, isCanceled: false },
+    { clientId: 3, name: "MN Subscription | (4x Month) ...", isComplete: false, isCanceled: false },
+    { clientId: 4, name: "JumpStart Your Freedom", isComplete: false, isCanceled: true },
+    // Mentoring tiers (distinct people): 4x x2 (clients 3,5), 2x x1 (client 6), 1x x1 (client 7).
+    { clientId: 5, name: "MN Subscription | (4x Month) ...", isComplete: false, isCanceled: false },
+    { clientId: 6, name: "MN Subscription | (2x Month) ...", isComplete: false, isCanceled: false },
+    { clientId: 7, name: "ONE appointment per month", isComplete: false, isCanceled: false },
+    // A second open 4x for client 5 must NOT double-count them.
+    { clientId: 5, name: "Every 4 appointments", isComplete: false, isCanceled: false },
+    // Non-pipeline tiers ignored.
+    { clientId: 8, name: "After Graduation Care", isComplete: false, isCanceled: false },
+    { clientId: 9, name: "Mentor Training", isComplete: false, isCanceled: false },
+    { clientId: 10, name: "Gain Momentum Group", isComplete: false, isCanceled: false },
+  ];
+  const c = computeJyfVsMentoring(engs);
+  eq(c.jyf, 2, "JYF = distinct open-JumpStart people (clients 1,2; completed/canceled excluded)");
+  eq(c.mentoring, 4, "Active Mentoring = distinct people across open 4x/2x/1x (clients 3,5,6,7)");
+  eq(c.byTier["4x"], 2, "4x distinct people (clients 3,5; client 5's two 4x count once)");
+  eq(c.byTier["2x"], 1, "2x distinct people (client 6)");
+  eq(c.byTier["1x"], 1, "1x distinct people (client 7)");
+  eq(c.total, 6, "total distinct people in either bucket (1,2,3,5,6,7)");
+
+  const empty = computeJyfVsMentoring([]);
+  eq(empty.jyf, 0, "empty -> jyf 0");
+  eq(empty.mentoring, 0, "empty -> mentoring 0");
+  eq(empty.total, 0, "empty -> total 0");
 }
 
 console.log("");

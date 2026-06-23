@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -20,6 +21,7 @@ import {
   delta,
   fetchCoachesWithSettings,
   fetchLastSyncedAt,
+  fetchJyfVsMentoring,
   fetchManualMetrics,
   fetchMenteeJourneys,
   fetchMentorCoachIds,
@@ -31,6 +33,7 @@ import {
   type CoachWithSettings,
   type DiscoveryOutcomeValue,
   type FreedomReport,
+  type JyfVsMentoring,
   type ManualMetricRow,
   type MenteeJourney,
   type RangeAppt,
@@ -382,6 +385,7 @@ export function MetricsView() {
   // All-history mentee journeys, loaded once — backs the "Meetings to Freedom!"
   // card (graduated-mentee lifetime metric, not scoped to the date range).
   const [journeys, setJourneys] = useState<MenteeJourney[]>([]);
+  const [jyfVsMentoring, setJyfVsMentoring] = useState<JyfVsMentoring | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -468,6 +472,22 @@ export function MetricsView() {
     fetchMenteeJourneys()
       .then((js) => {
         if (!cancelled) setJourneys(js);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // "JYF vs Active Mentoring" — current-state cohort snapshot (all-time, not
+  // range-scoped), so it loads once like the journeys above.
+  useEffect(() => {
+    let cancelled = false;
+    fetchJyfVsMentoring()
+      .then((r) => {
+        if (!cancelled) setJyfVsMentoring(r);
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -875,6 +895,35 @@ export function MetricsView() {
       rows: freedomReport.rows.map((r) => [r.name, r.windowStart, r.graduationDate, r.meetings]),
     }),
     [freedomReport]
+  );
+
+  // "JYF vs Active Mentoring" — two bars (distinct people per phase). The table
+  // adds the per-tier mentoring breakdown + the de-duplicated pipeline total.
+  const jyfBars = useMemo(
+    () =>
+      jyfVsMentoring
+        ? [
+            { phase: "JumpStart (JYF)", people: jyfVsMentoring.jyf },
+            { phase: "Active Mentoring", people: jyfVsMentoring.mentoring },
+          ]
+        : [],
+    [jyfVsMentoring]
+  );
+  const jyfTable = useMemo<ChartCardTable>(
+    () => ({
+      columns: ["Cohort", "People"],
+      rows: jyfVsMentoring
+        ? [
+            ["JumpStart (JYF) — open", jyfVsMentoring.jyf],
+            ["Active Mentoring (4x + 2x + 1x) — open", jyfVsMentoring.mentoring],
+            ["• 4x", jyfVsMentoring.byTier["4x"]],
+            ["• 2x", jyfVsMentoring.byTier["2x"]],
+            ["• 1x", jyfVsMentoring.byTier["1x"]],
+            ["Total in pipeline (distinct)", jyfVsMentoring.total],
+          ]
+        : [],
+    }),
+    [jyfVsMentoring]
   );
 
   // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
@@ -1576,6 +1625,60 @@ export function MetricsView() {
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Bar dataKey="meetings" name="1-on-1 sessions" fill={C.mentees} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ChartCard>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <ChartCard
+              title="JYF vs Active Mentoring"
+              helpId="metrics.jyfVsMentoring"
+              table={jyfTable}
+              extra={
+                <>
+                  <p className="view__hint">
+                    People currently in an <strong>open JumpStart Your Freedom</strong> engagement vs. people in{" "}
+                    <strong>open ongoing mentoring</strong> (4x / 2x / 1x). Counts distinct people; completed or canceled
+                    engagements drop out. <em>All-time snapshot — not affected by the date range above.</em>
+                  </p>
+                  <div className="stat-row">
+                    <div className="stat">
+                      <span className="stat__value" style={{ color: C.mentees }}>
+                        {jyfVsMentoring ? num(jyfVsMentoring.jyf) : "—"}
+                      </span>
+                      <span className="stat__label">In JumpStart (JYF)</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value" style={{ color: C.meetings }}>
+                        {jyfVsMentoring ? num(jyfVsMentoring.mentoring) : "—"}
+                      </span>
+                      <span className="stat__label">In Active Mentoring</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{jyfVsMentoring ? num(jyfVsMentoring.byTier["4x"]) : "—"}</span>
+                      <span className="stat__label">4x</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{jyfVsMentoring ? num(jyfVsMentoring.byTier["2x"]) : "—"}</span>
+                      <span className="stat__label">2x</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{jyfVsMentoring ? num(jyfVsMentoring.byTier["1x"]) : "—"}</span>
+                      <span className="stat__label">1x</span>
+                    </div>
+                  </div>
+                </>
+              }
+            >
+              <BarChart data={jyfBars} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="phase" {...axisProps} />
+                <YAxis allowDecimals={false} width={28} {...axisProps} />
+                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Bar dataKey="people" name="People" radius={[4, 4, 0, 0]}>
+                  <Cell fill={C.mentees} />
+                  <Cell fill={C.meetings} />
+                </Bar>
               </BarChart>
             </ChartCard>
           </div>

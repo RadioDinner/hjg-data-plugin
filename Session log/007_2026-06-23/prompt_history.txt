@@ -13,3 +13,6 @@ You don't need to create one. Reference this PR going forward — pushing more c
 
 --- 2026-06-23 ---
 I've merged everthing to main via the pull request. As of now, Main is the primary branch.
+
+--- 2026-06-23 ---
+I want to build a feature called "JYF vs Active Mentoring". This feature will count the people with active, open JumpStart Your Freedom engagements vs the sum of people in 4x, 2x and 1x Mentoring engagements. Commit this to main. Don't create a new branch for any of this.

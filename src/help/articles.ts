@@ -224,6 +224,23 @@ Pure logic in \`lib/journey.ts\`.`,
 ### Source
 - Per-mentee journeys (\`fetchMenteeJourneys\`): \`ca_appointments\` (1-on-1 mentoring) + \`ca_engagements\` (JumpStart end + graduation). Pure math in \`lib/freedom.ts\`.`,
   },
+  "metrics.jyfVsMentoring": {
+    title: "JYF vs Active Mentoring",
+    body: `A current-state snapshot of **where people are in the pipeline right now**: how many are in the supervised start (**JumpStart Your Freedom**) versus ongoing **1-on-1 mentoring** (4x / 2x / 1x).
+
+### What's counted
+- **In JumpStart (JYF)** — distinct people with an **open** JumpStart engagement.
+- **In Active Mentoring** — distinct people with an **open** 4x, 2x, or 1x engagement (the union — each person counted once).
+- An engagement is **open** when it is **neither complete nor canceled**. Completed JumpStarts and graduated/ended mentees drop out automatically.
+
+### Notes
+- Counts **people, not engagements** — someone with two open engagements is counted once per side. The **4x / 2x / 1x** tiles break down the mentoring side; in the rare case a person has open engagements in two tiers they show under both, so the tiles can total slightly more than "In Active Mentoring".
+- Test/placeholder mentees you've excluded (and group/placeholder clients) are left out.
+- **All-time snapshot** — *not* affected by the date range at the top of the page.
+
+### Source
+- \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`). Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`).`,
+  },
 };
 
 export function getHelpArticle(id: string): HelpArticle | undefined {
