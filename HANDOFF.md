@@ -1,7 +1,7 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-22 (session 006b).
+2026-06-22 (session 006c).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
@@ -44,10 +44,37 @@ Picking this up cold — start here. Both session-006b migrations (`9989`, `9988
   **No migration.** Has a "?" article.
 - **Expanded contextual-help "?" coverage** to Mentor capacity, Resource engagement,
   the Discovery / Raw data / Company options tabs (new articles in `src/help/articles.ts`).
+- **Conversion bars color-coded by outcome + channel.** The Discovery→conversion bars are
+  stacked by outcome (soft palette: sea-green/gold/coral/slate) AND split by channel —
+  **Zoom = solid, Phone = grid pattern** (SVG `<defs>`); `convData` carries per-outcome
+  phone/zoom counts (`OUTCOME_COLORS`/`OUTCOME_ORDER`).
+- **★ Full visual redesign — professional, crisp, light + dark (the last 006c item).**
+  New **`src/theme.tsx`** `ThemeProvider` writes `<html data-theme>` (persisted to
+  localStorage `hjg.theme`, falls back to OS pref); a **toggle** sits in the topbar and
+  `index.html` sets the theme **pre-paint** (no flash). `styles.css` was rebuilt around a
+  **light (default) + dark** token set with a crisp business feel: **small radii** (6px
+  cards / 4px controls + pills), 1px borders, restrained shadows, a refined **blue accent**;
+  pills/badges/notices use shared semantic **tone tokens** so both modes read well. Charts
+  are theme-aware via **`useChartTokens()`** (axis/grid/tooltip/accent/cmp per theme) —
+  `MetricsView` / `PayStaffView` / `JourneysView` derive them per render (recharts can't
+  read CSS vars). The embedded **Maps follow the theme**: `MapsView` passes `?theme=`, and
+  both `public/data-map.html` + `public/pay-map.html` gained a light palette + a pre-paint
+  bootstrap. **No migration.**
 
-Both **no migration, no schema change.** `typecheck` + `verify` (now **14 sections**) +
-`build` pass; UI not browser-tested. **`FEATURE_BACKLOG.md` has no planned items** —
-add new ideas before building.
+All 006c work is **no migration, no schema change** (except the pay-engine re-sync caveat
+below). `typecheck` + `verify` (**14 sections**) + `build` all pass. **UI NOT browser-tested**
+(headless) — eyeball both themes + the charts on a Vercel preview. **`FEATURE_BACKLOG.md`
+has no planned items.**
+
+**▶ Next-session checklist:**
+1. **Browser-verify both themes** (toggle in the topbar) across every tab — especially the
+   recharts cards (axis/grid/tooltip), the color-coded conversion bars, and the two Maps.
+2. **Re-sync if needed** so `ca_invoices.date_of` carries the day (else Clayton proration
+   treats every invoice as day-1). Quick check: Raw data → `ca_invoices` → `date_of` shows
+   real days, not `-01`.
+3. Optional polish: the Pay-staff "Billed" reference bar is still a fixed `#334155`;
+   per-mentee colors in `pay-map.html` are CSS-var driven now but the Period-B/`CMP` and a
+   few series colors are fixed mid-tones (read on both, not theme-perfect).
 
 ---
 

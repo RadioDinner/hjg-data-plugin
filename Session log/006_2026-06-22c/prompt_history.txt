@@ -36,3 +36,6 @@ On the new discovery calls > conversion, I want the columns color coded again
 
 --- 2026-06-22 19:55 ---
 Make the colors more asthetically pleasing, like a range of colors, not these stark mixes. Also, I meant when I said that I want the columns color coded, that I want to be able to see the dcifference between phone ones and zoom ones. Make phone ones with a grid pattern and zoom ones solid. Keep the coloring of conversion, pending etc
+
+--- 2026-06-22 20:10 ---
+Ok, I want you to do a comprehensive re-design over the whole platform. I want it to look professional with 2 color modes, light and dark that I can toggle for the entire site. But I don't want the big rounded corners and everything smooth. I want it clean, and crisp, with a professional, business looking feel. Then, write the handoff, merge everything to main and wrap the session.

@@ -7,7 +7,22 @@ asked to "build the next feature" — but `FEATURE_BACKLOG.md` was empty (all si
 progress, I picked the lowest-risk, in-flight continuation: **finishing the
 contextual-help coverage**. Committed straight to `main`.
 
+Session 006c then kept going well beyond that — a string of user-driven features and a
+full visual redesign. Everything committed straight to `main`.
+
 ## What shipped (on `main`)
+
+- **★ Full visual redesign — professional/crisp, light + dark (final item).** New
+  `src/theme.tsx` ThemeProvider (`<html data-theme>`, persisted, OS-pref fallback) + a
+  topbar toggle; `index.html` sets the theme pre-paint. `styles.css` rebuilt as a
+  light-default + dark token system with crisp business styling (small radii, 1px borders,
+  restrained shadows, blue accent, semantic tone tokens for pills/badges/notices). Charts
+  themed via `useChartTokens()` (MetricsView/PayStaffView/JourneysView). Both embedded maps
+  (`public/data-map.html`, `public/pay-map.html`) got light palettes + `?theme=` support
+  (passed by `MapsView`). No migration. `fb9db24`.
+- **Conversion bars color-coded by outcome + channel (user request).** Stacked by outcome
+  (soft palette) and split by channel — Zoom solid, Phone grid pattern (SVG `<defs>`).
+  `convData` carries per-outcome phone/zoom counts.
 
 - **Metrics tab — merge + reorder (user request).** Combined the redundant "Discovery
   calls" card into the conversion card (retitled **"Discovery calls → conversion"**, now
