@@ -12,6 +12,11 @@ Working notes for resuming this project in a future session. Last updated
 
 Picking this up cold — start here. Both session-006b migrations (`9989`, `9988`) are
 **applied** (per the user). **Session 006c** (after the backlog emptied) shipped:
+- **"Maps" tab** (`src/views/MapsView.tsx`, replaced `DataMapView.tsx`): one top-nav tab
+  with a **Data map / Payments** toggle (iframes `public/data-map.html` + the NEW
+  `public/pay-map.html`). `pay-map.html` is a self-contained interactive explainer of the
+  Clayton two-month split (rule + live calculator + the worked Alex example, numbers
+  computed in-page). **No migration.**
 - **Pay engine rewritten to Clayton's two-month split** (`lib/pay.ts`). An invoice
   dated day D splits by `elapsed = D/30` (**fixed 30-day**): `(1−elapsed)` pays in the
   invoice's month, `elapsed` rolls to the next. Payout month = this month's invoices ×

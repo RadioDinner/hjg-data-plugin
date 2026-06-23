@@ -9,6 +9,15 @@ contextual-help coverage**. Committed straight to `main`.
 
 ## What shipped (on `main`)
 
+- **"Maps" tab + Payments visual (user request).** Folded the Data-map tab into a single
+  **Maps** tab (`src/views/MapsView.tsx`, replacing `DataMapView.tsx`) with a Data map /
+  Payments toggle. New `public/pay-map.html` is a self-contained interactive explainer of
+  the Clayton two-month split: the rule, a live calculator (amount + day + rate), and the
+  worked Alex example (split bars + monthly stacked payout + totals), computed in-page so
+  it always reconciles. Earlier in the turn I also handed the user a paste-ready Claude-Chat
+  prompt for the same visual (logged), then they asked to build it into the dashboard. No
+  migration.
+
 - **Pay engine rewritten to MATCH Clayton's two-month split (user request).** The user
   reconstructed the former admin's (Clayton's) payment method; I (1) told it back, (2)
   compared it to the existing engine, (3) rewrote `lib/pay.ts` to match, (4) wired it

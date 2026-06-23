@@ -21,3 +21,6 @@ Then, I want you to wire it into the "Pay Staff" feature.
 
 --- 2026-06-22 18:55 ---
 Give me a comprehensive explanation that I can use to put into a prompt in Claude Chat so that I can have a visual way of explaining how payments are calculated.
+
+--- 2026-06-22 19:05 ---
+generate it as part of the dashboard. Move the data map and this map to a tab called "Maps"

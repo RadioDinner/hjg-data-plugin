@@ -7,11 +7,11 @@ import { JourneysView } from "./views/JourneysView";
 import { PayStaffView } from "./views/PayStaffView";
 import { BuildPayoutView } from "./views/BuildPayoutView";
 import { RawDataView } from "./views/RawDataView";
-import { DataMapView } from "./views/DataMapView";
+import { MapsView } from "./views/MapsView";
 import { AdminView } from "./views/AdminView";
 import { CompanyOptionsView } from "./views/CompanyOptionsView";
 
-type Tab = "metrics" | "discovery" | "journeys" | "paystaff" | "buildpayout" | "raw" | "datamap" | "admin" | "options";
+type Tab = "metrics" | "discovery" | "journeys" | "paystaff" | "buildpayout" | "raw" | "maps" | "admin" | "options";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "metrics", label: "Metrics" },
@@ -20,7 +20,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "paystaff", label: "Pay staff" },
   { key: "buildpayout", label: "Build payout" },
   { key: "raw", label: "Raw data" },
-  { key: "datamap", label: "Data map" },
+  { key: "maps", label: "Maps" },
   { key: "admin", label: "Admin" },
   { key: "options", label: "Company options" },
 ];
@@ -66,7 +66,7 @@ export function App() {
         {tab === "paystaff" && <PayStaffView onBuildPayout={() => setTab("buildpayout")} />}
         {tab === "buildpayout" && <BuildPayoutView onBack={() => setTab("paystaff")} />}
         {tab === "raw" && <RawDataView />}
-        {tab === "datamap" && <DataMapView />}
+        {tab === "maps" && <MapsView />}
         {tab === "admin" && <AdminView />}
         {tab === "options" && <CompanyOptionsView />}
       </div>

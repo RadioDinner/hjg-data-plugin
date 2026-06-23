@@ -18,6 +18,18 @@ below). Add new ideas here, newest on top._
 
 ## Shipped
 
+### Maps tab — Data map + Payments visual — session 006c, 2026-06-22
+
+Consolidated the "Data map" tab into a single **"Maps"** top-nav tab with a Data map /
+Payments segmented toggle (`src/views/MapsView.tsx`, replacing `DataMapView.tsx`). Added
+a new self-contained **payments explainer** at **`public/pay-map.html`** — an interactive,
+dependency-free page that teaches the Clayton two-month split: the rule, a live calculator
+(amount + invoice day + rate → "paid this month" vs "rolls to next month"), and the worked
+Alex-Arnold example (per-invoice split bars + monthly stacked payout + a totals table),
+all computed in-page so the numbers always reconcile ($153/$255/$195.50/$161.50, total
+$765). Each map has a "Full screen ↗" link. No migration; static pages copied to the build
+root. ⚠ Not browser-verified.
+
 ### Pay engine — rewritten to match Clayton's two-month split — session 006c, 2026-06-22
 
 After the user reconstructed the former admin's (Clayton's) method, `lib/pay.ts` was
