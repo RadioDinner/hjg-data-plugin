@@ -52,9 +52,13 @@ and irreversible. So this session committed to the working branch (the only cohe
 place) and surfaced the discrepancy to the user via AskUserQuestion rather than
 force-pushing main unilaterally.
 
+**Decision (2026-06-23): the user chose to leave `main` alone.** The working branch
+`claude/great-albattani-bysuhx` is the live lineage; keep building there. The stale
+`main` branch stays untouched unless the user revisits.
+
 ## Open questions / next step
 
-- **Resolve main vs working branch** per the user's choice (overwrite `main`, open a PR,
-  or keep working on the `claude/*` lineage).
+- main vs working branch: **decided — leave `main` alone**; continue on the `claude/*`
+  lineage.
 - Browser-verify the two new toggles (all 4 combinations × light/dark × single/compare).
 - Session-006c open items still stand (themes eyeball, `ca_invoices.date_of` re-sync).

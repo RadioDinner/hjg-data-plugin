@@ -35,13 +35,16 @@ contain the conversion card, theme redesign, Pay/Build/Journeys work, etc. Despi
 HANDOFF wording ("straight to main"), prior sessions actually landed on
 `claude/*` branches, not the git `main` branch. **Session 007 committed to the working
 branch** (the only coherent place). Reconciling onto the real `main` would require a
-force-push over unrelated history — left to the user to decide (see session log).
+force-push over unrelated history — **the user chose to leave `main` alone (2026-06-23)**;
+the working branch `claude/great-albattani-bysuhx` is the live lineage. Don't touch
+`main` unless the user revisits this.
 
 **▶ Next-session checklist:**
 1. **Browser-verify** the conversion card's two new toggles (all 4 combinations, light +
    dark, single + compare mode).
-2. Resolve the **main vs working-branch** divergence above if the user wants GitHub
-   `main` to reflect the real lineage.
+2. **main vs working-branch divergence — DECIDED 2026-06-23: leave `main` alone.**
+   Keep building on `claude/great-albattani-bysuhx` (the live lineage). Don't touch the
+   stale `main` branch unless the user revisits.
 3. The session-006c checklist below is still open (browser-verify themes, re-sync for
    `ca_invoices.date_of` day, optional pay-color polish).
 
