@@ -11,12 +11,16 @@ contextual-help coverage**. Committed straight to `main`.
 
 - **"Maps" tab + Payments visual (user request).** Folded the Data-map tab into a single
   **Maps** tab (`src/views/MapsView.tsx`, replacing `DataMapView.tsx`) with a Data map /
-  Payments toggle. New `public/pay-map.html` is a self-contained interactive explainer of
-  the Clayton two-month split: the rule, a live calculator (amount + day + rate), and the
-  worked Alex example (split bars + monthly stacked payout + totals), computed in-page so
-  it always reconciles. Earlier in the turn I also handed the user a paste-ready Claude-Chat
-  prompt for the same visual (logged), then they asked to build it into the dashboard. No
-  migration.
+  Payments toggle. New `public/pay-map.html` is a self-contained, dependency-free explainer
+  of the Clayton split. First handed the user a paste-ready Claude-Chat prompt for the same
+  visual (logged), then built it into the dashboard.
+  - **Then expanded** (per follow-up) to a **3-mentee calculator** — defaults Alex Arnold
+    ($425 d12), Bob Boyd ($265 d5), Chase Chester ($145 d22), all editable — with one
+    mentor-rate selector, a per-mentee split bar, and a combined **monthly-paycheck** view
+    (stacked-by-mentee over 4 months: first partial → two steady-full → tail partial) + a
+    table, computed live (steady = Σ full; first + tail = one full month).
+  - **Shareable with mentors:** `/pay-map.html` is served outside the login gate (Vercel
+    serves real files before the SPA rewrite) and works offline if saved. No migration.
 
 - **Pay engine rewritten to MATCH Clayton's two-month split (user request).** The user
   reconstructed the former admin's (Clayton's) payment method; I (1) told it back, (2)

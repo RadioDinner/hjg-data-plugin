@@ -22,13 +22,17 @@ below). Add new ideas here, newest on top._
 
 Consolidated the "Data map" tab into a single **"Maps"** top-nav tab with a Data map /
 Payments segmented toggle (`src/views/MapsView.tsx`, replacing `DataMapView.tsx`). Added
-a new self-contained **payments explainer** at **`public/pay-map.html`** — an interactive,
-dependency-free page that teaches the Clayton two-month split: the rule, a live calculator
-(amount + invoice day + rate → "paid this month" vs "rolls to next month"), and the worked
-Alex-Arnold example (per-invoice split bars + monthly stacked payout + a totals table),
-all computed in-page so the numbers always reconcile ($153/$255/$195.50/$161.50, total
-$765). Each map has a "Full screen ↗" link. No migration; static pages copied to the build
-root. ⚠ Not browser-verified.
+a self-contained, dependency-free **payments explainer** at **`public/pay-map.html`** that
+teaches the Clayton two-month split — the rule + the formulas. **Shareable with mentors:**
+it's a real static file served at `/pay-map.html` *outside* the app's login gate (Vercel
+serves files before the SPA rewrite), and works offline if saved.
+
+Expanded the calculator to a **3-mentee** model (defaults **Alex Arnold** $425 d12, **Bob
+Boyd** $265 d5, **Chase Chester** $145 d22 — names/amounts/days editable): one mentor-rate
+selector (35/50/60), a per-mentee split bar (paid-this-month vs rolls-next + full share),
+and a combined **"monthly paycheck"** view — stacked-by-mentee bars over 4 months (first
+partial → two steady-full → tail partial) + a table, all computed live so it reconciles
+(steady = Σ full; first + tail = one full month). No migration. ⚠ Not browser-verified.
 
 ### Pay engine — rewritten to match Clayton's two-month split — session 006c, 2026-06-22
 
