@@ -370,6 +370,12 @@ export function MetricsView() {
   const [outcomes, setOutcomes] = useState<Map<number, ResolvedOutcome>>(new Map());
   const [selectedTypes, setSelectedTypes] = useState<Set<string> | null>(null);
   const [meetingsMode, setMeetingsMode] = useState<"total" | "compare">("total");
+  // Discovery → conversion card view toggles (both default on = current behavior).
+  // Outcome coloring stacks the bars by converted/pending/not-converted/no-show;
+  // channel split textures each segment (Zoom solid, Phone grid). Either can be
+  // turned off independently — see the bar-builder near the chart render.
+  const [convColorByOutcome, setConvColorByOutcome] = useState(true);
+  const [convSplitByChannel, setConvSplitByChannel] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [mentorIds, setMentorIds] = useState<Set<number>>(new Set());
   const [coachSettings, setCoachSettings] = useState<CoachWithSettings[]>([]);
@@ -792,12 +798,21 @@ export function MetricsView() {
         // the outcome (color) and the channel (phone = grid pattern, zoom = solid).
         const phone: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
         const zoom: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+        // Channel totals across all outcomes — for the "no color coding, split by
+        // channel" view (one Phone bar + one Zoom bar per month).
+        let totalPhone = 0;
+        let totalZoom = 0;
         for (const a of items) {
           const o = outcomes.get(a.id);
           if (!o) continue;
           counts[o.outcome]++;
-          if (a.category === "discoveryPhone") phone[o.outcome]++;
-          else zoom[o.outcome]++; // zoom + any non-phone channel render solid
+          if (a.category === "discoveryPhone") {
+            phone[o.outcome]++;
+            totalPhone++;
+          } else {
+            zoom[o.outcome]++; // zoom + any non-phone channel render solid
+            totalZoom++;
+          }
         }
         const total = items.length;
         return {
@@ -815,6 +830,8 @@ export function MetricsView() {
           NotConverted_zoom: zoom.not_converted,
           NoShow_phone: phone.no_show,
           NoShow_zoom: zoom.no_show,
+          Total_phone: totalPhone,
+          Total_zoom: totalZoom,
           Total: total,
           Rate: total > 0 ? Math.round((counts.converted / total) * 100) : 0,
         };
@@ -897,6 +914,73 @@ export function MetricsView() {
   const cmpMentees = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentees ?? 0 })), [data, bData]);
   const cmpMentors = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentors ?? 0 })), [data, bData]);
   const cmpConv = useMemo(() => convData.map((d, i) => ({ ...d, cmp: bConvRate[i]?.Rate ?? 0 })), [convData, bConvRate]);
+
+  // The conversion bars adapt to the two card toggles:
+  //   • outcome coloring  → stack by converted/pending/not-converted/no-show (one color each)
+  //   • channel split     → texture each segment (Zoom solid, Phone grid)
+  // Off ⇒ the bars collapse: no coloring → a single neutral series; no channel
+  // split → one solid bar per segment. All four combinations are covered below.
+  const convBars = useMemo<ReactElement[]>(() => {
+    const NEUTRAL = ct.accent;
+    if (convColorByOutcome && convSplitByChannel) {
+      // Default — per-outcome color × channel texture (Zoom solid + Phone grid).
+      return OUTCOME_ORDER.flatMap((k, oi) => {
+        const top = oi === OUTCOME_ORDER.length - 1;
+        return [
+          <Bar
+            key={`${k}-zoom`}
+            yAxisId="left"
+            stackId="calls"
+            dataKey={`${OUTCOME_KEYBASE[k]}_zoom`}
+            name={OUTCOME_LABELS[k]}
+            fill={OUTCOME_COLORS[k]}
+          />,
+          <Bar
+            key={`${k}-phone`}
+            yAxisId="left"
+            stackId="calls"
+            dataKey={`${OUTCOME_KEYBASE[k]}_phone`}
+            legendType="none"
+            fill={`url(#ptn-${k})`}
+            radius={top ? [4, 4, 0, 0] : undefined}
+          />,
+        ];
+      });
+    }
+    if (convColorByOutcome) {
+      // Outcome color only — one solid bar per outcome, no channel texture.
+      return OUTCOME_ORDER.map((k, oi) => (
+        <Bar
+          key={k}
+          yAxisId="left"
+          stackId="calls"
+          dataKey={OUTCOME_LABELS[k]}
+          name={OUTCOME_LABELS[k]}
+          fill={OUTCOME_COLORS[k]}
+          radius={oi === OUTCOME_ORDER.length - 1 ? [4, 4, 0, 0] : undefined}
+        />
+      ));
+    }
+    if (convSplitByChannel) {
+      // Channel split only — a neutral Zoom bar (solid) + Phone bar (grid).
+      return [
+        <Bar key="total-zoom" yAxisId="left" stackId="calls" dataKey="Total_zoom" name="Zoom" fill={NEUTRAL} />,
+        <Bar
+          key="total-phone"
+          yAxisId="left"
+          stackId="calls"
+          dataKey="Total_phone"
+          name="Phone"
+          fill="url(#ptn-total)"
+          radius={[4, 4, 0, 0]}
+        />,
+      ];
+    }
+    // Neither — one neutral solid bar of total discovery calls.
+    return [
+      <Bar key="total" yAxisId="left" dataKey="Total" name="Discovery calls" fill={NEUTRAL} radius={[4, 4, 0, 0]} />,
+    ];
+  }, [convColorByOutcome, convSplitByChannel, ct.accent]);
 
   const meetingsCompareTable = useMemo(
     () =>
@@ -1327,10 +1411,31 @@ export function MetricsView() {
                     JumpStart Your Freedom (Waiting List) on or after the call. With no purchase it stays pending for 30
                     days, then becomes not converted. Staff overrides on the Discovery tab take precedence. Overall
                     conversion rate: <strong>{pct(conv.rate)}</strong>
-                    {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>} ·{" "}
-                    <span style={{ whiteSpace: "nowrap" }}>bars: solid = Zoom, grid = Phone</span>
+                    {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
+                    {convSplitByChannel && (
+                      <> · <span style={{ whiteSpace: "nowrap" }}>bars: solid = Zoom, grid = Phone</span></>
+                    )}
                     {!compareMode && <> · <em>click a bar to see that month's calls</em></>}
                   </p>
+                  <div className="type-filter__head" style={{ marginBottom: 10 }}>
+                    <span className="muted">Bar coding:</span>
+                    <label className="type-filter__item">
+                      <input
+                        type="checkbox"
+                        checked={convColorByOutcome}
+                        onChange={() => setConvColorByOutcome((v) => !v)}
+                      />
+                      <span>Color by outcome</span>
+                    </label>
+                    <label className="type-filter__item">
+                      <input
+                        type="checkbox"
+                        checked={convSplitByChannel}
+                        onChange={() => setConvSplitByChannel((v) => !v)}
+                      />
+                      <span>Split by method (Zoom / Phone)</span>
+                    </label>
+                  </div>
                   <div className="stat-row">
                     <div className="stat">
                       <span className="stat__value">{num(conv.total)}</span>
@@ -1388,33 +1493,15 @@ export function MetricsView() {
                       <path d="M6 0 V6 M0 6 H6" stroke="rgba(15,23,42,0.55)" strokeWidth="1" />
                     </pattern>
                   ))}
+                  {/* Neutral grid for the "split by channel, no coloring" view. */}
+                  <pattern id="ptn-total" width="6" height="6" patternUnits="userSpaceOnUse">
+                    <rect width="6" height="6" fill={ct.accent} />
+                    <path d="M6 0 V6 M0 6 H6" stroke="rgba(15,23,42,0.55)" strokeWidth="1" />
+                  </pattern>
                 </defs>
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Legend />
-                {OUTCOME_ORDER.flatMap((k, oi) => {
-                  const top = oi === OUTCOME_ORDER.length - 1;
-                  return [
-                    // Zoom = solid; shows the outcome color in the legend.
-                    <Bar
-                      key={`${k}-zoom`}
-                      yAxisId="left"
-                      stackId="calls"
-                      dataKey={`${OUTCOME_KEYBASE[k]}_zoom`}
-                      name={OUTCOME_LABELS[k]}
-                      fill={OUTCOME_COLORS[k]}
-                    />,
-                    // Phone = grid pattern of the same color; hidden from the legend.
-                    <Bar
-                      key={`${k}-phone`}
-                      yAxisId="left"
-                      stackId="calls"
-                      dataKey={`${OUTCOME_KEYBASE[k]}_phone`}
-                      legendType="none"
-                      fill={`url(#ptn-${k})`}
-                      radius={top ? [4, 4, 0, 0] : undefined}
-                    />,
-                  ];
-                })}
+                {convBars}
                 <Line
                   yAxisId="right"
                   type="monotone"
