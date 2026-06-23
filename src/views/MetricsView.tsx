@@ -347,25 +347,6 @@ function ChartDataTable({ columns, rows }: ChartCardTable) {
   );
 }
 
-interface TipEntry {
-  dataKey?: string | number;
-  value?: number;
-}
-function DiscoveryTooltip({ active, payload, label }: { active?: boolean; payload?: TipEntry[]; label?: string }) {
-  if (!active || !payload || payload.length === 0) return null;
-  const get = (k: string) => Number(payload.find((p) => p.dataKey === k)?.value ?? 0);
-  const phone = get("Phone");
-  const zoom = get("Zoom");
-  return (
-    <div style={{ ...TOOLTIP, padding: "6px 10px", fontSize: 13 }}>
-      <div style={{ marginBottom: 4 }}>{label}</div>
-      <div style={{ color: C.phone }}>Phone: {phone}</div>
-      <div style={{ color: C.zoom }}>Zoom: {zoom}</div>
-      <div style={{ borderTop: "1px solid #334155", marginTop: 4, paddingTop: 4 }}>Total: {phone + zoom}</div>
-    </div>
-  );
-}
-
 const INITIAL = presetRange("this_year");
 
 export function MetricsView() {
@@ -763,7 +744,11 @@ export function MetricsView() {
   const conv = useMemo(() => {
     const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
     let manualCount = 0;
+    let phone = 0;
+    let zoom = 0;
     for (const a of discovery) {
+      if (a.category === "discoveryPhone") phone++;
+      else if (a.category === "discoveryZoom") zoom++;
       const o = outcomes.get(a.id);
       if (o) {
         counts[o.outcome]++;
@@ -771,7 +756,7 @@ export function MetricsView() {
       }
     }
     const total = discovery.length;
-    return { total, counts, manualCount, rate: total > 0 ? counts.converted / total : null };
+    return { total, counts, manualCount, phone, zoom, rate: total > 0 ? counts.converted / total : null };
   }, [discovery, outcomes]);
 
   // Per-month conversion series for the Discovery → conversion ChartCard. Each
@@ -874,24 +859,10 @@ export function MetricsView() {
 
   // Overlay datasets: A's per-month rows carry a `cmp` field = Period B's value
   // for the same metric at the same month index (presets keep spans equal).
-  const cmpDiscovery = useMemo(
-    () => data.map((d, i) => ({ ...d, cmp: (bData[i]?.Phone ?? 0) + (bData[i]?.Zoom ?? 0) })),
-    [data, bData]
-  );
   const cmpMentees = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentees ?? 0 })), [data, bData]);
   const cmpMentors = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentors ?? 0 })), [data, bData]);
   const cmpConv = useMemo(() => convData.map((d, i) => ({ ...d, cmp: bConvRate[i]?.Rate ?? 0 })), [convData, bConvRate]);
 
-  const discoveryCompareTable = useMemo(
-    () =>
-      buildCompareTable(
-        "calls",
-        data.map((d) => ({ month: d.month, value: d.Phone + d.Zoom })),
-        bData.map((d) => ({ month: d.month, value: d.Phone + d.Zoom })),
-        (a, b) => signed(a - b)
-      ),
-    [data, bData]
-  );
   const meetingsCompareTable = useMemo(
     () =>
       buildCompareTable(
@@ -944,13 +915,6 @@ export function MetricsView() {
 
   // Each table mirrors the exact per-month numbers that build its chart, so the
   // graph + table panels on every card stay in sync as filters and ranges move.
-  const discoveryTable = useMemo<ChartCardTable>(
-    () => ({
-      columns: ["Month", "Phone", "Zoom", "Total"],
-      rows: data.map((d) => [d.month, d.Phone, d.Zoom, d.Phone + d.Zoom]),
-    }),
-    [data]
-  );
   const meetingsTable = useMemo<ChartCardTable>(
     () =>
       meetingsMode === "compare"
@@ -1317,124 +1281,33 @@ export function MetricsView() {
             </div>
           )}
 
-          <section className="card">
-            <div className="stat-row">
-              <div className="stat">
-                <span className="stat__value">{num(kpis.discoveryTotal)}</span>
-                <span className="stat__label">Discovery calls</span>
-              </div>
-              <div className="stat">
-                <span className="stat__value">{num(kpis.meetingsTotal)}</span>
-                <span className="stat__label">Mentee meetings</span>
-              </div>
-              <div className="stat">
-                <span className="stat__value">{num(kpis.mentees)}</span>
-                <span className="stat__label">Active mentees</span>
-              </div>
-              <div className="stat">
-                <span className="stat__value">{num(kpis.mentors)}</span>
-                <span className="stat__label">Mentors</span>
-              </div>
-            </div>
-          </section>
-
           <div style={{ marginTop: 18 }}>
             <ChartCard
-              title="Discovery calls"
-              helpId="metrics.discovery"
-              table={compareMode ? discoveryCompareTable : discoveryTable}
-              onExplore={exploreDiscoveryRaw}
-            >
-              <BarChart data={compareMode ? cmpDiscovery : data}>
-                <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="month" {...axisProps} />
-                <YAxis allowDecimals={false} width={28} {...axisProps} />
-                {compareMode ? (
-                  <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                ) : (
-                  <Tooltip content={<DiscoveryTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                )}
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Phone" stackId="calls" fill={C.phone} />
-                <Bar dataKey="Zoom" stackId="calls" fill={C.zoom} radius={[4, 4, 0, 0]} />
-                {compareMode && <Bar dataKey="cmp" name="Period B (total)" fill={CMP} radius={[4, 4, 0, 0]} />}
-              </BarChart>
-            </ChartCard>
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <ChartCard
-              title="Mentee meetings"
-              helpId="metrics.meetings"
-              extra={meetingsExtra}
-              table={compareMode ? meetingsCompareTable : meetingsTable}
-              onExplore={exploreMeetingsRaw}
-            >
-              {meetingsChart}
-            </ChartCard>
-          </div>
-
-          <div className="grid" style={{ marginTop: 18 }}>
-            <ChartCard
-              title="Active mentees"
-              helpId="metrics.mentees"
-              table={compareMode ? menteesCompareTable : menteesTable}
-              onExplore={exploreMenteesRaw}
-            >
-              <LineChart data={compareMode ? cmpMentees : data}>
-                <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="month" {...axisProps} />
-                <YAxis allowDecimals={false} width={28} {...axisProps} />
-                <Tooltip contentStyle={TOOLTIP} />
-                {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                <Line type="monotone" dataKey="Mentees" name="Period A" stroke={C.mentees} strokeWidth={2} dot={{ r: 3 }} />
-                {compareMode && (
-                  <Line
-                    type="monotone"
-                    dataKey="cmp"
-                    name="Period B"
-                    stroke={CMP}
-                    strokeWidth={2}
-                    strokeDasharray="5 4"
-                    dot={{ r: 2 }}
-                  />
-                )}
-              </LineChart>
-            </ChartCard>
-
-            <ChartCard
-              title="Mentors"
-              helpId="metrics.mentors"
-              table={compareMode ? mentorsCompareTable : mentorsTable}
-              onExplore={exploreMentorsRaw}
-            >
-              <BarChart data={compareMode ? cmpMentors : data}>
-                <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="month" {...axisProps} />
-                <YAxis allowDecimals={false} width={28} {...axisProps} />
-                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                <Bar dataKey="Mentors" name="Period A" fill={C.mentors} radius={[4, 4, 0, 0]} />
-                {compareMode && <Bar dataKey="cmp" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />}
-              </BarChart>
-            </ChartCard>
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <ChartCard
-              title="Discovery → conversion"
+              title="Discovery calls → conversion"
               helpId="metrics.conversion"
               extra={
                 <>
                   <p className="view__hint">
-                    Auto-computed: a call converts when the prospect buys JumpStart Your Freedom (Waiting List) on or
-                    after the call. With no purchase it stays pending for 30 days, then becomes not converted. Staff
-                    overrides on the Discovery tab take precedence. Overall conversion rate:{" "}
-                    <strong>{pct(conv.rate)}</strong>
+                    Every discovery call and how it resolved. Auto-computed: a call converts when the prospect buys
+                    JumpStart Your Freedom (Waiting List) on or after the call. With no purchase it stays pending for 30
+                    days, then becomes not converted. Staff overrides on the Discovery tab take precedence. Overall
+                    conversion rate: <strong>{pct(conv.rate)}</strong>
                     {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
                     {!compareMode && <> · <em>click a bar to see that month's calls</em></>}
                   </p>
                   <div className="stat-row">
+                    <div className="stat">
+                      <span className="stat__value">{num(conv.total)}</span>
+                      <span className="stat__label">Discovery calls</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{num(conv.phone)}</span>
+                      <span className="stat__label">Phone</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{num(conv.zoom)}</span>
+                      <span className="stat__label">Zoom</span>
+                    </div>
                     {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
                       <div className="stat" key={k}>
                         <span className="stat__value">{num(conv.counts[k])}</span>
@@ -1549,6 +1422,85 @@ export function MetricsView() {
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Bar dataKey="meetings" name="1-on-1 sessions" fill={C.mentees} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ChartCard>
+          </div>
+
+          <section className="card">
+            <div className="stat-row">
+              <div className="stat">
+                <span className="stat__value">{num(kpis.discoveryTotal)}</span>
+                <span className="stat__label">Discovery calls</span>
+              </div>
+              <div className="stat">
+                <span className="stat__value">{num(kpis.meetingsTotal)}</span>
+                <span className="stat__label">Mentee meetings</span>
+              </div>
+              <div className="stat">
+                <span className="stat__value">{num(kpis.mentees)}</span>
+                <span className="stat__label">Active mentees</span>
+              </div>
+              <div className="stat">
+                <span className="stat__value">{num(kpis.mentors)}</span>
+                <span className="stat__label">Mentors</span>
+              </div>
+            </div>
+          </section>
+
+          <div style={{ marginTop: 18 }}>
+            <ChartCard
+              title="Mentee meetings"
+              helpId="metrics.meetings"
+              extra={meetingsExtra}
+              table={compareMode ? meetingsCompareTable : meetingsTable}
+              onExplore={exploreMeetingsRaw}
+            >
+              {meetingsChart}
+            </ChartCard>
+          </div>
+
+          <div className="grid" style={{ marginTop: 18 }}>
+            <ChartCard
+              title="Active mentees"
+              helpId="metrics.mentees"
+              table={compareMode ? menteesCompareTable : menteesTable}
+              onExplore={exploreMenteesRaw}
+            >
+              <LineChart data={compareMode ? cmpMentees : data}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="month" {...axisProps} />
+                <YAxis allowDecimals={false} width={28} {...axisProps} />
+                <Tooltip contentStyle={TOOLTIP} />
+                {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                <Line type="monotone" dataKey="Mentees" name="Period A" stroke={C.mentees} strokeWidth={2} dot={{ r: 3 }} />
+                {compareMode && (
+                  <Line
+                    type="monotone"
+                    dataKey="cmp"
+                    name="Period B"
+                    stroke={CMP}
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={{ r: 2 }}
+                  />
+                )}
+              </LineChart>
+            </ChartCard>
+
+            <ChartCard
+              title="Mentors"
+              helpId="metrics.mentors"
+              table={compareMode ? mentorsCompareTable : mentorsTable}
+              onExplore={exploreMentorsRaw}
+            >
+              <BarChart data={compareMode ? cmpMentors : data}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="month" {...axisProps} />
+                <YAxis allowDecimals={false} width={28} {...axisProps} />
+                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                <Bar dataKey="Mentors" name="Period A" fill={C.mentors} radius={[4, 4, 0, 0]} />
+                {compareMode && <Bar dataKey="cmp" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />}
               </BarChart>
             </ChartCard>
           </div>

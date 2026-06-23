@@ -9,6 +9,13 @@ contextual-help coverage**. Committed straight to `main`.
 
 ## What shipped (on `main`)
 
+- **Metrics tab — merge + reorder (user request).** Combined the redundant "Discovery
+  calls" card into the conversion card (retitled **"Discovery calls → conversion"**, now
+  carrying total/Phone/Zoom tiles alongside the outcome tiles) and moved that card +
+  **Meetings to Freedom!** to the **top** of the Metrics page (above the KPI strip).
+  Removed the orphaned `DiscoveryTooltip`/`TipEntry`, `cmpDiscovery`, `discoveryCompareTable`,
+  `discoveryTable`. `MetricsView.tsx` + the `metrics.conversion` help article; no migration.
+
 - **"Maps" tab + Payments visual (user request).** Folded the Data-map tab into a single
   **Maps** tab (`src/views/MapsView.tsx`, replacing `DataMapView.tsx`) with a Data map /
   Payments toggle. New `public/pay-map.html` is a self-contained, dependency-free explainer

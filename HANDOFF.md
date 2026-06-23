@@ -12,6 +12,11 @@ Working notes for resuming this project in a future session. Last updated
 
 Picking this up cold — start here. Both session-006b migrations (`9989`, `9988`) are
 **applied** (per the user). **Session 006c** (after the backlog emptied) shipped:
+- **Metrics tab reorder + merge.** Folded the standalone "Discovery calls" card into the
+  conversion card (now **"Discovery calls → conversion"** — adds total/Phone/Zoom tiles)
+  and moved it + **Meetings to Freedom!** to the **top** of the Metrics page (above the KPI
+  strip). Removed the now-dead `DiscoveryTooltip`/`TipEntry`, `cmpDiscovery`,
+  `discoveryCompareTable`, `discoveryTable`. `MetricsView.tsx` only; no migration.
 - **"Maps" tab** (`src/views/MapsView.tsx`, replaced `DataMapView.tsx`): one top-nav tab
   with a **Data map / Payments** toggle (iframes `public/data-map.html` + the NEW
   `public/pay-map.html`). `pay-map.html` is a self-contained, dependency-free explainer of

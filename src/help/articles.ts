@@ -66,8 +66,8 @@ export const HELP_ARTICLES: Record<string, HelpArticle> = {
   },
 
   "metrics.conversion": {
-    title: "Discovery → conversion",
-    body: `Of the discovery calls in the range, how many turned into a sale.
+    title: "Discovery calls → conversion",
+    body: `Every discovery call in the range and how it resolved — this single card combines the call counts (total, plus the Phone / Zoom split) with the conversion outcomes.
 
 ### When a call converts
 - A call **converts** when the prospect purchases **JumpStart Your Freedom (Waiting List)** (offering \`42840\`) on or after the call date.
