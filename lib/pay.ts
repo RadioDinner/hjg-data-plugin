@@ -1,26 +1,31 @@
-// Pure staff-payment (payroll) engine. Computes what each mentor is owed for a
-// given service month. No I/O — the caller supplies already-fetched rows, so
-// this is unit-testable (see scripts/verify-metrics.ts §8) and reusable from the
-// browser (src/views/PayStaffView.tsx).
+// Pure staff-payment (payroll) engine — the CLAYTON model (matched 2026-06-22 after
+// the user reconstructed the legacy admin's method; see docs/legacy-pay-calculator.md).
+// No I/O — the caller supplies already-fetched rows, so this is unit-testable
+// (scripts/verify-metrics.ts §8/§9) and reusable from the browser.
 //
-// Model (decided with the user, 2026-06-19):
-//  - Revenue belongs to the invoice's SERVICE month (date_of), never the payment
-//    date. We pay coaches on the amount BILLED (invoice `amount`) — what the
-//    mentee owes for that service month "in a perfect world" — credited to that
-//    service month. The amount COLLECTED (amount_paid) is carried alongside for
-//    reference/reconciliation but does NOT drive the payout.
-//  - Partial months are prorated by active service days: (active days in month /
-//    days in month). A full month => factor 1 => the whole monthly share. This
-//    handles mid-month starts, quits/graduations, and tier changes.
-//  - The split RAMPS with the MENTOR's tenure and applies to ALL of that mentor's
-//    mentees that month: their 1st month of work = 35%, 2nd = 50%, 3rd month
-//    onward = 60%. Tenure is the mentor's, measured from their earliest engagement
-//    start (overridable per coach) — NOT each mentee's own timeline. (The legacy
-//    Clayton spreadsheet ramped per-mentee; that was wrong — see
-//    docs/legacy-pay-calculator.md.)
-//  - A mentee is attributed to the coach who covered the most active days that
-//    month (handles a mid-month hand-off). Billed revenue with no overlapping
-//    engagement is reported as "unassigned" rather than silently dropped.
+// MODEL (decided with the user):
+//  - Each invoice bills a mentee their tier price (e.g. $425 for 4x) for a service
+//    month. The mentor earns a share of that BILLED amount (collected is carried for
+//    reference only).
+//  - PRORATION + TWO-MONTH SPLIT (the heart of Clayton's method). An invoice dated
+//    on day D of its service month is split across TWO calendar months by where D
+//    falls in the month:
+//        elapsed   e        = D / 30            (FIXED 30-day month, per the user)
+//        remaining (1 − e)
+//      • the REMAINING fraction (1 − e) is recognized in the invoice's own month,
+//      • the ELAPSED fraction (e) rolls forward into the NEXT calendar month.
+//    So a payout month M sums: this month's invoice × (1 − e)  +  last month's
+//    invoice × e_last. Each invoice's two slices add back to the full amount, so the
+//    mentor is made whole across the two months with no separate catch-up.
+//  - SHARE RAMPS with the MENTOR's tenure (NOT the mentee's): the mentor's 1st month
+//    of work = 35%, 2nd = 50%, 3rd onward = 60%, applied to ALL their mentees. The
+//    rate used for a payout month is the mentor's rate IN THAT MONTH (so everything
+//    landing in a month — including a rolled-forward slice — is paid at that month's
+//    rate; with the per-mentor ramp this only differs during a mentor's first two
+//    months, which is why no per-mentee catch-up is needed).
+//  - A mentee is attributed to the coach who covered the most active engagement days
+//    in the invoice's service month. Billed revenue with no overlapping engagement is
+//    reported as "unassigned" rather than silently dropped.
 
 import { engagementTier } from "./config";
 
@@ -34,10 +39,21 @@ export function splitForTenureMonth(tenureMonth: number): number {
   return PAY_RAMP[i];
 }
 
-// 'YYYY-MM' -> absolute month ordinal, for tenure arithmetic.
+// 'YYYY-MM' -> absolute month ordinal, for tenure + adjacency arithmetic.
 export function monthOrdinal(ym: string): number {
   const [y, m] = ym.split("-").map(Number);
   return y * 12 + (m - 1);
+}
+function ymFromOrdinal(o: number): string {
+  const y = Math.floor(o / 12);
+  const m = (o % 12) + 1;
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+function nextYm(ym: string): string {
+  return ymFromOrdinal(monthOrdinal(ym) + 1);
+}
+function prevYm(ym: string): string {
+  return ymFromOrdinal(monthOrdinal(ym) - 1);
 }
 
 // 1-indexed tenure: the mentor's start month itself is tenure month 1.
@@ -45,20 +61,32 @@ export function tenureMonthsBetween(startYm: string, serviceYm: string): number 
   return monthOrdinal(serviceYm) - monthOrdinal(startYm) + 1;
 }
 
+// Actual calendar days in a month — used ONLY for the engagement-coverage day-walk
+// (which coach served the mentee). The PRORATION denominator is a fixed 30 (below).
 export function daysInMonth(ym: string): number {
   const [y, m] = ym.split("-").map(Number);
-  return new Date(Date.UTC(y, m, 0)).getUTCDate(); // day 0 of next month = last day of this one
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+// Clayton's fixed 30-day proration denominator. Elapsed fraction of the month at
+// the invoice's day-of-month, clamped to [0, 1] (a day past the 30th = fully elapsed).
+export const PRORATION_DAYS = 30;
+export function elapsedFraction(dayOfMonth: number): number {
+  return Math.min(Math.max(dayOfMonth, 0), PRORATION_DAYS) / PRORATION_DAYS;
 }
 
 function ymOf(dateYmd: string): string {
   return dateYmd.slice(0, 7);
+}
+function dayOf(dateYmd: string): number {
+  return Number(dateYmd.slice(8, 10)) || 1;
 }
 
 // --- engine inputs ---
 
 export interface PayInvoiceInput {
   clientId: number;
-  serviceYm: string; // 'YYYY-MM' from the invoice date_of
+  serviceDate: string; // 'YYYY-MM-DD' from the invoice date_of (the DAY drives proration)
   billed: number; // invoice `amount` — what was billed; the PAY BASIS
   collected: number; // amount_paid (collected so far) — reference only
 }
@@ -73,7 +101,7 @@ export interface PayEngagementInput {
 }
 
 export interface PayInputs {
-  ym: string; // the service month being computed, 'YYYY-MM'
+  ym: string; // the payout month being computed, 'YYYY-MM'
   invoices: PayInvoiceInput[];
   engagements: PayEngagementInput[];
   coachName: (id: number) => string;
@@ -85,18 +113,22 @@ export interface PayInputs {
 
 // --- engine outputs ---
 
+// One mentee's payout for one PAYOUT month under the Clayton split. The payout
+// blends this month's invoice slice and last month's rolled-forward slice:
+//   earned = recognizedThis (this invoice × (1−e)) + rolloverPrev (last invoice × e_prev)
+//   payout = earned × splitPct   (mentor rate in this payout month)
 export interface PayMenteeLine {
   clientId: number;
   clientName: string;
   coachId: number | null;
-  billed: number; // invoice amount billed (pay basis)
-  collected: number; // amount paid so far (reference)
-  activeDays: number;
-  daysInMonth: number;
-  proration: number; // activeDays / daysInMonth, 0..1
-  earned: number; // billed * proration (revenue credited to this month)
+  billed: number; // invoice amount billed THIS payout month (0 if rollover-only); pay basis
+  collected: number; // amount paid so far on this month's invoice (reference)
+  invoiceDay: number | null; // day-of-month of this month's invoice date_of (null if none)
+  recognizedThis: number; // billed × (1 − e) — recognized from this month's invoice
+  rolloverPrev: number; // last month's invoice × e_prev — rolled into this month
+  earned: number; // recognizedThis + rolloverPrev (revenue credited to this month)
   splitPct: number;
-  payout: number; // earned * splitPct
+  payout: number; // earned × splitPct
   tier: string;
 }
 
@@ -116,7 +148,6 @@ export interface PayMentorSummary {
 
 export interface PayReport {
   ym: string;
-  daysInMonth: number;
   mentors: PayMentorSummary[];
   unassigned: PayMenteeLine[]; // billed revenue with no overlapping engagement
   totals: { billed: number; collected: number; earned: number; payout: number; mentorCount: number; menteeCount: number };
@@ -124,9 +155,60 @@ export interface PayReport {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Which coach covered a client the most in a given month, and the tier in force.
+// Day-walk over the ACTUAL calendar days (engagement coverage), independent of the
+// fixed-30 proration. First matching engagement wins the day's coach/tier.
+function coverInMonth(ym: string, engs: PayEngagementInput[]): { coachId: number | null; tier: string } {
+  const dim = daysInMonth(ym);
+  const monthEnd = `${ym}-${String(dim).padStart(2, "0")}`;
+  const daysByCoach = new Map<number, number>();
+  let tier = "other";
+  for (let day = 1; day <= dim; day++) {
+    const d = `${ym}-${String(day).padStart(2, "0")}`;
+    let coverCoach: number | null = null;
+    let coverTier: string | null = null;
+    let covered = false;
+    for (const e of engs) {
+      const s = (e.startDate ?? "0000-01-01").slice(0, 10);
+      const en = (e.endDate ?? "9999-12-31").slice(0, 10);
+      if (d >= s && d <= en && d <= monthEnd) {
+        covered = true;
+        if (coverCoach == null && e.coachId != null) {
+          coverCoach = e.coachId;
+          coverTier = engagementTier(e.name);
+        }
+      }
+    }
+    if (covered) {
+      if (coverCoach != null) daysByCoach.set(coverCoach, (daysByCoach.get(coverCoach) ?? 0) + 1);
+      if (coverTier) tier = coverTier;
+    }
+  }
+  let coachId: number | null = null;
+  let best = 0;
+  for (const [cid, n] of daysByCoach) {
+    if (n > best) {
+      best = n;
+      coachId = cid;
+    }
+  }
+  return { coachId, tier };
+}
+
+// Per-(coach, client) accumulator for a payout month.
+interface LineAcc {
+  coachId: number | null;
+  tier: string;
+  billed: number;
+  collected: number;
+  invoiceDay: number | null;
+  recognizedThis: number;
+  rolloverPrev: number;
+}
+
 export function computePayReport(input: PayInputs): PayReport {
   const { ym } = input;
-  const dim = daysInMonth(ym);
+  const prev = prevYm(ym);
 
   // Mentor tenure start = override, else the earliest engagement start month.
   const earliestStart = new Map<number, string>();
@@ -142,16 +224,7 @@ export function computePayReport(input: PayInputs): PayReport {
     return s ? ymOf(s) : null;
   };
 
-  // Billed (pay basis) and collected (reference) for this service month, per mentee.
-  const billedByClient = new Map<number, number>();
-  const collectedByClient = new Map<number, number>();
-  for (const inv of input.invoices) {
-    if (inv.serviceYm !== ym) continue;
-    billedByClient.set(inv.clientId, (billedByClient.get(inv.clientId) ?? 0) + (inv.billed || 0));
-    collectedByClient.set(inv.clientId, (collectedByClient.get(inv.clientId) ?? 0) + (inv.collected || 0));
-  }
-
-  // Non-canceled engagements grouped by mentee.
+  // Non-canceled engagements grouped by mentee (for coverage).
   const engByClient = new Map<number, PayEngagementInput[]>();
   for (const e of input.engagements) {
     if (e.isCanceled) continue;
@@ -160,87 +233,81 @@ export function computePayReport(input: PayInputs): PayReport {
     engByClient.set(e.clientId, arr);
   }
 
-  const monthEnd = `${ym}-${String(dim).padStart(2, "0")}`;
+  // Accumulate slices into (coach|client) lines: this-month invoices contribute the
+  // remaining-fraction slice; prev-month invoices contribute the elapsed rollover.
+  const acc = new Map<string, LineAcc & { clientId: number }>();
+  const keyOf = (coachId: number | null, clientId: number) => `${coachId ?? "—"}|${clientId}`;
+  const ensure = (coachId: number | null, clientId: number, tier: string): LineAcc & { clientId: number } => {
+    const k = keyOf(coachId, clientId);
+    let a = acc.get(k);
+    if (!a) {
+      a = { coachId, clientId, tier, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0 };
+      acc.set(k, a);
+    }
+    return a;
+  };
+
+  for (const inv of input.invoices) {
+    const invYm = ymOf(inv.serviceDate);
+    const amt = inv.billed || 0;
+    if (amt <= 0) continue;
+    if (invYm === ym) {
+      const cov = coverInMonth(ym, engByClient.get(inv.clientId) ?? []);
+      const day = dayOf(inv.serviceDate);
+      const recognized = amt * (1 - elapsedFraction(day));
+      const a = ensure(cov.coachId, inv.clientId, cov.tier);
+      a.billed += amt;
+      a.collected += inv.collected || 0;
+      a.recognizedThis += recognized;
+      a.invoiceDay = a.invoiceDay == null ? day : Math.min(a.invoiceDay, day);
+      if (a.tier === "other") a.tier = cov.tier;
+    } else if (invYm === prev) {
+      const cov = coverInMonth(prev, engByClient.get(inv.clientId) ?? []);
+      const rollover = amt * elapsedFraction(dayOf(inv.serviceDate));
+      const a = ensure(cov.coachId, inv.clientId, cov.tier);
+      a.rolloverPrev += rollover;
+      if (a.tier === "other") a.tier = cov.tier;
+    }
+  }
+
   const mentors = new Map<number, PayMentorSummary>();
   const unassigned: PayMenteeLine[] = [];
 
-  for (const [clientId, billed] of billedByClient) {
-    if (billed <= 0) continue; // pay on billed: nothing billed, nothing owed
-    const collected = round2(collectedByClient.get(clientId) ?? 0);
-    const engs = engByClient.get(clientId) ?? [];
+  for (const a of acc.values()) {
+    const earned = round2(a.recognizedThis + a.rolloverPrev);
+    const billed = round2(a.billed);
+    if (earned <= 0 && billed <= 0) continue;
+    const collected = round2(a.collected);
+    const base: Omit<PayMenteeLine, "splitPct" | "payout"> = {
+      clientId: a.clientId,
+      clientName: input.clientName(a.clientId),
+      coachId: a.coachId,
+      billed,
+      collected,
+      invoiceDay: a.invoiceDay,
+      recognizedThis: round2(a.recognizedThis),
+      rolloverPrev: round2(a.rolloverPrev),
+      earned,
+      tier: a.tier,
+    };
 
-    // Walk each day of the month: count active days (union across engagements)
-    // and which coach + tier covered the day (first matching engagement wins).
-    let activeDays = 0;
-    const daysByCoach = new Map<number, number>();
-    let tier = "other";
-    for (let day = 1; day <= dim; day++) {
-      const d = `${ym}-${String(day).padStart(2, "0")}`;
-      let coverCoach: number | null = null;
-      let coverTier: string | null = null;
-      let covered = false;
-      for (const e of engs) {
-        const s = (e.startDate ?? "0000-01-01").slice(0, 10);
-        const en = (e.endDate ?? "9999-12-31").slice(0, 10);
-        if (d >= s && d <= en && d <= monthEnd) {
-          covered = true;
-          if (coverCoach == null && e.coachId != null) {
-            coverCoach = e.coachId;
-            coverTier = engagementTier(e.name);
-          }
-        }
-      }
-      if (covered) {
-        activeDays++;
-        if (coverCoach != null) daysByCoach.set(coverCoach, (daysByCoach.get(coverCoach) ?? 0) + 1);
-        if (coverTier) tier = coverTier;
-      }
-    }
-
-    // Attribute the mentee to the coach with the most active days this month.
-    let coachId: number | null = null;
-    let best = 0;
-    for (const [cid, n] of daysByCoach) {
-      if (n > best) {
-        best = n;
-        coachId = cid;
-      }
-    }
-
-    const proration = dim ? Math.min(1, activeDays / dim) : 0;
-    const earned = round2(billed * proration);
-
-    if (coachId == null) {
-      // Billed revenue we can't tie to a coach this month — surface it.
-      unassigned.push({
-        clientId,
-        clientName: input.clientName(clientId),
-        coachId: null,
-        billed: round2(billed),
-        collected,
-        activeDays,
-        daysInMonth: dim,
-        proration,
-        earned,
-        splitPct: 0,
-        payout: 0,
-        tier,
-      });
+    if (a.coachId == null) {
+      unassigned.push({ ...base, splitPct: 0, payout: 0 });
       continue;
     }
 
-    const startMonth = startMonthFor(coachId);
+    const startMonth = startMonthFor(a.coachId);
     const tenure = startMonth ? tenureMonthsBetween(startMonth, ym) : null;
-    // Unknown tenure (coach has engagements but no dated start) defaults to the
-    // established rate rather than penalizing them as "new".
+    // Unknown tenure (engagements but no dated start) defaults to the established
+    // rate rather than penalizing the mentor as "new".
     const splitPct = tenure != null ? splitForTenureMonth(tenure) : PAY_RAMP[PAY_RAMP.length - 1];
     const payout = round2(earned * splitPct);
 
-    let m = mentors.get(coachId);
+    let m = mentors.get(a.coachId);
     if (!m) {
       m = {
-        coachId,
-        coachName: input.coachName(coachId),
+        coachId: a.coachId,
+        coachName: input.coachName(a.coachId),
         startMonth,
         tenureMonth: tenure,
         splitPct,
@@ -251,27 +318,14 @@ export function computePayReport(input: PayInputs): PayReport {
         payout: 0,
         lines: [],
       };
-      mentors.set(coachId, m);
+      mentors.set(a.coachId, m);
     }
     m.menteeCount++;
     m.billed = round2(m.billed + billed);
     m.collected = round2(m.collected + collected);
     m.earned = round2(m.earned + earned);
     m.payout = round2(m.payout + payout);
-    m.lines.push({
-      clientId,
-      clientName: input.clientName(clientId),
-      coachId,
-      billed: round2(billed),
-      collected,
-      activeDays,
-      daysInMonth: dim,
-      proration,
-      earned,
-      splitPct,
-      payout,
-      tier,
-    });
+    m.lines.push({ ...base, splitPct, payout });
   }
 
   const mentorList = [...mentors.values()].sort((a, b) => b.payout - a.payout);
@@ -286,19 +340,13 @@ export function computePayReport(input: PayInputs): PayReport {
     menteeCount: mentorList.reduce((s, m) => s + m.menteeCount, 0),
   };
 
-  return { ym, daysInMonth: dim, mentors: mentorList, unassigned, totals };
+  return { ym, mentors: mentorList, unassigned, totals };
 }
 
 // --- Multi-month timeline + flat ledger ------------------------------------
-// The Pay-staff tab shows a breakdown by month (an all-months table) and an
-// "explore source data" window. Both are built from the same per-month math:
-// computePayTimeline is a thin map over computePayReport (so a month here is
-// byte-for-byte what the single-month view would show) plus a FLAT LEDGER — one
-// row per mentee per month, including the unassigned bucket — that powers the
-// sortable/filterable raw-data explorer. Still pure: no I/O.
+// computePayTimeline is a thin map over computePayReport plus a FLAT LEDGER (one
+// row per mentee per payout month, incl. the unassigned bucket) for the explorer.
 
-// One mentee's payout for one month, flattened with its coach + month attached
-// so the explorer can sort/filter the whole history in a single table.
 export interface PayLedgerRow {
   ym: string;
   coachId: number | null;
@@ -308,9 +356,9 @@ export interface PayLedgerRow {
   tier: string;
   billed: number;
   collected: number;
-  activeDays: number;
-  daysInMonth: number;
-  proration: number;
+  invoiceDay: number | null;
+  recognizedThis: number;
+  rolloverPrev: number;
   earned: number;
   splitPct: number;
   payout: number;
@@ -334,18 +382,31 @@ export interface PayTimelineInput {
   coachName: (id: number) => string;
   clientName: (id: number) => string;
   startMonthOverride?: Map<number, string>;
-  // Months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
-  // month, newest first.
+  // Payout months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
+  // month PLUS the following month (where the rollover slice lands), newest first.
   months?: string[];
 }
 
 // Distinct service months present in the invoices, newest first.
 export function distinctServiceMonths(invoices: PayInvoiceInput[]): string[] {
-  return [...new Set(invoices.map((i) => i.serviceYm))].sort((a, b) => b.localeCompare(a));
+  return [...new Set(invoices.map((i) => ymOf(i.serviceDate)))].sort((a, b) => b.localeCompare(a));
+}
+
+// Payout months = every service month AND the month after it (the rollover tail),
+// newest first. So a mentee's final invoice still pays its elapsed slice the
+// following month even if no new invoice is issued.
+export function payoutMonths(invoices: PayInvoiceInput[]): string[] {
+  const set = new Set<string>();
+  for (const i of invoices) {
+    const ym = ymOf(i.serviceDate);
+    set.add(ym);
+    set.add(nextYm(ym));
+  }
+  return [...set].sort((a, b) => b.localeCompare(a));
 }
 
 export function computePayTimeline(input: PayTimelineInput): PayTimeline {
-  const months = input.months ?? distinctServiceMonths(input.invoices);
+  const months = input.months ?? payoutMonths(input.invoices);
   const reports = months.map((ym) =>
     computePayReport({
       ym,
@@ -370,9 +431,9 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
           tier: l.tier,
           billed: l.billed,
           collected: l.collected,
-          activeDays: l.activeDays,
-          daysInMonth: l.daysInMonth,
-          proration: l.proration,
+          invoiceDay: l.invoiceDay,
+          recognizedThis: l.recognizedThis,
+          rolloverPrev: l.rolloverPrev,
           earned: l.earned,
           splitPct: l.splitPct,
           payout: l.payout,
@@ -390,9 +451,9 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
         tier: u.tier,
         billed: u.billed,
         collected: u.collected,
-        activeDays: u.activeDays,
-        daysInMonth: u.daysInMonth,
-        proration: u.proration,
+        invoiceDay: u.invoiceDay,
+        recognizedThis: u.recognizedThis,
+        rolloverPrev: u.rolloverPrev,
         earned: u.earned,
         splitPct: u.splitPct,
         payout: u.payout,

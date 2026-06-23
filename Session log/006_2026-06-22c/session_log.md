@@ -9,6 +9,29 @@ contextual-help coverage**. Committed straight to `main`.
 
 ## What shipped (on `main`)
 
+- **Pay engine rewritten to MATCH Clayton's two-month split (user request).** The user
+  reconstructed the former admin's (Clayton's) payment method; I (1) told it back, (2)
+  compared it to the existing engine, (3) rewrote `lib/pay.ts` to match, (4) wired it
+  through Pay staff.
+  - **Model:** an invoice dated day D of its service month splits by `elapsed = D/30`
+    (**fixed 30-day** month). The **remaining** `(1−elapsed)` pays in the invoice's
+    month; the **elapsed** part rolls into the **next** month. A payout month = this
+    month's invoices × (1−elapsed) + last month's × their elapsed, all × the mentor's
+    rate. Each invoice's two slices sum back to its full share (made whole; no catch-up).
+  - **Kept** (one deliberate divergence from Clayton, per 2026-06-19): the 35/50/60 ramp
+    is by **MENTOR** tenure (not per-mentee).
+  - **AskUserQuestion decisions:** ramp = **per-mentor**; proration date = invoice
+    **`date_of`**; denominator = **fixed 30 days** (flagged that the user's March 38.7%
+    implies actual days while May 63.3% implies 30; they chose 30, so Mar 12 → 40%).
+  - **Plumbing:** `PayInvoiceInput.serviceYm` → `serviceDate` (full date, for the day);
+    `fetchAllPayInvoices` now loads `date_of`; `PayData.months` = `payoutMonths` (service
+    months + rollover tail). `PayMenteeLine`/`PayLedgerRow` gained
+    `invoiceDay`/`recognizedThis`/`rolloverPrev`. Explore + Build-payout columns updated.
+  - **Tests:** verify **§8/§9** rewritten to lock Clayton's Alex-Arnold walkthrough
+    ($153 / $255 / $195.50 / $161.50 across Mar–Jun; total = 0.6 × 3×$425 = $765).
+  - `docs/legacy-pay-calculator.md` §7 + TL;DR updated (engine now matches Clayton).
+  - **No migration**; ⚠ **re-sync if `ca_invoices.date_of` lacks day precision**.
+
 - **"Meetings to Freedom!" metric card (user request).** New card on the **Metrics**
   tab (the user's chosen location): per **graduated** mentee, the number of **1-on-1
   mentoring sessions** (4x/2x/1x) between the **completion of JumpStart Your Freedom**

@@ -9,9 +9,10 @@ to it.
 > **TL;DR.** The sheet is one idea wrapped in a lot of manual bookkeeping: pay a
 > mentor a percentage of what each mentee pays, prorated for partial months, with
 > the percentage ramping up over time — and do it so the mentor can be paid on the
-> 1st of every month even though mentees start mid-month. The dashboard keeps the
-> intent but computes it from synced data instead of by hand, and **fixes the one
-> thing the sheet got wrong: the ramp is built on the MENTOR's tenure, not each
+> 1st of every month even though mentees start mid-month. **As of 2026-06-22 the
+> dashboard engine (`lib/pay.ts`) replicates this exactly** — the two-month split
+> and invoice-date proration — computed from synced data instead of by hand, with
+> **one deliberate change: the ramp is built on the MENTOR's tenure, not each
 > mentee's.**
 
 ---
@@ -105,24 +106,27 @@ never copied the sheet's per-mentee reset.
 
 ## 7. How the dashboard (`lib/pay.ts`) relates to it
 
-The app keeps the **intent** but is simpler and data-driven. It assigns each
-invoice wholly to its **service month** and prorates by active days, which removes
-the need for the roll-forward and catch-up machinery.
+**Aligned to Clayton's method 2026-06-22.** The engine now **replicates Clayton's
+two-month split and invoice-date proration**, computed from synced data instead of
+by hand. It keeps **one deliberate improvement** — the ramp is built on the
+**MENTOR's** tenure, not each mentee's — and uses a **fixed 30-day** proration
+denominator (the user's choice) keyed off the invoice's `date_of` day.
 
 | Dimension | Legacy sheet (Clayton) | Dashboard engine (`lib/pay.ts`) |
 |---|---|---|
-| Ramp 35/50/60 | **per mentee** (wrong) | **per MENTOR tenure**, across all their mentees (correct) — with an editable per-coach **Pay start** override (Admin → Mentor capacity) |
+| Ramp 35/50/60 | **per mentee** | **per MENTOR tenure**, across all their mentees (the one intentional change) — with an editable per-coach **Pay start** override (Admin → Mentor capacity) |
 | Revenue basis | the mentee's billed Amount | **billed** (invoice `amount`); collected (`amount_paid`) carried for reference |
-| Time assignment | one payment split across two calendar months by anchor date, remainder rolled forward | each invoice lands wholly in its **service month** (`date_of`) |
-| Mid-month proration | `1 − day/days` off a drifting hand-entered date | active engagement days ÷ days in month, from real dates |
-| Make-whole | explicit **catch-up** residual + ad-hoc fixes | none needed (no lag); "unassigned" bucket for revenue with no overlapping engagement |
+| Time assignment | one payment **split across two calendar months** by anchor date, remainder rolled forward | **matches:** split across two months by the invoice date — remaining part in the invoice's month, elapsed part rolled to the next |
+| Mid-month proration | `1 − day/days` off a drifting hand-entered date | **matches:** `1 − day/30` off the invoice's `date_of` (fixed 30-day month) |
+| Make-whole | explicit **catch-up** residual + ad-hoc fixes | not needed — the two slices add back to the full share, and the per-mentor ramp is ~constant (no per-mentee residual); "unassigned" bucket for revenue with no overlapping engagement |
 | Tier price drops | typed by hand | falls out of the invoice amount |
 | Maintenance | re-typed monthly; drifts | re-synced from CoachAccountable; derived + auditable (the Explore window) |
 
 For a steady, full-month, established mentee paying $425, **both produce $255**
-(`425 × 0.60`). They only diverge in the messy cases — a mentor's first 1–2
-months, mid-month starts, tier changes, partial/late payments — which is exactly
-where the sheet piled on its roll-forward and catch-up and the app stays simple.
+(`425 × 0.60`). With the alignment they now also match on **mid-month starts and
+the roll-forward**; the only intentional divergence left is the **per-mentor**
+ramp (an established mentor's new mentee is paid 60% immediately, not restarted at
+35%).
 
 ## 8. Where "delivery" fits (future)
 

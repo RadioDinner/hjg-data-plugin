@@ -18,9 +18,9 @@ import {
 export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
-import { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP } from "../lib/pay";
+import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP } from "../lib/pay";
 import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine } from "../lib/pay";
-export { computePayReport, computePayTimeline, distinctServiceMonths, PAY_RAMP };
+export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP };
 export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine };
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
@@ -1014,7 +1014,7 @@ export interface PayData {
   engagements: PayEngagementInput[];
   coachName: (id: number) => string;
   clientName: (id: number) => string;
-  months: string[]; // distinct service months present in invoices, newest first
+  months: string[]; // payout months (each service month + its rollover tail), newest first
   // coachId -> 'YYYY-MM' staff override for the pay-ramp start (coach_settings).
   // The engine falls back to the mentor's earliest engagement when absent.
   startMonthOverride: Map<number, string>;
@@ -1057,23 +1057,33 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
   const pageSize = 1000;
   const out: PayInvoiceInput[] = [];
   for (let f = 0; ; f += pageSize) {
+    // date_of is the full service date — its DAY drives Clayton's proration split.
     const { data, error } = await supabase
       .from("ca_invoices")
-      .select("client_id,date_of_year,date_of_month,amount,amount_paid")
+      .select("client_id,date_of,date_of_year,date_of_month,amount,amount_paid")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as {
       client_id: number | null;
+      date_of: string | null;
       date_of_year: number | null;
       date_of_month: number | null;
       amount: number | null;
       amount_paid: number | null;
     }[];
     for (const inv of batch) {
-      if (inv.client_id == null || inv.date_of_year == null || inv.date_of_month == null) continue;
+      if (inv.client_id == null) continue;
+      // Prefer the full date_of (day precision); fall back to the 1st when only the
+      // denormalized year/month is present.
+      const serviceDate =
+        inv.date_of ??
+        (inv.date_of_year != null && inv.date_of_month != null
+          ? `${inv.date_of_year}-${String(inv.date_of_month).padStart(2, "0")}-01`
+          : null);
+      if (!serviceDate) continue;
       out.push({
         clientId: inv.client_id,
-        serviceYm: `${inv.date_of_year}-${String(inv.date_of_month).padStart(2, "0")}`,
+        serviceDate,
         billed: Number(inv.amount) || 0,
         collected: Number(inv.amount_paid) || 0,
       });
@@ -1107,7 +1117,8 @@ export async function fetchPayData(): Promise<PayData> {
     if (s.pay_start_month && /^\d{4}-\d{2}$/.test(s.pay_start_month)) startMonthOverride.set(s.coach_id, s.pay_start_month);
   }
 
-  const months = [...new Set(invoices.map((i) => i.serviceYm))].sort((a, b) => b.localeCompare(a));
+  // Payout months = each service month + the following month (the rollover tail).
+  const months = payoutMonths(invoices);
 
   return {
     invoices,

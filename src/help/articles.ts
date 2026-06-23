@@ -101,19 +101,23 @@ Pure math lives in \`lib/compare.ts\`.`,
 
   "pay.payout": {
     title: "How staff pay is computed",
-    body: `Each mentor earns a **ramped share of the revenue billed** to their mentees.
+    body: `Each mentor earns a **ramped share of the revenue billed** to their mentees, split across two months by each invoice's date (the method the former admin, Clayton, used).
 
-### The split (ramp)
-- The share **ramps with the mentor's tenure**: month 1 = **35%**, month 2 = **50%**, month 3 onward = **60%**.
-- Tenure is the *mentor's* (from their earliest engagement, or a pinned start in Admin → Mentor capacity), and the rate applies to **all** their mentees that month.
+### The share (ramp)
+- The share **ramps with the MENTOR's tenure**: month 1 = **35%**, month 2 = **50%**, month 3 onward = **60%** — applied to **all** their mentees. Tenure is from the mentor's earliest engagement (or a pinned start in Admin → Mentor capacity).
 
-### The revenue
-- Pay is on the amount **billed** (invoice \`amount\`), credited to the invoice's **service month** (\`date_of\`). The amount *collected* is shown for reference only.
-- A partial month is **prorated by active engagement days** (active days ÷ days in month) — handles mid-month starts, quits, and tier changes.
-- A mentee is attributed to the coach who covered the **most active days** that month. Billed revenue with no overlapping engagement shows as **"unassigned"** rather than being dropped.
+### The two-month split (Clayton)
+- Pay is on the amount **billed** (invoice \`amount\`); collected is reference only.
+- An invoice dated on **day D** of its month is split by where D falls, using a **fixed 30-day** month: \`elapsed = D / 30\`.
+  - The **remaining** part \`(1 − elapsed)\` is paid in the **invoice's own month**.
+  - The **elapsed** part rolls forward and is paid the **next month**.
+- So a month's payout = **this month's invoice × (1 − elapsed) + last month's invoice × its elapsed**, all × the mentor's rate. Each invoice's two slices add back to its full share, so the mentor is made whole across the two months.
+
+### Attribution
+- A mentee is attributed to the coach who covered the **most active days** in the invoice's service month. Billed revenue with no overlapping engagement shows as **"unassigned"** rather than being dropped.
 
 ### Source
-- \`ca_invoices\` (billed/collected, service month) + \`ca_engagements\` (mentee ↔ mentor ↔ tier spans). Pure engine in \`lib/pay.ts\`.`,
+- \`ca_invoices\` (billed, service **date** \`date_of\`) + \`ca_engagements\`. Pure engine in \`lib/pay.ts\`; see \`docs/legacy-pay-calculator.md\`.`,
   },
 
   "pay.build": {

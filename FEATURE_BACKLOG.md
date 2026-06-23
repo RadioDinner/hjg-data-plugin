@@ -18,6 +18,25 @@ below). Add new ideas here, newest on top._
 
 ## Shipped
 
+### Pay engine — rewritten to match Clayton's two-month split — session 006c, 2026-06-22
+
+After the user reconstructed the former admin's (Clayton's) method, `lib/pay.ts` was
+rewritten from the old active-days-in-service-month model to **Clayton's two-month
+split**: an invoice dated on day D of its month is split by `elapsed = D/30` (**fixed
+30-day** month, user's choice) — the **remaining** part `(1−elapsed)` pays in the
+invoice's month, the **elapsed** part rolls into the **next** month. A payout month =
+this month's invoices × (1−elapsed) + last month's invoices × their elapsed, all ×
+the mentor's rate. Each invoice's two slices add back to its full share (made whole,
+no catch-up). **Kept** (the one deliberate divergence from Clayton, per 2026-06-19):
+the 35/50/60 ramp is by **MENTOR** tenure. Proration keys off the invoice **`date_of`
+day** (now loaded; was month-only). `PayMenteeLine`/`PayLedgerRow` gained
+`invoiceDay` / `recognizedThis` / `rolloverPrev`; payout months now include the
+**rollover tail** (a final invoice still pays its elapsed slice the next month).
+Wired through Pay staff, the Explore window, and Build payout; **verify §8/§9**
+rewritten and locked to Clayton's Alex-Arnold walkthrough; `docs/legacy-pay-calculator.md`
+§7 updated. **No migration** (invoice dates already mirrored — re-sync only if
+`date_of` is stale). ⚠ Not browser-verified.
+
 ### Metrics — "Meetings to Freedom!" card — session 006c, 2026-06-22
 
 User-requested new metric card on the **Metrics** tab: per **graduated** mentee, the

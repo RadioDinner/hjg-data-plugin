@@ -190,9 +190,10 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
               Pay staff <HelpButton id="pay.payout" label="Pay staff" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Mentors earn a ramped share ({PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by tenure month)
-              of revenue <strong>billed</strong> to each mentee, credited to the invoice's <strong>service
-              month</strong> and prorated by active days. (Collected is shown alongside for reference.)
+              Mentors earn a ramped share ({PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by mentor-tenure
+              month) of revenue <strong>billed</strong> to each mentee. Each invoice's share is{" "}
+              <strong>split across two months</strong> by its invoice date (fixed 30-day): the remaining part pays in the
+              invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
             </div>
           </div>
           {!noInvoices && (
@@ -251,8 +252,9 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
             </div>
 
             <p className="view__hint" style={{ marginBottom: 4 }}>
-              Click a month to expand its per-mentor breakdown. Months at or after {monthLabel(cur)} are projections
-              (proration runs through month-end until the month closes).
+              Click a month to expand its per-mentor breakdown. Each month blends the current invoices' slices with
+              slices rolled forward from the prior month; months at or after {monthLabel(cur)} update as new invoices
+              sync.
             </p>
             <div className="table-scroll">
               <table className="table table--center">

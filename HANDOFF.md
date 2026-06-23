@@ -11,7 +11,18 @@ Working notes for resuming this project in a future session. Last updated
 ## Resume here (live state — 2026-06-22, session 006c — WRAPPED)
 
 Picking this up cold — start here. Both session-006b migrations (`9989`, `9988`) are
-**applied** (per the user). **Session 006c** (after the backlog emptied) shipped two things:
+**applied** (per the user). **Session 006c** (after the backlog emptied) shipped:
+- **Pay engine rewritten to Clayton's two-month split** (`lib/pay.ts`). An invoice
+  dated day D splits by `elapsed = D/30` (**fixed 30-day**): `(1−elapsed)` pays in the
+  invoice's month, `elapsed` rolls to the next. Payout month = this month's invoices ×
+  (1−elapsed) + last month's × their elapsed, × the **per-MENTOR** ramp (35/50/60 —
+  kept from 2026-06-19). Proration keys off the invoice **`date_of` day** (now loaded).
+  `PayMenteeLine`/`PayLedgerRow` gained `invoiceDay`/`recognizedThis`/`rolloverPrev`;
+  payout months include the **rollover tail**. Pay staff + Explore + Build payout all
+  use it; **verify §8/§9** rewritten to Clayton's Alex example; legacy doc §7 updated.
+  **No migration** — but **re-sync if `ca_invoices.date_of` lacks the day** (else every
+  invoice prorates as day-1). Decisions: per-mentor ramp, `date_of` date, fixed-30
+  (the user's March 38.7% implies actual-days, but they chose 30 — Mar 12 → 40%).
 - **"Meetings to Freedom!" metric card** (user request) on the **Metrics** tab — per
   graduated mentee, 1-on-1 mentoring sessions (4x/2x/1x) from JumpStart completion
   (the JumpStart engagement **end date**, fallback first ongoing-tier entry) to

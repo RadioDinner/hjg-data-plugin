@@ -242,8 +242,9 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
         l.clientName,
         l.tier,
         l.billed,
-        `${l.activeDays}/${l.daysInMonth}`,
-        fmtPct(l.proration),
+        l.invoiceDay ?? "",
+        l.recognizedThis,
+        l.rolloverPrev,
         fmtPct(l.splitPct),
         l.payout,
         s.included ? "yes" : "no",
@@ -252,10 +253,10 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
         s.note ?? "",
       ];
     });
-    rows.push(["TOTAL", "", "", "", "", "", summary.computedTotal, "", "", summary.builtTotal, ""]);
+    rows.push(["TOTAL", "", "", "", "", "", "", summary.computedTotal, "", "", summary.builtTotal, ""]);
     downloadCsv(
       `payout-build-${data?.coachName(coach).replace(/\s+/g, "-").toLowerCase() ?? coach}-${ym}`,
-      ["Mentee", "Tier", "Billed", "Active days", "Proration", "Split", "Engine payout", "Included", "Override", "Effective payout", "Note"],
+      ["Mentee", "Tier", "Billed (this mo)", "Inv. day", "This-mo slice", "Rolled-in", "Split", "Engine payout", "Included", "Override", "Effective payout", "Note"],
       rows
     );
   }
@@ -378,7 +379,7 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
                       <th style={{ textAlign: "left" }}>Mentee</th>
                       <th>Tier</th>
                       <th>Billed</th>
-                      <th>Active</th>
+                      <th>Earned</th>
                       <th>Split</th>
                       <th>Engine</th>
                       <th>Override</th>
@@ -403,9 +404,11 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
                           </td>
                           <td style={{ textAlign: "left" }}>{l.clientName}</td>
                           <td>{l.tier}</td>
-                          <td className="num">{fmtUsd(l.billed)}</td>
-                          <td className="num">
-                            {l.activeDays}/{l.daysInMonth}
+                          <td className="num" title={l.invoiceDay != null ? `invoice day ${l.invoiceDay}` : "rollover only"}>
+                            {fmtUsd(l.billed)}
+                          </td>
+                          <td className="num" title={`this-mo ${fmtUsd(l.recognizedThis)} + rolled-in ${fmtUsd(l.rolloverPrev)}`}>
+                            {fmtUsd(l.earned)}
                           </td>
                           <td className="num">{fmtPct(l.splitPct)}</td>
                           <td className="num">{fmtUsd(l.payout)}</td>

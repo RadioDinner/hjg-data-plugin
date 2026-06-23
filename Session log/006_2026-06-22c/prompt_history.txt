@@ -10,3 +10,11 @@ Ok, well then I want a new metric card added called "Meetings to Freedom!" and I
 --- 2026-06-22 18:12 (AskUserQuestion answers) ---
 Q: Where should the "Meetings to Freedom!" card live?  A: Metrics tab
 Q: What marks 'completion of JumpStart'?  A: JumpStart engagement end date
+
+--- 2026-06-22 18:30 ---
+Ok, so I had a very long discussion with Clayton, the former administrative assistant, who explained how the payment system worked. I will do several things now.
+First, I will tell you how it works according to him.
+Second, I want you to compare YOUR existing logic to the new logic from him
+Third, I want you to MATCH CLAYTONS logic by re-writing your own.
+Then, I want you to wire it into the "Pay Staff" feature.
+[Clayton's model — Alex Arnold example: starts 4x on Mar 12 2026, pays $425 immediately; Apr 12 invoice paid; April not routine, a meeting moved a week out so admin pushes next invoice to May 19; May 19 invoice paid. Mentor gets 60% of revenue per mentee per month. Mar 12 = 38.7% through the month, 61.3% remaining -> mentor gets 60% of 61.3% of $425 = $156.315 (paid in March). Remainder applied to following month: (1-.613)=.387; $425*.387=$164.475; *60% = $98.685 (paid in April). Check: 98.685+156.315=$255. May: 19th = 63.3% elapsed; May payout first part = ($425*(1-.633))*.6 = $93.585, plus April's remainder. June: May's remainder = $425*.633*.6 = $161.415; check 93.585+161.415=$255. Boiled down: INVOICE DATE amount * % of month remaining * mentor% paid that month; remainder next month = PRIOR INVOICE DATE amount * (1 - % of prior month remaining) * mentor%.]

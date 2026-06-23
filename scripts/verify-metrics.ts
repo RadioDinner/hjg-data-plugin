@@ -18,9 +18,10 @@ import {
   computePayReport,
   computePayTimeline,
   distinctServiceMonths,
+  payoutMonths,
+  elapsedFraction,
   splitForTenureMonth,
   tenureMonthsBetween,
-  daysInMonth,
   type PayInvoiceInput,
   type PayEngagementInput,
 } from "../lib/pay.js";
@@ -46,6 +47,7 @@ function assert(cond: boolean, msg: string) {
 function eq(actual: unknown, expected: unknown, msg: string) {
   assert(actual === expected, `${msg} (got ${actual}, want ${expected})`);
 }
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // --- synthetic data builders ---
 let apptId = 1;
@@ -238,87 +240,79 @@ console.log("[7] appointment categorization (group sessions vs 1-on-1)");
   eq(c("Mentor Training Extra Teaching"), "excluded", "excluded type unaffected");
 }
 
-console.log("[8] staff payment engine (ramp, proration, billed revenue)");
+console.log("[8] staff payment engine — Clayton split (invoice-date proration, two-month roll, per-mentor ramp)");
 {
-  // Ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60%.
+  // Ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60% (by MENTOR tenure).
   eq(splitForTenureMonth(1), 0.35, "tenure month 1 -> 35%");
   eq(splitForTenureMonth(2), 0.5, "tenure month 2 -> 50%");
   eq(splitForTenureMonth(3), 0.6, "tenure month 3 -> 60%");
   eq(splitForTenureMonth(12), 0.6, "established mentor -> 60%");
-  eq(tenureMonthsBetween("2026-04", "2026-04"), 1, "start month is tenure month 1");
-  eq(tenureMonthsBetween("2026-04", "2026-06"), 3, "two months later is tenure month 3");
-  eq(daysInMonth("2026-04"), 30, "April has 30 days");
-  eq(daysInMonth("2026-02"), 28, "Feb 2026 has 28 days");
+  eq(tenureMonthsBetween("2026-01", "2026-03"), 3, "Jan start -> March is tenure month 3");
+  // Fixed 30-day proration denominator (Clayton).
+  eq(elapsedFraction(12), 0.4, "day 12 -> 12/30 elapsed (fixed 30-day month)");
+  eq(elapsedFraction(19), 19 / 30, "day 19 -> 19/30 elapsed");
+  eq(elapsedFraction(30), 1, "day 30 -> fully elapsed");
+  eq(elapsedFraction(31), 1, "a day past the 30th clamps to fully elapsed");
 
   const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
   const clientName = (id: number) => `Mentee ${id}`;
 
-  // Alex on a 4x engagement ($425 billed) for a full April; Harry started in
-  // Feb (so by April he's at the 60% established rate). 425 * 1.0 * 0.60 = 255.
-  const invoices: PayInvoiceInput[] = [{ clientId: 1, serviceYm: "2026-04", billed: 425, collected: 425 }];
-  const engagements: PayEngagementInput[] = [
-    { clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+  // ---- The canonical Alex Arnold example (Clayton's own walkthrough) ----
+  // Harry started Jan 2026 (so by March he's at the established 60%). Alex pays
+  // $425 on the 12th (Mar, Apr) then the 19th (May, pushed a week). Each invoice's
+  // 60% is split across two calendar months by where its day falls (fixed /30).
+  const harry: PayEngagementInput[] = [
+    { clientId: 1, coachId: 29074, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
   ];
-  const r = computePayReport({ ym: "2026-04", invoices, engagements, coachName, clientName });
-  eq(r.mentors.length, 1, "one mentor paid");
-  eq(r.mentors[0].coachName, "Harry Shenk", "attributed to Harry");
-  eq(r.mentors[0].splitPct, 0.6, "Harry at established 60%");
-  eq(r.mentors[0].payout, 255, "full-month 4x payout = $255");
+  const alex: PayInvoiceInput[] = [
+    { clientId: 1, serviceDate: "2026-03-12", billed: 425, collected: 425 },
+    { clientId: 1, serviceDate: "2026-04-12", billed: 425, collected: 425 },
+    { clientId: 1, serviceDate: "2026-05-19", billed: 425, collected: 425 },
+  ];
 
-  // Mid-month quit: engagement ends 2026-04-15 -> 15/30 active days -> proration
-  // 0.5 -> 425 * 0.5 * 0.60 = 127.5.
-  const r2 = computePayReport({
+  const mar = computePayReport({ ym: "2026-03", invoices: alex, engagements: harry, coachName, clientName });
+  eq(mar.mentors[0].splitPct, 0.6, "Harry established -> 60%");
+  eq(mar.mentors[0].lines[0].recognizedThis, 255, "March: recognized this month = 425*(1-12/30) = $255");
+  eq(mar.mentors[0].lines[0].rolloverPrev, 0, "no rollover into the first month");
+  eq(mar.mentors[0].payout, 153, "March payout = 425*(1-12/30)*0.6 = $153");
+
+  const apr = computePayReport({ ym: "2026-04", invoices: alex, engagements: harry, coachName, clientName });
+  eq(apr.mentors[0].lines[0].rolloverPrev, 170, "March's elapsed slice rolls into April = 425*12/30 = $170");
+  eq(apr.mentors[0].payout, 255, "April payout = this(425*0.6) + rolled(425*0.4) at 60% = $255");
+
+  const may = computePayReport({ ym: "2026-05", invoices: alex, engagements: harry, coachName, clientName });
+  eq(may.mentors[0].payout, 195.5, "May payout = (425*(1-19/30) + 425*(12/30)) * 0.6 = $195.50");
+
+  // June has NO invoice, but May's elapsed slice still rolls forward — the mentor
+  // gets the tail.
+  const jun = computePayReport({ ym: "2026-06", invoices: alex, engagements: harry, coachName, clientName });
+  eq(jun.mentors[0].lines[0].billed, 0, "no invoice billed in June (rollover-only line)");
+  eq(jun.mentors[0].payout, 161.5, "June payout = 425*(19/30)*0.6 = $161.50 (May's tail)");
+
+  // Conservation: each invoice's two slices add back to its full 60%; the whole
+  // run pays exactly 60% of all billed.
+  const tlAlex = computePayTimeline({ invoices: alex, engagements: harry, coachName, clientName });
+  eq(tlAlex.totals.payout, 765, "total = 0.6 * (3 * 425) = $765 across the four payout months");
+  eq(tlAlex.months.map((m) => m.ym).join(","), "2026-06,2026-05,2026-04,2026-03", "payout months include the June rollover tail");
+
+  // ---- Pay on BILLED: partial collection doesn't change the payout ----
+  const partial = computePayReport({
     ym: "2026-04",
-    invoices,
-    engagements: [{ clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: "2026-04-15", isCanceled: false, name: "(4x Month)" }],
+    invoices: [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 200 }],
+    engagements: harry,
     coachName,
     clientName,
   });
-  eq(r2.mentors[0].lines[0].activeDays, 15, "active 15 of 30 days");
-  eq(r2.mentors[0].payout, 127.5, "half-month payout = $127.50");
+  // Day 1 -> elapsed 1/30 -> recognized this month = 425*(29/30); rollover next month.
+  eq(partial.mentors[0].collected, 200, "collected ($200) carried for reference");
+  eq(partial.mentors[0].lines[0].recognizedThis, round2(425 * (29 / 30)), "billed basis: recognized off $425 not $200");
 
-  // New mentor (started this service month) -> tenure month 1 -> 35%.
-  const r3 = computePayReport({
-    ym: "2026-04",
-    invoices,
-    engagements: [{ clientId: 1, coachId: 30000, startDate: "2026-04-01", endDate: null, isCanceled: false, name: "(2x Month)" }],
-    coachName: (id) => `#${id}`,
-    clientName,
-  });
-  eq(r3.mentors[0].splitPct, 0.35, "brand-new mentor at 35%");
-  eq(r3.mentors[0].payout, 148.75, "new-mentor payout = 425 * 0.35");
-
-  // Pay on BILLED: a partially-paid invoice still pays on the full billed amount;
-  // the collected figure is carried for reference but doesn't change the payout.
-  const r4 = computePayReport({
-    ym: "2026-04",
-    invoices: [{ clientId: 1, serviceYm: "2026-04", billed: 425, collected: 200 }],
-    engagements,
-    coachName,
-    clientName,
-  });
-  eq(r4.mentors[0].payout, 255, "billed basis ignores partial collection: 425 * 0.60 = $255");
-  eq(r4.mentors[0].collected, 200, "collected ($200) carried through for reference");
-
-  // Collected revenue with no engagement that month -> unassigned, not dropped.
-  const r5 = computePayReport({
-    ym: "2026-04",
-    invoices,
-    engagements: [{ clientId: 1, coachId: 29074, startDate: "2026-05-01", endDate: null, isCanceled: false, name: "(4x)" }],
-    coachName,
-    clientName,
-  });
-  eq(r5.mentors.length, 0, "no mentor paid when engagement doesn't overlap");
-  eq(r5.unassigned.length, 1, "revenue surfaced as unassigned");
-
-  // Per-MENTOR ramp (confirmed 2026-06-19): the split tracks the MENTOR's tenure
-  // and applies to ALL their mentees that month, NOT each mentee's own timeline.
-  // A mentor in their first month of work pays 35% across every assigned mentee.
-  const r6 = computePayReport({
+  // ---- Per-MENTOR ramp: a mentor's 1st month pays 35% across ALL their mentees ----
+  const newMentor = computePayReport({
     ym: "2026-03",
     invoices: [
-      { clientId: 10, serviceYm: "2026-03", billed: 425, collected: 425 },
-      { clientId: 11, serviceYm: "2026-03", billed: 425, collected: 425 },
+      { clientId: 10, serviceDate: "2026-03-01", billed: 425, collected: 425 },
+      { clientId: 11, serviceDate: "2026-03-01", billed: 425, collected: 425 },
     ],
     engagements: [
       { clientId: 10, coachId: 60000, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "(4x Month)" },
@@ -327,72 +321,72 @@ console.log("[8] staff payment engine (ramp, proration, billed revenue)");
     coachName: (id) => `#${id}`,
     clientName,
   });
-  eq(r6.mentors.length, 1, "one mentor for two mentees");
-  eq(r6.mentors[0].menteeCount, 2, "mentor has two mentees this month");
-  eq(r6.mentors[0].splitPct, 0.35, "mentor's 1st month -> 35% across ALL mentees");
-  eq(r6.mentors[0].payout, 297.5, "35% of combined billed (850) = $297.50");
+  eq(newMentor.mentors[0].menteeCount, 2, "mentor has two mentees this month");
+  eq(newMentor.mentors[0].splitPct, 0.35, "mentor's 1st month -> 35% across ALL mentees");
+  // Each invoice day 1: recognized this month = 425*(29/30) each -> *0.35.
+  eq(newMentor.mentors[0].payout, round2(2 * 425 * (29 / 30) * 0.35), "35% across both mentees, day-1 proration");
 
-  // Mentor-start override: a veteran whose earliest *synced* engagement is April
-  // would look brand-new (35%); pinning the true start to January makes April
-  // their 4th tenure month -> established 60%.
-  const lateSync: PayEngagementInput[] = [
+  // ---- Unassigned: billed revenue with no overlapping engagement ----
+  const noEng = computePayReport({
+    ym: "2026-04",
+    invoices: [{ clientId: 1, serviceDate: "2026-04-12", billed: 425, collected: 425 }],
+    engagements: [{ clientId: 1, coachId: 29074, startDate: "2026-09-01", endDate: null, isCanceled: false, name: "(4x)" }],
+    coachName,
+    clientName,
+  });
+  eq(noEng.mentors.length, 0, "no mentor paid when no engagement overlaps the invoice month");
+  eq(noEng.unassigned.length, 1, "revenue surfaced as unassigned, not dropped");
+  eq(noEng.unassigned[0].payout, 0, "unassigned pays 0");
+
+  // ---- Mentor-start override pins tenure (a late-synced veteran isn't "new") ----
+  const lateSync: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 }];
+  const lateEng: PayEngagementInput[] = [
     { clientId: 1, coachId: 70000, startDate: "2026-04-01", endDate: null, isCanceled: false, name: "(4x)" },
   ];
-  const noOv = computePayReport({ ym: "2026-04", invoices, engagements: lateSync, coachName: (id) => `#${id}`, clientName });
-  eq(noOv.mentors[0].splitPct, 0.35, "without override, an April-start mentor looks new -> 35%");
+  const noOv = computePayReport({ ym: "2026-04", invoices: lateSync, engagements: lateEng, coachName: (id) => `#${id}`, clientName });
+  eq(noOv.mentors[0].splitPct, 0.35, "without override an April-start mentor looks new -> 35%");
   const ov = computePayReport({
     ym: "2026-04",
-    invoices,
-    engagements: lateSync,
+    invoices: lateSync,
+    engagements: lateEng,
     coachName: (id) => `#${id}`,
     clientName,
     startMonthOverride: new Map([[70000, "2026-01"]]),
   });
   eq(ov.mentors[0].splitPct, 0.6, "override start (Jan) -> April is tenure month 4 -> 60%");
-  eq(ov.mentors[0].payout, 255, "override pays the veteran rate: 425 * 0.60 = $255");
 }
 
-console.log("[9] staff payment timeline + flat ledger (by-month breakdown / explorer)");
+console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned, scoping)");
 {
   const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
   const clientName = (id: number) => `Mentee ${id}`;
 
-  // Mentee 1: billed in both April and May, fully covered by Harry (60% by then).
-  // Mentee 2: billed in May only, with NO overlapping engagement -> unassigned.
+  // Mentee 1: one invoice (Apr 10), Harry established. Mentee 2: invoice (May 5)
+  // with NO overlapping engagement -> unassigned.
   const invoices: PayInvoiceInput[] = [
-    { clientId: 1, serviceYm: "2026-04", billed: 425, collected: 425 },
-    { clientId: 1, serviceYm: "2026-05", billed: 425, collected: 425 },
-    { clientId: 2, serviceYm: "2026-05", billed: 100, collected: 100 },
+    { clientId: 1, serviceDate: "2026-04-10", billed: 425, collected: 425 },
+    { clientId: 2, serviceDate: "2026-05-05", billed: 100, collected: 100 },
   ];
   const engagements: PayEngagementInput[] = [
-    { clientId: 1, coachId: 29074, startDate: "2026-02-01", endDate: null, isCanceled: false, name: "(4x Month)" },
+    { clientId: 1, coachId: 29074, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "(4x Month)" },
   ];
 
-  eq(distinctServiceMonths(invoices).join(","), "2026-05,2026-04", "distinct months newest-first");
+  eq(distinctServiceMonths(invoices).join(","), "2026-05,2026-04", "distinct service months newest-first");
+  eq(payoutMonths(invoices).join(","), "2026-06,2026-05,2026-04", "payout months = service months + rollover tails");
 
   const tl = computePayTimeline({ invoices, engagements, coachName, clientName });
-  eq(tl.months.length, 2, "timeline covers both service months");
-  eq(tl.months[0].ym, "2026-05", "newest month first");
-  // April: just mentee 1 (425*0.6=255). May: mentee 1 (255) + mentee 2 unassigned.
-  eq(tl.months[1].report.totals.payout, 255, "April payout rolls up to $255");
-  eq(tl.totals.payout, 510, "grand total payout across months = $510");
-  eq(tl.totals.billed, 950, "grand total billed = 425+425+100");
-  eq(tl.totals.collected, 950, "grand total collected = 425+425+100");
-
-  // Ledger: one row per mentee per month, including the unassigned bucket.
-  eq(tl.ledger.length, 3, "ledger has a row per mentee per month (incl. unassigned)");
-  const unassigned = tl.ledger.filter((r) => !r.assigned);
-  eq(unassigned.length, 1, "one unassigned ledger row");
-  eq(unassigned[0].clientId, 2, "unassigned row is mentee 2");
-  eq(unassigned[0].coachName, "—", "unassigned row has no coach");
+  // Harry: Apr slice (425*(1-10/30)*0.6=170) + May rollover (425*(10/30)*0.6=85) = 255.
   const harryRows = tl.ledger.filter((r) => r.coachName === "Harry Shenk");
-  eq(harryRows.length, 2, "Harry has a ledger row in each month");
-  eq(harryRows.reduce((s, r) => s + r.payout, 0), 510, "Harry's ledger payouts sum to $510");
+  eq(round2(harryRows.reduce((s, r) => s + r.payout, 0)), 255, "Harry's split payouts sum to 60% of $425 = $255");
+  eq(tl.totals.payout, 255, "only the assigned mentee is paid");
+
+  const unassigned = tl.ledger.filter((r) => !r.assigned);
+  eq(unassigned.length >= 1, true, "mentee 2 surfaced as unassigned (no engagement)");
+  eq(unassigned.every((r) => r.payout === 0), true, "unassigned lines pay 0");
 
   // An explicit months list scopes the timeline (e.g. a single-month explore).
   const one = computePayTimeline({ invoices, engagements, coachName, clientName, months: ["2026-04"] });
   eq(one.months.length, 1, "explicit months list scopes the timeline");
-  eq(one.ledger.length, 1, "scoped ledger only covers the requested month");
 }
 
 console.log("[10] compare-mode period math (shiftMonths, presets, delta)");

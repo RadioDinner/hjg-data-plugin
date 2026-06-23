@@ -10,6 +10,8 @@ function monthLabel(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   return m ? `${SHORT[m - 1]} ${y}` : ym;
 }
+const ymOf = (d: string) => d.slice(0, 7);
+const dayOf = (d: string) => Number(d.slice(8, 10)) || 1;
 
 type ViewKey = "ledger" | "invoices" | "engagements";
 
@@ -87,8 +89,9 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       }
     } else if (view === "invoices") {
       for (const inv of invoices) {
-        if (!monthInRange(inv.serviceYm)) continue;
-        const c = coachByClientMonth.get(`${inv.serviceYm}|${inv.clientId}`);
+        const invYm = ymOf(inv.serviceDate);
+        if (!monthInRange(invYm)) continue;
+        const c = coachByClientMonth.get(`${invYm}|${inv.clientId}`);
         const cName = c?.coachName ?? "—";
         if (q && !`${clientName(inv.clientId)} ${cName}`.toLowerCase().includes(q)) continue;
         if (c?.coachId != null) m.set(c.coachId, cName);
@@ -131,9 +134,9 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
         tier: r.tier,
         billed: r.billed,
         collected: r.collected,
-        activeDays: r.activeDays,
-        daysInMonth: r.daysInMonth,
-        proration: r.proration,
+        invoiceDay: r.invoiceDay ?? "",
+        recognizedThis: r.recognizedThis,
+        rolloverPrev: r.rolloverPrev,
         splitPct: r.splitPct,
         earned: r.earned,
         payout: r.payout,
@@ -144,12 +147,13 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       { key: "coachName", label: "Coach" },
       { key: "clientName", label: "Mentee" },
       { key: "tier", label: "Tier" },
-      { key: "billed", label: "Billed", numeric: true, format: (r) => fmtUsd(r.billed) },
+      { key: "billed", label: "Billed (this mo)", numeric: true, format: (r) => fmtUsd(r.billed) },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
-      { key: "activeDays", label: "Active days", numeric: true, format: (r) => `${r.activeDays}/${r.daysInMonth}` },
-      { key: "proration", label: "Proration", numeric: true, format: (r) => fmtPct(r.proration) },
+      { key: "invoiceDay", label: "Inv. day", numeric: true },
+      { key: "recognizedThis", label: "This-mo slice", numeric: true, format: (r) => fmtUsd(r.recognizedThis) },
+      { key: "rolloverPrev", label: "Rolled-in", numeric: true, format: (r) => fmtUsd(r.rolloverPrev) },
       { key: "splitPct", label: "Split", numeric: true, format: (r) => fmtPct(r.splitPct) },
-      { key: "earned", label: "Earned (billed × prorate)", numeric: true, format: (r) => fmtUsd(r.earned) },
+      { key: "earned", label: "Earned (this + rolled)", numeric: true, format: (r) => fmtUsd(r.earned) },
       { key: "payout", label: "Payout", numeric: true, format: (r) => fmtUsd(r.payout) },
       { key: "assigned", label: "Status", format: (r) => (r.assigned ? "assigned" : "unassigned") },
     ];
@@ -162,11 +166,13 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
   // nothing was attributed (e.g. no engagement overlapped that month). ---
   const invoiceData = useMemo<{ columns: SortColumn[]; rows: Row[] }>(() => {
     const rows = invoices
-      .filter((inv) => monthInRange(inv.serviceYm))
+      .filter((inv) => monthInRange(ymOf(inv.serviceDate)))
       .map<Row>((inv) => {
-        const c = coachByClientMonth.get(`${inv.serviceYm}|${inv.clientId}`);
+        const invYm = ymOf(inv.serviceDate);
+        const c = coachByClientMonth.get(`${invYm}|${inv.clientId}`);
         return {
-          serviceYm: inv.serviceYm,
+          serviceYm: invYm,
+          serviceDay: dayOf(inv.serviceDate),
           clientName: clientName(inv.clientId),
           coachName: c?.coachName ?? "—",
           coachId: c?.coachId ?? null,
@@ -179,6 +185,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       .filter((r) => !q || `${r.clientName} ${r.coachName}`.toLowerCase().includes(q));
     const columns: SortColumn[] = [
       { key: "serviceYm", label: "Service month", format: (r) => monthLabel(String(r.serviceYm)) },
+      { key: "serviceDay", label: "Inv. day", numeric: true },
       { key: "clientName", label: "Mentee" },
       { key: "coachName", label: "Coach" },
       { key: "clientId", label: "Client ID", numeric: true },
