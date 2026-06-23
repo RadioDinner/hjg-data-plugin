@@ -1,0 +1,8 @@
+--- 2026-06-23 ---
+Lets kick off a new feature/change. Commit everything to main for this session. On the Color coding columns and hash lines vs solid on the "Discovery calls > conversion" card, I want the option to toggle on and off, both the separate mehtods of discovery calls and the converted, not converted, pending, etc.
+Continue from where you left off.
+
+--- 2026-06-23 (AskUserQuestion answer) ---
+Q: main is stale (session 002) with unrelated history; the real work lives on
+   claude/great-albattani-bysuhx. How do you want main handled?
+A: Leave main alone.

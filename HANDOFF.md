@@ -8,6 +8,48 @@ Working notes for resuming this project in a future session. Last updated
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
 
+## Resume here (live state — 2026-06-23, session 007 — WRAPPED)
+
+Picking this up cold — start here. **Session 007 shipped one Metrics tweak.**
+`typecheck` + `verify` (14 sections) + `build` all pass. **No migration, no schema
+change. UI NOT browser-tested** (headless) — eyeball on a Vercel preview.
+
+- **Discovery → conversion card: toggle outcome coloring + channel split.** The card
+  gained **two independent on/off checkboxes** ("Bar coding:"): **Color by outcome**
+  (stack by converted/pending/not-converted/no-show, each its own color) and **Split by
+  method (Zoom / Phone)** (texture each segment — Zoom solid, Phone grid). Both default
+  **on** (= prior behavior). All four combinations render: color-only → solid stacked
+  outcome bars; channel-only → neutral Zoom (solid) + Phone (grid) bars; neither → one
+  neutral "Discovery calls" bar. `convData` gained `Total_phone`/`Total_zoom`; a neutral
+  `ptn-total` grid pattern was added to the chart `<defs>`; the bars are built by a
+  `convBars` memo keyed off the two toggles. The "solid = Zoom, grid = Phone" hint only
+  shows when the channel split is on. Works in compare mode. `MetricsView.tsx` only.
+  Toggles are **ephemeral local state** (like `meetingsMode`/`compareMode`) — not
+  persisted org-wide. **No migration.**
+
+**⚠ GIT TOPOLOGY NOTE (important).** The working branch
+`claude/great-albattani-bysuhx` (where ALL sessions 003–007 live) and the actual
+`origin/main` branch have **completely unrelated histories** (no common ancestor —
+`git merge-base` is empty). `origin/main` is stale at **session 002** and does NOT
+contain the conversion card, theme redesign, Pay/Build/Journeys work, etc. Despite the
+HANDOFF wording ("straight to main"), prior sessions actually landed on
+`claude/*` branches, not the git `main` branch. **Session 007 committed to the working
+branch** (the only coherent place). Reconciling onto the real `main` would require a
+force-push over unrelated history — **the user chose to leave `main` alone (2026-06-23)**;
+the working branch `claude/great-albattani-bysuhx` is the live lineage. Don't touch
+`main` unless the user revisits this.
+
+**▶ Next-session checklist:**
+1. **Browser-verify** the conversion card's two new toggles (all 4 combinations, light +
+   dark, single + compare mode).
+2. **main vs working-branch divergence — DECIDED 2026-06-23: leave `main` alone.**
+   Keep building on `claude/great-albattani-bysuhx` (the live lineage). Don't touch the
+   stale `main` branch unless the user revisits.
+3. The session-006c checklist below is still open (browser-verify themes, re-sync for
+   `ca_invoices.date_of` day, optional pay-color polish).
+
+---
+
 ## Resume here (live state — 2026-06-22, session 006c — WRAPPED)
 
 Picking this up cold — start here. Both session-006b migrations (`9989`, `9988`) are
