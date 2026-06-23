@@ -30,3 +30,6 @@ I LOVE the PAY MAP. Can I somehow set it up so I could send it to the mentors so
 
 --- 2026-06-22 19:35 ---
 Combine the "Discovery Calls" with "Discovery > Conversion", as it's redundant data, then move the "Discovery > Conversion" card on the metrics tab to the top of the page. Then put the "Meetings to Freedom!" card under that.
+
+--- 2026-06-22 19:45 ---
+On the new discovery calls > conversion, I want the columns color coded again

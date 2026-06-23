@@ -68,6 +68,15 @@ const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
   no_show: "No show",
 };
 
+// Color per discovery outcome (matches the status pills) — used to color-code the
+// stacked bars on the Discovery calls → conversion card.
+const OUTCOME_COLORS: Record<DiscoveryOutcomeValue, string> = {
+  converted: "#34d399", // green
+  pending: "#fbbf24", // amber
+  not_converted: "#f87171", // red
+  no_show: "#64748b", // slate
+};
+
 const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
 
 const PRESETS = [
@@ -1310,7 +1319,7 @@ export function MetricsView() {
                     </div>
                     {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
                       <div className="stat" key={k}>
-                        <span className="stat__value">{num(conv.counts[k])}</span>
+                        <span className="stat__value" style={{ color: OUTCOME_COLORS[k] }}>{num(conv.counts[k])}</span>
                         <span className="stat__label">{OUTCOME_LABELS[k]}</span>
                       </div>
                     ))}
@@ -1347,7 +1356,17 @@ export function MetricsView() {
                 />
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Legend />
-                <Bar yAxisId="left" dataKey="Converted" fill={C.converted} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" stackId="calls" dataKey="Converted" name="Converted" fill={OUTCOME_COLORS.converted} />
+                <Bar yAxisId="left" stackId="calls" dataKey="Pending" name="Pending" fill={OUTCOME_COLORS.pending} />
+                <Bar yAxisId="left" stackId="calls" dataKey="Not converted" name="Not converted" fill={OUTCOME_COLORS.not_converted} />
+                <Bar
+                  yAxisId="left"
+                  stackId="calls"
+                  dataKey="No show"
+                  name="No show"
+                  fill={OUTCOME_COLORS.no_show}
+                  radius={[4, 4, 0, 0]}
+                />
                 <Line
                   yAxisId="right"
                   type="monotone"
