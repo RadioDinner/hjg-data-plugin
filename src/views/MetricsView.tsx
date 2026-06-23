@@ -15,11 +15,13 @@ import {
 import {
   COMPARE_PRESETS,
   MANUAL_METRICS,
+  computeMeetingsToFreedom,
   derivePeriodB,
   delta,
   fetchCoachesWithSettings,
   fetchLastSyncedAt,
   fetchManualMetrics,
+  fetchMenteeJourneys,
   fetchMentorCoachIds,
   fetchRangeAppointments,
   fetchResolvedOutcomes,
@@ -28,7 +30,9 @@ import {
   type CompareKey,
   type CoachWithSettings,
   type DiscoveryOutcomeValue,
+  type FreedomReport,
   type ManualMetricRow,
+  type MenteeJourney,
   type RangeAppt,
   type ResolvedOutcome,
 } from "../db";
@@ -376,6 +380,9 @@ export function MetricsView() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [mentorIds, setMentorIds] = useState<Set<number>>(new Set());
   const [coachSettings, setCoachSettings] = useState<CoachWithSettings[]>([]);
+  // All-history mentee journeys, loaded once — backs the "Meetings to Freedom!"
+  // card (graduated-mentee lifetime metric, not scoped to the date range).
+  const [journeys, setJourneys] = useState<MenteeJourney[]>([]);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -446,6 +453,22 @@ export function MetricsView() {
       cancelled = true;
     };
   }, [from, to]);
+
+  // Mentee journeys load once (all-history) for the "Meetings to Freedom!" card.
+  // Not date-scoped, so it doesn't re-fetch as the range changes.
+  useEffect(() => {
+    let cancelled = false;
+    fetchMenteeJourneys()
+      .then((js) => {
+        if (!cancelled) setJourneys(js);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Period B (comparison) data — mirrors the Period A fetches, only while compare
   // mode is on. Clearing on toggle-off guarantees the view returns to the exact
@@ -785,6 +808,36 @@ export function MetricsView() {
       rows: convData.map((d) => [d.month, d.Converted, d.Pending, d["Not converted"], d["No show"], d.Total, d.Rate]),
     }),
     [convData]
+  );
+
+  // "Meetings to Freedom!" — 1-on-1 mentoring sessions from JumpStart completion
+  // (engagement end date) to graduation, per graduated mentee. All-history; not
+  // scoped to the date range. Excluded (test/placeholder) mentees are dropped.
+  const freedomReport = useMemo<FreedomReport>(() => {
+    const inputs = journeys
+      .filter((j) => !j.excluded)
+      .map((j) => ({
+        clientId: j.clientId,
+        name: j.name,
+        graduated: j.resolvedStatus === "graduated",
+        graduationDate: (j.override === "graduated" ? j.overrideDate : null) ?? j.stageDates.graduated,
+        jumpstartEnd: j.jumpstartEndDate,
+        firstOngoingStart:
+          [j.stageDates["4x"], j.stageDates["2x"], j.stageDates["1x"]].filter((d): d is string => !!d).sort()[0] ?? null,
+        meetings: j.meetings.map((m) => ({ date: m.date, isGroup: m.isGroup })),
+      }));
+    return computeMeetingsToFreedom(inputs);
+  }, [journeys]);
+  const freedomBars = useMemo(
+    () => freedomReport.rows.map((r) => ({ name: r.name, meetings: r.meetings })),
+    [freedomReport]
+  );
+  const freedomTable = useMemo<ChartCardTable>(
+    () => ({
+      columns: ["Mentee", "JumpStart completed", "Graduated", "1-on-1 sessions"],
+      rows: freedomReport.rows.map((r) => [r.name, r.windowStart, r.graduationDate, r.meetings]),
+    }),
+    [freedomReport]
   );
 
   // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
@@ -1446,6 +1499,57 @@ export function MetricsView() {
                   />
                 )}
               </ComposedChart>
+            </ChartCard>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <ChartCard
+              title="Meetings to Freedom!"
+              helpId="metrics.freedom"
+              table={freedomTable}
+              extra={
+                <>
+                  <p className="view__hint">
+                    1-on-1 mentoring sessions (4x / 2x / 1x) from the completion of{" "}
+                    <strong>JumpStart Your Freedom</strong> to <strong>graduation</strong>, per graduated mentee. Group
+                    sessions don't count. <em>All-time — not affected by the date range above.</em>
+                  </p>
+                  <div className="stat-row">
+                    <div className="stat">
+                      <span className="stat__value">{freedomReport.avg ?? "—"}</span>
+                      <span className="stat__label">Avg to freedom</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{freedomReport.median ?? "—"}</span>
+                      <span className="stat__label">Median</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">{num(freedomReport.n)}</span>
+                      <span className="stat__label">Graduates measured</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat__value">
+                        {freedomReport.min ?? "—"}–{freedomReport.max ?? "—"}
+                      </span>
+                      <span className="stat__label">Range</span>
+                    </div>
+                  </div>
+                  {freedomReport.unmeasured > 0 && (
+                    <p className="view__hint" style={{ marginTop: 4 }}>
+                      {num(freedomReport.unmeasured)} graduated mentee{freedomReport.unmeasured === 1 ? "" : "s"} omitted
+                      (missing a JumpStart-completion or graduation date).
+                    </p>
+                  )}
+                </>
+              }
+            >
+              <BarChart data={freedomBars} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="name" {...axisProps} interval={0} angle={-25} textAnchor="end" height={72} />
+                <YAxis allowDecimals={false} width={28} {...axisProps} />
+                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Bar dataKey="meetings" name="1-on-1 sessions" fill={C.mentees} radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ChartCard>
           </div>
 

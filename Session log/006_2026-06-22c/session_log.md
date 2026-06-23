@@ -9,6 +9,23 @@ contextual-help coverage**. Committed straight to `main`.
 
 ## What shipped (on `main`)
 
+- **"Meetings to Freedom!" metric card (user request).** New card on the **Metrics**
+  tab (the user's chosen location): per **graduated** mentee, the number of **1-on-1
+  mentoring sessions** (4x/2x/1x) between the **completion of JumpStart Your Freedom**
+  and **graduation**; group sessions excluded.
+  - Window start = the JumpStart engagement's **end date** (the user's chosen
+    definition), fallback = first ongoing-tier entry if no end date; window end =
+    graduation (After-Graduation-Care engagement or a manual "graduated" override).
+  - Avg / median / n / range tiles + per-mentee bars + a table (graph AND table);
+    graduates missing an endpoint are surfaced as "omitted". **All-time** (not scoped
+    to the date range).
+  - Pure math in **`lib/freedom.ts`** (`computeMeetingsToFreedom`), re-exported via
+    `src/db.ts`, locked by **verify §14**. Plumbing: threaded `ca_engagements.end_date`
+    through the journeys layer → new `MenteeJourney.jumpstartEndDate`. **No migration**
+    (end_date already mirrored). "?" article `metrics.freedom`.
+  - AskUserQuestion: **Metrics tab** (vs Journeys) + **JumpStart engagement end date**
+    (vs first ongoing-tier entry) for the window start.
+
 - **Contextual help — expanded coverage.** Wired the session-006b "?" drawer into the
   cards/tabs it didn't cover yet, with new articles in `src/help/articles.ts`:
   - `metrics.capacity` — Mentor capacity utilization (incl. the group-session /

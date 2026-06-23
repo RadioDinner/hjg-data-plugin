@@ -199,6 +199,23 @@ Pure logic in \`lib/journey.ts\`.`,
 - Each option is a dropdown declared in a registry (\`src/companyOptions.ts\`) and saved to the \`app_settings\` table.
 - First option: **Journeys → stage-date basis** (engagement start vs. first 1-on-1 meeting), also togglable inline on the Journeys tab.`,
   },
+
+  "metrics.freedom": {
+    title: "Meetings to Freedom!",
+    body: `For each **graduated** mentee, how many **1-on-1 mentoring sessions** (4x / 2x / 1x) it took to walk them from finishing JumpStart to graduation ("Freedom").
+
+### The window
+- **Starts** when **JumpStart Your Freedom** completed — the mentee's JumpStart engagement **end date** (falls back to when they entered their first ongoing tier if no end date was recorded).
+- **Ends** at the **graduation** date (an "After Graduation Care" engagement, or a manual "graduated" override).
+
+### Counting
+- Only **1-on-1** mentoring meetings inside that window count — **group** sessions (In Depth / Tracking Together) are excluded.
+- Only **graduated** mentees are measured (you need both endpoints). A graduate missing a JumpStart-completion or graduation date is shown as "omitted", not counted. Test/placeholder mentees you've excluded are left out.
+- **All-time** — this card is *not* affected by the date range at the top of the page.
+
+### Source
+- Per-mentee journeys (\`fetchMenteeJourneys\`): \`ca_appointments\` (1-on-1 mentoring) + \`ca_engagements\` (JumpStart end + graduation). Pure math in \`lib/freedom.ts\`.`,
+  },
 };
 
 export function getHelpArticle(id: string): HelpArticle | undefined {

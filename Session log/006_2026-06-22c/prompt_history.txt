@@ -3,3 +3,10 @@ I applied both migrations, build the next feature
 
 --- 2026-06-22 18:00 ---
 wait, so you finished the entire feature backlog?
+
+--- 2026-06-22 18:10 ---
+Ok, well then I want a new metric card added called "Meetings to Freedom!" and I want it to count how many 1 on 1 mentoring sessions, whether 4x, 2x or 1x, between the completion of JumpStart Your Freedom and the Graduation
+
+--- 2026-06-22 18:12 (AskUserQuestion answers) ---
+Q: Where should the "Meetings to Freedom!" card live?  A: Metrics tab
+Q: What marks 'completion of JumpStart'?  A: JumpStart engagement end date

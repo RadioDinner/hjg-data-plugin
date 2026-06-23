@@ -39,6 +39,10 @@ export type { CompareKey, ComparePreset, Delta, Range as ComparePeriod } from ".
 export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
 export type { CapacityAppt } from "../lib/capacity";
 
+// Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
+export { computeMeetingsToFreedom } from "../lib/freedom";
+export type { FreedomMenteeInput, FreedomRow, FreedomReport } from "../lib/freedom";
+
 // Pure pipeline stage-date logic (engagement-start vs first-meeting basis).
 import {
   computeStageDates,
@@ -622,6 +626,9 @@ export interface MenteeJourney {
   // Care" engagement.
   stageDates: Record<PipelineTier, string | null>;
   currentTier: PipelineTier | null;
+  // Latest JumpStart-engagement end date (when JumpStart Your Freedom completed),
+  // used as the "Meetings to Freedom!" window start. Null if no ended JumpStart.
+  jumpstartEndDate: string | null;
   // Manual override (mentee_outcomes), if any.
   overrideId: string | null;
   override: MenteeStatus | null;
@@ -708,6 +715,7 @@ interface EngagementRow {
   client_id: number | null;
   name: string | null;
   start_date: string | null;
+  end_date: string | null;
   is_complete: boolean | null;
   is_canceled: boolean | null;
 }
@@ -719,7 +727,7 @@ async function fetchAllEngagements(): Promise<EngagementRow[]> {
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_engagements")
-      .select("id,client_id,name,start_date,is_complete,is_canceled")
+      .select("id,client_id,name,start_date,end_date,is_complete,is_canceled")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as EngagementRow[];
@@ -736,6 +744,7 @@ interface ClientStages {
   stageDates: Record<PipelineTier, string | null>;
   currentTier: PipelineTier | null;
   hasOpen: boolean;
+  jumpstartEnd: string | null; // latest JumpStart engagement end (completion) date
 }
 // Build per-client stages for the chosen basis. Engagements give each tier's
 // start date + the engagement→tier map; meetings (tagged with their engagement's
@@ -749,6 +758,7 @@ function buildClientStages(
   const engTierById = new Map<number, PipelineTier>();
   const engByClient = new Map<number, EngagementStageInput[]>();
   const hasOpen = new Map<number, boolean>();
+  const jumpstartEnd = new Map<number, string>();
   for (const e of engagements) {
     if (e.client_id == null) continue;
     const tier = engagementTier(e.name);
@@ -759,6 +769,11 @@ function buildClientStages(
     arr.push({ tier: pt, startDate: e.start_date });
     engByClient.set(e.client_id, arr);
     if (!e.is_complete && !e.is_canceled) hasOpen.set(e.client_id, true);
+    // Latest JumpStart-engagement end date = when JumpStart Your Freedom completed.
+    if (pt === "jumpstart" && e.end_date) {
+      const cur = jumpstartEnd.get(e.client_id);
+      if (!cur || e.end_date > cur) jumpstartEnd.set(e.client_id, e.end_date);
+    }
   }
   // Tag each meeting with its engagement's tier so "first meeting" can date stages.
   const meetByClient = new Map<number, MeetingStageInput[]>();
@@ -775,7 +790,12 @@ function buildClientStages(
   const out = new Map<number, ClientStages>();
   for (const clientId of new Set<number>([...engByClient.keys(), ...meetByClient.keys()])) {
     const stageDates = computeStageDates(basis, engByClient.get(clientId) ?? [], meetByClient.get(clientId) ?? []);
-    out.set(clientId, { stageDates, currentTier: highestTier(stageDates), hasOpen: hasOpen.get(clientId) ?? false });
+    out.set(clientId, {
+      stageDates,
+      currentTier: highestTier(stageDates),
+      hasOpen: hasOpen.get(clientId) ?? false,
+      jumpstartEnd: jumpstartEnd.get(clientId) ?? null,
+    });
   }
   return out;
 }
@@ -883,6 +903,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       engagementIds,
       stageDates,
       currentTier,
+      jumpstartEndDate: st?.jumpstartEnd ?? null,
       overrideId: o?.id ?? null,
       override,
       overrideDate,

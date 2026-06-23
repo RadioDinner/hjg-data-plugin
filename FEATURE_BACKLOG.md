@@ -18,6 +18,21 @@ below). Add new ideas here, newest on top._
 
 ## Shipped
 
+### Metrics — "Meetings to Freedom!" card — session 006c, 2026-06-22
+
+User-requested new metric card on the **Metrics** tab: per **graduated** mentee, the
+number of **1-on-1 mentoring sessions** (4x / 2x / 1x) between the **completion of
+JumpStart Your Freedom** and **graduation** (group sessions excluded). Window start =
+the JumpStart engagement's **end date** (user's choice), falling back to first
+ongoing-tier entry if no end date; window end = graduation (After-Graduation-Care
+engagement or a manual "graduated" override). Shows avg / median / n / range tiles +
+per-mentee bars + a table (graph AND table, north star); graduates missing an endpoint
+are reported as "omitted". **All-time** (not range-scoped). Pure math in
+**`lib/freedom.ts`** (`computeMeetingsToFreedom`), re-exported via `src/db.ts`, locked
+by **verify §14**. Needed plumbing: `ca_engagements.end_date` threaded through the
+journeys layer → new `MenteeJourney.jumpstartEndDate`. **No migration** (end_date
+already mirrored). Has a "?" help article (`metrics.freedom`). ⚠ Not browser-verified.
+
 ### Contextual help — expanded coverage (capacity, resource, Discovery, Raw data, Company options) — session 006c, 2026-06-22
 
 Followed up the session-006b help framework by wiring the "?" drawer into the cards/

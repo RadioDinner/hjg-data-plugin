@@ -11,12 +11,20 @@ Working notes for resuming this project in a future session. Last updated
 ## Resume here (live state — 2026-06-22, session 006c — WRAPPED)
 
 Picking this up cold — start here. Both session-006b migrations (`9989`, `9988`) are
-**applied** (per the user). **Session 006c** was a small follow-up after the backlog
-emptied: it **expanded the contextual-help "?" coverage** to the cards/tabs the 006b
-framework didn't reach — Mentor capacity, Resource engagement, the Discovery tab, the
-Raw data tab, and the Company options tab (new articles in `src/help/articles.ts`).
-**No migration, no schema change.** `typecheck` + `build` pass; UI not browser-tested.
-**`FEATURE_BACKLOG.md` has no planned items** — add new ideas before building.
+**applied** (per the user). **Session 006c** (after the backlog emptied) shipped two things:
+- **"Meetings to Freedom!" metric card** (user request) on the **Metrics** tab — per
+  graduated mentee, 1-on-1 mentoring sessions (4x/2x/1x) from JumpStart completion
+  (the JumpStart engagement **end date**, fallback first ongoing-tier entry) to
+  graduation; group sessions excluded. Avg/median/n/range tiles + per-mentee bars +
+  table; all-time (not range-scoped). Pure `lib/freedom.ts` (`computeMeetingsToFreedom`,
+  **verify §14**); threaded `ca_engagements.end_date` → `MenteeJourney.jumpstartEndDate`.
+  **No migration.** Has a "?" article.
+- **Expanded contextual-help "?" coverage** to Mentor capacity, Resource engagement,
+  the Discovery / Raw data / Company options tabs (new articles in `src/help/articles.ts`).
+
+Both **no migration, no schema change.** `typecheck` + `verify` (now **14 sections**) +
+`build` pass; UI not browser-tested. **`FEATURE_BACKLOG.md` has no planned items** —
+add new ideas before building.
 
 ---
 

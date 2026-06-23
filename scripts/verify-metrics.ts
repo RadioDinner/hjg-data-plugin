@@ -13,6 +13,7 @@ import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
 import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
 import { computeStageDates, highestTier, type EngagementStageInput, type MeetingStageInput } from "../lib/journey.js";
+import { computeMeetingsToFreedom, type FreedomMenteeInput } from "../lib/freedom.js";
 import {
   computePayReport,
   computePayTimeline,
@@ -528,6 +529,64 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   eq(isDefaultLineState({ included: false, override: null, note: null }), false, "excluded is not default");
   eq(isDefaultLineState({ included: true, override: 0, note: null }), false, "override (even 0) is not default");
   eq(isDefaultLineState({ included: true, override: null, note: "checked" }), false, "noted line is not default");
+}
+
+console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");
+{
+  const mentees: FreedomMenteeInput[] = [
+    {
+      // JumpStart end wins as window start; group + out-of-window meetings excluded;
+      // graduation-day meeting counts (inclusive).
+      clientId: 1,
+      name: "Alice",
+      graduated: true,
+      graduationDate: "2026-06-30",
+      jumpstartEnd: "2026-01-31",
+      firstOngoingStart: "2026-02-01",
+      meetings: [
+        { date: "2026-01-15", isGroup: false }, // before window (JumpStart phase)
+        { date: "2026-02-10", isGroup: false }, // in window
+        { date: "2026-03-10", isGroup: true }, // group -> excluded
+        { date: "2026-04-10", isGroup: false }, // in window
+        { date: "2026-06-30", isGroup: false }, // on graduation day -> counts
+        { date: "2026-07-15", isGroup: false }, // after graduation
+      ],
+    },
+    {
+      // No JumpStart end -> falls back to first ongoing-tier start.
+      clientId: 2,
+      name: "Bob",
+      graduated: true,
+      graduationDate: "2026-05-31",
+      jumpstartEnd: null,
+      firstOngoingStart: "2026-03-01",
+      meetings: [
+        { date: "2026-03-05", isGroup: false },
+        { date: "2026-04-05", isGroup: false },
+      ],
+    },
+    { clientId: 3, name: "Cara", graduated: false, graduationDate: null, jumpstartEnd: "2026-01-01", firstOngoingStart: "2026-02-01", meetings: [{ date: "2026-03-01", isGroup: false }] },
+    { clientId: 4, name: "Dan", graduated: true, graduationDate: "2026-05-01", jumpstartEnd: null, firstOngoingStart: null, meetings: [] }, // no window
+    { clientId: 5, name: "Eve", graduated: true, graduationDate: "2026-05-01", jumpstartEnd: "2026-06-01", firstOngoingStart: null, meetings: [] }, // window starts after graduation (anomaly)
+  ];
+
+  const rep = computeMeetingsToFreedom(mentees);
+  eq(rep.n, 2, "two measurable graduated mentees (Alice, Bob)");
+  eq(rep.unmeasured, 2, "Dan (no window) + Eve (start after grad) unmeasured");
+  eq(rep.rows[0].name, "Alice", "rows sorted by meetings desc (Alice first)");
+  eq(rep.rows[0].meetings, 3, "Alice: Feb10 + Apr10 + Jun30 (group + out-of-window excluded)");
+  eq(rep.rows[0].windowStart, "2026-01-31", "Alice window starts at JumpStart end date");
+  const bob = rep.rows.find((r) => r.name === "Bob")!;
+  eq(bob.meetings, 2, "Bob: both ongoing meetings count");
+  eq(bob.windowStart, "2026-03-01", "Bob falls back to first ongoing-tier start (no JumpStart end)");
+  eq(rep.total, 5, "total sessions across measurable mentees");
+  eq(rep.avg, 2.5, "avg meetings-to-freedom = 5/2");
+  eq(rep.median, 2.5, "median of [2,3] = 2.5");
+  eq(rep.min, 2, "min = 2");
+  eq(rep.max, 3, "max = 3");
+
+  eq(computeMeetingsToFreedom([]).n, 0, "empty input -> n 0");
+  eq(computeMeetingsToFreedom([]).avg, null, "empty input -> avg null");
 }
 
 console.log("");
