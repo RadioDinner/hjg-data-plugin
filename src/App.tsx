@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth, signOut } from "./auth";
+import { useTheme } from "./theme";
 import { Login } from "./components/Login";
 import { MetricsView } from "./views/MetricsView";
 import { DiscoveryView } from "./views/DiscoveryView";
@@ -27,6 +28,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 export function App() {
   const { user, loading } = useAuth();
+  const { theme, toggle } = useTheme();
   const [tab, setTab] = useState<Tab>("metrics");
 
   if (loading) return <div className="loading">Loading…</div>;
@@ -41,6 +43,14 @@ export function App() {
         </div>
         <div className="topbar__controls">
           <span className="topbar__user">{user.email}</span>
+          <button
+            className="theme-toggle"
+            onClick={toggle}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
           <button className="btn" onClick={() => signOut()}>
             Sign out
           </button>

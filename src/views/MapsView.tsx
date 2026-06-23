@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTheme } from "../theme";
 
 // The "Maps" tab — visual, in-app explainers, each a self-contained static page
 // under public/ embedded in an iframe (kept as snapshots; no app data needed):
@@ -23,8 +24,10 @@ const MAPS = [
 type MapKey = (typeof MAPS)[number]["key"];
 
 export function MapsView() {
+  const { theme } = useTheme();
   const [active, setActive] = useState<MapKey>("data");
   const cur = MAPS.find((m) => m.key === active) ?? MAPS[0];
+  const src = `${cur.src}?theme=${theme}`; // the static pages read ?theme to match light/dark
 
   return (
     <section className="card" style={{ display: "flex", flexDirection: "column" }}>
@@ -47,15 +50,15 @@ export function MapsView() {
               </button>
             ))}
           </div>
-          <a className="btn btn--sm" href={cur.src} target="_blank" rel="noopener" title="Open this map full screen in a new tab">
+          <a className="btn btn--sm" href={src} target="_blank" rel="noopener" title="Open this map full screen in a new tab">
             Full screen ↗
           </a>
         </div>
       </div>
 
       <iframe
-        key={cur.key}
-        src={cur.src}
+        key={cur.key + theme}
+        src={src}
         title={cur.label}
         style={{
           width: "100%",

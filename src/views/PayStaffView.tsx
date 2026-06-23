@@ -4,10 +4,8 @@ import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimel
 import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
+import { useChartTokens } from "../theme";
 
-const AXIS = "#94a3b8";
-const GRID = "#1e293b";
-const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -104,6 +102,10 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [explore, setExplore] = useState<{ initialMonth?: string } | null>(null);
+  const ct = useChartTokens();
+  const AXIS = ct.axis;
+  const GRID = ct.grid;
+  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
 
   useEffect(() => {
     let live = true;
@@ -246,7 +248,7 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
                   <Tooltip contentStyle={TOOLTIP} formatter={(v) => fmtUsd(Number(v))} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar name="Billed" dataKey="billed" fill="#334155" radius={[4, 4, 0, 0]} />
-                  <Bar name="Payout" dataKey="payout" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                  <Bar name="Payout" dataKey="payout" fill={ct.accent} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

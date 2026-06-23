@@ -38,6 +38,7 @@ import {
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
+import { useChartTokens } from "../theme";
 import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp } from "../format";
 
@@ -45,15 +46,8 @@ type ChartCardCell = string | number;
 type ChartCardTable = { columns: string[]; rows: ChartCardCell[][] };
 type ChartCardView = "graph" | "table" | "both";
 
-const AXIS = "#94a3b8";
-const GRID = "#1e293b";
-const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
 const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b", converted: "#34d399", rate: "#f472b6" };
 const PALETTE = ["#38bdf8", "#34d399", "#a78bfa", "#f59e0b", "#f472b6", "#22d3ee", "#fb7185", "#a3e635"];
-// Period B in compare mode — a neutral "reference" tone that reads as the prior
-// period across every card (dashed line for line/composed charts, paired bar for
-// bar charts) without colliding with any series' own accent.
-const CMP = "#cbd5e1";
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function shortType(name: string): string {
@@ -87,8 +81,6 @@ const OUTCOME_KEYBASE: Record<DiscoveryOutcomeValue, string> = {
   not_converted: "NotConverted",
   no_show: "NoShow",
 };
-
-const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
 
 const PRESETS = [
   { key: "this_month", label: "This month" },
@@ -403,6 +395,14 @@ export function MetricsView() {
   const [manualB, setManualB] = useState<ManualMetricRow[]>([]);
   const [outcomesB, setOutcomesB] = useState<Map<number, ResolvedOutcome>>(new Map());
   const [loadingB, setLoadingB] = useState(false);
+
+  // Theme-aware chart colors (recharts needs concrete values, not CSS vars).
+  const ct = useChartTokens();
+  const AXIS = ct.axis;
+  const GRID = ct.grid;
+  const CMP = ct.cmp;
+  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
+  const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
 
   // Effective Period B range: derived from A while a preset is active, otherwise
   // the user-edited custom range.

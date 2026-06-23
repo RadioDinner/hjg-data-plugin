@@ -4,13 +4,34 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>HJG — How Mentor Pay Is Calculated</title>
+<script>
+  // Match the dashboard's theme: ?theme=light|dark, else the OS preference.
+  (function () {
+    try {
+      var p = new URLSearchParams(location.search).get("theme");
+      var t = p === "light" || p === "dark"
+        ? p
+        : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = t;
+    } catch (e) { /* ignore */ }
+  })();
+</script>
 <style>
   :root {
-    --bg: #0f172a; --panel: #1e293b; --panel-2: #0b1324; --line: #334155;
+    /* light (default) */
+    --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f1f3f6; --line: #e3e7ee;
+    --text: #1e293b; --muted: #64748b;
+    --this: #2563eb;   /* paid in the invoice's own month */
+    --roll: #d97706;   /* rolls into the next month */
+    --good: #059669;
+    --on-bar: #ffffff; /* text on colored bars */
+    --alex: #2563eb; --bob: #7c3aed; --chase: #059669;
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a; --panel: #1a2335; --panel-2: #0b1324; --line: #2c3a52;
     --text: #e2e8f0; --muted: #94a3b8;
-    --this: #38bdf8;   /* paid in the invoice's own month */
-    --roll: #f59e0b;   /* rolls into the next month */
-    --good: #34d399;
+    --this: #38bdf8; --roll: #f59e0b; --good: #34d399;
+    --on-bar: #06121f;
     --alex: #38bdf8; --bob: #a78bfa; --chase: #34d399;
   }
   * { box-sizing: border-box; }
@@ -21,16 +42,16 @@
   h2 { font-size: 16px; margin: 24px 0 8px; }
   h3 { font-size: 14px; margin: 18px 0 8px; color: var(--text); }
   .sub { color: var(--muted); font-size: 14px; margin: 0 0 8px; line-height: 1.55; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-top: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; margin-top: 14px; }
   .muted { color: var(--muted); }
   p { line-height: 1.6; font-size: 14px; }
-  code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  code { background: rgba(127,127,127,.16); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
   .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; margin: 4px 0 10px; }
   .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: var(--panel-2); color: var(--muted); border: none; padding: 7px 14px; font-size: 13px; cursor: pointer; }
   .seg button + button { border-left: 1px solid var(--line); }
-  .seg button.on { background: var(--this); color: #03283a; font-weight: 700; }
+  .seg button.on { background: var(--this); color: #ffffff; font-weight: 700; }
   .ratebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
 
   /* mentee editor */
@@ -38,11 +59,11 @@
   .mentee .top { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
   .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 7px; vertical-align: 0px; }
   .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
-  .field input[type=text] { width: 170px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 14px; font-weight: 600; }
-  .field input[type=number] { width: 110px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 14px; }
+  .field input[type=text] { width: 170px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 4px; padding: 7px 9px; font-size: 14px; font-weight: 600; }
+  .field input[type=number] { width: 110px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 4px; padding: 7px 9px; font-size: 14px; }
   .field input[type=range] { width: 190px; accent-color: var(--this); }
-  .bar { display: flex; height: 38px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); margin: 12px 0 6px; background: var(--panel); }
-  .bar > div { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #06121f; white-space: nowrap; overflow: hidden; transition: width .15s ease; }
+  .bar { display: flex; height: 38px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); margin: 12px 0 6px; background: var(--panel); }
+  .bar > div { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--on-bar); white-space: nowrap; overflow: hidden; transition: width .15s ease; }
   .seg-this { background: var(--this); } .seg-roll { background: var(--roll); }
   .mnums { display: flex; gap: 22px; flex-wrap: wrap; font-size: 12px; }
   .mnums b { display: block; font-size: 15px; }
@@ -60,7 +81,7 @@
   th { color: var(--muted); font-weight: 600; }
   .foot td { border-top: 2px solid var(--line); font-weight: 700; }
   .note { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.55; }
-  .share { background: rgba(56,189,248,.08); border: 1px solid #1e4a5f; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #bae6fd; margin-top: 12px; }
+  .share { background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--this); border-radius: 0 6px 6px 0; padding: 10px 14px; font-size: 13px; color: var(--muted); margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -132,8 +153,8 @@
     return { elapsed: elapsed, remaining: remaining, thisMonth: amount * remaining * rate, nextMonth: amount * elapsed * rate, full: amount * rate };
   }
 
-  var COLORS = ["var(--alex)", "var(--bob)", "var(--chase)"];
-  var HEX = ["#38bdf8", "#a78bfa", "#34d399"];
+  // CSS-var colors so the chart matches whichever theme is active.
+  var HEX = ["var(--alex)", "var(--bob)", "var(--chase)"];
   var mentees = [
     { name: "Alex Arnold", amount: 425, day: 12 },   // 4x
     { name: "Bob Boyd", amount: 265, day: 5 },        // 2x

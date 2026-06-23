@@ -18,6 +18,7 @@ import {
   type StageBasis,
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
+import { useChartTokens } from "../theme";
 
 const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
 
@@ -27,9 +28,7 @@ function spanDays(a: string | null, b: string | null): number | null {
   return Math.floor((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
-const AXIS = "#94a3b8";
-const GRID = "#1e293b";
-const TOOLTIP = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" };
+type ChartStyle = { background: string; border: string; borderRadius: number; color: string };
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const STATUS_LABEL: Record<ResolvedMenteeStatus, string> = {
@@ -85,6 +84,10 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [excluding, setExcluding] = useState(false);
+  const ct = useChartTokens();
+  const AXIS = ct.axis;
+  const GRID = ct.grid;
+  const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
 
   // Reset the editor when a different mentee is selected.
   useEffect(() => {
@@ -262,11 +265,11 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
   );
 }
 
-function LegTooltip({ active, payload }: { active?: boolean; payload?: { payload: { leg: string; avg: number | null; median: number | null; n: number } }[] }) {
+function LegTooltip({ active, payload, tip }: { active?: boolean; payload?: { payload: { leg: string; avg: number | null; median: number | null; n: number } }[]; tip?: ChartStyle }) {
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
   return (
-    <div style={{ ...TOOLTIP, padding: "6px 10px", fontSize: 13 }}>
+    <div style={{ ...tip, padding: "6px 10px", fontSize: 13 }}>
       <div style={{ marginBottom: 4 }}>{p.leg}</div>
       <div>Average: {humanizeDays(p.avg)}</div>
       <div>Median: {humanizeDays(p.median)}</div>
@@ -277,6 +280,10 @@ function LegTooltip({ active, payload }: { active?: boolean; payload?: { payload
 
 // Board-level roll-up of the pipeline-leg durations across every mentee.
 function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
+  const ct = useChartTokens();
+  const AXIS = ct.axis;
+  const GRID = ct.grid;
+  const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
   const legs = useMemo(() => aggregateJourneyDurations(journeys), [journeys]);
   const counts = useMemo(() => {
     let active = 0;
@@ -336,8 +343,8 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
               <CartesianGrid stroke={GRID} horizontal={false} />
               <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
               <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
-              <Tooltip content={<LegTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-              <Bar dataKey="avg" fill="#38bdf8" radius={[0, 3, 3, 0]} />
+              <Tooltip content={<LegTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+              <Bar dataKey="avg" fill={ct.accent} radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
