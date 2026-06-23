@@ -33,3 +33,6 @@ Combine the "Discovery Calls" with "Discovery > Conversion", as it's redundant d
 
 --- 2026-06-22 19:45 ---
 On the new discovery calls > conversion, I want the columns color coded again
+
+--- 2026-06-22 19:55 ---
+Make the colors more asthetically pleasing, like a range of colors, not these stark mixes. Also, I meant when I said that I want the columns color coded, that I want to be able to see the dcifference between phone ones and zoom ones. Make phone ones with a grid pattern and zoom ones solid. Keep the coloring of conversion, pending etc

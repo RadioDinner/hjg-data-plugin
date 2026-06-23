@@ -69,6 +69,10 @@ export const HELP_ARTICLES: Record<string, HelpArticle> = {
     title: "Discovery calls → conversion",
     body: `Every discovery call in the range and how it resolved — this single card combines the call counts (total, plus the Phone / Zoom split) with the conversion outcomes.
 
+### Reading the bars
+- Each column's **height** is that month's total calls, **colored by outcome** (converted / pending / not converted / no show); the **line** is the conversion rate.
+- **Channel:** **solid** segments are **Zoom** calls, **grid-patterned** segments are **Phone** calls.
+
 ### When a call converts
 - A call **converts** when the prospect purchases **JumpStart Your Freedom (Waiting List)** (offering \`42840\`) on or after the call date.
 - No purchase yet, still within 30 days of the call → **pending**.

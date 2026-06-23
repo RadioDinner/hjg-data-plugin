@@ -68,13 +68,24 @@ const OUTCOME_LABELS: Record<DiscoveryOutcomeValue, string> = {
   no_show: "No show",
 };
 
-// Color per discovery outcome (matches the status pills) — used to color-code the
-// stacked bars on the Discovery calls → conversion card.
+// Color per discovery outcome — a soft, cohesive range (sea-green → gold → coral →
+// slate-blue) rather than stark primaries, used to color-code the stacked bars on
+// the Discovery calls → conversion card. Phone segments render as a grid pattern of
+// the same color; zoom segments render solid (see the chart's <defs>).
 const OUTCOME_COLORS: Record<DiscoveryOutcomeValue, string> = {
-  converted: "#34d399", // green
-  pending: "#fbbf24", // amber
-  not_converted: "#f87171", // red
-  no_show: "#64748b", // slate
+  converted: "#6cc4a1", // soft sea-green
+  pending: "#e3c06a", // muted gold
+  not_converted: "#dd9183", // soft coral
+  no_show: "#8a93b3", // muted slate-blue
+};
+// Stacking order (best → inactive) + the data-key prefix for each outcome's
+// phone/zoom split in convData.
+const OUTCOME_ORDER: DiscoveryOutcomeValue[] = ["converted", "pending", "not_converted", "no_show"];
+const OUTCOME_KEYBASE: Record<DiscoveryOutcomeValue, string> = {
+  converted: "Converted",
+  pending: "Pending",
+  not_converted: "NotConverted",
+  no_show: "NoShow",
 };
 
 const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
@@ -777,9 +788,16 @@ export function MetricsView() {
       buckets.map((b) => {
         const items = (byMonth.get(b.key) ?? []).filter((a) => a.category !== "mentoring");
         const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+        // Per-outcome split by channel (phone vs zoom) so the bars can show both
+        // the outcome (color) and the channel (phone = grid pattern, zoom = solid).
+        const phone: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+        const zoom: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
         for (const a of items) {
           const o = outcomes.get(a.id);
-          if (o) counts[o.outcome]++;
+          if (!o) continue;
+          counts[o.outcome]++;
+          if (a.category === "discoveryPhone") phone[o.outcome]++;
+          else zoom[o.outcome]++; // zoom + any non-phone channel render solid
         }
         const total = items.length;
         return {
@@ -789,6 +807,14 @@ export function MetricsView() {
           Pending: counts.pending,
           "Not converted": counts.not_converted,
           "No show": counts.no_show,
+          Converted_phone: phone.converted,
+          Converted_zoom: zoom.converted,
+          Pending_phone: phone.pending,
+          Pending_zoom: zoom.pending,
+          NotConverted_phone: phone.not_converted,
+          NotConverted_zoom: zoom.not_converted,
+          NoShow_phone: phone.no_show,
+          NoShow_zoom: zoom.no_show,
           Total: total,
           Rate: total > 0 ? Math.round((counts.converted / total) * 100) : 0,
         };
@@ -1301,7 +1327,8 @@ export function MetricsView() {
                     JumpStart Your Freedom (Waiting List) on or after the call. With no purchase it stays pending for 30
                     days, then becomes not converted. Staff overrides on the Discovery tab take precedence. Overall
                     conversion rate: <strong>{pct(conv.rate)}</strong>
-                    {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
+                    {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>} ·{" "}
+                    <span style={{ whiteSpace: "nowrap" }}>bars: solid = Zoom, grid = Phone</span>
                     {!compareMode && <> · <em>click a bar to see that month's calls</em></>}
                   </p>
                   <div className="stat-row">
@@ -1354,19 +1381,40 @@ export function MetricsView() {
                   unit="%"
                   {...axisProps}
                 />
+                <defs>
+                  {OUTCOME_ORDER.map((k) => (
+                    <pattern key={k} id={`ptn-${k}`} width="6" height="6" patternUnits="userSpaceOnUse">
+                      <rect width="6" height="6" fill={OUTCOME_COLORS[k]} />
+                      <path d="M6 0 V6 M0 6 H6" stroke="rgba(15,23,42,0.55)" strokeWidth="1" />
+                    </pattern>
+                  ))}
+                </defs>
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Legend />
-                <Bar yAxisId="left" stackId="calls" dataKey="Converted" name="Converted" fill={OUTCOME_COLORS.converted} />
-                <Bar yAxisId="left" stackId="calls" dataKey="Pending" name="Pending" fill={OUTCOME_COLORS.pending} />
-                <Bar yAxisId="left" stackId="calls" dataKey="Not converted" name="Not converted" fill={OUTCOME_COLORS.not_converted} />
-                <Bar
-                  yAxisId="left"
-                  stackId="calls"
-                  dataKey="No show"
-                  name="No show"
-                  fill={OUTCOME_COLORS.no_show}
-                  radius={[4, 4, 0, 0]}
-                />
+                {OUTCOME_ORDER.flatMap((k, oi) => {
+                  const top = oi === OUTCOME_ORDER.length - 1;
+                  return [
+                    // Zoom = solid; shows the outcome color in the legend.
+                    <Bar
+                      key={`${k}-zoom`}
+                      yAxisId="left"
+                      stackId="calls"
+                      dataKey={`${OUTCOME_KEYBASE[k]}_zoom`}
+                      name={OUTCOME_LABELS[k]}
+                      fill={OUTCOME_COLORS[k]}
+                    />,
+                    // Phone = grid pattern of the same color; hidden from the legend.
+                    <Bar
+                      key={`${k}-phone`}
+                      yAxisId="left"
+                      stackId="calls"
+                      dataKey={`${OUTCOME_KEYBASE[k]}_phone`}
+                      legendType="none"
+                      fill={`url(#ptn-${k})`}
+                      radius={top ? [4, 4, 0, 0] : undefined}
+                    />,
+                  ];
+                })}
                 <Line
                   yAxisId="right"
                   type="monotone"
