@@ -41,6 +41,8 @@ import {
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
+import { MenteeStatusEditor } from "../components/MenteeStatusEditor";
+import { useAuth } from "../auth";
 import { useChartTokens } from "../theme";
 import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp } from "../format";
@@ -365,6 +367,7 @@ function ChartDataTable({ columns, rows }: ChartCardTable) {
 const INITIAL = presetRange("this_year");
 
 export function MetricsView() {
+  const { user } = useAuth();
   const [from, setFrom] = useState(INITIAL.from);
   const [to, setTo] = useState(INITIAL.to);
   const [preset, setPreset] = useState<PresetKey | "custom">("this_year");
@@ -466,7 +469,13 @@ export function MetricsView() {
   }, [from, to]);
 
   // Mentee journeys load once (all-history) for the "Meetings to Freedom!" card.
-  // Not date-scoped, so it doesn't re-fetch as the range changes.
+  // Not date-scoped, so it doesn't re-fetch as the range changes. Reloadable so a
+  // graduation-status edit (below the card) refreshes the metric immediately.
+  function reloadJourneys() {
+    fetchMenteeJourneys()
+      .then((js) => setJourneys(js))
+      .catch((e) => setError(String(e)));
+  }
   useEffect(() => {
     let cancelled = false;
     fetchMenteeJourneys()
@@ -1627,6 +1636,14 @@ export function MetricsView() {
                 <Bar dataKey="meetings" name="1-on-1 sessions" fill={C.mentees} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartCard>
+            <div style={{ marginTop: 12 }}>
+              <MenteeStatusEditor
+                journeys={journeys}
+                userId={user?.id ?? ""}
+                onSaved={reloadJourneys}
+                onError={setError}
+              />
+            </div>
           </div>
 
           <div style={{ marginTop: 18 }}>

@@ -51,6 +51,23 @@ export { computeJyfVsMentoring };
 export type { CohortEngagementInput, JyfVsMentoring };
 export type { MentoringTier } from "../lib/cohort";
 
+// Pure Journeys per-stage color logic (gradient interpolation + config resolution).
+export {
+  STAGE_KEYS,
+  STAGE_LABELS,
+  STAGE_COUNT,
+  DEFAULT_STAGE_COLORS,
+  DEFAULT_STAGE_COLOR_CONFIG,
+  DEFAULT_GRADIENT_FROM,
+  DEFAULT_GRADIENT_TO,
+  gradientColors,
+  resolveStageColors,
+  parseStageColorConfig,
+  stageColorsFromRaw,
+  serializeStageColorConfig,
+} from "../lib/stageColors";
+export type { StageKey, StageColorMode, StageColorConfig } from "../lib/stageColors";
+
 // Pure pipeline stage-date logic (engagement-start vs first-meeting basis).
 import {
   computeStageDates,

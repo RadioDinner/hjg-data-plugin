@@ -16,6 +16,15 @@ import { computeStageDates, highestTier, type EngagementStageInput, type Meeting
 import { computeMeetingsToFreedom, type FreedomMenteeInput } from "../lib/freedom.js";
 import { computeJyfVsMentoring, type CohortEngagementInput } from "../lib/cohort.js";
 import {
+  gradientColors,
+  resolveStageColors,
+  parseStageColorConfig,
+  stageColorsFromRaw,
+  hexToRgb,
+  STAGE_COUNT,
+  DEFAULT_STAGE_COLORS,
+} from "../lib/stageColors.js";
+import {
   computePayReport,
   computePayTimeline,
   distinctServiceMonths,
@@ -617,6 +626,40 @@ console.log("[15] JYF vs Active Mentoring cohort (open engagements by phase, dis
   eq(empty.jyf, 0, "empty -> jyf 0");
   eq(empty.mentoring, 0, "empty -> mentoring 0");
   eq(empty.total, 0, "empty -> total 0");
+}
+
+console.log("[16] Journeys per-stage colors (gradient interpolation + config resolution)");
+{
+  // Gradient endpoints are inclusive; the midpoint of 3 black->white steps is grey.
+  const g3 = gradientColors("#000000", "#ffffff", 3);
+  eq(g3.length, 3, "gradient(3) returns 3 colors");
+  eq(g3[0], "#000000", "gradient start = from");
+  eq(g3[2], "#ffffff", "gradient end = to");
+  eq(g3[1], "#808080", "gradient midpoint of black->white = mid grey");
+
+  const g6 = gradientColors("#e11d48", "#15803d");
+  eq(g6.length, STAGE_COUNT, "gradient default length = 6 stages");
+  eq(g6[0].toLowerCase(), "#e11d48", "6-step gradient keeps the red endpoint");
+  eq(g6[5].toLowerCase(), "#15803d", "6-step gradient keeps the green endpoint");
+
+  // Invalid endpoints fall back to defaults rather than throwing / NaN.
+  eq(hexToRgb("nope"), null, "hexToRgb rejects a non-hex string");
+  eq(gradientColors("nope", "#15803d").length, 6, "invalid 'from' still yields 6 colors");
+
+  // Gradient mode ignores the explicit colors; custom mode uses them.
+  const grad = resolveStageColors({ mode: "gradient", from: "#000000", to: "#ffffff", colors: ["#111111"] });
+  eq(grad[0], "#000000", "gradient mode interpolates (ignores colors[])");
+  const cust = resolveStageColors({ mode: "custom", from: "#000000", to: "#ffffff", colors: ["#123456", "#abcdef"] });
+  eq(cust[0], "#123456", "custom mode uses colors[0]");
+  eq(cust[2], DEFAULT_STAGE_COLORS[2], "custom mode fills a missing color from the default palette");
+
+  // Defensive parsing: junk / empty -> a complete, valid default config.
+  const def = parseStageColorConfig("not json");
+  eq(def.colors.length, 6, "malformed JSON -> 6 default colors");
+  eq(stageColorsFromRaw(null).length, 6, "null raw -> 6 default colors");
+  const round = parseStageColorConfig(JSON.stringify({ mode: "gradient", from: "#aabbcc", to: "#112233", colors: [] }));
+  eq(round.mode, "gradient", "round-trip preserves mode");
+  eq(round.from, "#aabbcc", "round-trip preserves 'from'");
 }
 
 console.log("");

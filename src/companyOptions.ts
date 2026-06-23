@@ -1,13 +1,23 @@
 // Registry of org-wide "Company options" — the single source of truth for the
-// Company options tab. Each entry renders as a labelled dropdown (grouped by
-// `section`) and is persisted in app_settings (jsonb) under `key`. Add a new
-// option here + seed its key in a migration (app_settings has no staff INSERT
-// policy) and it shows up on the tab automatically.
+// Company options tab. Each entry renders (grouped by `section`) and is persisted
+// in app_settings (jsonb) under `key`. Add a new option here + seed its key in a
+// migration (app_settings has no staff INSERT policy) and it shows up on the tab
+// automatically.
+//
+// Control types:
+//   - "select"      (default): a labelled dropdown of `choices`.
+//   - "stageColors": the Journeys per-stage color editor (gradient / custom). Its
+//                    stored value is a JSON string (see lib/stageColors.ts); the
+//                    registry just declares the key + a JSON-string default.
+
+import { serializeStageColorConfig, DEFAULT_STAGE_COLOR_CONFIG } from "../lib/stageColors";
 
 export interface CompanyOptionChoice {
   value: string;
   label: string;
 }
+
+export type CompanyOptionType = "select" | "stageColors";
 
 export interface CompanyOption {
   key: string; // app_settings key
@@ -15,7 +25,8 @@ export interface CompanyOption {
   label: string;
   help: string;
   default: string;
-  choices: CompanyOptionChoice[];
+  type?: CompanyOptionType; // defaults to "select"
+  choices: CompanyOptionChoice[]; // ignored for non-select types
 }
 
 export const COMPANY_OPTIONS: CompanyOption[] = [
@@ -34,6 +45,18 @@ export const COMPANY_OPTIONS: CompanyOption[] = [
       { value: "engagement_start", label: "Engagement start date" },
       { value: "first_meeting", label: "First 1-on-1 meeting" },
     ],
+  },
+  {
+    key: "journeys_stage_colors",
+    section: "Journeys",
+    label: "Pipeline stage colors",
+    help:
+      "The color of each pipeline stage (Discovery → JumpStart → 4x → 2x → 1x → Graduation) " +
+      "on a mentee's timeline. Choose “Gradient” to blend two endpoint colors across all six " +
+      "stages (e.g. bright red → dark green), or “Custom” to set each stage color individually.",
+    default: serializeStageColorConfig(DEFAULT_STAGE_COLOR_CONFIG),
+    type: "stageColors",
+    choices: [],
   },
 ];
 

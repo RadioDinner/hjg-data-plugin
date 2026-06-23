@@ -10,9 +10,42 @@ Working notes for resuming this project in a future session. Last updated
 
 ## Resume here (live state — 2026-06-23, session 007 — WRAPPED)
 
-Picking this up cold — start here. **Session 007 shipped two Metrics changes.**
-`typecheck` + `verify` (**15 sections**) + `build` all pass. **No migration, no schema
-change. UI NOT browser-tested** (headless) — eyeball on a Vercel preview.
+Picking this up cold — start here. **Session 007 shipped several changes.**
+`typecheck` + `verify` (**16 sections, 187 checks**) + `build` all pass. **UI NOT
+browser-tested** (headless) — eyeball on a Vercel preview.
+
+**⚠ ONE NEW MIGRATION this session — MUST be applied** (Supabase SQL Editor):
+**`9987_journeys_stage_colors.sql`** seeds the `journeys_stage_colors` key. Until it's
+applied, the Company-options stage-color editor works in-session but **won't persist**
+(staff can UPDATE `app_settings` but not INSERT). The Journeys timeline still renders the
+curated red→green default colors regardless.
+
+**Shipped this session (007) — UI/UX batch:**
+- **Excel-like tables, app-wide.** `.table` now has full cell **gridlines**, a shaded
+  header row, **zebra** striping, and a row hover (`src/styles.css`). Every table uses
+  `.table`, so this is global.
+- **Meetings to Freedom! — graduation/status editor on the card.** New
+  `src/components/MenteeStatusEditor.tsx` (pick a mentee → set active/graduated/quit/fired
+  + date + notes) sits below the card in `MetricsView`. Writes a **manual override
+  (`mentee_outcomes`) that always wins over synced data and is never touched by a re-sync**
+  — the sticky behavior the user wanted is inherent (override `??` auto at `db.ts:888`;
+  sync only writes `ca_*`). MetricsView gained `useAuth` + a `reloadJourneys()` so an edit
+  refreshes the metric immediately. **No migration.**
+- **Journeys timeline — fits + color-coded by stage.** The stage rail **no longer
+  scrolls** (removed `overflow-x`, nodes shrink to fit). Each of the 6 stages (Discovery →
+  JumpStart → 4x → 2x → 1x → Graduation) is **color-coded** (dot + label + a top accent
+  bar) from an org-wide setting.
+- **Company option: Journeys → "Pipeline stage colors"** (`journeys_stage_colors`). Two
+  modes: **Gradient** (blend two endpoint colors across the 6 stages) or **Custom** (set
+  each of the 6). Pure color math in **`lib/stageColors.ts`** (`gradientColors`,
+  `resolveStageColors`, `parse/serializeStageColorConfig`, **verify §16**), re-exported via
+  `db.ts`. Stored as a **JSON string** in `app_settings` (rides the string-valued
+  Company-options plumbing). Editor is a custom `StageColorsControl` in
+  `CompanyOptionsView` (live preview, debounced saves). Default = curated **red→green**
+  palette. Registry gained a `type?: "select" | "stageColors"` discriminator
+  (`src/companyOptions.ts`). **Migration `9987` seeds the key.**
+
+**Shipped this session (007) — earlier (already on main):**
 
 - **NEW "JYF vs Active Mentoring" card** (Metrics tab, below "Meetings to Freedom!"). A
   current-state cohort snapshot: **distinct people with an OPEN JumpStart Your Freedom
@@ -48,10 +81,14 @@ was replaced. **Going forward, `main` is primary** — develop from it.
 **▶ Next-session checklist:**
 1. **Branch from `main`** — it is now the primary branch and holds everything (PR #8
    merged 2026-06-23). The `claude/*` working branch is fully captured in `main`.
-2. **Browser-verify** (a) the new **JYF vs Active Mentoring** card numbers against CA
-   reality, and (b) the conversion card's two toggles (all 4 combinations, light + dark,
-   single + compare mode).
-3. The session-006c checklist below is still open (browser-verify themes, re-sync for
+2. **Apply `9987_journeys_stage_colors.sql`** (Supabase SQL Editor) so the stage-color
+   option persists. **Next new migration is `9986_…`.**
+3. **Browser-verify** the session-007 UI: Excel-like tables everywhere; the Journeys
+   timeline (no scrollbar, 6 stage colors) in light + dark; the **Company options →
+   Pipeline stage colors** editor (Gradient vs Custom, live preview, persistence after
+   9987); the **Meetings to Freedom! graduation editor** (set graduated → metric updates →
+   survives a re-sync); the **JYF vs Active Mentoring** card; the conversion-card toggles.
+4. The session-006c checklist below is still open (browser-verify themes, re-sync for
    `ca_invoices.date_of` day, optional pay-color polish).
 
 ---
@@ -473,13 +510,12 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Conventions / gotchas
 
-- **Migrations DESCENDING** (newest = lowest). Present = `9988`…`9999`. **Next
-  new one is `9987_…`.** Run by copy-paste into the Supabase SQL Editor; make
-  re-runnable (`drop … if exists` / `add column if not exists`). User reports
-  9999–9990 applied (start of 006b). **Two NEW this session (006b) — both MUST be
-  applied:** `9989_payout_builds.sql` (Build payout — Save/Approve/Discard error
-  until it exists) and `9988_mentee_exclusions.sql` (Journeys exclude — Exclude/
-  Include errors until it exists). Both are staff-RLS, one row per key, re-runnable.
+- **Migrations DESCENDING** (newest = lowest). Present = `9987`…`9999`. **Next
+  new one is `9986_…`.** Run by copy-paste into the Supabase SQL Editor; make
+  re-runnable (`drop … if exists` / `add column if not exists`). **NEW this session
+  (007): `9987_journeys_stage_colors.sql`** — seeds the `journeys_stage_colors`
+  Company option (JSON-string value via `to_jsonb(...::text)`); the stage-color editor
+  won't persist until it's applied. `on conflict do nothing`, re-runnable.
 - **Vercel functions are native ESM** → relative imports in `api/` (+ `lib/` it
   pulls in, e.g. `ca.ts`/`sync.ts`) MUST end in `.js`. **BUT** pure `lib/` modules
   consumed by the frontend (`config.ts`, `conversion.ts`, **`pay.ts`**) use

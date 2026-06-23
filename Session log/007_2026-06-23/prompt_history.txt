@@ -16,3 +16,12 @@ I've merged everthing to main via the pull request. As of now, Main is the prima
 
 --- 2026-06-23 ---
 I want to build a feature called "JYF vs Active Mentoring". This feature will count the people with active, open JumpStart Your Freedom engagements vs the sum of people in 4x, 2x and 1x Mentoring engagements. Commit this to main. Don't create a new branch for any of this.
+
+--- 2026-06-23 ---
+I want all the tables to look more like excel tables with like, gridlines and stuff. Also, on the meetings to freedom card, I want a way to edit Mentee's graduation status and I want that to override the data I synced. However, I still want the synced data to be added to this system. Basically anything has been overridden once, I don't want to have the SYNC override. Make sense?
+Also, in the "Journeys" tab, In the mentee specific window, where you open it to see their timeline, I A) don't want the scroll bar for the the Discovery to graduation timeline, make it fit. Also, color code their journey in the timeline and in the columns below. Discovery Call one color, JumpStart Your Freedom JYF another color, 4x another, 2x another, 1x another and graduation it's own color. Make it a gradient of colors, like very light blue to very dark blue, or bright red to dark green. Actually I think I like the red to green system. BUT, I want you to make all 6 colors a "setable" range in company options for this tab. I also want to be able to pick 2 colors in that option to set as a gradient between the two.
+[+ pasted Jeffrey Horst sample timeline data]
+
+--- 2026-06-23 (AskUserQuestion answer) ---
+Q: How should the graduation-status editor on the Meetings to Freedom card work?
+A: Full status editor (embed the active/graduated/quit/fired + date editor on the card).

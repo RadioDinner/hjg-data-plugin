@@ -2,6 +2,33 @@
 
 ## What shipped
 
+- **UI/UX batch (tables, graduation editor, Journeys stage colors).**
+  - **Excel-like tables, app-wide** (`src/styles.css`): `.table` got full cell gridlines,
+    a shaded header row, zebra striping, and a row hover. Every table in the app uses
+    `.table`, so it's global.
+  - **Graduation/status editor on "Meetings to Freedom!"** — new
+    `src/components/MenteeStatusEditor.tsx` (mentee picker → active/graduated/quit/fired +
+    date + notes), placed below the card in `MetricsView` (added `useAuth` +
+    `reloadJourneys()` so an edit refreshes the metric live). It writes a manual override
+    to `mentee_outcomes`, which **always wins over synced data and is never touched by a
+    re-sync** (override `??` auto at `db.ts:888`; sync only writes `ca_*`). So the user's
+    "overridden once → sync won't override" requirement is **inherent** — confirmed sync
+    never touches `mentee_outcomes`/`app_settings`. No migration.
+  - **Journeys timeline: fits + color-coded.** Stage rail no longer scrolls (removed
+    `overflow-x`, nodes shrink); each of the 6 stages (Discovery → JumpStart → 4x → 2x →
+    1x → Graduation) is color-coded (dot + label + top accent bar).
+  - **Company option "Pipeline stage colors"** (`journeys_stage_colors`): Gradient (blend
+    2 endpoints) or Custom (6 individual) mode. Pure math `lib/stageColors.ts`
+    (`gradientColors`/`resolveStageColors`/`parse|serializeStageColorConfig`, verify §16),
+    re-exported via `db.ts`. Stored as a JSON string in `app_settings`. Custom
+    `StageColorsControl` in `CompanyOptionsView` (live preview, debounced saves). Default
+    = curated red→green palette. Registry gained `type?: "select" | "stageColors"`.
+    **Migration `9987_journeys_stage_colors.sql` seeds the key (MUST be applied).**
+  - Decisions: graduation editor scope = **full status editor** (user pick, via
+    AskUserQuestion); stage colors default = curated red→green custom palette (gradient
+    mode available); colors stored as JSON string to reuse the string-valued
+    Company-options plumbing.
+
 - **NEW "JYF vs Active Mentoring" Metrics card** (committed to `main`).
   A current-state cohort snapshot comparing **distinct people with an open JumpStart Your
   Freedom (JYF) engagement** vs **distinct people with an open 4x/2x/1x mentoring

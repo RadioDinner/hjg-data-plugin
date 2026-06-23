@@ -11,6 +11,8 @@ import {
   removeMenteeExclusion,
   setCompanyOption,
   setMenteeOutcome,
+  stageColorsFromRaw,
+  DEFAULT_STAGE_COLORS,
   type MenteeJourney,
   type MenteeStatus,
   type PipelineTier,
@@ -63,21 +65,41 @@ function StatusPill({ status }: { status: ResolvedMenteeStatus }) {
 }
 
 // One node on the horizontal stage rail (a date marker), with the gap to the
-// previous node rendered on the connector.
-function StageNode({ label, date, gap }: { label: string; date: string | null; gap?: string }) {
+// previous node rendered on the connector. `color` is this stage's configured
+// color (Company options → Journeys → Pipeline stage colors); a reached stage
+// shows it solid, an unreached stage stays muted.
+function StageNode({ label, date, gap, color }: { label: string; date: string | null; gap?: string; color: string }) {
+  const reached = !!date;
   return (
     <div className="stage">
       {gap !== undefined && <div className="stage__gap">{gap}</div>}
-      <div className={`stage__node ${date ? "" : "stage__node--empty"}`}>
-        <span className="stage__dot" />
-        <span className="stage__label">{label}</span>
+      <div
+        className={`stage__node ${reached ? "" : "stage__node--empty"}`}
+        style={reached ? { borderTopColor: color } : undefined}
+      >
+        <span className="stage__dot" style={reached ? { background: color, borderColor: color } : undefined} />
+        <span className="stage__label" style={reached ? { color } : undefined}>
+          {label}
+        </span>
         <span className="stage__date">{date ?? "—"}</span>
       </div>
     </div>
   );
 }
 
-function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourney; userId: string; onSaved: () => void; onError: (m: string) => void }) {
+function Timeline({
+  journey,
+  userId,
+  colors,
+  onSaved,
+  onError,
+}: {
+  journey: MenteeJourney;
+  userId: string;
+  colors: string[]; // 6 stage colors in order: Discovery, JumpStart, 4x, 2x, 1x, Graduation
+  onSaved: () => void;
+  onError: (m: string) => void;
+}) {
   const [status, setStatus] = useState<MenteeStatus | "">(journey.override ?? "");
   const [date, setDate] = useState(journey.overrideDate ?? "");
   const [notes, setNotes] = useState(journey.notes ?? "");
@@ -196,12 +218,12 @@ function Timeline({ journey, userId, onSaved, onError }: { journey: MenteeJourne
       </div>
 
       <div className="stage-rail">
-        <StageNode label="Discovery" date={journey.discoveryDate} />
-        <StageNode label="JumpStart" date={journey.stageDates.jumpstart} gap={humanizeDays(spanDays(journey.discoveryDate, journey.stageDates.jumpstart))} />
-        <StageNode label="4x mentoring" date={journey.stageDates["4x"]} gap={humanizeDays(spanDays(journey.stageDates.jumpstart, journey.stageDates["4x"]))} />
-        <StageNode label="2x mentoring" date={journey.stageDates["2x"]} gap={humanizeDays(spanDays(journey.stageDates["4x"], journey.stageDates["2x"]))} />
-        <StageNode label="1x mentoring" date={journey.stageDates["1x"]} gap={humanizeDays(spanDays(journey.stageDates["2x"], journey.stageDates["1x"]))} />
-        <StageNode label="Graduation" date={journey.stageDates.graduated} gap={humanizeDays(spanDays(journey.stageDates["1x"], journey.stageDates.graduated))} />
+        <StageNode label="Discovery" date={journey.discoveryDate} color={colors[0]} />
+        <StageNode label="JumpStart" date={journey.stageDates.jumpstart} gap={humanizeDays(spanDays(journey.discoveryDate, journey.stageDates.jumpstart))} color={colors[1]} />
+        <StageNode label="4x mentoring" date={journey.stageDates["4x"]} gap={humanizeDays(spanDays(journey.stageDates.jumpstart, journey.stageDates["4x"]))} color={colors[2]} />
+        <StageNode label="2x mentoring" date={journey.stageDates["2x"]} gap={humanizeDays(spanDays(journey.stageDates["4x"], journey.stageDates["2x"]))} color={colors[3]} />
+        <StageNode label="1x mentoring" date={journey.stageDates["1x"]} gap={humanizeDays(spanDays(journey.stageDates["2x"], journey.stageDates["1x"]))} color={colors[4]} />
+        <StageNode label="Graduation" date={journey.stageDates.graduated} gap={humanizeDays(spanDays(journey.stageDates["1x"], journey.stageDates.graduated))} color={colors[5]} />
       </div>
 
       <div className="journey__rhythm">
@@ -383,6 +405,7 @@ export function JourneysView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stageBasis, setStageBasis] = useState<StageBasis>("engagement_start");
+  const [stageColors, setStageColors] = useState<string[]>(DEFAULT_STAGE_COLORS);
 
   async function load(basis: StageBasis) {
     setLoading(true);
@@ -403,10 +426,12 @@ export function JourneysView() {
     (async () => {
       let basis: StageBasis = "engagement_start";
       try {
-        const v = (await fetchCompanyOptions())["journeys_stage_basis"];
+        const opts = await fetchCompanyOptions();
+        const v = opts["journeys_stage_basis"];
         if (v === "first_meeting" || v === "engagement_start") basis = v;
+        if (!cancelled) setStageColors(stageColorsFromRaw(opts["journeys_stage_colors"]));
       } catch {
-        /* fall back to the default basis */
+        /* fall back to the default basis + colors */
       }
       if (cancelled) return;
       setStageBasis(basis);
@@ -506,7 +531,7 @@ export function JourneysView() {
           </div>
           <div className="journeys__detail">
             {current ? (
-              <Timeline journey={current} userId={user?.id ?? ""} onSaved={() => load(stageBasis)} onError={setError} />
+              <Timeline journey={current} userId={user?.id ?? ""} colors={stageColors} onSaved={() => load(stageBasis)} onError={setError} />
             ) : (
               <div className="muted" style={{ padding: 24 }}>Select a mentee to view their journey.</div>
             )}

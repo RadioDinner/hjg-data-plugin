@@ -171,9 +171,13 @@ body {
 .spark__bar { width: 100%; min-height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; }
 .spark__label { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
-.table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.table th, .table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
-.table th { color: var(--muted); font-weight: 600; }
+/* Excel-like data tables: full cell gridlines, a shaded header row, zebra
+   striping and a row hover. Applies to every .table in the app. */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid var(--line-strong); }
+.table th, .table td { text-align: left; padding: 7px 10px; border: 1px solid var(--line); }
+.table th { color: var(--text); font-weight: 600; background: var(--panel-2); border-color: var(--line-strong); }
+.table tbody tr:nth-child(even) td { background: var(--panel-2); }
+.table tbody tr:hover td { background: var(--row-hover, rgba(127, 127, 127, 0.10)); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .muted { color: var(--muted); }
 .table-scroll { overflow-x: auto; }
@@ -365,15 +369,28 @@ body {
 .journey__head h2 { margin: 0; }
 .journey__sub { font-size: 13px; margin-top: 2px; }
 
-/* horizontal stage rail */
-.stage-rail { display: flex; align-items: stretch; gap: 0; margin: 8px 0 24px; overflow-x: auto; padding-bottom: 6px; }
-.stage { display: flex; align-items: center; flex: 1; min-width: 0; }
-.stage__gap { flex: 1; text-align: center; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line-strong); margin: 0 4px; padding-top: 2px; min-width: 36px; }
-.stage__node { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 92px; }
+/* horizontal stage rail — fits the panel (no horizontal scroll); each node is
+   color-coded by its pipeline stage (Company options → Journeys → stage colors). */
+.stage-rail { display: flex; align-items: flex-start; gap: 0; margin: 8px 0 24px; }
+.stage { display: flex; align-items: flex-start; flex: 1 1 0; min-width: 0; }
+.stage__gap { flex: 1 1 auto; text-align: center; font-size: 10px; color: var(--muted); border-top: 1px dashed var(--line-strong); margin: 12px 3px 0; padding-top: 2px; min-width: 14px; white-space: nowrap; }
+.stage__node { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; flex: 0 0 auto; max-width: 100%; border-top: 3px solid transparent; padding: 4px 4px 0; }
 .stage__dot { width: 11px; height: 11px; border-radius: 999px; background: var(--accent); border: 2px solid var(--panel); }
 .stage__node--empty .stage__dot { background: var(--line-strong); }
-.stage__label { font-size: 11px; color: var(--muted); text-align: center; }
-.stage__date { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stage__label { font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2; font-weight: 600; }
+.stage__date { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
+
+/* Company options → Journeys → stage color editor */
+.stage-colors { display: flex; flex-direction: column; gap: 12px; min-width: 280px; }
+.stage-colors__inputs { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.stage-colors__inputs--custom { gap: 10px; }
+.stage-colors__field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
+.stage-colors__field input[type="color"] { width: 44px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--panel); cursor: pointer; }
+.stage-colors__preview { display: flex; gap: 6px; flex-wrap: wrap; }
+.stage-colors__swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 64px; }
+.stage-colors__chip { width: 100%; height: 16px; border-radius: 4px; border: 1px solid var(--line); }
+.stage-colors__caption { font-size: 10px; text-align: center; line-height: 1.15; }
+.grad-editor { margin-top: 0; }
 
 .journey__rhythm { margin-bottom: 20px; }
 .journey__rhythm-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
