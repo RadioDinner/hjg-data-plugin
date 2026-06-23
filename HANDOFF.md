@@ -27,24 +27,19 @@ change. UI NOT browser-tested** (headless) — eyeball on a Vercel preview.
   Toggles are **ephemeral local state** (like `meetingsMode`/`compareMode`) — not
   persisted org-wide. **No migration.**
 
-**⚠ GIT TOPOLOGY NOTE (important).** The working branch
-`claude/great-albattani-bysuhx` (where ALL sessions 003–007 live) and the actual
-`origin/main` branch have **completely unrelated histories** (no common ancestor —
-`git merge-base` is empty). `origin/main` is stale at **session 002** and does NOT
-contain the conversion card, theme redesign, Pay/Build/Journeys work, etc. Despite the
-HANDOFF wording ("straight to main"), prior sessions actually landed on
-`claude/*` branches, not the git `main` branch. **Session 007 committed to the working
-branch** (the only coherent place). Reconciling onto the real `main` would require a
-force-push over unrelated history — **the user chose to leave `main` alone (2026-06-23)**;
-the working branch `claude/great-albattani-bysuhx` is the live lineage. Don't touch
-`main` unless the user revisits this.
+**✅ GIT TOPOLOGY — RESOLVED 2026-06-23.** Earlier in session 007 the working branch
+`claude/great-albattani-bysuhx` and `origin/main` had **completely unrelated histories**
+(`origin/main` was stale at session 002 and lacked all of sessions 003–007). **The user
+then merged the work into `main` via PR #8** (merge commit `cbfdb63`), so **`main` is now
+the primary branch and contains the full lineage** (sessions 003–007: conversion card,
+theme redesign, Pay/Build/Journeys, Maps, etc.). The old session-002 history on `main`
+was replaced. **Going forward, `main` is primary** — develop from it.
 
 **▶ Next-session checklist:**
-1. **Browser-verify** the conversion card's two new toggles (all 4 combinations, light +
+1. **Branch from `main`** — it is now the primary branch and holds everything (PR #8
+   merged 2026-06-23). The `claude/*` working branch is fully captured in `main`.
+2. **Browser-verify** the conversion card's two new toggles (all 4 combinations, light +
    dark, single + compare mode).
-2. **main vs working-branch divergence — DECIDED 2026-06-23: leave `main` alone.**
-   Keep building on `claude/great-albattani-bysuhx` (the live lineage). Don't touch the
-   stale `main` branch unless the user revisits.
 3. The session-006c checklist below is still open (browser-verify themes, re-sync for
    `ca_invoices.date_of` day, optional pay-color polish).
 

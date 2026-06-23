@@ -6,3 +6,10 @@ Continue from where you left off.
 Q: main is stale (session 002) with unrelated history; the real work lives on
    claude/great-albattani-bysuhx. How do you want main handled?
 A: Leave main alone.
+
+--- 2026-06-23 ---
+A pull request was just created for this branch from the Claude Code UI: https://github.com/RadioDinner/hjg-data-plugin/pull/8
+You don't need to create one. Reference this PR going forward — pushing more commits to this branch will update it.
+
+--- 2026-06-23 ---
+I've merged everthing to main via the pull request. As of now, Main is the primary branch.

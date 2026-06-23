@@ -56,9 +56,15 @@ force-pushing main unilaterally.
 `claude/great-albattani-bysuhx` is the live lineage; keep building there. The stale
 `main` branch stays untouched unless the user revisits.
 
+**Update (2026-06-23, later): RESOLVED — the user merged the work into `main` via PR #8**
+(merge commit `cbfdb63`) and declared **`main` the primary branch**. `main` now contains
+the full lineage (sessions 003–007); the old session-002 history was replaced. Local
+`main` was hard-reset to `origin/main` to pick up the merge. **Going forward, develop
+from `main`.** The PR for this branch was #8 (now merged).
+
 ## Open questions / next step
 
-- main vs working branch: **decided — leave `main` alone**; continue on the `claude/*`
-  lineage.
+- main vs working branch: **resolved — `main` is now primary** (PR #8 merged). Branch
+  from `main` next session; the `claude/*` branch is fully captured there.
 - Browser-verify the two new toggles (all 4 combinations × light/dark × single/compare).
 - Session-006c open items still stand (themes eyeball, `ca_invoices.date_of` re-sync).
