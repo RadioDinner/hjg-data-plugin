@@ -410,11 +410,13 @@ body {
 .mentee-record__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
 .mentee-record__field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); min-width: 0; }
 .mentee-record__field span { font-weight: 600; }
-.mentee-record__field input {
+.mentee-record__field input, .mentee-record__field textarea {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
   border-radius: var(--r-control); padding: 7px 9px; font-size: 13px; width: 100%; box-sizing: border-box;
 }
-.mentee-record__field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mentee-record__field input:focus, .mentee-record__field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mentee-record__field textarea { resize: vertical; min-height: 56px; font-family: inherit; }
+.mentee-record__field--wide { grid-column: 1 / -1; }
 .mentee-record__actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 
 .card--inset { background: var(--panel-2); box-shadow: none; }

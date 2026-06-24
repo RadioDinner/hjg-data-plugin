@@ -90,9 +90,11 @@ Commits added after the wrap above (newest first):
   staff RLS) — seeded once from the user's Notion export, editable in-dashboard via a
   new "Mentee record" card on Journeys. db.ts fetch/save + RAW_TABLES + help article.
   Adversarially reviewed (10 findings; key-by-clientId medium fixed + low-sev fixes).
-  **Then curated (this turn) per the user:** mirror **15 selected columns** (dropped the
-  4 low-signal ones — Associated Tasks, JS Lesson, MN Equivalency, dd w a) and **drop the
-  'Test Locked Page' test row** → **181 rows, 152 client_id-matched** by name.
+  **Column scope (this turn) — the user went back and forth:** first chose to curate to
+  15 columns (I built that), then **reversed to keep all 19 columns**. Final state = **all 19
+  Notion columns**, with the **'Test Locked Page' test row dropped** → **181 rows, 152
+  client_id-matched** by name. (Regenerated `9986`; restored the source files to the all-19
+  state via `git checkout a242cf5^ -- ...`, preserving the days-per-stage work.)
 - `dbea260` **Fixed the Journeys stage-rail white-space gap** before the Discovery
   node (`.stage:first-child { flex: 0 0 auto }`).
 - `1ba9ab7` Backlog entry for the Mentees table (later built).
@@ -104,10 +106,10 @@ Commits added after the wrap above (newest first):
   as a card in the Journeys detail pane. Architecture: a real HJG-owned table (not a view)
   because it mirrors external Notion data + must be editable. client_id auto-matched by
   name; the 29 prospects not in CA get null client_id (seeded, but only reachable via Raw
-  data). **Column scope (re-confirmed later):** the user first said "all 19" but then chose
-  to **curate to 15 columns** (drop Associated Tasks, JS Lesson, MN Equivalency, dd w a) and
-  **exclude the 'Test Locked Page' test row** — done by regenerating `9986` + trimming the
-  `MenteeRecord` type, the card fields, the help article, and dead CSS.
+  data). **Column scope — settled after a flip-flop:** the user first said "all 19", then chose
+  "keep 15 / drop the 4 cryptic", then **reversed back to all 19** (still excluding the
+  'Test Locked Page' test row). FINAL = **all 19 columns, 181 rows**. The interim 15-col curation
+  (commit `a242cf5`) was undone by restoring the source files from `a242cf5^` + regenerating `9986`.
 - **Export-all question answered:** yes it includes hand-entered tables, but the
   user's export had EMPTY discovery_outcomes + mentee_outcomes (no saved overrides
   yet) — so step-2 data comes from Notion + the CA mirror, not dashboard overrides.

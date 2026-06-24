@@ -45,3 +45,6 @@ Also, on the Journeys tab, where I select an individual mentee, in the grid belo
 
 --- 2026-06-24 (AskUserQuestion answer — Mentees columns) ---
 [Columns] Keep 15, drop the 4 cryptic (Associated Tasks, JS Lesson?, MN Equivalency, dd w a). Drop the 'Test Locked Page' test row.
+
+--- 2026-06-24 (AskUserQuestion answer — Mentees columns, REVERSED) ---
+[Columns] Keep all 19 after all (still drop the 'Test Locked Page' test row).

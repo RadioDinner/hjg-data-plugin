@@ -526,10 +526,10 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
 }
 
 // The editable fields of the Mentee source-of-truth record (mirrors Notion), in
-// display order. `num` renders a number input, `date` a date input, everything
-// else a text input.
-type RecKind = "text" | "date" | "num";
-const RECORD_FIELDS: { key: keyof MenteeRecordEdit; label: string; kind: RecKind }[] = [
+// display order. `num` renders a number input, `date` a date input, `area` a
+// multi-line textarea, everything else a text input.
+type RecKind = "text" | "date" | "num" | "area";
+const RECORD_FIELDS: { key: keyof MenteeRecordEdit; label: string; kind: RecKind; wide?: boolean }[] = [
   { key: "name", label: "Name", kind: "text" },
   { key: "status", label: "Status (Notion)", kind: "text" },
   { key: "mentor", label: "Mentor", kind: "text" },
@@ -545,6 +545,10 @@ const RECORD_FIELDS: { key: keyof MenteeRecordEdit; label: string; kind: RecKind
   { key: "current_invoice_amount", label: "Current invoice amount", kind: "num" },
   { key: "email", label: "Email", kind: "text" },
   { key: "phone", label: "Phone", kind: "text" },
+  { key: "js_lesson", label: "JS lesson", kind: "text" },
+  { key: "mn_equivalency", label: "MN equivalency", kind: "num" },
+  { key: "dd_w_a", label: "dd w a", kind: "num" },
+  { key: "associated_tasks", label: "Associated tasks / notes", kind: "area", wide: true },
 ];
 
 // Build a string-valued form snapshot from a record (or empty), defaulting the
@@ -633,14 +637,18 @@ function MenteeRecordCard({
       </div>
       <div className="mentee-record__grid">
         {RECORD_FIELDS.map((fld) => (
-          <label key={fld.key} className="mentee-record__field">
+          <label key={fld.key} className={`mentee-record__field ${fld.wide ? "mentee-record__field--wide" : ""}`}>
             <span>{fld.label}</span>
-            <input
-              type={fld.kind === "date" ? "date" : fld.kind === "num" ? "number" : "text"}
-              step={fld.kind === "num" ? "any" : undefined}
-              value={form[fld.key] ?? ""}
-              onChange={(e) => set(fld.key, e.target.value)}
-            />
+            {fld.kind === "area" ? (
+              <textarea rows={3} value={form[fld.key] ?? ""} onChange={(e) => set(fld.key, e.target.value)} />
+            ) : (
+              <input
+                type={fld.kind === "date" ? "date" : fld.kind === "num" ? "number" : "text"}
+                step={fld.kind === "num" ? "any" : undefined}
+                value={form[fld.key] ?? ""}
+                onChange={(e) => set(fld.key, e.target.value)}
+              />
+            )}
           </label>
         ))}
       </div>
