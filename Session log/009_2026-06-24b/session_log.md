@@ -162,9 +162,11 @@ Commits: 34b5f21 (P1) · 90a4cbe (P2) · 0eb5112 (P3) · c28a6f7 (P4). typecheck
 - `src/components/PipelineTimingCard.tsx` — former §102 leg-durations + start-date cohort-compare,
   now a Metrics card reading the new table. help metrics.pipelineTiming.
 
+### Dead-code cleanup DONE (commit 7025398): removed ~600 lines of unreachable old
+  journey/mentee code from db.ts (kept engagementTierMap for Margins; all live helpers intact).
+  db.ts ~2090 → ~1480 lines. No refs to dropped tables remain.
+
 ### CUTOVER required (see HANDOFF): apply 9975 → re-sync (or Rebuild from CA) → re-enter Notion data.
-### Follow-up tech debt: remove the dead old journey/mentee functions still in db.ts (no callers;
-  interleaved with live helpers; deletion list in HANDOFF; typecheck is the safety net).
 
 ## Notes for future-me
 - The `mentees` seed (`9986`) is a one-shot Notion import, `on conflict (notion_key)
