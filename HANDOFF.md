@@ -1,7 +1,52 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-24 (session 008).
+2026-06-24 (session 009).
+
+## Resume here (live state — 2026-06-24, session 009 — WRAPPED)
+
+Picking this up cold — start here. **Session 009 committed straight to `main`** (per the
+user). `typecheck` + `verify` (**16 sections**, §8 gained owner-override cases) + `build`
+all pass. **UI NOT browser-tested** (headless).
+
+**⚠ TWO NEW MIGRATIONS — both MUST be applied** (Supabase SQL Editor):
+- **`9984_ca_clients_primary_coach.sql`** — adds `ca_clients.coach_id` (CA primary coach =
+  the mentee's OWNER). **APPLY BEFORE THE NEXT SYNC** — the sync now writes `coach_id`, so an
+  unapplied column makes the `ca_clients` upsert error. After applying, **re-sync** (Admin →
+  Sync now) to populate owners. Until synced, every owner-driven surface gracefully falls back
+  to the old engagement/appointment-derived coach.
+- **`9983_mentee_outcomes_no_mentoring.sql`** — widens the `mentee_outcomes.status` CHECK to
+  allow the new `no_mentoring` exit. Until applied, saving a "No mentoring" outcome errors.
+
+**Next new migration is `9982_…`.**
+
+**Shipped this session (009), newest first:**
+- **OWNER = CoachAccountable primary coach, EVERYWHERE incl. pay** (user chose this scope).
+  Sync captures `Client.CoachID` → `ca_clients.coach_id` (`9984`); `fetchPrimaryCoachByClient()`
+  (defensive, empty map if unapplied). **Pay** (`lib/pay.ts` `primaryCoachOf`): invoices credit
+  the owner, tier still from engagement coverage, fallback `coverOnDate→coverInMonth`; threaded
+  via `fetchPayData`→PayStaff/BuildPayout; verify §8 +4 cases. **Capacity** (MetricsView):
+  1-on-1 mentees re-bucketed under their owner (group detection still on the running coach).
+  **Journeys**: `MenteeJourney.ownerCoachId/Name/Source`; timeline header shows "Owner: …".
+- **ALTERNATIVE journey exits — quit / fired / NO MENTORING** (new status `no_mentoring`,
+  migration `9983`). The stage rail ends in a **red ✕ exit node in place of Graduation** at the
+  last reached stage when a mentee exits; editor dropdown + pill + label updated.
+- **Diagnosed Jonathan Heinzman** from the user's `ca_engagements` CSV: both his engagements
+  (JumpStart `62514` + ongoing 4x `63543`) are under coach **9315 = Arthur**; Ty Miller's 4x was
+  re-cut under **40711 = Caleb** but Jonathan's was not — so engagement-derived attribution
+  correctly showed Arthur. The owner=primary-coach change is the fix (re-pair in CA + re-sync).
+- **Help: "How clients are matched to coaches"** master "?" article (Pay-staff header + Journeys
+  meeting list); rewritten for the owner model; pay/capacity/journeys articles updated.
+
+**▶ Next-session checklist (session 009):**
+1. **Apply `9984` (before any sync) + `9983`, then re-sync.** Jonathan only flips to Caleb if the
+   user **re-pairs him to Caleb in CoachAccountable** (the CSV still has him under Arthur).
+2. **Browser-verify**: Journeys "Owner: …" line + the red exit node (quit/fired/no-mentoring);
+   Pay-staff payouts re-attributed to owners; capacity grouped by owner (no cross-coach
+   double-count).
+3. Optional: surface the owner in the Journeys mentee LIST + the Mentee-record card too.
+
+---
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See

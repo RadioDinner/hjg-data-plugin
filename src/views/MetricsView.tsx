@@ -20,6 +20,7 @@ import {
   derivePeriodB,
   delta,
   fetchCoachesWithSettings,
+  fetchPrimaryCoachByClient,
   fetchLastSyncedAt,
   fetchJyfVsMentoring,
   fetchManualMetrics,
@@ -382,6 +383,9 @@ export function MetricsView() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [mentorIds, setMentorIds] = useState<Set<number>>(new Set());
   const [coachSettings, setCoachSettings] = useState<CoachWithSettings[]>([]);
+  // clientId -> owner (CA primary coach). Capacity buckets each mentee under their
+  // owner, not whoever ran each meeting. Empty until 9984 is applied + a re-sync.
+  const [primaryCoach, setPrimaryCoach] = useState<Map<number, number>>(new Map());
   // All-history mentee journeys, loaded once — backs the "Meetings to Freedom!"
   // card (graduated-mentee lifetime metric, not scoped to the date range).
   const [journeys, setJourneys] = useState<MenteeJourney[]>([]);
@@ -563,11 +567,12 @@ export function MetricsView() {
   // Admin tab updates these and the dashboard reflects on next visit.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchMentorCoachIds(), fetchCoachesWithSettings()])
-      .then(([ids, all]) => {
+    Promise.all([fetchMentorCoachIds(), fetchCoachesWithSettings(), fetchPrimaryCoachByClient()])
+      .then(([ids, all, owners]) => {
         if (cancelled) return;
         setMentorIds(ids);
         setCoachSettings(all);
+        setPrimaryCoach(owners);
       })
       .catch(() => {});
     return () => {
@@ -736,7 +741,7 @@ export function MetricsView() {
     // not several 1-on-1s. Both otherwise inflate capacity (the "Arthur Nisly"
     // bug + its residual weekly-slot case). Capacity-only; these still count as
     // mentoring meetings/active mentees everywhere else.
-    const menteesByCoach = oneOnOneMenteesByCoach(
+    const byApptCoach = oneOnOneMenteesByCoach(
       selectedMentoring.map<CapacityAppt>((a) => ({
         coachId: a.coachId,
         clientId: a.clientId,
@@ -744,6 +749,22 @@ export function MetricsView() {
         slot: a.startRaw,
       }))
     );
+    // Group-slot detection runs on the coach who actually ran each meeting (above),
+    // then each surviving 1-on-1 mentee is bucketed under their OWNER (CA primary
+    // coach) so a mentee counts once, under their owner — not under every coach
+    // they happened to meet. Falls back to the meeting coach until owners are synced.
+    const menteesByCoach = new Map<number, Set<number>>();
+    for (const [apptCoach, clients] of byApptCoach) {
+      for (const cid of clients) {
+        const owner = primaryCoach.get(cid) ?? apptCoach;
+        let set = menteesByCoach.get(owner);
+        if (!set) {
+          set = new Set();
+          menteesByCoach.set(owner, set);
+        }
+        set.add(cid);
+      }
+    }
     return coachSettings
       .filter((c) => c.isMentor)
       .map((c) => {
@@ -758,7 +779,7 @@ export function MetricsView() {
         if (bu !== au) return bu - au;
         return b.mentees - a.mentees;
       });
-  }, [coachSettings, selectedMentoring]);
+  }, [coachSettings, selectedMentoring, primaryCoach]);
 
   const capacityTotals = useMemo(() => {
     const totalCapacity = capacityRows.reduce((s, r) => s + (r.capacity ?? 0), 0);

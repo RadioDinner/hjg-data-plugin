@@ -41,6 +41,7 @@ const STATUS_LABEL: Record<ResolvedMenteeStatus, string> = {
   graduated: "Graduated",
   quit: "Quit",
   fired: "Fired",
+  no_mentoring: "No mentoring",
   inactive: "Inactive",
 };
 
@@ -49,6 +50,7 @@ const OVERRIDE_OPTIONS: { value: MenteeStatus; label: string }[] = [
   { value: "active", label: "Active" },
   { value: "quit", label: "Quit" },
   { value: "fired", label: "Fired" },
+  { value: "no_mentoring", label: "No mentoring" },
 ];
 
 export function MenteeStatusEditor({

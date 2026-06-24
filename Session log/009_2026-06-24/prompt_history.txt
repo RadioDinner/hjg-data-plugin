@@ -2,3 +2,15 @@
 Lets kick off a new session, commit to main  for the entirety of this session. 
 
 I applied all migrations. You found Ty, but I was looking for you to find Jonathan Heinzman. I checked Caleb Ottos clients and he has more than Ty, Joash and Jonathan but for some reason the "managed by" of some of Calebs clients is still Arthur. Is your system set to find clients primary coach? Or how does it work? I want you to do a few things.  First, tell me how the clients are assumed to coaches. Give me your logic. Second, add that explaination to the "?" card on the appropriate cards/pages on the dashboard.
+
+--- 2026-06-24 (session 009) ---
+@"/root/.claude/uploads/6508d2f2-6072-515b-ade4-f889e5e6cb2d/77b70067-caengagements20260624.csv" I want an "alternative" ending added to the "graduation" status in the journeys of "quit","no mentoring" and "fired" as an alternative exit to the journey path at any time
+
+here is the ca_engagements data so you can look at Jonathan Heinzmans engagements
+
+--- 2026-06-24 (session 009) ---
+I want the "owner" of the mentee to be decided by primary coach
+
+--- 2026-06-24 (session 009 — AskUserQuestion answer) ---
+Q: How far should "owner = primary coach" reach?
+A: Everywhere, incl. pay (primary coach drives Journeys owner display, Mentor-capacity grouping, AND Pay-staff payout attribution).

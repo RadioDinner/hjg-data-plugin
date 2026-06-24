@@ -13,6 +13,7 @@ export interface CACoach {
 
 export interface CAClient {
   ID: number;
+  CoachID?: number; // the client's PRIMARY coach (CA's "managed by" pairing)
   firstName?: string;
   lastName?: string;
   name?: string;
@@ -213,6 +214,7 @@ export interface CaCoachRow {
 
 export interface CaClientRow {
   id: number;
+  coach_id: number | null; // CA Client.CoachID = primary coach (the mentee's owner)
   name: string | null;
   first_name: string | null;
   last_name: string | null;

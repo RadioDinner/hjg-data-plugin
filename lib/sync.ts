@@ -141,6 +141,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       const full = fullName(c.firstName, c.lastName, c.name);
       return {
         id: c.ID,
+        coach_id: c.CoachID ?? null, // CA primary coach = the mentee's owner
         name: full || null,
         first_name: c.firstName ?? null,
         last_name: c.lastName ?? null,

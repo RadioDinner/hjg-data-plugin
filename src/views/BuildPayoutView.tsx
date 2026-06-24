@@ -85,6 +85,7 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
       clientName: data.clientName,
       months: data.months,
       startMonthOverride: data.startMonthOverride,
+      primaryCoachOf: data.primaryCoachOf,
     });
   }, [data]);
 
@@ -147,6 +148,7 @@ export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
       coachName: data.coachName,
       clientName: data.clientName,
       startMonthOverride: data.startMonthOverride,
+      primaryCoachOf: data.primaryCoachOf,
     });
   }, [data, ym]);
   const mentor = useMemo(

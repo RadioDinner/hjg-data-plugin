@@ -23,9 +23,17 @@
 //    landing in a month — including a rolled-forward slice — is paid at that month's
 //    rate; with the per-mentor ramp this only differs during a mentor's first two
 //    months, which is why no per-mentee catch-up is needed).
-//  - A mentee is attributed to the coach who covered the most active engagement days
-//    in the invoice's service month. Billed revenue with no overlapping engagement is
-//    reported as "unassigned" rather than silently dropped.
+//  - ATTRIBUTION (who gets credited/paid for a mentee's invoice):
+//    • If `primaryCoachOf` is supplied and returns a coach for the mentee, that
+//      coach (CoachAccountable's PRIMARY-coach pairing = the mentee's OWNER) is
+//      credited — this is what the dashboard uses (decided with the user, session
+//      009: owner = primary coach, everywhere incl. pay).
+//    • Otherwise (no primary coach known yet — e.g. before a re-sync) it falls back
+//      to the coach whose engagement covers the invoice date, then to the coach who
+//      covered the most days that service month.
+//    The TIER always comes from the engagement coverage regardless of who's credited.
+//    Billed revenue with no coach at all (no owner, no engagement) is reported as
+//    "unassigned" rather than silently dropped.
 
 import { engagementTier } from "./config";
 
@@ -109,6 +117,10 @@ export interface PayInputs {
   // coachId -> 'YYYY-MM' override for when a mentor's tenure started (else
   // derived from their earliest engagement start).
   startMonthOverride?: Map<number, string>;
+  // clientId -> the mentee's OWNER (CA primary coach). When present and non-null
+  // this coach is credited for the invoice instead of the engagement-coverage coach.
+  // Absent / null => fall back to engagement coverage (prior behavior).
+  primaryCoachOf?: (clientId: number) => number | null;
 }
 
 // --- engine outputs ---
@@ -266,6 +278,11 @@ export function computePayReport(input: PayInputs): PayReport {
     return a;
   };
 
+  // The coach credited for this mentee's invoice: the OWNER (CA primary coach) when
+  // known, else the engagement-coverage coach. The tier always comes from coverage.
+  const creditFor = (clientId: number, cov: { coachId: number | null; tier: string }): number | null =>
+    input.primaryCoachOf?.(clientId) ?? cov.coachId;
+
   for (const inv of input.invoices) {
     const invYm = ymOf(inv.serviceDate);
     const amt = inv.billed || 0;
@@ -274,7 +291,7 @@ export function computePayReport(input: PayInputs): PayReport {
       const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
       const day = dayOf(inv.serviceDate);
       const recognized = amt * (1 - elapsedFraction(day));
-      const a = ensure(cov.coachId, inv.clientId, cov.tier);
+      const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
       a.billed += amt;
       a.collected += inv.collected || 0;
       a.recognizedThis += recognized;
@@ -283,7 +300,7 @@ export function computePayReport(input: PayInputs): PayReport {
     } else if (invYm === prev) {
       const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
       const rollover = amt * elapsedFraction(dayOf(inv.serviceDate));
-      const a = ensure(cov.coachId, inv.clientId, cov.tier);
+      const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
       a.rolloverPrev += rollover;
       if (a.tier === "other") a.tier = cov.tier;
     }
@@ -401,6 +418,9 @@ export interface PayTimelineInput {
   coachName: (id: number) => string;
   clientName: (id: number) => string;
   startMonthOverride?: Map<number, string>;
+  // clientId -> the mentee's OWNER (CA primary coach); credited instead of the
+  // engagement-coverage coach when present (see computePayReport).
+  primaryCoachOf?: (clientId: number) => number | null;
   // Payout months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
   // month PLUS the following month (where the rollover slice lands), newest first.
   months?: string[];
@@ -434,6 +454,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
       coachName: input.coachName,
       clientName: input.clientName,
       startMonthOverride: input.startMonthOverride,
+      primaryCoachOf: input.primaryCoachOf,
     })
   );
 

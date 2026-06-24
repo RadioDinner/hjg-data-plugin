@@ -342,6 +342,7 @@ body {
 .pill--mentee-quit { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-text); }
 .pill--mentee-fired { background: var(--err-bg); border-color: var(--err-line); color: var(--err-text); }
 .pill--mentee-inactive { background: var(--neutral-bg); border-color: var(--neutral-line); color: var(--neutral-text); }
+.pill--mentee-no_mentoring { background: var(--neutral-bg); border-color: var(--neutral-line); color: var(--neutral-text); }
 
 /* --- Journeys tab: mentee list + timeline detail --- */
 .journeys { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
@@ -381,6 +382,9 @@ body {
 .stage__node { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; flex: 0 0 auto; max-width: 100%; border-top: 3px solid transparent; padding: 4px 4px 0; }
 .stage__dot { width: 11px; height: 11px; border-radius: 999px; background: var(--accent); border: 2px solid var(--panel); }
 .stage__node--empty .stage__dot { background: var(--line-strong); }
+/* Alternative-exit node (quit / fired / no mentoring) shown in place of Graduation. */
+.stage--exit .stage__gap { border-top-color: #b91c1c; color: #b91c1c; }
+.stage__node--exit .stage__dot { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
 .stage__label { font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2; font-weight: 600; }
 .stage__date { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
 

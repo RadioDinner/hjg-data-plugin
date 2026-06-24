@@ -12,6 +12,7 @@ import {
   setCompanyOption,
   stageColorsFromRaw,
   DEFAULT_STAGE_COLORS,
+  EXIT_STATUSES,
   type MenteeJourney,
   type MenteeRecord,
   type MenteeRecordEdit,
@@ -43,8 +44,12 @@ const STATUS_LABEL: Record<ResolvedMenteeStatus, string> = {
   graduated: "Graduated",
   quit: "Quit",
   fired: "Fired",
+  no_mentoring: "No mentoring",
   inactive: "Inactive",
 };
+
+// Color for the alternative-exit node (quit / fired / no mentoring) on the rail.
+const EXIT_COLOR = "#b91c1c";
 
 // Humanize a day count into a compact "1y 2mo" / "3mo" / "12 days" form.
 function humanizeDays(n: number | null): string {
@@ -66,20 +71,36 @@ function StatusPill({ status }: { status: ResolvedMenteeStatus }) {
 // previous node rendered on the connector. `color` is this stage's configured
 // color (Company options → Journeys → Pipeline stage colors); a reached stage
 // shows it solid, an unreached stage stays muted.
-function StageNode({ label, date, gap, color }: { label: string; date: string | null; gap?: string; color: string }) {
-  const reached = !!date;
+function StageNode({
+  label,
+  date,
+  gap,
+  color,
+  exit = false,
+}: {
+  label: string;
+  date: string | null;
+  gap?: string;
+  color: string;
+  // An alternative-exit node (quit / fired / no mentoring) renders as "reached"
+  // even without a date and is marked with an ✕ instead of a dot.
+  exit?: boolean;
+}) {
+  const reached = exit || !!date;
   return (
-    <div className="stage">
+    <div className={`stage${exit ? " stage--exit" : ""}`}>
       {gap !== undefined && <div className="stage__gap">{gap}</div>}
       <div
-        className={`stage__node ${reached ? "" : "stage__node--empty"}`}
+        className={`stage__node ${reached ? "" : "stage__node--empty"} ${exit ? "stage__node--exit" : ""}`}
         style={reached ? { borderTopColor: color } : undefined}
       >
-        <span className="stage__dot" style={reached ? { background: color, borderColor: color } : undefined} />
+        <span className="stage__dot" style={reached ? { background: color, borderColor: color } : undefined}>
+          {exit ? "✕" : ""}
+        </span>
         <span className="stage__label" style={reached ? { color } : undefined}>
           {label}
         </span>
-        <span className="stage__date">{date ?? "—"}</span>
+        <span className="stage__date">{date ?? (exit ? "exited" : "—")}</span>
       </div>
     </div>
   );
@@ -189,6 +210,19 @@ function Timeline({
   // Every recorded meeting, ascending — listed in the grid below the chart.
   const meetingList = journey.meetings;
 
+  // Alternative exit: the journey ended somewhere other than graduation (quit /
+  // fired / no mentoring). The rail then shows an exit node in place of Graduation.
+  const exited = (EXIT_STATUSES as readonly string[]).includes(journey.resolvedStatus);
+  const exitDate = journey.overrideDate ?? journey.lastMeeting;
+  // The latest stage the mentee actually reached — the exit connector measures from
+  // here, since the exit can happen at any stage (not just after 1x).
+  const lastStageDate =
+    journey.stageDates["1x"] ??
+    journey.stageDates["2x"] ??
+    journey.stageDates["4x"] ??
+    journey.stageDates.jumpstart ??
+    journey.discoveryDate;
+
   return (
     <div className="journey">
       <div className="journey__head">
@@ -198,6 +232,13 @@ function Timeline({
             {journey.excluded && <span className="pill" style={{ marginLeft: 8 }}>excluded</span>}
           </h2>
           <div className="journey__sub muted">
+            {journey.ownerCoachName && (
+              <>
+                Owner: <strong>{journey.ownerCoachName}</strong>
+                {journey.ownerSource === "fallback" && " (from latest meeting — primary coach not synced)"}
+                {" · "}
+              </>
+            )}
             {journey.meetingCount} meeting{journey.meetingCount === 1 ? "" : "s"}
             {journey.engagementIds.length > 1 && <> · {journey.engagementIds.length} engagements</>}
           </div>
@@ -244,7 +285,13 @@ function Timeline({
         <StageNode label="4x mentoring" date={journey.stageDates["4x"]} gap={humanizeDays(spanDays(journey.stageDates.jumpstart, journey.stageDates["4x"]))} color={colors[2]} />
         <StageNode label="2x mentoring" date={journey.stageDates["2x"]} gap={humanizeDays(spanDays(journey.stageDates["4x"], journey.stageDates["2x"]))} color={colors[3]} />
         <StageNode label="1x mentoring" date={journey.stageDates["1x"]} gap={humanizeDays(spanDays(journey.stageDates["2x"], journey.stageDates["1x"]))} color={colors[4]} />
-        <StageNode label="Graduation" date={journey.stageDates.graduated} gap={humanizeDays(spanDays(journey.stageDates["1x"], journey.stageDates.graduated))} color={colors[5]} />
+        {exited ? (
+          // Alternative ending: the path exits (Quit / Fired / No mentoring) in place
+          // of Graduation. The exit date is the override "ended on" (else last activity).
+          <StageNode label={STATUS_LABEL[journey.resolvedStatus]} date={exitDate} exit color={EXIT_COLOR} gap={humanizeDays(spanDays(lastStageDate, exitDate))} />
+        ) : (
+          <StageNode label="Graduation" date={journey.stageDates.graduated} gap={humanizeDays(spanDays(journey.stageDates["1x"], journey.stageDates.graduated))} color={colors[5]} />
+        )}
       </div>
 
       <div className="journey__rhythm">
@@ -666,7 +713,8 @@ export function JourneysView() {
       <p className="view__hint">
         Each mentee’s path through the pipeline — Discovery → JumpStart → 4x → 2x → 1x → Graduation — with how long each
         leg took. Pick a mentee to see their timeline. (Stages come from CoachAccountable engagements; graduation from an
-        “After Graduation Care” engagement. Exit status can still be overridden for quits/fires.)
+        “After Graduation Care” engagement. A mentee can take an <strong>alternative exit at any stage</strong> — Quit,
+        Fired, or No mentoring — set in the editor below; the rail then ends in that exit instead of Graduation.)
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0 14px", flexWrap: "wrap" }}>

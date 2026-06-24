@@ -117,14 +117,14 @@ Pure math lives in \`lib/compare.ts\`.`,
   - The **elapsed** part rolls forward and is paid the **next month**.
 - So a month's payout = **this month's invoice × (1 − elapsed) + last month's invoice × its elapsed**, all × the mentor's rate. Each invoice's two slices add back to its full share, so the mentor is made whole across the two months.
 
-### Attribution (which coach gets credited)
-- The coach comes from the **engagement**, not CoachAccountable's "managed by" / primary-coach field (we don't sync that).
-- For each invoice (its \`date_of\`): among engagements spanning that date, the **most-recently-started** one wins → its coach. If none covers the date, we fall back to the coach whose engagement covered the **most days** of that month.
-- Billed revenue with no overlapping engagement shows as **"unassigned"** rather than being dropped.
-- **So a handed-off mentee keeps the old coach until that coach's engagement ends (or the new coach's engagement starts on/before the invoice date) in CA.** See the **"How clients are matched to coaches"** help for the full picture and how to fix a handoff.
+### Attribution (which coach gets paid)
+- A mentee's invoice is credited to their **owner = CoachAccountable primary coach** (\`ca_clients.coach_id\`). Re-pair a mentee in CA + re-sync to move their pay to a different coach.
+- **Fallback** (owner not synced yet — needs migration \`9984\` + a re-sync): the coach on the covering **engagement** — for the invoice's \`date_of\`, the most-recently-started engagement spanning it, else the most-days-covered coach that month.
+- The **tier** always comes from the engagement coverage regardless of who's paid. Revenue with no owner *and* no engagement shows as **"unassigned"**, never dropped.
+- See the **"How clients are matched to coaches"** help for the full picture.
 
 ### Source
-- \`ca_invoices\` (billed, service **date** \`date_of\`) + \`ca_engagements\` (\`coach_id\`). Coach pick in \`lib/pay.ts\` (\`coverOnDate\` → \`coverInMonth\`); see \`docs/legacy-pay-calculator.md\`.`,
+- \`ca_invoices\` (billed, service **date** \`date_of\`) + \`ca_clients.coach_id\` (owner) + \`ca_engagements\` (tier + fallback coach). Engine in \`lib/pay.ts\` (\`primaryCoachOf\` → \`coverOnDate\` → \`coverInMonth\`); see \`docs/legacy-pay-calculator.md\`.`,
   },
 
   "pay.build": {
@@ -155,8 +155,9 @@ Pure math lives in \`lib/compare.ts\`.`,
   - **Engagement start** — the CA engagement's start date for that tier.
   - **First meeting** — the first 1-on-1 mentoring meeting under that tier (group sessions excluded), falling back to the engagement start.
 
-### Which coach owns a stage
-- Each tier's coach comes from that **engagement** (\`ca_engagements.coach_id\`), not CoachAccountable's "managed by" field, and the per-meeting **Coach** column below comes from whoever ran each meeting. A handed-off mentee keeps the old coach until the old engagement ends and the new one begins in CA. See the **"How clients are matched to coaches"** help.
+### Owner & alternative exits
+- Each mentee's **owner** is their CoachAccountable **primary coach** (\`ca_clients.coach_id\`), shown on the mentee's timeline. The per-meeting **Coach** column still shows whoever ran each meeting. See the **"How clients are matched to coaches"** help.
+- A mentee can take an **alternative exit at any stage** — **Quit**, **Fired**, or **No mentoring** — set in the "Edit graduation status" editor. The stage rail then ends in a red exit node *in place of* Graduation, at the point they left.
 
 Pure logic in \`lib/journey.ts\`.`,
   },
@@ -186,11 +187,12 @@ Pure logic in \`lib/journey.ts\`.`,
 - **Group sessions don't count.** "In Depth" / "Tracking Together" and any multi-client time slot (same coach, same exact start time, 2+ clients) are treated as group and excluded — so one group session of 10 doesn't look like 10 1-on-1s (the Arthur-Nisly inflation fix).
 
 ### Which coach a mentee counts under
-- A mentee is bucketed by **who ran each meeting** (\`ca_appointments.coach_id\`) — *not* CoachAccountable's "managed by" / primary coach (we don't sync that).
-- A mentee counts toward **every** coach they had a 1-on-1 with, so a **handed-off mentee shows under both** the old and the new coach (old meetings stay under the old coach). See the **"How clients are matched to coaches"** help.
+- A mentee counts once, under their **owner = CoachAccountable primary coach** (\`ca_clients.coach_id\`) — so a handed-off mentee no longer double-counts across coaches.
+- Group-session detection still uses who actually **ran** each meeting; only the final 1-on-1 bucket is grouped by owner.
+- **Fallback** (owner not synced yet — needs migration \`9984\` + a re-sync): the coach who ran the meeting (\`ca_appointments.coach_id\`). See the **"How clients are matched to coaches"** help.
 
 ### Source
-- \`ca_appointments\` categorized as 1-on-1 mentoring, per \`lib/capacity.ts\` (\`oneOnOneMenteesByCoach\`). Capacity from \`coach_settings\`.`,
+- \`ca_appointments\` categorized as 1-on-1 mentoring, per \`lib/capacity.ts\` (\`oneOnOneMenteesByCoach\`), re-bucketed by \`ca_clients.coach_id\`. Capacity from \`coach_settings\`.`,
   },
 
   "metrics.resource": {
@@ -270,32 +272,24 @@ Pure logic in \`lib/journey.ts\`.`,
 
   "general.coachAttribution": {
     title: "How clients are matched to coaches",
-    body: `**Short answer: the dashboard does *not* read CoachAccountable's "managed by" / primary-coach field.** It figures out which coach a mentee belongs to from their **activity** — their engagements and their meetings — not from the coach you set on the client's profile in CA.
+    body: `**The mentee's OWNER is CoachAccountable's primary coach** — the coach set on the client in CA (the "managed by" pairing you change by re-pairing a client). That owner drives **everything**: the Journeys owner, **Mentor-capacity** grouping, and **Pay-staff** payout attribution.
 
-### Why we don't use the CA "primary coach"
-CoachAccountable *does* track a primary coach per client (the \`CoachID\` on \`Client.getAll\`, what you change by re-pairing a client). But we deliberately **don't sync it** — it isn't stored on \`ca_clients\` and nothing on the dashboard reads it. A client's "managed by" in CA can say one thing while their actual engagements and meetings were run by someone else, so we attribute from the work that was actually done.
+### Where the owner comes from
+- CA's \`Client.getAll\` returns a \`CoachID\` per client = their primary coach. The sync mirrors it onto \`ca_clients.coach_id\`.
+- **You must apply migration \`9984\` and run a re-sync (Admin → Sync now)** for the owner to be populated. Until then it's blank and the dashboard falls back to the old activity-derived coach (below), so nothing breaks while you wait.
+- **To change a mentee's owner: re-pair them to the new coach in CoachAccountable, then re-sync.** No need to re-cut engagements just to move ownership.
 
-### The two ways a coach is derived
+### Fallback when the primary coach isn't known yet
+When a mentee has no synced primary coach, each surface falls back to how it worked before:
+- **Pay staff / Journeys stages** → the coach on the covering **engagement** (\`ca_engagements.coach_id\`): for an invoice's \`date_of\`, the most-recently-started engagement spanning that date, else the coach who covered the most days that month. Revenue with no coach at all = **"unassigned"**.
+- **Mentor capacity / per-meeting Coach column** → the coach who **ran each meeting** (\`ca_appointments.coach_id\`).
+- The Journeys owner line says "(from latest meeting — primary coach not synced)" when it's using this fallback.
 
-**1. From engagements** — used by **Pay staff** and the **Journeys** pipeline.
-- The coach comes from \`ca_engagements.coach_id\` — whoever runs that subscription/engagement.
-- For a given invoice (its \`date_of\`): among the engagements that span that date, the **most-recently-started** one wins, and its coach is credited.
-- If no engagement covers that exact date, we fall back to the coach whose engagement covered the **most days** of that service month.
-- Revenue with no covering engagement is shown as **"unassigned"**, never silently dropped.
-
-**2. From appointments** — used by **Mentor capacity** and the per-meeting **Coach** column.
-- The coach comes from \`ca_appointments.coach_id\` — whoever actually **ran that meeting**.
-- A mentee counts toward **every** coach they had a 1-on-1 meeting with, so a handed-off mentee can appear under **both** the old and the new coach. This is a per-meeting fact, not a single owner.
-
-### Why a re-assigned client still shows the old coach (e.g. Caleb's mentees showing Arthur)
-Re-pairing a client to a new coach in CA only changes CA's primary-coach field — **which we don't read**. It does **not**:
-- change who **ran the past meetings** → capacity and the meeting list keep the old coach for those dates, and
-- change who **owns a still-open engagement** → Pay staff and the Journeys stage keep the old coach until that engagement **ends** (or the new coach's engagement starts on/before the invoice date).
-
-**To move a mentee to the new coach everywhere:** in CoachAccountable, **end the old coach's engagement** and **start the new coach's engagement** with the correct start date, and book future meetings under the new coach. After the next **Sync now**, the engagement-based surfaces (Pay, Journeys) follow the new coach for dates the new engagement covers, and the appointment-based surfaces (capacity, meeting list) follow whoever ran each meeting.
+### Why this was the fix for "Caleb's mentees still show Arthur"
+A mentee like Jonathan Heinzman kept showing Arthur because his ongoing engagement was still recorded under Arthur in CA — and the old logic read the engagement, not the pairing. Now that **owner = primary coach**, re-pairing him to Caleb in CA (then re-syncing) moves him to Caleb everywhere, without touching the engagement.
 
 ### A separate thing: the Notion "Mentor" field
-The **Mentee record** card (Journeys) shows a **Mentor** column that came from the Notion roster. That is a **manual roster value** and is **not** used by any computed metric — it won't change who Pay staff, capacity, or the pipeline attribute a mentee to.`,
+The **Mentee record** card (Journeys) shows a **Mentor** column from the Notion roster. That's a **manual roster value** and is **not** the owner — it doesn't drive Pay, capacity, or the pipeline.`,
   },
 };
 

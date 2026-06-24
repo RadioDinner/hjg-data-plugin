@@ -379,6 +379,34 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   const hJun = computePayReport({ ym: "2026-06", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
   eq(round2(hJun.mentors.find((m) => m.coachId === 222)?.earned ?? 0), 425, "full day-30 rollover lands under the new 4x coach in June");
   eq(hJun.mentors.find((m) => m.coachId === 111)?.earned ?? 0, 0, "the outgoing JumpStart coach gets none of the 4x invoice");
+
+  // ---- Owner override (session 009: owner = CA primary coach, everywhere incl.
+  //      pay). When primaryCoachOf returns a coach, that owner is credited instead
+  //      of the engagement-coverage coach; the TIER still comes from coverage. ----
+  const owned = computePayReport({
+    ym: "2026-05",
+    invoices: handoffInv,
+    engagements: handoffEng,
+    coachName: (id) => `#${id}`,
+    clientName,
+    primaryCoachOf: () => 999,
+  });
+  eq(owned.mentors.find((m) => m.coachId === 999)?.lines[0]?.billed ?? 0, 425, "owner (primary coach 999) is credited the invoice, not the engagement coach");
+  eq(owned.mentors.find((m) => m.coachId === 222)?.billed ?? 0, 0, "the engagement-coverage coach gets nothing once an owner is set");
+  eq(
+    owned.mentors.find((m) => m.coachId === 999)?.lines[0]?.tier ?? "",
+    hMay.mentors.find((m) => m.coachId === 222)?.lines[0]?.tier ?? "x",
+    "tier still comes from engagement coverage, not the owner"
+  );
+  const ownedNull = computePayReport({
+    ym: "2026-05",
+    invoices: handoffInv,
+    engagements: handoffEng,
+    coachName: (id) => `#${id}`,
+    clientName,
+    primaryCoachOf: () => null,
+  });
+  eq(ownedNull.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0, 425, "null owner falls back to the engagement-coverage coach (222)");
 }
 
 console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned, scoping)");

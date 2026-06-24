@@ -620,9 +620,15 @@ export async function upsertCoachSettings(
 // rather than claiming tiers. Exit status is inferred from activity (active vs
 // dormant) and can be overridden by staff via mentee_outcomes.
 
-export type MenteeStatus = "active" | "graduated" | "quit" | "fired";
+// "graduated" is the normal ending; "quit" / "fired" / "no_mentoring" are the
+// ALTERNATIVE exits — a mentee can leave the pipeline at ANY stage (the Journeys
+// rail then shows an exit node in place of Graduation). "no_mentoring" = left the
+// pipeline without ongoing mentoring.
+export type MenteeStatus = "active" | "graduated" | "quit" | "fired" | "no_mentoring";
+// The exit statuses that end the journey somewhere other than graduation.
+export const EXIT_STATUSES: readonly MenteeStatus[] = ["quit", "fired", "no_mentoring"];
 // Inferred view adds "inactive": meetings stopped, but we can't know why
-// (graduated vs quit vs fired) until staff classify it.
+// (graduated vs quit vs fired vs no-mentoring) until staff classify it.
 export type ResolvedMenteeStatus = MenteeStatus | "inactive";
 
 // A mentee counts as active if they've met within this many days of today.
@@ -690,6 +696,12 @@ export interface MenteeJourney {
   // Staff-set exclusion (mentee_exclusions): test/placeholder mentee hidden from
   // metrics + the pipeline aggregates. Still listed (greyed) so it's reversible.
   excluded: boolean;
+  // OWNER = the mentee's coach, decided by CoachAccountable's PRIMARY-coach pairing
+  // (ca_clients.coach_id). When the primary coach isn't synced yet it falls back to
+  // the coach of the most recent meeting. ownerSource says which one is shown.
+  ownerCoachId: number | null;
+  ownerCoachName: string | null;
+  ownerSource: "primary" | "fallback" | "none";
 }
 
 // Whole days from `a` to `b` (both YYYY-MM-DD), parsed at UTC midnight.
@@ -752,6 +764,21 @@ async function fetchDiscoveryDatesByClient(): Promise<Map<number, string>> {
       if (!cur || d < cur) out.set(r.client_id, d);
     }
     if (batch.length < pageSize) break;
+  }
+  return out;
+}
+
+// The mentee's OWNER per client = CoachAccountable's primary-coach pairing,
+// mirrored onto ca_clients.coach_id (migration 9984). Defensive: if the column
+// isn't applied yet, PostgREST errors on the select — we swallow it and return an
+// empty map so every consumer falls back to its prior engagement/appointment coach
+// (the dashboard never breaks waiting on the migration + re-sync).
+export async function fetchPrimaryCoachByClient(): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  const { data, error } = await supabase.from("ca_clients").select("id,coach_id");
+  if (error) return out; // column missing (pre-migration) -> graceful empty
+  for (const r of (data ?? []) as { id: number; coach_id: number | null }[]) {
+    if (r.coach_id != null) out.set(r.id, r.coach_id);
   }
   return out;
 }
@@ -891,7 +918,7 @@ async function fetchMenteeOutcomeRows(): Promise<OutcomeRow[]> {
 // pipeline engagement), sorted by most-recent activity first. Excludes
 // placeholder/group "clients". Reads the full mirror once; the tab filters it.
 export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_start"): Promise<MenteeJourney[]> {
-  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomeRows, excludedSet] = await Promise.all([
+  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomeRows, excludedSet, primaryCoach] = await Promise.all([
     fetchAllMentoring(),
     fetchAllEngagements(),
     fetchDiscoveryDatesByClient(),
@@ -899,6 +926,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
     supabase.from("ca_coaches").select("id,name"),
     fetchMenteeOutcomeRows(),
     fetchExcludedClientIds(),
+    fetchPrimaryCoachByClient(),
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
@@ -1010,6 +1038,19 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       override ?? (stageDates.graduated ? "graduated" : active ? "active" : "inactive");
     const source: ResolvedOutcomeSource = override ? "manual" : "auto";
 
+    // Owner = CoachAccountable primary coach (ca_clients.coach_id). Falls back to
+    // the coach of the most recent meeting until the primary coach is synced.
+    const ownerCoachId = primaryCoach.get(clientId) ?? null;
+    let ownerCoachName: string | null = null;
+    let ownerSource: "primary" | "fallback" | "none" = "none";
+    if (ownerCoachId != null) {
+      ownerCoachName = coachMap.get(ownerCoachId) ?? `#${ownerCoachId}`;
+      ownerSource = "primary";
+    } else if (meetings.length) {
+      ownerCoachName = meetings[meetings.length - 1].coachName;
+      ownerSource = "fallback";
+    }
+
     const startDate = discoveryDate ?? stageDates.jumpstart ?? jyfPurchaseDate ?? firstMeeting;
     const exitDate =
       override && override !== "active" && overrideDate
@@ -1044,6 +1085,9 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       activeSpanDays: dayspan(firstMeeting, lastMeeting),
       daysInSystem: dayspan(startDate, exitDate),
       excluded: excludedSet.has(clientId),
+      ownerCoachId,
+      ownerCoachName,
+      ownerSource,
     });
   }
 
@@ -1316,6 +1360,9 @@ export interface PayData {
   // coachId -> 'YYYY-MM' staff override for the pay-ramp start (coach_settings).
   // The engine falls back to the mentor's earliest engagement when absent.
   startMonthOverride: Map<number, string>;
+  // clientId -> the mentee's OWNER (CA primary coach); the engine credits this coach
+  // for the invoice. Null when not synced yet => engine falls back to engagement coverage.
+  primaryCoachOf: (clientId: number) => number | null;
 }
 
 async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
@@ -1392,12 +1439,13 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
 }
 
 export async function fetchPayData(): Promise<PayData> {
-  const [invoices, engagements, coachesRes, clientsRes, settingsRes] = await Promise.all([
+  const [invoices, engagements, coachesRes, clientsRes, settingsRes, primaryCoach] = await Promise.all([
     fetchAllPayInvoices(),
     fetchAllPayEngagements(),
     supabase.from("ca_coaches").select("id,name"),
     supabase.from("ca_clients").select("id,name"),
     supabase.from("coach_settings").select("coach_id,pay_start_month"),
+    fetchPrimaryCoachByClient(),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
@@ -1425,6 +1473,7 @@ export async function fetchPayData(): Promise<PayData> {
     clientName: (id) => clients.get(id) ?? `#${id}`,
     months,
     startMonthOverride,
+    primaryCoachOf: (clientId) => primaryCoach.get(clientId) ?? null,
   };
 }
 

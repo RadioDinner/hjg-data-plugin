@@ -137,6 +137,7 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
       clientName: data.clientName,
       months: data.months,
       startMonthOverride: data.startMonthOverride,
+      primaryCoachOf: data.primaryCoachOf,
     });
   }, [data]);
 
