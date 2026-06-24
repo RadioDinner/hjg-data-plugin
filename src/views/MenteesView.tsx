@@ -15,24 +15,17 @@ import {
 type Kind = "text" | "date" | "num";
 type Col = { key: keyof MenteeRecord; label: string; kind: Kind; w?: number };
 
-// All 19 mirrored Notion columns, in a sensible reading order.
+// The retained mirrored Notion columns, in a sensible reading order. (9 columns —
+// FF amount / FF paid? / Wants PP? / Date FF paid / Invoice amt / JS lesson /
+// MN equiv / dd w a / Prayer partner — were removed 2026-06-24; migration 9979.)
 const COLS: Col[] = [
   { key: "name", label: "Name", kind: "text", w: 160 },
   { key: "status", label: "Status", kind: "text", w: 150 },
   { key: "mentor", label: "Mentor", kind: "text", w: 110 },
   { key: "mentor_1", label: "Mentor (full)", kind: "text", w: 150 },
-  { key: "mt_prayer_partner", label: "Prayer partner", kind: "text", w: 150 },
-  { key: "wants_pp", label: "Wants PP?", kind: "text", w: 90 },
   { key: "dc_date", label: "DC date", kind: "date", w: 140 },
   { key: "projected_start", label: "Projected start", kind: "date", w: 140 },
   { key: "offering_signup", label: "Offering signup", kind: "date", w: 140 },
-  { key: "ff_amount", label: "FF amount", kind: "num", w: 90 },
-  { key: "freedom_fight_paid", label: "FF paid?", kind: "text", w: 90 },
-  { key: "date_ff_paid", label: "Date FF paid", kind: "date", w: 140 },
-  { key: "current_invoice_amount", label: "Invoice amt", kind: "num", w: 90 },
-  { key: "js_lesson", label: "JS lesson", kind: "text", w: 110 },
-  { key: "mn_equivalency", label: "MN equiv", kind: "num", w: 90 },
-  { key: "dd_w_a", label: "dd w a", kind: "num", w: 90 },
   { key: "email", label: "Email", kind: "text", w: 200 },
   { key: "phone", label: "Phone", kind: "text", w: 110 },
   { key: "associated_tasks", label: "Associated tasks", kind: "text", w: 240 },

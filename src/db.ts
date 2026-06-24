@@ -1221,30 +1221,23 @@ export async function removeMenteeExclusion(clientId: number): Promise<void> {
 // One row per mentee (HJG-owned, staff RLS, migration 9986). `client_id` soft-refs
 // ca_clients.id (null for prospects not yet in CoachAccountable). Seeded once from
 // the Notion export; edited in the dashboard thereafter via the Journeys "Mentee
-// record" card. All 19 Notion columns are mirrored.
+// record" card. 9 Notion columns (FF amount / Freedom Fight paid? / Wants PP? /
+// Date FF paid / Current invoice amount / JS lesson / MN equivalency / dd w a /
+// Prayer partner) were removed 2026-06-24 — migration 9979 drops them.
 
 export interface MenteeRecord {
   id: string;
   client_id: number | null;
   notion_key: string;
   name: string;
-  wants_pp: string | null;
   mentor_1: string | null;
   status: string | null;
-  mt_prayer_partner: string | null;
   projected_start: string | null;
   associated_tasks: string | null;
-  current_invoice_amount: number | null;
-  ff_amount: number | null;
-  freedom_fight_paid: string | null;
-  js_lesson: string | null;
-  mn_equivalency: number | null;
   mentor: string | null;
   offering_signup: string | null;
-  dd_w_a: number | null;
   dc_date: string | null;
   email: string | null;
-  date_ff_paid: string | null;
   phone: string | null;
   created_at?: string;
   updated_at?: string;
@@ -1256,11 +1249,13 @@ export type MenteeRecordEdit = Partial<
 >;
 
 const MENTEE_SELECT =
-  "id,client_id,notion_key,name,wants_pp,mentor_1,status,mt_prayer_partner,projected_start,associated_tasks,current_invoice_amount,ff_amount,freedom_fight_paid,js_lesson,mn_equivalency,mentor,offering_signup,dd_w_a,dc_date,email,date_ff_paid,phone,created_at,updated_at";
+  "id,client_id,notion_key,name,mentor_1,status,projected_start,associated_tasks,mentor,offering_signup,dc_date,email,phone,created_at,updated_at";
 
 // PostgREST returns numeric(12,2) columns as strings to preserve precision; coerce
 // them back to numbers so MenteeRecord's `number | null` contract actually holds.
-const MENTEE_NUM_FIELDS = ["current_invoice_amount", "ff_amount", "mn_equivalency", "dd_w_a"] as const;
+// All numeric mentee fields were removed 2026-06-24 (migration 9979); re-add any
+// restored numeric column here so it's coerced back to a number on read.
+const MENTEE_NUM_FIELDS: readonly string[] = [];
 function normalizeMenteeRecord(r: MenteeRecord): MenteeRecord {
   const out = { ...r } as Record<string, unknown>;
   for (const k of MENTEE_NUM_FIELDS) {

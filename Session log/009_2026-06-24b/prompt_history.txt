@@ -1,0 +1,6 @@
+--- 2026-06-24 (session 009b) ---
+Let's kick off another session. In the Mentee record - source of truth data and screens, I want the "FF amount","Freedom Fight paid?","Wants PP?","Date FF paid","Current invoice amount","JS lesson","MN equivalency","dd w a","Prayer partner" removed. I'll add some of these back later but I want them removed as of now.
+
+--- 2026-06-24 (AskUserQuestion answer) ---
+Q: How should I handle the underlying `mentees` table columns for these 9 fields?
+A: Drop the columns too (delete the 9 columns from the mentees table via a new migration; update the 9986 seed so it stays re-runnable).

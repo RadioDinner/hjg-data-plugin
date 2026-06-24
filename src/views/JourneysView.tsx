@@ -638,6 +638,9 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
 // display order. `num` renders a number input, `date` a date input, `area` a
 // multi-line textarea, everything else a text input.
 type RecKind = "text" | "date" | "num" | "area";
+// 9 fields (Prayer partner / Wants PP? / FF amount / Freedom Fight paid? / Date FF
+// paid / Current invoice amount / JS lesson / MN equivalency / dd w a) were removed
+// 2026-06-24; migration 9979 drops the columns.
 const RECORD_FIELDS: { key: keyof MenteeRecordEdit; label: string; kind: RecKind; wide?: boolean }[] = [
   { key: "name", label: "Name", kind: "text" },
   { key: "status", label: "Status (Notion)", kind: "text" },
@@ -646,17 +649,8 @@ const RECORD_FIELDS: { key: keyof MenteeRecordEdit; label: string; kind: RecKind
   { key: "dc_date", label: "Discovery-call date", kind: "date" },
   { key: "projected_start", label: "Projected start", kind: "date" },
   { key: "offering_signup", label: "Offering signup", kind: "date" },
-  { key: "mt_prayer_partner", label: "Prayer partner", kind: "text" },
-  { key: "wants_pp", label: "Wants PP?", kind: "text" },
-  { key: "ff_amount", label: "FF amount", kind: "num" },
-  { key: "freedom_fight_paid", label: "Freedom Fight paid?", kind: "text" },
-  { key: "date_ff_paid", label: "Date FF paid", kind: "date" },
-  { key: "current_invoice_amount", label: "Current invoice amount", kind: "num" },
   { key: "email", label: "Email", kind: "text" },
   { key: "phone", label: "Phone", kind: "text" },
-  { key: "js_lesson", label: "JS lesson", kind: "text" },
-  { key: "mn_equivalency", label: "MN equivalency", kind: "num" },
-  { key: "dd_w_a", label: "dd w a", kind: "num" },
   { key: "associated_tasks", label: "Associated tasks / notes", kind: "area", wide: true },
 ];
 

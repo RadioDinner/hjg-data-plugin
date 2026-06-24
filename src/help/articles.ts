@@ -179,11 +179,11 @@ Pure logic in \`lib/journey.ts\`.`,
     body: `HJG's **internal source of truth** for this mentee — one consolidated record per person.
 
 ### Where it comes from
-- **Seeded once** from the Notion *Mentees Database* (all 19 columns mirrored), linked to the CoachAccountable client by name (\`client_id\`).
+- **Seeded once** from the Notion *Mentees Database*, linked to the CoachAccountable client by name (\`client_id\`).
 - After the import, **this is the master copy**: edits you make here are saved to the dashboard's own \`mentees\` table and are **never overwritten** by a CoachAccountable re-sync or a re-run of the seed.
 
 ### What it holds
-- Notion **Status**, **Mentor** and **Prayer partner**, **Discovery-call** and **Projected-start** dates, **Freedom-Fight** payment fields, contact info, and free notes.
+- Notion **Status**, **Mentor**, **Discovery-call** / **Projected-start** / **Offering-signup** dates, contact info, and free notes.
 - This is separate from the **pipeline status** editor above (which drives the auto/active/graduated logic) — that one feeds the metrics; this record is the management roster.
 
 ### Source

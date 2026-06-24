@@ -1,7 +1,56 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-24 (session 009).
+2026-06-24 (session 009b).
+
+## Resume here (live state — 2026-06-24, session 009b — WRAPPED)
+
+Picking this up cold — start here. **Session 009b worked on branch
+`claude/jolly-cannon-rd1s1z`** (per the task's branch requirement, NOT straight to
+`main` like recent sessions). `typecheck` + `verify` (**17 sections**) + `build` all
+pass. **UI NOT browser-tested** (headless).
+
+**⚠ ONE NEW MIGRATION — `9979_mentees_drop_fields.sql` — MUST be applied** (Supabase
+SQL Editor) on the existing database. It **drops 9 columns** from the `mentees`
+source-of-truth table (this destroys their data, per the user's explicit choice):
+`ff_amount`, `freedom_fight_paid`, `wants_pp`, `date_ff_paid`,
+`current_invoice_amount`, `js_lesson`, `mn_equivalency`, `dd_w_a`,
+`mt_prayer_partner` (Notion labels: FF amount / Freedom Fight paid? / Wants PP? /
+Date FF paid / Current invoice amount / JS lesson / MN equivalency / dd w a / Prayer
+partner). Re-runnable (`drop column if exists`). **Next new migration is `9978_…`.**
+
+**What shipped this session (009b):** the user asked to remove those 9 fields from
+the **Mentee record — source of truth** *data and screens* (they may re-add some
+later). Done end-to-end:
+- **Data layer** (`src/db.ts`): dropped the 9 fields from the `MenteeRecord`
+  interface, from `MENTEE_SELECT`, and emptied `MENTEE_NUM_FIELDS` (all 4 numeric
+  mentee cols were among the 9 — `normalizeMenteeRecord` is now a no-op but kept as
+  scaffolding for re-adds).
+- **Screens**: removed the 9 columns from the **Mentees** tab grid
+  (`MenteesView.tsx` `COLS`) and the Journeys **Mentee record** card
+  (`JourneysView.tsx` `RECORD_FIELDS` — the card's form + save are generic over that
+  list, so the fields drop from edit + save too). Updated the
+  `journeys.menteeRecord` help article prose (`src/help/articles.ts`).
+- **Schema/data**: new `9979` drops the columns from existing DBs. The **`9986`
+  seed was rewritten** (create-table DDL + the 181-row INSERT, via a quote-aware
+  parser) to omit the 9 columns so it stays **re-runnable** and a fresh apply never
+  creates them (then `9979` is a no-op). Verified: 181 rows × 12 values, header
+  matches, embedded commas/parens/`''` escapes preserved.
+- **Raw data tab**: `mentees` is in `RAW_TABLES`; after `9979` is applied the 9
+  columns no longer appear there either.
+
+**▶ Next-session checklist (009b):**
+1. **Apply `9979_mentees_drop_fields.sql`** (Supabase SQL Editor). No re-sync needed
+   (the `mentees` table is HJG-owned, not sync-written).
+2. **Browser-verify** (headless here): the **Mentees** tab grid and the Journeys
+   **Mentee record** card no longer show the 9 fields; existing edits to the kept
+   fields still save; Raw data → `mentees` no longer lists the dropped columns.
+3. If/when the user wants any field back: re-add it to `MenteeRecord` + `MENTEE_SELECT`
+   (+ `MENTEE_NUM_FIELDS` if numeric), the relevant `COLS`/`RECORD_FIELDS`, and a new
+   migration `add column if not exists`. Data dropped by `9979` is gone — seed values
+   for it still live in git history (the pre-009b `9986`).
+
+---
 
 ## Resume here (live state — 2026-06-24, session 009 — WRAPPED)
 
