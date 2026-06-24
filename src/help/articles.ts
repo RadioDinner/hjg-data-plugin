@@ -295,6 +295,9 @@ Pure logic in \`lib/journey.ts\`.`,
 ### Staff hours
 - **You enter these** per month, in the table (saves on blur). Stored in the \`program_hours\` table (migration \`9981\`).
 
+### Drill into a month
+- **Click a bar (or a table row)** to open the **meetings behind that month** — each delivered session with its date, time, coach, meeting name, attendees, and hours (a group session shows its attendee count). Export the list to CSV. An asterisk on hours marks a session using the fallback length (no end time recorded).
+
 ### Reading it
 - **Delivered ÷ staff** = delivered meeting hours per staff hour, for months where staff hours are entered — a first proxy for leverage/efficiency.
 - **Dollars come later.** This is the hours "bones"; cost + revenue layer on top once the hours model is trusted.`,

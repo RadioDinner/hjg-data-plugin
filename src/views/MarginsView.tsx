@@ -8,11 +8,13 @@ import {
   PROGRAMS,
   PROGRAM_MEETING_HOURS,
   mergeProgramMonths,
-  fetchDeliveredHoursByMonth,
+  programMonthTotals,
+  fetchProgramSessionsByMonth,
   fetchAllProgramHours,
   setProgramHours,
   type ProgramHoursRow,
   type ProgramMonthRow,
+  type ProgramSession,
 } from "../db";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -82,19 +84,21 @@ export function MarginsView() {
   const [programKey, setProgramKey] = useState(PROGRAMS[0].key);
   const def = PROGRAMS.find((p) => p.key === programKey) ?? PROGRAMS[0];
 
-  const [delivered, setDelivered] = useState<Map<string, { sessions: number; hours: number }>>(new Map());
+  const [sessionsByMonth, setSessionsByMonth] = useState<Map<string, ProgramSession[]>>(new Map());
   const [staffRows, setStaffRows] = useState<ProgramHoursRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [drillMonth, setDrillMonth] = useState<string | null>(null); // month whose meetings the modal shows
 
   useEffect(() => {
     let live = true;
     setLoading(true);
-    Promise.all([fetchDeliveredHoursByMonth(def.tiers), fetchAllProgramHours()])
-      .then(([d, s]) => {
+    setDrillMonth(null);
+    Promise.all([fetchProgramSessionsByMonth(def.tiers), fetchAllProgramHours()])
+      .then(([s, hrs]) => {
         if (!live) return;
-        setDelivered(d);
-        setStaffRows(s);
+        setSessionsByMonth(s);
+        setStaffRows(hrs);
         setError(null);
       })
       .catch((e) => live && setError(String(e)))
@@ -105,6 +109,7 @@ export function MarginsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programKey]);
 
+  const delivered = useMemo(() => programMonthTotals(sessionsByMonth), [sessionsByMonth]);
   const staffMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of staffRows) if (r.program === programKey && r.staffHours != null) m.set(r.month, r.staffHours);
@@ -112,9 +117,9 @@ export function MarginsView() {
   }, [staffRows, programKey]);
 
   const rows = useMemo(() => mergeProgramMonths(delivered, staffMap, [currentYm()]), [delivered, staffMap]);
-  // Oldest -> newest for the time axis.
+  // Oldest -> newest for the time axis. `ym` rides along so a bar click can drill in.
   const chartData = useMemo(
-    () => [...rows].reverse().map((r) => ({ month: monthLabel(r.month), Staff: r.staffHours ?? 0, Delivered: r.deliveredHours })),
+    () => [...rows].reverse().map((r) => ({ ym: r.month, month: monthLabel(r.month), Staff: r.staffHours ?? 0, Delivered: r.deliveredHours })),
     [rows]
   );
 
@@ -137,6 +142,31 @@ export function MarginsView() {
       `margins-${programKey}`,
       ["Month", "Delivered sessions", "Delivered hours", "Staff hours", "Delivered ÷ staff"],
       rows.map((r) => [r.month, r.sessions, r.deliveredHours, r.staffHours ?? "", r.ratio == null ? "" : Math.round(r.ratio * 100) / 100])
+    );
+  }
+
+  // Clicking a month's column drills into that month's delivered meetings. recharts'
+  // click state isn't cleanly typed; read the active row's `ym` defensively.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onChartClick = (s: any) => {
+    const ym = s?.activePayload?.[0]?.payload?.ym as string | undefined;
+    if (ym) setDrillMonth(ym);
+  };
+
+  // The meetings behind the clicked month's delivered bar.
+  const drillSessions = useMemo(() => (drillMonth ? sessionsByMonth.get(drillMonth) ?? [] : []), [drillMonth, sessionsByMonth]);
+  const drillTotals = useMemo(() => {
+    let hours = 0;
+    for (const s of drillSessions) hours += s.hours;
+    return { sessions: drillSessions.length, hours: Math.round(hours * 100) / 100 };
+  }, [drillSessions]);
+
+  function exportDrillCsv() {
+    if (!drillMonth) return;
+    downloadCsv(
+      `margins-${programKey}-${drillMonth}`,
+      ["Date", "Time", "Coach", "Meeting", "Attendees", "Hours", "Duration source"],
+      drillSessions.map((s) => [s.date, s.time ?? "", s.coachName, s.name, s.attendees, s.hours, s.realDuration ? "actual" : "fallback"])
     );
   }
 
@@ -220,7 +250,7 @@ export function MarginsView() {
             <div className="chart-card__split chart-card__split--both">
               <div style={{ width: "100%", height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }} onClick={onChartClick} style={{ cursor: "pointer" }}>
                     <CartesianGrid stroke={ct.grid} vertical={false} />
                     <XAxis dataKey="month" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
                     <YAxis tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} unit="h" />
@@ -244,11 +274,16 @@ export function MarginsView() {
                   </thead>
                   <tbody>
                     {rows.map((r: ProgramMonthRow) => (
-                      <tr key={r.month}>
+                      <tr
+                        key={r.month}
+                        className={r.sessions > 0 ? "margins__row--drill" : undefined}
+                        onClick={r.sessions > 0 ? () => setDrillMonth(r.month) : undefined}
+                        title={r.sessions > 0 ? "Show the meetings behind this month" : undefined}
+                      >
                         <td>{monthLabel(r.month)}</td>
                         <td className="num">{r.sessions}</td>
                         <td className="num">{fmtHours(r.deliveredHours)}</td>
-                        <td className="num">
+                        <td className="num" onClick={(e) => e.stopPropagation()}>
                           <StaffHoursCell value={r.staffHours} onSave={(h) => saveHours(r.month, h)} />
                         </td>
                         <td className="num">{r.ratio == null ? "—" : `${Math.round(r.ratio * 100) / 100}×`}</td>
@@ -266,14 +301,79 @@ export function MarginsView() {
               </div>
             </div>
             <p className="view__hint" style={{ marginTop: 10 }}>
-              Enter staff hours in the table (saves on blur). Needs migration <code>9981_program_hours.sql</code> applied to
-              persist, and a re-sync after <code>9980_ca_appointments_end.sql</code> for real meeting durations (until then
-              delivered hours use the {PROGRAM_MEETING_HOURS} h/session fallback). “Delivered ÷ staff” is delivered hours per
-              staff hour for months where staff hours are entered.
+              <strong>Click a bar (or a table row)</strong> to see the meetings behind that month. Enter staff hours in the
+              table (saves on blur). Needs migration <code>9981_program_hours.sql</code> applied to persist, and a re-sync
+              after <code>9980_ca_appointments_end.sql</code> for real meeting durations (until then delivered hours use the
+              {" "}{PROGRAM_MEETING_HOURS} h/session fallback). “Delivered ÷ staff” is delivered hours per staff hour for
+              months where staff hours are entered.
             </p>
           </>
         )}
       </section>
+
+      {drillMonth && (
+        <div className="modal" onClick={() => setDrillMonth(null)}>
+          <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__head">
+              <h2>
+                {def.label} — meetings in {monthLabel(drillMonth)}
+              </h2>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn--sm" onClick={exportDrillCsv} disabled={drillSessions.length === 0}>
+                  Export CSV
+                </button>
+                <button className="btn btn--sm" onClick={() => setDrillMonth(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="modal__body">
+              {drillSessions.length === 0 ? (
+                <p className="muted">No delivered {def.label} meetings recorded for {monthLabel(drillMonth)}.</p>
+              ) : (
+                <table className="table table--center">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Time</th>
+                      <th>Coach</th>
+                      <th>Meeting</th>
+                      <th>Attendees</th>
+                      <th>Hours</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillSessions.map((s, i) => (
+                      <tr key={i}>
+                        <td className="num">{s.date}</td>
+                        <td className="num">{s.time ?? "—"}</td>
+                        <td>{s.coachName}</td>
+                        <td>
+                          {s.name}
+                          {s.attendees > 1 && <span className="pill" style={{ marginLeft: 6 }}>group ×{s.attendees}</span>}
+                        </td>
+                        <td className="num">{s.attendees}</td>
+                        <td className="num">
+                          {Math.round(s.hours * 100) / 100}
+                          {!s.realDuration && (
+                            <span className="muted" title="No end time recorded — using the per-session fallback">
+                              {" "}*
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="modal__foot muted">
+              {drillTotals.sessions} session{drillTotals.sessions === 1 ? "" : "s"} · {Math.round(drillTotals.hours * 100) / 100} delivered hours
+              {drillSessions.some((s) => !s.realDuration) && <> · * = fallback {PROGRAM_MEETING_HOURS} h (no end time recorded)</>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,6 +51,18 @@ export const PROGRAMS: ProgramDef[] = [
   },
 ];
 
+// One delivered session (a distinct coach + start-time slot) behind the delivered
+// hours — the drill-down rows when you click a month's column on the Margins chart.
+export interface ProgramSession {
+  date: string; // YYYY-MM-DD
+  time: string | null; // HH:MM (local) from the start time, when known
+  coachName: string;
+  name: string; // meeting name
+  attendees: number; // appointment rows in this slot (1 = 1-on-1; >1 = group)
+  hours: number; // this session's hours (real duration, or the fallback)
+  realDuration: boolean; // true = from end−start; false = PROGRAM_MEETING_HOURS fallback
+}
+
 export interface ProgramMonthRow {
   month: string; // YYYY-MM
   sessions: number; // distinct delivered sessions/meetings that month

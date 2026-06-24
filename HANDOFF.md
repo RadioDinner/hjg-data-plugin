@@ -28,6 +28,9 @@ unapplied column errors the appointment upsert), then **re-sync** to populate it
 **Next new migration is `9979_…`.**
 
 **Shipped this session (009), newest first:**
+- **Margins — drill-down.** Click a month's chart bar (or table row) → a modal lists the delivered
+  meetings behind that month (date/time/coach/name/attendees/hours + CSV). `fetchDeliveredHoursByMonth`
+  → `fetchProgramSessionsByMonth` (per-session detail) + `programMonthTotals`; `ProgramSession` type.
 - **Margins — real meeting durations.** Synced CA `Appointment.endDate` → `ca_appointments.end_raw`
   (`9980`); delivered hours = actual `end − start` per session (pure `meetingHours`, verify §17),
   falling back to `PROGRAM_MEETING_HOURS` (1 h) only when no end is recorded. **Still open: money layer.**

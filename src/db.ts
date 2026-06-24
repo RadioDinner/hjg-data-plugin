@@ -42,8 +42,9 @@ export type { CapacityAppt } from "../lib/capacity";
 
 // Pure Margins helpers (program staff-hours vs delivered meeting-hours).
 import { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths, meetingHours } from "../lib/margins";
+import type { ProgramSession } from "../lib/margins";
 export { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths, meetingHours };
-export type { ProgramDef, ProgramMonthRow } from "../lib/margins";
+export type { ProgramDef, ProgramMonthRow, ProgramSession } from "../lib/margins";
 
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
 export { computeMeetingsToFreedom } from "../lib/freedom";
@@ -1636,28 +1637,32 @@ export async function deletePayoutBuild(coachId: number, serviceMonth: string): 
 // Delivered meeting hours per month for a program (its pipeline tiers), and the
 // manually-entered staff hours. Pure comparison lives in lib/margins.ts.
 
-// Distinct delivered SESSIONS per month for the given tiers, and their total HOURS.
-// A session = a distinct (coach, exact start time) slot, so a group meeting counts
-// once (not once per attendee); meetings with no start time fall back to their own id.
-// Each session's hours = its real duration (end − start) when both are recorded,
-// else the PROGRAM_MEETING_HOURS stand-in (e.g. before a re-sync populates end_raw).
-export async function fetchDeliveredHoursByMonth(
-  tiers: PipelineTier[]
-): Promise<Map<string, { sessions: number; hours: number }>> {
+// Delivered SESSIONS per month for the given tiers — the rows behind the Margins
+// delivered-hours bars (and the click-through meeting list). A session = a distinct
+// (coach, exact start time) slot, so a group meeting is ONE session (its attendees
+// are summed onto it), not one per attendee. Meetings with no start time get their
+// own id. Each session's hours = its real duration (end − start) when recorded, else
+// the PROGRAM_MEETING_HOURS stand-in (e.g. before a re-sync populates end_raw).
+// Derive the per-month {sessions, hours} totals with `programMonthTotals` below.
+export async function fetchProgramSessionsByMonth(tiers: PipelineTier[]): Promise<Map<string, ProgramSession[]>> {
   const tierSet = new Set<string>(tiers);
-  const engTier = engagementTierMap(await fetchAllEngagements());
-  // month -> (slotKey -> session hours). A Map de-dupes group attendees to one slot.
-  const slotsByMonth = new Map<string, Map<string, number>>();
+  const [engagements, coachesRes] = await Promise.all([fetchAllEngagements(), supabase.from("ca_coaches").select("id,name")]);
+  const engTier = engagementTierMap(engagements);
+  const coachMap = new Map<number, string | null>();
+  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coachMap.set(c.id, c.name);
+
+  // slotKey -> the session, with its month carried for the final grouping.
+  const bySlot = new Map<string, ProgramSession & { _month: string }>();
   const pageSize = 1000;
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
-      .select("id,coach_id,engagement_id,start_date,start_raw,end_raw")
+      .select("id,coach_id,engagement_id,start_date,start_raw,end_raw,name")
       .in("category", ["mentoring", "group"])
       .eq("status", "A")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
-    const batch = (data ?? []) as { id: number; coach_id: number | null; engagement_id: number | null; start_date: string | null; start_raw: string | null; end_raw: string | null }[];
+    const batch = (data ?? []) as { id: number; coach_id: number | null; engagement_id: number | null; start_date: string | null; start_raw: string | null; end_raw: string | null; name: string | null }[];
     for (const a of batch) {
       if (a.engagement_id == null) continue;
       const tier = engTier.get(a.engagement_id);
@@ -1665,20 +1670,47 @@ export async function fetchDeliveredHoursByMonth(
       const month = (a.start_date ?? "").slice(0, 7);
       if (!month) continue;
       const slot = a.start_raw ? `${a.coach_id ?? "?"}|${a.start_raw}` : `id|${a.id}`;
-      let slots = slotsByMonth.get(month);
-      if (!slots) {
-        slots = new Map();
-        slotsByMonth.set(month, slots);
+      const existing = bySlot.get(slot);
+      if (existing) {
+        existing.attendees++; // another attendee of the same group slot
+        continue;
       }
-      if (!slots.has(slot)) slots.set(slot, meetingHours(a.start_raw, a.end_raw) ?? PROGRAM_MEETING_HOURS);
+      const dur = meetingHours(a.start_raw, a.end_raw);
+      bySlot.set(slot, {
+        _month: month,
+        date: a.start_date ?? "",
+        time: a.start_raw && a.start_raw.length >= 16 ? a.start_raw.slice(11, 16) : null,
+        coachName: (a.coach_id != null ? coachMap.get(a.coach_id) : null) ?? (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
+        name: a.name ?? "",
+        attendees: 1,
+        hours: dur ?? PROGRAM_MEETING_HOURS,
+        realDuration: dur != null,
+      });
     }
     if (batch.length < pageSize) break;
   }
+
+  const out = new Map<string, ProgramSession[]>();
+  for (const s of bySlot.values()) {
+    const { _month, ...session } = s;
+    let arr = out.get(_month);
+    if (!arr) {
+      arr = [];
+      out.set(_month, arr);
+    }
+    arr.push(session);
+  }
+  for (const arr of out.values()) arr.sort((a, b) => `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`));
+  return out;
+}
+
+// Per-month {sessions, hours} totals from the session detail (for the chart + merge).
+export function programMonthTotals(sessionsByMonth: Map<string, ProgramSession[]>): Map<string, { sessions: number; hours: number }> {
   const out = new Map<string, { sessions: number; hours: number }>();
-  for (const [month, slots] of slotsByMonth) {
+  for (const [month, sessions] of sessionsByMonth) {
     let hours = 0;
-    for (const h of slots.values()) hours += h;
-    out.set(month, { sessions: slots.size, hours: Math.round(hours * 100) / 100 });
+    for (const s of sessions) hours += s.hours;
+    out.set(month, { sessions: sessions.length, hours: Math.round(hours * 100) / 100 });
   }
   return out;
 }

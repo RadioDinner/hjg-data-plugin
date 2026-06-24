@@ -361,6 +361,11 @@ body {
 .journey-filters__check input { cursor: pointer; }
 .journey-filters__count { display: flex; align-items: center; font-size: 12px; margin-left: auto; align-self: center; }
 
+/* Margins: rows you can click to drill into that month's meetings */
+.margins__row--drill { cursor: pointer; }
+.margins__row--drill:hover { background: var(--row-hover, rgba(148, 163, 184, 0.12)); }
+.margins__hours-input { width: 72px; text-align: right; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-control); padding: 3px 6px; font-size: 13px; }
+
 .journeys__roster-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
 .journeys__roster-toggle input { cursor: pointer; }
 .journeys__rows { display: flex; flex-direction: column; gap: 4px; max-height: 620px; overflow-y: auto; }

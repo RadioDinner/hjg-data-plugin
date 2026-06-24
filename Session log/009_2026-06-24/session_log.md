@@ -127,6 +127,17 @@ count once per (coach, start-time) slot. Margins blurb/help updated. typecheck/v
 unapplied column errors the appointment upsert) and **re-sync** to populate real durations — until
 then everything uses the 1 h/session fallback. **Still open: the money layer.**
 
+## Seventh batch (same session) — Margins drill-down
+
+**11. Click a month's column → its meetings.** The Margins chart bars and table rows are now
+clickable; clicking opens a **modal listing the delivered meetings behind that month** (date, time,
+coach, meeting name, attendees, hours), with CSV export and a fallback-hours asterisk. Data layer
+refactored: `fetchDeliveredHoursByMonth` → **`fetchProgramSessionsByMonth`** (returns per-session
+detail: distinct coach+start-time slots, group attendees summed onto one session); view derives the
+chart totals via **`programMonthTotals`**. `ProgramSession` type in `lib/margins.ts`. Chart-level
+`onClick` reads `activePayload` (matches the Metrics conversion drill-down pattern). typecheck/
+verify/build pass.
+
 ## Open questions / next step
 1. **Apply `9984` then re-sync** (and `9983`). Verify Jonathan flips to Caleb *only if the user
    re-pairs him to Caleb in CA* — the data export still has him under Arthur on both engagements,
