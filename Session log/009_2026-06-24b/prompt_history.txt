@@ -43,3 +43,8 @@ Q: §105 editing? A: It's fine as read-only, but don't make it look like I can s
 
 --- 2026-06-24 (session 009b) ---
 ok, now I want you to look at the data that came from the notion export. Where the status of the mentee in that table is "Done (Graduated)" I want you to set the graduation date to 7 days after their last 1x meeting. And I want it to be saved in the "Mentees table" in supabase.
+
+--- 2026-06-24 (AskUserQuestion answers — confirm) ---
+Q: 29 graduates with no 1x meeting? A: Leave the 29 blank (only the 12 with a 1x meeting).
+Q: Where to save? A: mentees + Journeys pipeline (both mentees.graduation_date AND mentee_outcomes.graduation_date).
+-> Confirms migration 9976 as already built/pushed (d50380d). No change needed.
