@@ -7,6 +7,25 @@ instruction "Always commit to main for this session").
 
 Commits (newest first):
 
+- `427def6` **Backlog:** combine Pay staff + Build payout; raw-data search/sort/filter;
+  unique 3-digit ids on every card/modal/screen. Mentees item marked shipped.
+- `77fb7f0` **NEW "Mentees" tab** — Notion-like editable grid (inline cell edit + save-on-blur,
+  search, sort, CSV, "+ Add mentee", CA indicator). `MenteesView.tsx` + db `fetchAllMenteeRecords`/
+  `updateMenteeRecordById` (by uuid PK so null-client_id prospects edit too)/`createMenteeRecord`.
+- `bd9ddf3` **PAY BUG FIX** — late-month tier change. Caleb Otto/June showed only Joash; **Ty Miller**
+  was missing because his 4x invoice (5/30) was credited to the majority-day coach (Arthur, JumpStart,
+  29/31 days) instead of Caleb. Switched invoice→coach attribution from month-majority (`coverInMonth`)
+  to **invoice-date** (`coverOnDate`, prefers most-recently-started covering engagement). Ty now earns
+  $425 under Caleb in June. verify §8 gained a hand-off case.
+- `fffc4ea` **Journeys: edit pipeline stage dates** in the graduation editor (Discovery/JumpStart/4x/
+  2x/1x/Graduation, override ?? synced). Migration **9985** (6 date cols + nullable status); read+write
+  fall back to base cols if unapplied (tab never breaks).
+- `0fe8f80` **Journeys: graduation editor driven by the list selection** (shared selection; removed the
+  redundant inline Timeline status editor).
+- `41c04da` **Mentees: keep all 19 columns** (revert the interim 15-col curation), still drop test row.
+- `dbea260` **Journeys: stage-rail white-space gap fix** (first cell sizes to its node).
+- `1ba9ab7` **Backlog: "Mentees" source-of-truth table** (later built this session).
+
 - `e4046f2` **Journeys: color the meeting-rhythm columns by pipeline tier.**
   The "Observed meeting rhythm" chart (per selected mentee) was one flat-purple
   bar per month (count only). Now each month's column is **stacked by the

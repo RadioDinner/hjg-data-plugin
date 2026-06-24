@@ -14,18 +14,53 @@ Picking this up cold — start here. **Session 008 committed straight to `main`*
 user's instruction this session). `typecheck` + `verify` (**16 sections**) + `build` all
 pass. **UI NOT browser-tested** (headless) — eyeball on a Vercel preview.
 
-**⚠ ONE NEW MIGRATION this session — MUST be applied** (Supabase SQL Editor):
-**`9986_mentees.sql`** creates + seeds the `mentees` source-of-truth table (182 Notion rows).
-Until it's applied, the Journeys "Mentee record" card shows the empty/create state and the
-table is absent from Raw data. Re-runnable, insert-if-absent (won't clobber edits).
-**Next new migration is `9985_…`.** (Session 007's `9987_journeys_stage_colors.sql` is still
-pending too.)
+**⚠ TWO NEW MIGRATIONS this session — both MUST be applied** (Supabase SQL Editor):
+- **`9986_mentees.sql`** creates + seeds the `mentees` source-of-truth table (**181 Notion rows**,
+  all 19 columns). Powers the new **Mentees tab** + the Journeys "Mentee record" card. Re-runnable,
+  insert-if-absent (won't clobber edits).
+- **`9985_mentee_outcomes_stage_dates.sql`** adds six stage-date override columns to
+  `mentee_outcomes` + relaxes `status` to nullable. Powers the new **pipeline-date editing** in the
+  Journeys graduation editor. Re-runnable. **Code degrades gracefully if unapplied** (the Journeys
+  fetch/write fall back to base columns, so the tab won't break — date edits just won't persist).
+
+**Next new migration is `9984_…`.** (Session 007's `9987_journeys_stage_colors.sql` is still
+pending too — so **three migrations are pending: 9985, 9986, 9987**.)
 
 > ⚠ Git-state note resolved: at session start the *local* `main` was stale at the old
 > session-002 commit (`88b8490`) with unrelated history, while `origin/main` was the full
 > lineage (`e79b536`). Reset local `main` to `origin/main` and worked there. `main` is primary.
 
 **Shipped this session (008), newest first:**
+- **NEW "Mentees" tab — Notion-like editable grid.** A standalone top-nav tab (after Journeys)
+  showing the **full Notion "Mentees Database" mirror** as an **editable grid**: every cell edits
+  inline and **saves on blur** to the `mentees` table. Search, click-to-sort columns, CSV export,
+  **"+ Add mentee"**, and a CA-linked indicator. Shows **all 181 rows incl. the ~29 prospects with
+  no CA client**. `src/views/MenteesView.tsx`; db.ts gained `fetchAllMenteeRecords`,
+  `updateMenteeRecordById` (edit by uuid PK → null-client_id rows are editable), `createMenteeRecord`.
+  **Needs `9986` applied.**
+- **PAY BUG FIXED — late-month tier change misattributed the new invoice.** Found via the user's
+  report (June 2026, coach **Caleb Otto** showed only Joash; **Ty Miller** was missing). Ty's
+  JumpStart (Arthur Nisly) ended 5/29 and his 4x (Caleb) started 5/29; `computePayReport` attributed
+  every invoice to the **majority-day** coach (`coverInMonth`) — Arthur held 29/31 May days — so the
+  **$425 4x invoice dated 5/30** (and its 100% day-30 rollover into June) went to Arthur, not Caleb.
+  **Fix:** attribute each invoice to the coach covering its **`date_of`** (`coverOnDate`, prefers the
+  most-recently-started covering engagement), falling back to month-majority only when no engagement
+  covers the exact date. Now Ty earns **$425 under Caleb in June**. `lib/pay.ts`; **verify §8 gained a
+  late-month-handoff case** (Clayton §8/§9 intact). **No migration.**
+- **Journeys graduation editor — list-driven + edits pipeline stage dates.**
+  - The **"Edit graduation status" card now follows the mentee list selection** (shared selection
+    state; the dropdown and the list stay in sync). **Removed the redundant inline "Pipeline status"
+    editor** that was inside the Timeline — one editor now.
+  - That editor **also edits the six pipeline stage dates** (Discovery, JumpStart, 4x, 2x, 1x,
+    Graduation). Each overrides the synced CA date (shown beneath the field); blank = use synced.
+    Stored in `mentee_outcomes` (**migration `9985`**, six date cols + nullable status). `db.ts`:
+    `MenteeJourney` gained `stageSynced`/`stageOverrides`; `fetchMenteeJourneys` applies
+    `override ?? synced` and recomputes `currentTier` from the effective dates; `setMenteeOutcome`
+    writes the dates. **Both read & write fall back to base columns if 9985 isn't applied** (tab
+    never breaks). The rail, days-per-stage chart, durations, and current tier all reflect overrides.
+- **Mentees table column scope settled (after a flip-flop): ALL 19 Notion columns** (the user first
+  said all 19, then 15, then back to all 19), test row dropped → **181 rows**. The interim 15-column
+  curation was reverted (`git checkout a242cf5^ -- <src>` + regenerated `9986`).
 - **Journeys per-mentee detail reworked → "Time in each program stage" + meeting list** (user
   follow-up). The per-mentee **columns now show DAYS spent in each category** (Discovery→JumpStart,
   JumpStart, 4x, 2x, 1x) — one bar per stage, colored to match the rail, spanning from entering a
@@ -65,18 +100,23 @@ user's 2026-06-23 export, **`discovery_outcomes` and `mentee_outcomes` were EMPT
 /`coach_settings`(5) had data.
 
 **▶ Next-session checklist (session 008):**
-1. **Apply `9986_mentees.sql`** (Supabase SQL Editor) — creates + seeds the `mentees` table.
-   Then browser-verify the **Journeys "Mentee record" card** (edit + save round-trip, persists a
-   re-sync), and that `mentees` appears in **Raw data** + Export-all.
-2. **Browser-verify** the reworked Journeys per-mentee detail: the **"Time in each program stage"**
-   days bars (colors match the rail), the **meeting list** grid, and the **stage-rail white-space
-   fix** (first-node gap gone) in light + dark. Confirm "Edit graduation status" now on Journeys,
-   and the stray KPI card gone from Metrics.
-3. **Apply `9987_journeys_stage_colors.sql`** (still pending from session 007) so the stage-color
-   Company option persists.
-4. Possible follow-ups: surface the ~30 unmatched/null-`client_id` Notion mentees (prospects not in
-   CA) somewhere (they're in Raw data only); reconcile the messy Notion columns (`js_lesson`,
-   `dd_w_a`, `freedom_fight_paid`) if the user wants them cleaned.
+1. **Apply the three pending migrations** (Supabase SQL Editor): **`9986_mentees.sql`** (mentees
+   table + seed), **`9985_mentee_outcomes_stage_dates.sql`** (stage-date overrides), and
+   **`9987_journeys_stage_colors.sql`** (session 007, stage colors). The app degrades gracefully
+   without 9985 and renders default colors without 9987, but **the Mentees tab + Mentee-record card
+   are empty until 9986 is applied.**
+2. **Browser-verify the new/changed surfaces** (headless here):
+   - **NEW Mentees tab** — inline cell edit + save-on-blur, search, sort, CSV, "+ Add mentee".
+   - **Journeys graduation editor** — picking a mentee in the list populates it; the six **pipeline
+     stage-date** fields edit + persist and move the rail/days-chart/current-tier (after 9985).
+   - **Pay staff → Explore June 2026 → Caleb Otto** now shows **Ty Miller (~$425)** alongside Joash.
+   - The earlier session-008 items (time-in-stage bars, meeting list, stage-rail gap fix).
+3. **New backlog items** (`FEATURE_BACKLOG.md`, newest on top): (a) combine Pay staff + Build payout
+   (Build launches from Pay staff); (b) search/sort/filter in Raw-data tables; (c) a unique **3-digit
+   id** on every card/modal/screen (comprehensive registry + index).
+4. Possible follow-ups: the messy Notion columns (`js_lesson`, `dd_w_a`, `freedom_fight_paid`) are
+   mirrored verbatim — clean/retype if wanted. The Journeys Timeline still has the per-selected
+   editor removed; the single editor is the "Edit graduation status" card.
 
 ---
 
