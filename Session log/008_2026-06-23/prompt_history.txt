@@ -48,3 +48,6 @@ Also, on the Journeys tab, where I select an individual mentee, in the grid belo
 
 --- 2026-06-24 (AskUserQuestion answer — Mentees columns, REVERSED) ---
 [Columns] Keep all 19 after all (still drop the 'Test Locked Page' test row).
+
+--- 2026-06-24 ---
+When I select an individual mentee from the list in the journey tab, I want them to pop into the "edit graduation status".

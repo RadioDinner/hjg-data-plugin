@@ -32,17 +32,21 @@ const OVERRIDE_OPTIONS: { value: MenteeStatus; label: string }[] = [
 
 export function MenteeStatusEditor({
   journeys,
+  selectedClientId,
+  onSelect,
   userId,
   onSaved,
   onError,
 }: {
   journeys: MenteeJourney[];
+  selectedClientId: number | null;
+  onSelect: (clientId: number | null) => void;
   userId: string;
   onSaved: () => void;
   onError: (m: string) => void;
 }) {
   const sorted = useMemo(() => [...journeys].sort((a, b) => a.name.localeCompare(b.name)), [journeys]);
-  const [clientId, setClientId] = useState<number | null>(null);
+  const clientId = selectedClientId;
   const [status, setStatus] = useState<MenteeStatus | "">("");
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -52,8 +56,9 @@ export function MenteeStatusEditor({
 
   const selected = useMemo(() => sorted.find((j) => j.clientId === clientId) ?? null, [sorted, clientId]);
 
-  // Prefill the editor when a DIFFERENT mentee is picked (not on the post-save
-  // data refresh, so the "Saved ✓" confirmation isn't wiped instantly).
+  // Prefill the editor when a DIFFERENT mentee is picked (from the list or this
+  // dropdown — both drive the shared selection). Not on the post-save data
+  // refresh, so the "Saved ✓" confirmation isn't wiped instantly.
   useEffect(() => {
     const j = sorted.find((x) => x.clientId === clientId) ?? null;
     setStatus(j?.override ?? "");
@@ -112,7 +117,7 @@ export function MenteeStatusEditor({
           Mentee
           <select
             value={clientId ?? ""}
-            onChange={(e) => setClientId(e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => onSelect(e.target.value === "" ? null : Number(e.target.value))}
           >
             <option value="">Select a mentee…</option>
             {sorted.map((j) => (

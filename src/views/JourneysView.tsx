@@ -2,23 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../auth";
 import {
-  MENTEE_ACTIVE_WINDOW_DAYS,
   addMenteeExclusion,
   aggregateJourneyDurations,
-  clearMenteeOutcome,
   fetchCompanyOptions,
   fetchMenteeJourneys,
   fetchMenteeRecordsByClient,
   removeMenteeExclusion,
   saveMenteeRecord,
   setCompanyOption,
-  setMenteeOutcome,
   stageColorsFromRaw,
   DEFAULT_STAGE_COLORS,
   type MenteeJourney,
   type MenteeRecord,
   type MenteeRecordEdit,
-  type MenteeStatus,
   type PipelineTier,
   type ResolvedMenteeStatus,
   type StageBasis,
@@ -49,13 +45,6 @@ const STATUS_LABEL: Record<ResolvedMenteeStatus, string> = {
   fired: "Fired",
   inactive: "Inactive",
 };
-
-const OVERRIDE_OPTIONS: { value: MenteeStatus; label: string }[] = [
-  { value: "active", label: "Active" },
-  { value: "graduated", label: "Graduated" },
-  { value: "quit", label: "Quit" },
-  { value: "fired", label: "Fired" },
-];
 
 // Humanize a day count into a compact "1y 2mo" / "3mo" / "12 days" form.
 function humanizeDays(n: number | null): string {
@@ -136,48 +125,12 @@ function Timeline({
   onSaved: () => void;
   onError: (m: string) => void;
 }) {
-  const [status, setStatus] = useState<MenteeStatus | "">(journey.override ?? "");
-  const [date, setDate] = useState(journey.overrideDate ?? "");
-  const [notes, setNotes] = useState(journey.notes ?? "");
-  const [saving, setSaving] = useState(false);
-  const [clearing, setClearing] = useState(false);
   const [excluding, setExcluding] = useState(false);
   const ct = useChartTokens();
   const AXIS = ct.axis;
   const GRID = ct.grid;
   const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
 
-  // Reset the editor when a different mentee is selected.
-  useEffect(() => {
-    setStatus(journey.override ?? "");
-    setDate(journey.overrideDate ?? "");
-    setNotes(journey.notes ?? "");
-  }, [journey.clientId, journey.override, journey.overrideDate, journey.notes]);
-
-  const dirty = (journey.override ?? "") !== status || (journey.overrideDate ?? "") !== date || (journey.notes ?? "") !== notes;
-  const canSave = status !== "" && dirty && !saving;
-
-  async function save() {
-    if (status === "") return;
-    setSaving(true);
-    try {
-      await setMenteeOutcome(userId, journey.clientId, { status, statusDate: date || null, notes: notes || null });
-      onSaved();
-    } catch (e) {
-      onError(String(e));
-      setSaving(false);
-    }
-  }
-  async function clearOverride() {
-    setClearing(true);
-    try {
-      await clearMenteeOutcome(journey.clientId);
-      onSaved();
-    } catch (e) {
-      onError(String(e));
-      setClearing(false);
-    }
-  }
   async function toggleExclude() {
     setExcluding(true);
     try {
@@ -372,45 +325,6 @@ function Timeline({
         )}
       </div>
 
-      <div className="journey__status card card--inset">
-        <h3>Pipeline status</h3>
-        <p className="view__hint">
-          Inferred from activity (active if a meeting in the last {MENTEE_ACTIVE_WINDOW_DAYS} days, otherwise inactive). Set
-          the real outcome here — quit or fired can happen at any stage, so record the date it ended. Clear to revert to
-          automatic.
-        </p>
-        <div className="journey__status-row">
-          <label>
-            Outcome
-            <select value={status} onChange={(e) => setStatus(e.target.value as MenteeStatus | "")}>
-              <option value="">Auto ({STATUS_LABEL[journey.resolvedStatus]})</option>
-              {OVERRIDE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Ended on
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={status === "active"} />
-          </label>
-          <label className="journey__notes">
-            Notes
-            <input type="text" value={notes} placeholder="e.g. moved away, couldn’t afford it" onChange={(e) => setNotes(e.target.value)} />
-          </label>
-          <div className="journey__status-actions">
-            <button className="btn btn--primary btn--sm" onClick={save} disabled={!canSave}>
-              {saving ? "Saving…" : journey.overrideId ? "Update" : "Save"}
-            </button>
-            {journey.overrideId && (
-              <button className="btn btn--sm" onClick={clearOverride} disabled={clearing}>
-                {clearing ? "…" : "Clear"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -785,6 +699,8 @@ export function JourneysView() {
             <div style={{ marginBottom: 18 }}>
               <MenteeStatusEditor
                 journeys={journeys}
+                selectedClientId={selected}
+                onSelect={setSelected}
                 userId={user?.id ?? ""}
                 onSaved={() => load(stageBasis)}
                 onError={setError}
