@@ -22,6 +22,7 @@ import {
   startWindowLabel,
   type CohortJourneyInput,
 } from "../lib/cohortCompare.js";
+import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney.js";
 import {
   gradientColors,
   resolveStageColors,
@@ -868,6 +869,80 @@ console.log("[19] Pipeline-timing start-date cohort compare (windowing + roll-up
   eq(empty.total, 0, "empty cohort total 0");
   assert(empty.pctGraduated === null, "empty cohort pctGraduated null");
   assert(empty.avgDaysInSystem === null, "empty cohort avgDaysInSystem null");
+}
+
+console.log("[20] Mentee management — CA-layer derivation (deriveMenteeCaRecords)");
+{
+  const today = "2026-06-24";
+  const coaches = [
+    { id: 1, name: "Arthur" },
+    { id: 2, name: "Caleb" },
+  ];
+  const clients = [
+    { id: 10, name: "Grad Mentee", coachId: 1, isExcluded: false },
+    { id: 11, name: "Active 4x", coachId: 2, isExcluded: false },
+    { id: 12, name: "Declined", coachId: null, isExcluded: false },
+    { id: 99, name: "Gain Momentum Group 1", coachId: null, isExcluded: true }, // dropped
+  ];
+  const engagements = [
+    { id: 100, clientId: 10, name: "MN Subscription | (0x Month) JumpStart", startDate: "2025-01-01", endDate: "2025-02-01", isComplete: true, isCanceled: false },
+    { id: 101, clientId: 10, name: "MN Subscription | (4x Month)", startDate: "2025-02-01", endDate: null, isComplete: true, isCanceled: false },
+    { id: 102, clientId: 10, name: "After Graduation Care", startDate: "2025-12-01", endDate: null, isComplete: false, isCanceled: false },
+    { id: 110, clientId: 11, name: "MN Subscription | (4x Month)", startDate: "2026-06-01", endDate: null, isComplete: false, isCanceled: false }, // open
+    { id: 999, clientId: 99, name: "(4x)", startDate: "2026-01-01", endDate: null, isComplete: false, isCanceled: false }, // excluded client
+  ];
+  const appointments = [
+    { clientId: 10, coachId: 1, engagementId: null, category: "discoveryZoom", date: "2024-12-15" },
+    { clientId: 11, coachId: 2, engagementId: null, category: "discoveryPhone", date: "2026-05-01" },
+    { clientId: 11, coachId: 2, engagementId: 110, category: "mentoring", date: "2026-06-05" },
+    { clientId: 12, coachId: 1, engagementId: null, category: "discoveryZoom", date: "2025-01-01" }, // stale discovery only
+  ];
+  const purchases = [{ clientId: 11, date: "2026-05-20" }];
+  const recs = deriveMenteeCaRecords({ clients, engagements, appointments, coaches, purchases, today, basis: "engagement_start" });
+  eq(recs.length, 3, "3 records (excluded client dropped)");
+  const byId = new Map(recs.map((r) => [r.clientId, r]));
+
+  const g = byId.get(10)!;
+  eq(g.status, "graduated", "10: graduated (after-graduation engagement)");
+  eq(g.currentTier, "graduated", "10: current tier graduated");
+  eq(g.ownerCoachName, "Arthur", "10: owner = primary coach Arthur");
+  eq(g.ownerSource, "primary", "10: owner source primary");
+  eq(g.discoveryDate, "2024-12-15", "10: discovery date");
+  eq(g.jumpstartDate, "2025-01-01", "10: jumpstart date");
+  eq(g.tier4xDate, "2025-02-01", "10: 4x date");
+  eq(g.graduationDate, "2025-12-01", "10: graduation date");
+  eq(g.jumpstartEnd, "2025-02-01", "10: jumpstart end");
+  eq(g.startDate, "2024-12-15", "10: start = discovery");
+  eq(g.meetingCount, 0, "10: no mentoring meetings");
+
+  const a = byId.get(11)!;
+  eq(a.status, "active", "11: active (open engagement)");
+  eq(a.currentTier, "4x", "11: current tier 4x");
+  eq(a.ownerCoachName, "Caleb", "11: owner Caleb");
+  eq(a.tier4xDate, "2026-06-01", "11: 4x engagement start");
+  eq(a.discoveryDate, "2026-05-01", "11: discovery date");
+  eq(a.firstMeeting, "2026-06-05", "11: first meeting");
+  eq(a.meetingCount, 1, "11: one meeting");
+  eq(a.jyfPurchaseDate, "2026-05-20", "11: JYF purchase");
+  eq(a.startDate, "2026-05-01", "11: start = discovery");
+  assert(a.hasOpen, "11: has an open engagement");
+
+  const d = byId.get(12)!;
+  eq(d.status, "inactive", "12: inactive (stale discovery, no follow-through)");
+  assert(d.currentTier === null, "12: no tier (discovery only)");
+  eq(d.discoveryDate, "2025-01-01", "12: discovery date");
+  eq(d.ownerSource, "none", "12: no owner (no primary, no meetings)");
+  assert(d.ownerCoachName === null, "12: owner name null");
+  eq(d.startDate, "2025-01-01", "12: start = discovery");
+  eq(d.meetingCount, 0, "12: no meetings");
+
+  // Upsert-row mapper carries only ca_* columns + client_id + synced timestamp.
+  const row = toMenteeCaUpsertRow(g, "2026-06-24T00:00:00.000Z");
+  eq(row.client_id, 10, "upsert row client_id");
+  eq(row.ca_status, "graduated", "upsert row ca_status");
+  eq(row.ca_graduation_date, "2025-12-01", "upsert row ca_graduation_date");
+  eq(row.ca_synced_at, "2026-06-24T00:00:00.000Z", "upsert row ca_synced_at");
+  assert(!("status" in row) && !("is_test" in row), "upsert row has NO hand-layer columns");
 }
 
 console.log("");

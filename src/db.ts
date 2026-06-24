@@ -99,6 +99,9 @@ export type { StageBasis };
 export { monthsAgoYmd, inStartWindow, summarizeCohort, startWindowLabel, COHORT_TIERS } from "../lib/cohortCompare";
 export type { CohortJourneyInput, CohortStats, CohortTier, StartWindow } from "../lib/cohortCompare";
 
+// Pure CA-layer derivation for the rebuilt Mentee management system (migration 9975).
+import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney";
+
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
 async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
@@ -1412,6 +1415,191 @@ export function aggregateJourneyDurations(allJourneys: MenteeJourney[]): LegStat
     const medianDays = n ? (n % 2 ? vals[(n - 1) / 2] : Math.round((vals[n / 2 - 1] + vals[n / 2]) / 2)) : null;
     return { key: leg.key, label: leg.label, n, avgDays, medianDays };
   });
+}
+
+// ============================================================================
+// Mentee management (SOURCE OF TRUTH) — rebuilt 2026-06-24 (migration 9975).
+// One `mentees` row per person, in two layers:
+//   * ca_*  — derived from CoachAccountable, refreshed every sync (sync owns).
+//   * hand  — status / *_override / Notion info / notes / is_test (staff own;
+//             never touched by a sync). This is the source of truth.
+// The app reads the EFFECTIVE value (hand override ?? ca value). CA derivation is
+// pure in lib/menteeJourney.ts. (Phase 1: data layer; the new Mentees page lands
+// in Phase 2.)
+// ============================================================================
+
+export type MenteeMgmtStatus = "active" | "graduated" | "quit" | "fired" | "paused" | "declined";
+
+// The raw `mentees` row (both layers). Effective values are derived in the view.
+export interface MenteeRow {
+  id: string;
+  client_id: number | null;
+  // CA layer (sync-owned, refreshed each sync)
+  ca_name: string | null;
+  ca_owner_coach_id: number | null;
+  ca_owner_coach_name: string | null;
+  ca_discovery_date: string | null;
+  ca_jumpstart_date: string | null;
+  ca_tier_4x_date: string | null;
+  ca_tier_2x_date: string | null;
+  ca_tier_1x_date: string | null;
+  ca_graduation_date: string | null;
+  ca_first_meeting: string | null;
+  ca_last_meeting: string | null;
+  ca_meeting_count: number;
+  ca_current_tier: string | null;
+  ca_jumpstart_end: string | null;
+  ca_jyf_purchase_date: string | null;
+  ca_start_date: string | null;
+  ca_has_open: boolean;
+  ca_status: string | null;
+  ca_synced_at: string | null;
+  // hand layer (staff-owned, source of truth)
+  name_override: string | null;
+  status: MenteeMgmtStatus | null;
+  status_stage: string | null;
+  status_date: string | null;
+  discovery_date_override: string | null;
+  jumpstart_date_override: string | null;
+  tier_4x_date_override: string | null;
+  tier_2x_date_override: string | null;
+  tier_1x_date_override: string | null;
+  graduation_date_override: string | null;
+  owner_coach_id_override: number | null;
+  email: string | null;
+  phone: string | null;
+  mentor: string | null;
+  notion_status: string | null;
+  notes: string | null;
+  is_test: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// The hand-layer fields a staff member can edit (everything except ca_* + meta).
+export type MenteeHandEdit = Partial<
+  Pick<
+    MenteeRow,
+    | "name_override"
+    | "status"
+    | "status_stage"
+    | "status_date"
+    | "discovery_date_override"
+    | "jumpstart_date_override"
+    | "tier_4x_date_override"
+    | "tier_2x_date_override"
+    | "tier_1x_date_override"
+    | "graduation_date_override"
+    | "owner_coach_id_override"
+    | "email"
+    | "phone"
+    | "mentor"
+    | "notion_status"
+    | "notes"
+    | "is_test"
+  >
+>;
+
+const MENTEE_MGMT_SELECT =
+  "id,client_id,ca_name,ca_owner_coach_id,ca_owner_coach_name,ca_discovery_date,ca_jumpstart_date,ca_tier_4x_date,ca_tier_2x_date,ca_tier_1x_date,ca_graduation_date,ca_first_meeting,ca_last_meeting,ca_meeting_count,ca_current_tier,ca_jumpstart_end,ca_jyf_purchase_date,ca_start_date,ca_has_open,ca_status,ca_synced_at,name_override,status,status_stage,status_date,discovery_date_override,jumpstart_date_override,tier_4x_date_override,tier_2x_date_override,tier_1x_date_override,graduation_date_override,owner_coach_id_override,email,phone,mentor,notion_status,notes,is_test,created_at,updated_at";
+
+// All mentees (both layers), ordered by effective name.
+export async function fetchMentees(): Promise<MenteeRow[]> {
+  const { data, error } = await supabase.from("mentees").select(MENTEE_MGMT_SELECT);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as MenteeRow[];
+  rows.sort((a, b) => (a.name_override ?? a.ca_name ?? "").localeCompare(b.name_override ?? b.ca_name ?? ""));
+  return rows;
+}
+
+// Persist hand-layer edits for one mentee (by uuid PK). Never writes ca_* columns.
+export async function saveMenteeHand(id: string, edits: MenteeHandEdit): Promise<void> {
+  const { error } = await supabase.from("mentees").update(edits).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// Add a hand-only mentee (a prospect not yet in CA). client_id stays null.
+export async function createMentee(userId: string, name: string, edits: MenteeHandEdit = {}): Promise<MenteeRow> {
+  const { data, error } = await supabase
+    .from("mentees")
+    .insert({ name_override: name, created_by: userId || null, ...edits })
+    .select(MENTEE_MGMT_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as MenteeRow;
+}
+
+// Client ids flagged is_test (replaces mentee_exclusions). Used by Metrics to drop
+// test/placeholder mentees from its ranges (wired in Phase 2).
+export async function fetchTestClientIds(): Promise<Set<number>> {
+  const { data, error } = await supabase.from("mentees").select("client_id").eq("is_test", true);
+  if (error) throw new Error(error.message);
+  const set = new Set<number>();
+  for (const r of (data ?? []) as { client_id: number | null }[]) if (r.client_id != null) set.add(r.client_id);
+  return set;
+}
+
+// Manual "Rebuild from CA": recompute the CA layer for every mentee from the synced
+// mirror (no CoachAccountable calls) and upsert ONLY the ca_* columns — the hand
+// layer is untouched. Mirrors the sync's materialize step (lib/sync.ts). Returns
+// the number of mentees refreshed.
+export async function rebuildMenteesFromCa(): Promise<number> {
+  const [cl, en, ap, co] = await Promise.all([
+    supabase.from("ca_clients").select("id,name,coach_id,is_excluded"),
+    supabase.from("ca_engagements").select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
+    supabase.from("ca_appointments").select("client_id,coach_id,engagement_id,category,start_date"),
+    supabase.from("ca_coaches").select("id,name"),
+  ]);
+  const firstErr = cl.error || en.error || ap.error || co.error;
+  if (firstErr) throw new Error(firstErr.message);
+  const clients = (cl.data ?? []) as { id: number; name: string | null; coach_id: number | null; is_excluded: boolean | null }[];
+  const engagements = (en.data ?? []) as {
+    id: number | null;
+    client_id: number | null;
+    name: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    is_complete: boolean | null;
+    is_canceled: boolean | null;
+  }[];
+  const appts = (ap.data ?? []) as { client_id: number | null; coach_id: number | null; engagement_id: number | null; category: string | null; start_date: string | null }[];
+  const coaches = (co.data ?? []) as { id: number; name: string | null }[];
+
+  const purchaseMap = await fetchConversionPurchasesByClient(clients.map((c) => c.id));
+  const purchases: { clientId: number; date: string }[] = [];
+  for (const [clientId, dates] of purchaseMap) if (dates[0]) purchases.push({ clientId, date: dates[0] });
+
+  const caRecords = deriveMenteeCaRecords({
+    clients: clients.map((c) => ({ id: c.id, name: c.name, coachId: c.coach_id ?? null, isExcluded: !!c.is_excluded })),
+    engagements: engagements.map((e) => ({
+      id: e.id,
+      clientId: e.client_id ?? null,
+      name: e.name,
+      startDate: e.start_date,
+      endDate: e.end_date,
+      isComplete: !!e.is_complete,
+      isCanceled: !!e.is_canceled,
+    })),
+    appointments: appts.map((a) => ({
+      clientId: a.client_id ?? null,
+      coachId: a.coach_id ?? null,
+      engagementId: a.engagement_id ?? null,
+      category: a.category ?? "other",
+      date: a.start_date,
+    })),
+    coaches: coaches.map((c) => ({ id: c.id, name: c.name })),
+    purchases,
+    today: todayYmd(),
+    basis: "first_meeting",
+  });
+  const syncedAt = new Date().toISOString();
+  const rows = caRecords.map((r) => toMenteeCaUpsertRow(r, syncedAt));
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = rows.slice(i, i + 500);
+    const { error } = await supabase.from("mentees").upsert(batch, { onConflict: "client_id" });
+    if (error) throw new Error(error.message);
+  }
+  return rows.length;
 }
 
 // --- Staff payment (Pay staff tab) ---

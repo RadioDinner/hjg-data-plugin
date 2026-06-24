@@ -115,6 +115,32 @@ lists exact per-month rates). Window is org-configurable as **N weeks or N month
   sections). `journeys.aggregate` help article updated. **UI-only — no migration.**
 - typecheck + verify (19) + build all pass. Not browser-tested (headless).
 
+## MAJOR REWORK: Mentee management overhaul — Phase 1 (schema + CA materialization)
+
+User directive: throw out the Journeys pipeline + mentee data and rebuild from
+scratch. Decisions locked via AskUserQuestion:
+- **Per-field sync split**: new `mentees` table = CA layer (`ca_*`, sync-owned,
+  refreshed) + HAND layer (status/`*_override`/Notion/`notes`/`is_test`, staff-owned,
+  never synced). Effective = hand ?? ca. This is the source of truth.
+- **Tabs**: new Mentees tab replaces both old Mentees + Journeys; §102 leg-timing → Metrics.
+- **DB**: drop all 3 old tables (mentees, mentee_outcomes, mentee_exclusions); excluded/test
+  → `mentees.is_test`.
+- **Statuses**: active / graduated / quit / fired / paused / declined (+ stage & date per exit).
+
+Phases: 1 schema+materialize (DONE) · 2 mgmt page (replaces tabs) · 3 funnel viz · 4 §102→Metrics.
+
+### Phase 1 shipped (additive — build green, old tabs still work; `9975` NOT applied yet)
+- `supabase/migrations/9975_mentees_rebuild.sql` — drop 3 old tables + create new two-layer
+  `mentees`. DESTRUCTIVE, apply once at Phase-2 cutover then re-sync. Re-runnable via a guarded
+  drop (only the OLD-schema `mentees`, detected by `notion_key`). `client_id bigint unique`
+  (NULLs allowed) = onConflict target. Next migration `9974_`.
+- `lib/menteeJourney.ts` — pure `deriveMenteeCaRecords` (+ `toMenteeCaUpsertRow`). Includes
+  discovery-only clients (decliners) for the funnel. Verify §20.
+- `lib/sync.ts` — best-effort materialize step writes ONLY `ca_*` columns (onConflict client_id).
+- `src/db.ts` — `MenteeRow`/`MenteeHandEdit`/`MenteeMgmtStatus`, `fetchMentees`, `saveMenteeHand`,
+  `createMentee`, `fetchTestClientIds`, `rebuildMenteesFromCa`. Old functions untouched (removed P2).
+- typecheck + verify (20) + build all pass. Committed to main.
+
 ## Notes for future-me
 - The `mentees` seed (`9986`) is a one-shot Notion import, `on conflict (notion_key)
   do nothing` — re-running never clobbers dashboard edits.

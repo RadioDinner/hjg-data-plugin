@@ -1,7 +1,55 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-24 (session 009b).
+2026-06-24 (session 009b — mentee-management rework underway).
+
+## ⏳ MENTEE MANAGEMENT REWORK (2026-06-24, session 009b) — Phase 1 of 4 SHIPPED
+
+A **major from-scratch rework** of the mentee/journey system is in progress (user
+directive). Decisions locked (via AskUserQuestion):
+- **Per-field sync split:** the new `mentees` table has a **CA layer** (`ca_*`, sync
+  refreshes every run) and a **HAND layer** (status / `*_override` / Notion info /
+  notes / `is_test`, staff-owned, NEVER touched by sync). App reads effective =
+  `hand ?? ca`. This is the source of truth.
+- **Tabs:** new **Mentees** management tab will REPLACE both the old Mentees grid AND
+  the Journeys tab; the §102 leg-timing card moves into **Metrics**.
+- **DB:** **drop all three** old tables (`mentees`, `mentee_outcomes`,
+  `mentee_exclusions`); "excluded/test" folds into `mentees.is_test`.
+- **Statuses:** active / graduated / quit / fired / paused / declined (each exit/grad
+  records a stage + date).
+
+**Phase plan:** 1 = schema + CA materialization (DONE) · 2 = Mentees management page
+(replaces both tabs) · 3 = funnel/exit visualization · 4 = §102 → Metrics card + final
+cleanup.
+
+**▶ Phase 1 shipped (this commit) — purely ADDITIVE, build stays green, OLD tabs still
+work because `9975` is NOT applied yet:**
+- **`9975_mentees_rebuild.sql`** — drops the 3 old tables and creates the new two-layer
+  `mentees`. **DESTRUCTIVE; apply ONCE at the Phase-2 cutover, then re-sync.** Re-runnable
+  (guarded drop: only drops the OLD-schema `mentees`, detected via `notion_key`, so
+  re-pasting after cutover won't wipe hand data). `client_id` is `unique` (NULLs allowed)
+  = the onConflict target. **Next new migration is `9974_…`.**
+- **`lib/menteeJourney.ts`** — pure `deriveMenteeCaRecords()` (CA rows → per-mentee CA
+  layer: owner, stage dates, current tier, meeting counts, status guess, system start;
+  INCLUDES discovery-only clients so the funnel can count decliners) + `toMenteeCaUpsertRow()`
+  (ca_* columns only). Verify **§20** (now 20 sections).
+- **`lib/sync.ts`** — new best-effort materialize step: after the CA upserts, recompute the
+  CA layer and upsert ONLY `ca_*` columns of `mentees` (onConflict `client_id`) so a sync
+  refreshes facts without touching the hand layer. Fails soft (warning) if `9975` isn't
+  applied.
+- **`src/db.ts`** — new API: `MenteeRow`/`MenteeHandEdit`/`MenteeMgmtStatus`, `fetchMentees`,
+  `saveMenteeHand`, `createMentee`, `fetchTestClientIds` (Metrics exclusion, wired in P2),
+  `rebuildMenteesFromCa` (manual refresh over the mirror, no CA calls). **Old journey/mentee
+  functions are still present and untouched** (removed in Phase 2 at cutover).
+
+**▶ Phase 2 (next):** build the new `MenteesView` (roster table + per-mentee detail with
+CA history + editable hand layer); remove `JourneysView`, `MenteeStatusEditor`, the old
+`MenteesView` grid, and the old db.ts journey/mentee functions; rewire Metrics exclusion
+from `mentee_exclusions` → `fetchTestClientIds`; remove the Journeys tab from `App.tsx`.
+**Apply `9975` + re-sync as part of the Phase-2 cutover** (until then the new table doesn't
+exist; the materialize step no-ops with a warning).
+
+---
 
 ## Resume here (live state — 2026-06-24, session 009b — WRAPPED)
 
