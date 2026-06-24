@@ -43,6 +43,7 @@ import {
   type BuildLineInput,
   type BuildLineState,
 } from "../lib/payBuild.js";
+import { mergeProgramMonths } from "../lib/margins.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -703,6 +704,35 @@ console.log("[16] Journeys per-stage colors (gradient interpolation + config res
   const round = parseStageColorConfig(JSON.stringify({ mode: "gradient", from: "#aabbcc", to: "#112233", colors: [] }));
   eq(round.mode, "gradient", "round-trip preserves mode");
   eq(round.from, "#aabbcc", "round-trip preserves 'from'");
+}
+
+console.log("[17] Margins — staff-hours vs delivered-hours month merge");
+{
+  const delivered = new Map<string, { sessions: number; hours: number }>([
+    ["2026-05", { sessions: 10, hours: 10 }],
+    ["2026-04", { sessions: 6, hours: 6 }],
+  ]);
+  const staff = new Map<string, number>([
+    ["2026-05", 4],
+    ["2026-03", 8], // a month with staff hours but no delivered meetings
+  ]);
+  const rows = mergeProgramMonths(delivered, staff, ["2026-06"]); // current-month seed
+
+  eq(rows.length, 4, "union of delivered + staff + extra months = 4 rows");
+  eq(rows[0].month, "2026-06", "rows are newest-first (extra/current month on top)");
+  const may = rows.find((r) => r.month === "2026-05")!;
+  eq(may.deliveredHours, 10, "delivered hours = sessions × 1h");
+  eq(may.staffHours, 4, "staff hours carried through");
+  eq(may.ratio, 2.5, "ratio = delivered ÷ staff (10/4)");
+  const apr = rows.find((r) => r.month === "2026-04")!;
+  eq(apr.staffHours, null, "month with no staff entry -> staffHours null");
+  eq(apr.ratio, null, "no staff hours -> ratio null");
+  const mar = rows.find((r) => r.month === "2026-03")!;
+  eq(mar.sessions, 0, "staff-only month has 0 delivered sessions");
+  eq(mar.ratio, 0, "0 delivered ÷ 8 staff = 0 ratio");
+  const jun = rows.find((r) => r.month === "2026-06")!;
+  eq(jun.deliveredHours, 0, "seeded current month has 0 delivered");
+  eq(jun.staffHours, null, "seeded current month has no staff hours yet");
 }
 
 console.log("");

@@ -18,9 +18,17 @@ manual exit-date SQL). **Still REQUIRED: a re-sync** (Admin → Sync now) so `ca
 - **`9982_mentee_outcomes_exit_dates.sql`** — `quit_date` / `no_mentoring_date` / `fired_date`
   (captures the SQL the user ran by hand; re-runnable no-op for them).
 
-**Next new migration is `9981_…`.**
+**Also new: `9981_program_hours.sql`** — the Margins tab's staff-hours table (staff RLS). Apply it
+before staff-hours entry persists; delivered hours render without it (fetch is fail-open).
+
+**Next new migration is `9980_…`.**
 
 **Shipped this session (009), newest first:**
+- **Margins tab (bones)** — new top-nav tab; **JumpStart Your Freedom** + **Mentoring** sub-tabs.
+  By-month **graph + table**: entered **staff hours** (new `program_hours` table, `9981`, save-on-blur)
+  vs **delivered meeting hours** (distinct coach+start-time sessions × `PROGRAM_MEETING_HOURS` = 1 h
+  stand-in) + delivered÷staff ratio. `lib/margins.ts` (verify §17). **Dollars deferred** (per request).
+  Open: real per-meeting durations (CA mirror lacks an end time) + the money layer.
 - **Pipeline-timing cohort filters** (Journeys card, from the backlog). Composable filter bar:
   **Active within** (3/6/12/24 mo by last activity), **Status** (active/graduated/exited), **Current
   tier**, **Owner**, **Overridden graduation date** checkbox. Filters the graph + table + tiles;

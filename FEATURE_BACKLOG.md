@@ -11,37 +11,6 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-### "Margins" tab — staff-hours vs delivered-hours, by program — requested session 009, 2026-06-24
-
-**What.** A new top-nav **"Margins"** tab with **sub-tabs per program**. Start with two:
-**JumpStart Your Freedom** and **Mentoring**. In the **JumpStart Your Freedom** sub-tab, let staff
-**enter all the staff hours for a given month** and **compare them to the total JYF meeting hours
-delivered that month** (a graph + table — the north star). **Money numbers come later** — for now
-build the *bones*: the tab, the sub-tab shell, the month picker, the staff-hours entry, and the
-delivered-hours roll-up + the comparison.
-
-**Why.** HJG wants to understand program **margins** — how much staff time goes into each program
-vs how much mentoring is actually delivered. The hours comparison is the foundation; dollar
-cost/revenue layers on top once the hours model is trusted.
-
-**Where in code / approach.**
-- New `src/views/MarginsView.tsx` + a top-nav tab in `src/App.tsx` (sub-tab switch inside the view,
-  same pattern as the Maps tab's Data-map/Payments toggle).
-- **Staff hours = manual input** → a new HJG-owned table (e.g. `program_hours`: program, `YYYY-MM`,
-  hours, notes; staff RLS; new descending migration). Reuse the `manual_metrics` editing pattern.
-- **Delivered JYF hours** = sum the **duration of JYF meetings** in the month. JYF = appointments
-  under a JumpStart engagement (tier `jumpstart` via `engagementTier`). **Caveat:** appointment
-  duration needs `start_raw` + an end time; `ca_appointments` currently stores `start_raw` (no end)
-  — confirm CA exposes a duration/end, else assume a per-meeting standard length (config) as a stand-in.
-- Pure roll-up in a `lib/` module (verify-locked); view shows graph + table side by side.
-
-**Acceptance criteria.**
-- Margins tab with JumpStart Your Freedom + Mentoring sub-tabs.
-- JYF sub-tab: pick a month → enter staff hours (persisted) → see staff hours vs delivered JYF
-  meeting hours as a graph **and** a table. No dollars yet; structure ready to add them.
-
----
-
 ### Unique 3-digit identifier on every card / modal / screen — requested session 008, 2026-06-24
 
 **What.** Give **every self-contained section of data** — each ChartCard, each tab/screen,
@@ -207,6 +176,16 @@ outcome," so the table can't assume it:
 ---
 
 ## Shipped
+
+### "Margins" tab — staff-hours vs delivered-hours, by program — ✅ SHIPPED (bones) session 009, 2026-06-24
+
+New top-nav **Margins** tab (`src/views/MarginsView.tsx`) with **JumpStart Your Freedom** +
+**Mentoring** sub-tabs. Each: a by-month **graph + table** (north star) comparing entered **staff
+hours** (new `program_hours` table, migration `9981`, save-on-blur) against **delivered meeting
+hours** (distinct coach+start-time sessions under the program's tiers × `PROGRAM_MEETING_HOURS`, a
+1 h stand-in until CA exposes durations) + a delivered÷staff ratio. Pure merge in `lib/margins.ts`
+(verify §17). **Dollars deferred** — bones only, per the request. Open follow-up: real per-meeting
+durations (CA mirror has start but no end), and the money layer (cost/revenue).
 
 ### Pipeline-timing card — mentee filters (Journeys) — ✅ SHIPPED session 009, 2026-06-24
 

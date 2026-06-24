@@ -32,3 +32,6 @@ In the journey's tab, there are 219 mentees, but the notion database shows 181. 
 
 --- 2026-06-24 (session 009) ---
 build the feature on the feature backlog that adds filters to the journeys
+
+--- 2026-06-24 (session 009) ---
+keep working on the backlog

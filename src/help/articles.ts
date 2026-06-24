@@ -282,6 +282,23 @@ Pure logic in \`lib/journey.ts\`.`,
 - \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`). Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`).`,
   },
 
+  "margins.tab": {
+    title: "Margins — staff hours vs delivered hours",
+    body: `The first step toward **program margins**: compare the **staff hours** that went into a program each month against the **meeting hours actually delivered**. Sub-tabs split it by program — **JumpStart Your Freedom** (the supervised JumpStart tier) and **Mentoring** (ongoing 4x / 2x / 1x).
+
+### Delivered hours
+- Counted from CoachAccountable meetings whose engagement is in the program's tiers, grouped by month.
+- A **session** = a distinct **coach + exact start-time** slot, so a group meeting counts **once** (not once per attendee).
+- **Delivered hours = sessions × a standard per-session length** (currently **1 h**). This is a **stand-in** — CoachAccountable doesn't expose real per-appointment durations in the mirror yet, so retune the one knob (\`PROGRAM_MEETING_HOURS\`) once it does.
+
+### Staff hours
+- **You enter these** per month, in the table (saves on blur). Stored in the \`program_hours\` table (migration \`9981\`).
+
+### Reading it
+- **Delivered ÷ staff** = delivered meeting hours per staff hour, for months where staff hours are entered — a first proxy for leverage/efficiency.
+- **Dollars come later.** This is the hours "bones"; cost + revenue layer on top once the hours model is trusted.`,
+  },
+
   "general.coachAttribution": {
     title: "How clients are matched to coaches",
     body: `**The mentee's OWNER is CoachAccountable's primary coach** — the coach set on the client in CA (the "managed by" pairing you change by re-pairing a client). That owner drives **everything**: the Journeys owner, **Mentor-capacity** grouping, and **Pay-staff** payout attribution.

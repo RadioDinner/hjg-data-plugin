@@ -40,6 +40,11 @@ export type { CompareKey, ComparePreset, Delta, Range as ComparePeriod } from ".
 export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
 export type { CapacityAppt } from "../lib/capacity";
 
+// Pure Margins helpers (program staff-hours vs delivered meeting-hours).
+import { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths } from "../lib/margins";
+export { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths };
+export type { ProgramDef, ProgramMonthRow } from "../lib/margins";
+
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
 export { computeMeetingsToFreedom } from "../lib/freedom";
 export type { FreedomMenteeInput, FreedomRow, FreedomReport } from "../lib/freedom";
@@ -1627,6 +1632,85 @@ export async function deletePayoutBuild(coachId: number, serviceMonth: string): 
 
 // --- Raw data viewer ---
 
+// --- Program hours (Margins tab) ---
+// Delivered meeting hours per month for a program (its pipeline tiers), and the
+// manually-entered staff hours. Pure comparison lives in lib/margins.ts.
+
+// Distinct delivered SESSIONS per month for the given tiers, × PROGRAM_MEETING_HOURS.
+// A session = a distinct (coach, exact start time) slot, so a group meeting counts
+// once (not once per attendee); meetings with no start time fall back to their own id.
+export async function fetchDeliveredHoursByMonth(
+  tiers: PipelineTier[]
+): Promise<Map<string, { sessions: number; hours: number }>> {
+  const tierSet = new Set<string>(tiers);
+  const engTier = engagementTierMap(await fetchAllEngagements());
+  const slotsByMonth = new Map<string, Set<string>>();
+  const pageSize = 1000;
+  for (let f = 0; ; f += pageSize) {
+    const { data, error } = await supabase
+      .from("ca_appointments")
+      .select("id,coach_id,engagement_id,start_date,start_raw")
+      .in("category", ["mentoring", "group"])
+      .eq("status", "A")
+      .range(f, f + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as { id: number; coach_id: number | null; engagement_id: number | null; start_date: string | null; start_raw: string | null }[];
+    for (const a of batch) {
+      if (a.engagement_id == null) continue;
+      const tier = engTier.get(a.engagement_id);
+      if (!tier || !tierSet.has(tier)) continue;
+      const month = (a.start_date ?? "").slice(0, 7);
+      if (!month) continue;
+      const slot = a.start_raw ? `${a.coach_id ?? "?"}|${a.start_raw}` : `id|${a.id}`;
+      let set = slotsByMonth.get(month);
+      if (!set) {
+        set = new Set();
+        slotsByMonth.set(month, set);
+      }
+      set.add(slot);
+    }
+    if (batch.length < pageSize) break;
+  }
+  const out = new Map<string, { sessions: number; hours: number }>();
+  for (const [month, set] of slotsByMonth) out.set(month, { sessions: set.size, hours: set.size * PROGRAM_MEETING_HOURS });
+  return out;
+}
+
+export interface ProgramHoursRow {
+  program: string;
+  month: string; // YYYY-MM
+  staffHours: number | null;
+  notes: string | null;
+}
+
+// All entered staff-hours rows. Defensive: if program_hours (9981) isn't applied
+// yet, returns [] so the Margins tab still renders (delivered hours from CA show;
+// entering staff hours errors until the migration lands).
+export async function fetchAllProgramHours(): Promise<ProgramHoursRow[]> {
+  const { data, error } = await supabase.from("program_hours").select("program,month,staff_hours,notes");
+  if (error) return [];
+  return ((data ?? []) as { program: string; month: string; staff_hours: number | string | null; notes: string | null }[]).map((r) => ({
+    program: r.program,
+    month: r.month,
+    staffHours: r.staff_hours == null || r.staff_hours === "" ? null : Number(r.staff_hours),
+    notes: r.notes ?? null,
+  }));
+}
+
+// Upsert one (program, month) staff-hours entry.
+export async function setProgramHours(
+  createdBy: string,
+  program: string,
+  month: string,
+  staffHours: number | null,
+  notes: string | null = null
+): Promise<void> {
+  const { error } = await supabase
+    .from("program_hours")
+    .upsert({ program, month, staff_hours: staffHours, notes, created_by: createdBy || null }, { onConflict: "program,month" });
+  if (error) throw new Error(error.message);
+}
+
 export const RAW_TABLES = [
   "ca_appointments",
   "ca_clients",
@@ -1642,6 +1726,7 @@ export const RAW_TABLES = [
   "mentee_outcomes",
   "mentees",
   "payout_builds",
+  "program_hours",
   "sync_runs",
 ] as const;
 

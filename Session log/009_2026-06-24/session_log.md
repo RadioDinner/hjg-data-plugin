@@ -97,6 +97,22 @@ by most-recent activity = lastMeeting/latest stage date), **Status** (active/gra
 Ephemeral local state. Roster/excluded scoping still applies underneath. New `.journey-filters`
 CSS; help article + FEATURE_BACKLOG (moved to Shipped) updated. typecheck/verify/build pass.
 
+## Fifth batch (same session) — Margins tab bones (built from backlog)
+
+**9. Margins tab** (`src/views/MarginsView.tsx`, new top-nav tab in `App.tsx`). Sub-tabs
+**JumpStart Your Freedom** (tier `jumpstart`) and **Mentoring** (4x/2x/1x). Each shows a by-month
+**graph + table**: entered **staff hours** vs **delivered meeting hours**, plus a delivered÷staff
+ratio + all-time stat tiles. Staff hours are entered inline (save-on-blur) into the new
+**`program_hours`** table (migration **`9981`**, staff RLS). Delivered hours = distinct
+**(coach, exact start-time)** sessions under the program's tiers × **`PROGRAM_MEETING_HOURS`** (1 h
+stand-in — CA mirror has a meeting start but no end/duration yet). Pure merge in **`lib/margins.ts`**
+(`mergeProgramMonths`, **verify §17**); `fetchDeliveredHoursByMonth` + `fetchAllProgramHours` +
+`setProgramHours` in db.ts; `program_hours` added to RAW_TABLES; "?" article `margins.tab`.
+**Dollars deferred** per the request (bones only). typecheck/verify/build pass.
+
+⚠ **Apply `9981_program_hours.sql`** before staff-hours entry persists (delivered hours render
+without it; the table fetch is fail-open).
+
 ## Open questions / next step
 1. **Apply `9984` then re-sync** (and `9983`). Verify Jonathan flips to Caleb *only if the user
    re-pairs him to Caleb in CA* — the data export still has him under Arthur on both engagements,
