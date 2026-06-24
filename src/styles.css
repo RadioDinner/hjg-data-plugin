@@ -404,6 +404,22 @@ body {
 .rhythm-legend__item { display: inline-flex; align-items: center; gap: 6px; }
 .rhythm-legend__swatch { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; flex: none; box-sizing: border-box; }
 
+/* --- Mentee record (source of truth) card --- */
+.mentee-record { margin-top: 14px; }
+.mentee-record__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.mentee-record__head h3 { margin: 0; font-size: 14px; }
+.mentee-record__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
+.mentee-record__field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); min-width: 0; }
+.mentee-record__field span { font-weight: 600; }
+.mentee-record__field input, .mentee-record__field textarea {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r-control); padding: 7px 9px; font-size: 13px; width: 100%; box-sizing: border-box;
+}
+.mentee-record__field input:focus, .mentee-record__field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mentee-record__field textarea { resize: vertical; min-height: 56px; font-family: inherit; }
+.mentee-record__field--wide { grid-column: 1 / -1; }
+.mentee-record__actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+
 .card--inset { background: var(--panel-2); box-shadow: none; }
 .journey__status h3 { margin: 0 0 6px; font-size: 14px; }
 .journey__status-row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; }

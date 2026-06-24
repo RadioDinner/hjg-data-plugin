@@ -8,12 +8,16 @@ import {
   clearMenteeOutcome,
   fetchCompanyOptions,
   fetchMenteeJourneys,
+  fetchMenteeRecordsByClient,
   removeMenteeExclusion,
+  saveMenteeRecord,
   setCompanyOption,
   setMenteeOutcome,
   stageColorsFromRaw,
   DEFAULT_STAGE_COLORS,
   type MenteeJourney,
+  type MenteeRecord,
+  type MenteeRecordEdit,
   type MenteeStatus,
   type PipelineTier,
   type ResolvedMenteeStatus,
@@ -511,6 +515,143 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
   );
 }
 
+// The editable fields of the Mentee source-of-truth record (mirrors Notion), in
+// display order. `num` renders a number input, `date` a date input, `area` a
+// multi-line textarea, everything else a text input.
+type RecKind = "text" | "date" | "num" | "area";
+const RECORD_FIELDS: { key: keyof MenteeRecordEdit; label: string; kind: RecKind; wide?: boolean }[] = [
+  { key: "name", label: "Name", kind: "text" },
+  { key: "status", label: "Status (Notion)", kind: "text" },
+  { key: "mentor", label: "Mentor", kind: "text" },
+  { key: "mentor_1", label: "Mentor (full)", kind: "text" },
+  { key: "dc_date", label: "Discovery-call date", kind: "date" },
+  { key: "projected_start", label: "Projected start", kind: "date" },
+  { key: "offering_signup", label: "Offering signup", kind: "date" },
+  { key: "mt_prayer_partner", label: "Prayer partner", kind: "text" },
+  { key: "wants_pp", label: "Wants PP?", kind: "text" },
+  { key: "ff_amount", label: "FF amount", kind: "num" },
+  { key: "freedom_fight_paid", label: "Freedom Fight paid?", kind: "text" },
+  { key: "date_ff_paid", label: "Date FF paid", kind: "date" },
+  { key: "current_invoice_amount", label: "Current invoice amount", kind: "num" },
+  { key: "email", label: "Email", kind: "text" },
+  { key: "phone", label: "Phone", kind: "text" },
+  { key: "js_lesson", label: "JS lesson", kind: "text" },
+  { key: "mn_equivalency", label: "MN equivalency", kind: "num" },
+  { key: "dd_w_a", label: "dd w a", kind: "num" },
+  { key: "associated_tasks", label: "Associated tasks / notes", kind: "area", wide: true },
+];
+
+// Build a string-valued form snapshot from a record (or empty), defaulting the
+// name to the mentee's CA name when there's no saved record yet.
+function recordToForm(rec: MenteeRecord | undefined, defaultName: string): Record<string, string> {
+  const f: Record<string, string> = {};
+  for (const fld of RECORD_FIELDS) {
+    const v = rec ? (rec[fld.key as keyof MenteeRecord] as unknown) : undefined;
+    f[fld.key] = v == null ? "" : String(v);
+  }
+  if (!f.name) f.name = defaultName;
+  return f;
+}
+
+// Editable "source of truth" card for the selected mentee (the `mentees` table,
+// mirrored from Notion). Sits below the timeline in the Journeys detail pane.
+function MenteeRecordCard({
+  clientId,
+  defaultName,
+  record,
+  userId,
+  onSaved,
+  onError,
+}: {
+  clientId: number;
+  defaultName: string;
+  record: MenteeRecord | undefined;
+  userId: string;
+  onSaved: (rec: MenteeRecord) => void;
+  onError: (m: string) => void;
+}) {
+  const baseline = useMemo(() => recordToForm(record, defaultName), [record, defaultName]);
+  const [form, setForm] = useState<Record<string, string>>(baseline);
+  const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Re-sync the form to the record (e.g. after a save re-baselines to the saved
+  // values). The card is keyed by clientId in the parent, so a mentee switch
+  // remounts with a fresh form rather than relying on this. `justSaved` is left
+  // alone here so the "Saved ✓" confirmation survives the post-save re-baseline.
+  useEffect(() => {
+    setForm(baseline);
+  }, [baseline]);
+
+  const dirty = useMemo(() => RECORD_FIELDS.some((f) => (form[f.key] ?? "") !== (baseline[f.key] ?? "")), [form, baseline]);
+
+  function set(key: string, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setJustSaved(false);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const edits: MenteeRecordEdit = {};
+      for (const fld of RECORD_FIELDS) {
+        const raw = (form[fld.key] ?? "").trim();
+        if (fld.kind === "num") {
+          const n = raw === "" ? null : Number(raw);
+          (edits as Record<string, unknown>)[fld.key] = raw !== "" && Number.isNaN(n) ? null : n;
+        } else {
+          (edits as Record<string, unknown>)[fld.key] = raw === "" ? null : raw;
+        }
+      }
+      const name = (edits.name as string | null) || defaultName;
+      edits.name = name;
+      const rec = await saveMenteeRecord(userId, clientId, name, edits);
+      onSaved(rec);
+      setJustSaved(true);
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card card--inset mentee-record">
+      <div className="mentee-record__head">
+        <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Mentee record — source of truth <HelpButton id="journeys.menteeRecord" label="Mentee record" />
+        </h3>
+        <span className="muted" style={{ fontSize: 12 }}>
+          {record ? "Mirrored from Notion; edits here are saved to the dashboard." : "No saved record yet — fill in and save to create one."}
+        </span>
+      </div>
+      <div className="mentee-record__grid">
+        {RECORD_FIELDS.map((fld) => (
+          <label key={fld.key} className={`mentee-record__field ${fld.wide ? "mentee-record__field--wide" : ""}`}>
+            <span>{fld.label}</span>
+            {fld.kind === "area" ? (
+              <textarea rows={3} value={form[fld.key] ?? ""} onChange={(e) => set(fld.key, e.target.value)} />
+            ) : (
+              <input
+                type={fld.kind === "date" ? "date" : fld.kind === "num" ? "number" : "text"}
+                step={fld.kind === "num" ? "any" : undefined}
+                value={form[fld.key] ?? ""}
+                onChange={(e) => set(fld.key, e.target.value)}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <div className="mentee-record__actions">
+        <button className="btn btn--primary btn--sm" onClick={save} disabled={!dirty || saving}>
+          {saving ? "Saving…" : record ? "Save changes" : "Create record"}
+        </button>
+        {justSaved && !dirty && <span className="muted" style={{ fontSize: 12 }}>Saved ✓</span>}
+      </div>
+    </div>
+  );
+}
+
 export function JourneysView() {
   const { user } = useAuth();
   const [journeys, setJourneys] = useState<MenteeJourney[]>([]);
@@ -520,6 +661,7 @@ export function JourneysView() {
   const [error, setError] = useState<string | null>(null);
   const [stageBasis, setStageBasis] = useState<StageBasis>("engagement_start");
   const [stageColors, setStageColors] = useState<string[]>(DEFAULT_STAGE_COLORS);
+  const [records, setRecords] = useState<Map<number, MenteeRecord>>(new Map());
 
   async function load(basis: StageBasis) {
     setLoading(true);
@@ -531,7 +673,22 @@ export function JourneysView() {
     } catch (e) {
       setError(String(e));
     }
+    // Source-of-truth records load separately so a not-yet-applied 9986 migration
+    // (missing `mentees` table) doesn't break the rest of the Journeys tab.
+    try {
+      setRecords(await fetchMenteeRecordsByClient());
+    } catch (e) {
+      // Most likely the 9986 migration isn't applied yet (no `mentees` table); the
+      // card just shows the empty/create state. Warn so a real error is still visible.
+      console.warn("Mentee source-of-truth records unavailable:", e);
+    }
     setLoading(false);
+  }
+
+  // Reflect a saved record immediately, without a full reload.
+  function handleRecordSaved(rec: MenteeRecord) {
+    if (rec.client_id == null) return;
+    setRecords((prev) => new Map(prev).set(rec.client_id as number, rec));
   }
 
   // On mount, read the org-wide stage-date basis (Company options), then load.
@@ -645,7 +802,18 @@ export function JourneysView() {
           </div>
           <div className="journeys__detail">
             {current ? (
-              <Timeline journey={current} userId={user?.id ?? ""} colors={stageColors} onSaved={() => load(stageBasis)} onError={setError} />
+              <>
+                <Timeline journey={current} userId={user?.id ?? ""} colors={stageColors} onSaved={() => load(stageBasis)} onError={setError} />
+                <MenteeRecordCard
+                  key={current.clientId}
+                  clientId={current.clientId}
+                  defaultName={current.name}
+                  record={records.get(current.clientId)}
+                  userId={user?.id ?? ""}
+                  onSaved={handleRecordSaved}
+                  onError={setError}
+                />
+              </>
             ) : (
               <div className="muted" style={{ padding: 24 }}>Select a mentee to view their journey.</div>
             )}

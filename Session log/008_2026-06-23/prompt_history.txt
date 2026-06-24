@@ -13,3 +13,27 @@ Then I want you to color code the columns in the Journey's tab so that I can vis
 [Journeys color-by] Pipeline tier/stage (Recommended) — stack each month's
 meeting-rhythm column by the tier of those meetings (JumpStart/4x/2x/1x),
 colored with the same red→green stage-rail palette.
+
+--- 2026-06-24 ---
+[screenshot of a mentee's stage rail with a yellow-circled white-space anomaly between Discovery and JumpStart]
+[attached: hjgrawdata20260623.xlsx ("raw export all" from dashboard), Mentees_Database_*.csv, Mentees_Database_*_all.csv (Notion "mentee database")]
+After this, I want you to build the feature on the backlog. I'll attach a copy of our "mentee database" from Notion. I want to mirror that data. Then, step two of this, after you build the feature, I want you to update the mentees data in our newly created Mentee Source of Truth, in the Journey's tab with the relevant information I give you from both the notion "mentee database", things I've saved/updated in the dashboard, and the raw data from the dashboard. See the .xlsx data and csv data for the task. Does the "raw export all" from the dashboard include the tables that have data saved that I have entered by hand?
+
+Also, I'm going to upload a screenshot of the "journey" of one of our mentees, for some reason there is a weird visual anamoly of just extra white space. I've circled it in a yellow highlighter, fix this too.
+
+--- 2026-06-24 (AskUserQuestion answers — Mentees feature) ---
+[Field scope] Mirror all 19 columns
+[Editability] Editable in dashboard (one-time Notion import; dashboard edits persist; re-seed won't clobber)
+[UI placement] Card in Journeys detail pane (+ Raw data table)
+
+--- 2026-06-24 ---
+I want the "edit graduation status" to be moved to the Journeys tab.
+
+Also, there is a random card below the Jumpstart your freedom vs active mentoring with this current data
+39 Discovery calls
+597 Mentee meetings
+60 Active mentees
+5 Mentors
+I want that removed.
+
+Also, on the Journeys tab, where I select an individual mentee, in the grid below the columns, I want a list of each meeting name, and I want the columns to reflect the amount of days spent in each category of the program, it seems like it isn't visually displaying the time spent in each category correctly

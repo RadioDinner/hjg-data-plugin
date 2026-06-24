@@ -155,6 +155,22 @@ Pure math lives in \`lib/compare.ts\`.`,
 Pure logic in \`lib/journey.ts\`.`,
   },
 
+  "journeys.menteeRecord": {
+    title: "Mentee record (source of truth)",
+    body: `HJG's **internal source of truth** for this mentee — one consolidated record per person.
+
+### Where it comes from
+- **Seeded once** from the Notion *Mentees Database* (all 19 columns mirrored), linked to the CoachAccountable client by name (\`client_id\`).
+- After the import, **this is the master copy**: edits you make here are saved to the dashboard's own \`mentees\` table and are **never overwritten** by a CoachAccountable re-sync or a re-run of the seed.
+
+### What it holds
+- Notion **Status**, **Mentor** and **Prayer partner**, **Discovery-call** and **Projected-start** dates, **Freedom-Fight** payment fields, contact info, and free notes.
+- This is separate from the **pipeline status** editor above (which drives the auto/active/graduated logic) — that one feeds the metrics; this record is the management roster.
+
+### Source
+- \`mentees\` table (HJG-owned, staff-RLS, migration \`9986\`). Prospects not yet in CoachAccountable are seeded too, but only those linked to a CA client appear on this tab.`,
+  },
+
   "metrics.capacity": {
     title: "Mentor capacity utilization",
     body: `How loaded each mentor is: distinct **1-on-1 mentees** they're serving vs. their **configured capacity**.

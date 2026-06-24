@@ -1042,6 +1042,97 @@ export async function removeMenteeExclusion(clientId: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// --- Mentees: HJG's internal SOURCE OF TRUTH (mirrors the Notion "Mentees Database") ---
+// One row per mentee (HJG-owned, staff RLS, migration 9986). `client_id` soft-refs
+// ca_clients.id (null for prospects not yet in CoachAccountable). Seeded once from
+// the Notion export; edited in the dashboard thereafter via the Journeys "Mentee
+// record" card. All 19 Notion columns are mirrored.
+
+export interface MenteeRecord {
+  id: string;
+  client_id: number | null;
+  notion_key: string;
+  name: string;
+  wants_pp: string | null;
+  mentor_1: string | null;
+  status: string | null;
+  mt_prayer_partner: string | null;
+  projected_start: string | null;
+  associated_tasks: string | null;
+  current_invoice_amount: number | null;
+  ff_amount: number | null;
+  freedom_fight_paid: string | null;
+  js_lesson: string | null;
+  mn_equivalency: number | null;
+  mentor: string | null;
+  offering_signup: string | null;
+  dd_w_a: number | null;
+  dc_date: string | null;
+  email: string | null;
+  date_ff_paid: string | null;
+  phone: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// The fields the Journeys card lets staff edit (everything but identity + audit).
+export type MenteeRecordEdit = Partial<
+  Omit<MenteeRecord, "id" | "client_id" | "notion_key" | "created_at" | "updated_at">
+>;
+
+const MENTEE_SELECT =
+  "id,client_id,notion_key,name,wants_pp,mentor_1,status,mt_prayer_partner,projected_start,associated_tasks,current_invoice_amount,ff_amount,freedom_fight_paid,js_lesson,mn_equivalency,mentor,offering_signup,dd_w_a,dc_date,email,date_ff_paid,phone,created_at,updated_at";
+
+// PostgREST returns numeric(12,2) columns as strings to preserve precision; coerce
+// them back to numbers so MenteeRecord's `number | null` contract actually holds.
+const MENTEE_NUM_FIELDS = ["current_invoice_amount", "ff_amount", "mn_equivalency", "dd_w_a"] as const;
+function normalizeMenteeRecord(r: MenteeRecord): MenteeRecord {
+  const out = { ...r } as Record<string, unknown>;
+  for (const k of MENTEE_NUM_FIELDS) {
+    const v = out[k];
+    out[k] = v == null || v === "" ? null : Number(v);
+  }
+  return out as unknown as MenteeRecord;
+}
+
+// All mentee records keyed by client_id. Rows with a null client_id (prospects not
+// yet in CA) are dropped here — they aren't reachable from the Journeys mentee list.
+export async function fetchMenteeRecordsByClient(): Promise<Map<number, MenteeRecord>> {
+  const { data, error } = await supabase.from("mentees").select(MENTEE_SELECT);
+  if (error) throw new Error(error.message);
+  const map = new Map<number, MenteeRecord>();
+  for (const raw of (data ?? []) as MenteeRecord[]) {
+    const r = normalizeMenteeRecord(raw);
+    if (r.client_id != null && !map.has(r.client_id)) map.set(r.client_id, r);
+  }
+  return map;
+}
+
+// Create or update the source-of-truth record for a CA client. Read-modify-write
+// by client_id so it works whether or not a Notion-seeded row already exists.
+export async function saveMenteeRecord(
+  userId: string,
+  clientId: number,
+  name: string,
+  edits: MenteeRecordEdit
+): Promise<MenteeRecord> {
+  const { data: rows, error: selErr } = await supabase.from("mentees").select("id").eq("client_id", clientId).limit(1);
+  if (selErr) throw new Error(selErr.message);
+  const existing = (rows ?? [])[0] as { id: string } | undefined;
+  if (existing) {
+    const { data, error } = await supabase.from("mentees").update(edits).eq("id", existing.id).select(MENTEE_SELECT).single();
+    if (error) throw new Error(error.message);
+    return normalizeMenteeRecord(data as MenteeRecord);
+  }
+  const { data, error } = await supabase
+    .from("mentees")
+    .insert({ client_id: clientId, notion_key: `client:${clientId}`, name, created_by: userId || null, ...edits })
+    .select(MENTEE_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  return normalizeMenteeRecord(data as MenteeRecord);
+}
+
 // Board-level roll-up of how long each pipeline leg takes, across all mentees.
 // Each leg is averaged only over mentees where BOTH endpoints exist (so a small
 // n is honest, not zero-padded), and negative spans (data anomalies) are dropped.
@@ -1320,6 +1411,7 @@ export const RAW_TABLES = [
   "manual_metrics",
   "mentee_exclusions",
   "mentee_outcomes",
+  "mentees",
   "payout_builds",
   "sync_runs",
 ] as const;
