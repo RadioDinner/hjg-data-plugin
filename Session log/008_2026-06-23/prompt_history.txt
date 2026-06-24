@@ -3,3 +3,8 @@ Ready to kick off another session? Always commit to main for this session
 
 --- 2026-06-23 (AskUserQuestion answer) ---
 [Direction] I'll tell you later
+
+--- 2026-06-24 ---
+I want you to add a feature to the feature backlog. I want a "Mentees" database table that is the "source of truth" for our internal management. i want it to get the originating row from ca_clients table from the synced data, but then I want to combine the mentee_outcomes and discovery_outcomes into that table since every one of our mentees with have a discovery call and a subsequent outcome. Put this on the backlog.
+
+Then I want you to color code the columns in the Journey's tab so that I can visually see a meeting distribution set per mentee.

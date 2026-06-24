@@ -11,8 +11,82 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-_No planned items right now — the session-006/006b backlog is fully shipped (see
-below). Add new ideas here, newest on top._
+### "Mentees" table — internal source-of-truth for each person — requested session 008, 2026-06-24
+
+**What.** A single **`Mentees`** table that is HJG's internal *source of truth* for
+managing each person, assembled from data we already mirror/own. One row per mentee.
+Its originating row comes from **`ca_clients`** (the CA-synced person record), then we
+**fold in that person's discovery call and its outcome (`discovery_outcomes`) and their
+pipeline outcome (`mentee_outcomes`)** so the whole arc — *who they are → their discovery
+call result → where they ended up* — lives in one place. The user's framing: "every one
+of our mentees will have a discovery call and a subsequent outcome," so those two facts
+belong on the mentee record, not scattered across three tables.
+
+**Why.** Today a mentee's identity (`ca_clients`), their discovery result
+(`discovery_outcomes`), and their journey outcome (`mentee_outcomes`) are three separate
+tables joined on `client_id` at read time (see `fetchMenteeJourneys`, the Discovery tab,
+`MenteeStatusEditor`). There's no one object that says "this is the mentee, here's their
+discovery outcome, here's their current status." A consolidated `Mentees` view/table makes
+internal management, board reporting, and future write-back far simpler, and gives every
+downstream view (Journeys, Metrics, Pay) one canonical mentee object to read.
+
+**Where in code / data.** Join key is **`client_id` = `ca_clients.id`** across all three:
+- `ca_clients` (sync-written, `9999_init.sql`): `id` (CA Client.ID, PK), `name`,
+  `first_name`, `last_name`, `email`, `is_active`, `is_excluded`, `synced_at`.
+- `discovery_outcomes` (HJG-owned, staff RLS, `9999_init.sql`): `client_id`,
+  `appointment_id` (soft ref `ca_appointments.id`; null = manually logged), `outcome`
+  ∈ {`converted`,`not_converted`,`pending`,`no_show`}, `follow_up_on`, `notes`, audit cols.
+  **Unique per `appointment_id`, NOT per client** — a person can have more than one
+  discovery call / outcome row.
+- `mentee_outcomes` (HJG-owned, staff RLS, `9995_mentee_outcomes.sql`): **unique per
+  `client_id`** (one row per mentee), `status` ∈ {`active`,`graduated`,`quit`,`fired`},
+  `status_date`, `notes`, audit cols. Override that already "wins" over inferred status.
+- Read paths to reuse/replace: `src/db.ts` (`fetchMenteeJourneys`, discovery/outcome
+  fetchers, `mentee_outcomes` read/write), `mentee_exclusions` (`9988`) as a sibling
+  staff-owned table, and the registry/RLS shape of the other HJG tables.
+
+**⚠ Reality check on the premise (verified against the schema/code, session 008).**
+The data does *not* guarantee "every mentee has a discovery call and a subsequent
+outcome," so the table can't assume it:
+- The discovery **call** event lives in **`ca_appointments`** (category
+  `discoveryPhone`/`discoveryZoom`), *not* in `discovery_outcomes`. `discovery_outcomes`
+  only stores the **staff override** of the auto-computed outcome — if staff never
+  override, there is **no row** and the outcome is derived at read time
+  (`resolveDiscoveryOutcome`). So a converted mentee can have **zero** `discovery_outcomes`
+  rows. The originating discovery date/outcome may need to come from `ca_appointments`
+  + the read-time resolver, with `discovery_outcomes` layered on only where present.
+- `mentee_outcomes` is likewise **optional** — most mentees have no row and get an
+  *inferred* status (active/inactive/graduated); a row exists only on staff override.
+- `ca_clients` also holds prospects who never converted and excluded placeholder/group
+  "clients" (`is_excluded`). The reliable per-mentee **spine is `ca_clients`**; the two
+  outcome tables are **sparse override layers** soft-joined on `client_id` (no FK).
+
+**Design decisions to make (capture before building):**
+- **View vs materialized table vs synced table.** Cleanest first cut is likely a
+  **SQL view** (`mentees`) that LEFT JOINs `ca_clients` ← `mentee_outcomes` ← a
+  *picked* `discovery_outcomes` row — zero new write surface, always fresh, read-only
+  (consistent with "read-only toward CA"). A real table only if we need to *edit* fields
+  that don't already live in an HJG-owned table. **Recommend the view first.**
+- **Which discovery outcome?** Since `discovery_outcomes` is per-appointment, decide the
+  rule for the single value folded onto the mentee: latest by date, the *converting* one
+  if present, or expose both a `discovery_outcome_latest` and a count. (Most mentees have
+  one; some have re-books / no-shows then a later convert.)
+- **Who is a "mentee"?** All `ca_clients` minus `is_excluded` and `mentee_exclusions`?
+  Or only those with ≥1 discovery call / ≥1 mentoring engagement? The user says every
+  mentee has a discovery call — but the *data* may have clients with no logged
+  `discovery_outcomes` row; decide whether those still appear (with nulls) or are filtered.
+- **Surface.** Add to the **Raw data** tab viewer at minimum; consider a dedicated
+  **Mentees** tab (searchable/sortable `SortableTable`, CSV export) as the internal
+  roster. North-star: also expose any rolled-up counts as graph + table.
+
+**Acceptance criteria.**
+- One row per mentee keyed on `ca_clients.id`, carrying identity (name/email/active),
+  their discovery outcome (per the chosen picking rule), and their journey status
+  (`mentee_outcomes`, override-aware) — joinable with zero client-side stitching.
+- Re-runnable migration (descending number — **next is `9986_…`**), staff-RLS if a real
+  table; a view inherits the base tables' RLS. Appears in the Raw-data viewer.
+- Excluded/placeholder clients handled explicitly (filtered or flagged, documented).
+- Verify coverage if any non-trivial picking/derivation logic lands in a pure `lib/` module.
 
 ---
 
