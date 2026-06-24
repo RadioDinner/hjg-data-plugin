@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../auth";
 import {
   fetchMentees,
@@ -10,6 +11,7 @@ import {
   fetchCompanyOptions,
   stageColorsFromRaw,
   toEffectiveMentee,
+  computeFunnel,
   DEFAULT_STAGE_COLORS,
   MENTEE_STATUSES,
   type MenteeRow,
@@ -22,7 +24,8 @@ import {
 import { SortableTable, type SortColumn, type Row } from "../components/SortableTable";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
-import { fmtDate } from "../format";
+import { fmtDate, pct } from "../format";
+import { useChartTokens } from "../theme";
 
 // The funnel stages, in order, with display labels + the stage-palette index used
 // for the rail colors (0 Discovery … 5 Graduation — matches journeys_stage_colors).
@@ -81,6 +84,7 @@ function draftFromRow(r: MenteeRow): MenteeHandEdit {
 
 export function MenteesView() {
   const { user } = useAuth();
+  const ct = useChartTokens();
   const [rows, setRows] = useState<MenteeRow[]>([]);
   const [stageColors, setStageColors] = useState<string[]>(DEFAULT_STAGE_COLORS);
   const [loading, setLoading] = useState(true);
@@ -135,6 +139,13 @@ export function MenteesView() {
     return m;
   }, [rows, today]);
   const effective = useMemo(() => [...effById.values()], [effById]);
+
+  // Funnel over ALL non-test mentees (board view, independent of the roster filters).
+  const funnel = useMemo(() => computeFunnel(effective), [effective]);
+  const funnelChart = useMemo(
+    () => funnel.stages.map((s, i) => ({ stage: s.label, entered: s.entered, color: stageColors[i] ?? ct.accent })),
+    [funnel, stageColors, ct.accent]
+  );
 
   const owners = useMemo(() => {
     const s = new Set<string>();
@@ -304,6 +315,67 @@ export function MenteesView() {
       </p>
 
       {error && <div className="error">{error}</div>}
+
+      {/* Funnel + exits */}
+      <div className="card card--inset" style={{ marginBottom: 16 }}>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Funnel &amp; exits <HelpButton id="mentees.funnel" label="Funnel & exits" />
+          <SectionId id="mentees.funnel" />
+        </h2>
+        <p className="view__hint">
+          How many mentees <strong>entered</strong> each stage, who's still <strong>active</strong> there, who <strong>exited</strong>
+          {" "}there (declined / quit / fired), and the <strong>conversion</strong> to the next stage. Graduation can happen directly
+          from 4x or 2x. All non-test mentees ({funnel.total}); not affected by the filters below.
+        </p>
+        <div className="chart-card__split chart-card__split--both">
+          <div style={{ width: "100%", height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={funnelChart} layout="vertical" margin={{ left: 8, right: 40 }}>
+                <CartesianGrid stroke={ct.grid} horizontal={false} />
+                <XAxis type="number" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} allowDecimals={false} />
+                <YAxis type="category" dataKey="stage" width={80} tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+                <Tooltip
+                  contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText }}
+                  cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                />
+                <Bar dataKey="entered" radius={[0, 3, 3, 0]}>
+                  {funnelChart.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
+                  ))}
+                  <LabelList dataKey="entered" position="right" style={{ fill: ct.axis, fontSize: 11 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="table-scroll" style={{ width: "100%" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Stage</th>
+                  <th>Entered</th>
+                  <th>Active here</th>
+                  <th>Exited (declined / quit / fired)</th>
+                  <th>→ Next</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.stages.map((s) => (
+                  <tr key={s.stage}>
+                    <td>{s.label}</td>
+                    <td className="num">{s.entered}</td>
+                    <td className="num">{s.activeHere}</td>
+                    <td className="num">
+                      {s.exitedHere}
+                      {s.exitedHere > 0 ? ` (${s.exits.declined}/${s.exits.quit}/${s.exits.fired})` : ""}
+                    </td>
+                    <td className="num">{s.conversionToNext == null ? "—" : pct(s.conversionToNext)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
       <div className="card card--inset" style={{ marginBottom: 16 }}>
         <div className="journey-filters">

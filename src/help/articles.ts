@@ -166,6 +166,23 @@ Pure math lives in \`lib/compare.ts\`.`,
 Pure logic in \`lib/menteeJourney.ts\` (CA derivation) + \`lib/menteeView.ts\` (effective view-model).`,
   },
 
+  "mentees.funnel": {
+    title: "Funnel & exits",
+    body: `Where mentees are in HJG's branching funnel and where they leak out: **Discovery → JumpStart → 4x → 2x → 1x → Graduated**.
+
+### What each column means
+- **Entered** — how many mentees reached that stage (its effective date is set). A mentee who **graduates directly from 4x or 2x** is counted at the stages they actually entered, not the ones they skipped.
+- **Active here** — mentees currently sitting at that stage (not yet exited or graduated).
+- **Exited** — terminal exits attributed to that stage, shown as **declined / quit / fired**: *declined* (didn't continue after a discovery call), *quit* (e.g. financial), *fired* (staff ended it). The exit is placed at the hand-set exit stage, else the furthest stage the mentee reached. (*Paused* mentees aren't counted as exited.)
+- **→ Next** — conversion to the next stage = entered(next) ÷ entered(this).
+
+### Notes
+- Counts cover **all non-test mentees** and use the **effective** dates/status (your hand edits win over CA). Mark a mentee **test** on its detail card to drop it.
+- Classify exits on a mentee's detail card (status + exit/grad stage) so they land at the right stage here.
+
+Pure logic in \`lib/menteeFunnel.ts\`.`,
+  },
+
   "journeys.aggregate": {
     title: "Pipeline leg durations",
     body: `Board-level view of how long mentees take to move through the pipeline: **Discovery → JumpStart → 4x → 2x → 1x → Graduation**.

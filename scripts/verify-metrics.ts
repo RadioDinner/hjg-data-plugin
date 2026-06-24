@@ -24,6 +24,7 @@ import {
 } from "../lib/cohortCompare.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney.js";
 import { toEffectiveMentee, aggregateLegDurations, type MenteeRowLike } from "../lib/menteeView.js";
+import { computeFunnel } from "../lib/menteeFunnel.js";
 import {
   gradientColors,
   resolveStageColors,
@@ -1011,6 +1012,42 @@ console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg 
   eq(byKey.get("dc_js")!.medianDays, 15, "dc_js median");
   eq(byKey.get("js_4x")!.n, 1, "js_4x n=1");
   eq(byKey.get("js_4x")!.avgDays, 10, "js_4x avg");
+}
+
+console.log("[22] Mentee management — funnel + exits (computeFunnel)");
+{
+  const b = (o: Partial<MenteeRowLike>): MenteeRowLike => ({
+    id: "x", client_id: 1, ca_name: null, ca_owner_coach_id: null, ca_owner_coach_name: null,
+    ca_discovery_date: null, ca_jumpstart_date: null, ca_tier_4x_date: null, ca_tier_2x_date: null,
+    ca_tier_1x_date: null, ca_graduation_date: null, ca_first_meeting: null, ca_last_meeting: null,
+    ca_meeting_count: 0, ca_jumpstart_end: null, ca_jyf_purchase_date: null, ca_start_date: null,
+    ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
+    status_date: null, discovery_date_override: null, jumpstart_date_override: null,
+    tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
+    graduation_date_override: null, owner_coach_id_override: null, is_test: false, ...o,
+  });
+  const t = "2026-06-24";
+  const mentees = [
+    b({ id: "A", client_id: 1, ca_discovery_date: "2026-01-01", status: "declined" }), // declined @ discovery
+    b({ id: "B", client_id: 2, ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-01-20", status: "quit" }), // quit @ jumpstart
+    b({ id: "C", client_id: 3, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01", ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-09-01", ca_status: "graduated" }), // graduated from 4x
+    b({ id: "D", client_id: 4, ca_discovery_date: "2026-02-01", ca_jumpstart_date: "2026-03-01", ca_tier_4x_date: "2026-05-01", ca_status: "active" }), // active @ 4x
+    b({ id: "T", client_id: 5, ca_discovery_date: "2020-01-01", ca_jumpstart_date: "2020-02-01", is_test: true }), // dropped
+  ].map((r) => toEffectiveMentee(r, t));
+  const f = computeFunnel(mentees);
+  eq(f.total, 4, "funnel total excludes test");
+  const byStage = new Map(f.stages.map((s) => [s.stage, s]));
+  eq(byStage.get("discovery")!.entered, 4, "entered discovery = 4");
+  eq(byStage.get("jumpstart")!.entered, 3, "entered jumpstart = 3");
+  eq(byStage.get("4x")!.entered, 2, "entered 4x = 2");
+  eq(byStage.get("2x")!.entered, 0, "entered 2x = 0 (C graduated from 4x, skipped 2x)");
+  eq(byStage.get("graduated")!.entered, 1, "entered graduated = 1");
+  eq(byStage.get("discovery")!.exits.declined, 1, "1 declined at discovery");
+  eq(byStage.get("jumpstart")!.exits.quit, 1, "1 quit at jumpstart");
+  eq(byStage.get("4x")!.activeHere, 1, "1 active at 4x (D)");
+  eq(byStage.get("graduated")!.activeHere, 0, "graduated not counted active");
+  assert(Math.abs((byStage.get("discovery")!.conversionToNext ?? -1) - 0.75) < 1e-9, "discovery->jumpstart conversion 75%");
+  assert(byStage.get("graduated")!.conversionToNext === null, "graduated has no next");
 }
 
 console.log("");

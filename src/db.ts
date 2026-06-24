@@ -106,6 +106,8 @@ import { toEffectiveMentee } from "../lib/menteeView";
 import { computeMeetingsToFreedom } from "../lib/freedom";
 export { toEffectiveMentee, aggregateLegDurations, MENTEE_STATUSES, MENTEE_EXIT_STATUSES, FUNNEL_STAGES } from "../lib/menteeView";
 export type { EffectiveMentee, FunnelStage } from "../lib/menteeView";
+export { computeFunnel } from "../lib/menteeFunnel";
+export type { FunnelReport, FunnelStageStat } from "../lib/menteeFunnel";
 
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
