@@ -66,6 +66,13 @@ in `9977` (+ `9986` DDL for fresh installs); `MenteeRecord` + `MENTEE_SELECT` up
 `journeys.menteeRecord` help article updated. (Not surfaced on the Mentees grid — scope
 was the Journeys card per the request.)
 
+**(4) "synced" date → confirm button** on the Journeys graduation editor (§107,
+`MenteeStatusEditor`). The per-stage "synced: yyyy-mm-dd" caption is now a **button**:
+clicking it copies the synced CA date into that override field (then Save persists it),
+so you confirm a date without retyping. Shows "✓ synced: …" + disables once the field
+already equals the synced value. No-synced fields stay a muted "synced: —". UI-only
+(no migration / no verify change).
+
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
    HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.

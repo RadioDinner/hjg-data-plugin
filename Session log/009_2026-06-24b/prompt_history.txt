@@ -18,3 +18,6 @@ Another feature / thing I want added, if I edit any element of the mentee in the
 
 --- 2026-06-24 (session 009b) ---
 all migrations applied
+
+--- 2026-06-24 (session 009b) ---
+On screen 107 I want the "synced: yyyy-mm-dd" to become a button that I can click to confirm the date, rather than re-entering it it.

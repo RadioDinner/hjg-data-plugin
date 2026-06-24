@@ -473,6 +473,12 @@ body {
   border-radius: var(--r-control); padding: 6px 10px; font-size: 14px;
 }
 .grad-editor__synced { font-size: 11px; }
+.grad-editor__synced-btn {
+  align-self: flex-start; background: none; border: none; padding: 0;
+  font: inherit; font-size: 11px; color: var(--accent); cursor: pointer; text-align: left;
+}
+.grad-editor__synced-btn:hover:not(:disabled) { text-decoration: underline; }
+.grad-editor__synced-btn:disabled { color: var(--muted); cursor: default; }
 
 /* --- Mentees tab (Notion-like editable grid) --- */
 .mentees__toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }

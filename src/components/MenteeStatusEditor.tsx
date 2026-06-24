@@ -207,21 +207,38 @@ export function MenteeStatusEditor({
       <div className="grad-editor__dates">
         <div className="grad-editor__dates-head muted">
           Pipeline dates — correct any milestone on this mentee’s timeline. Leave a field blank to keep the synced
-          CoachAccountable date (shown beneath each).
+          CoachAccountable date (shown beneath each) — or <strong>click the synced date</strong> to confirm it as the
+          override without retyping.
         </div>
         <div className="grad-editor__dates-grid">
-          {STAGE_FIELDS.map((f) => (
-            <label key={f.key} className="grad-editor__date-field">
-              <span>{f.label}</span>
-              <input
-                type="date"
-                value={dates[f.key]}
-                disabled={!selected}
-                onChange={(e) => setDates((d) => ({ ...d, [f.key]: e.target.value }))}
-              />
-              <span className="grad-editor__synced muted">synced: {selected?.stageSynced[f.key] ?? "—"}</span>
-            </label>
-          ))}
+          {STAGE_FIELDS.map((f) => {
+            const syncedVal = selected?.stageSynced[f.key] ?? null;
+            const confirmed = !!syncedVal && dates[f.key] === syncedVal;
+            return (
+              <label key={f.key} className="grad-editor__date-field">
+                <span>{f.label}</span>
+                <input
+                  type="date"
+                  value={dates[f.key]}
+                  disabled={!selected}
+                  onChange={(e) => setDates((d) => ({ ...d, [f.key]: e.target.value }))}
+                />
+                {syncedVal ? (
+                  <button
+                    type="button"
+                    className="grad-editor__synced grad-editor__synced-btn"
+                    disabled={!selected || confirmed}
+                    title={confirmed ? "Confirmed — using the synced date" : "Click to confirm: use this synced date as the override"}
+                    onClick={() => setDates((d) => ({ ...d, [f.key]: syncedVal }))}
+                  >
+                    {confirmed ? "✓ " : ""}synced: {syncedVal}
+                  </button>
+                ) : (
+                  <span className="grad-editor__synced muted">synced: —</span>
+                )}
+              </label>
+            );
+          })}
         </div>
       </div>
 
