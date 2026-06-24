@@ -42,3 +42,6 @@ Continue from where you left off.
 
 --- 2026-06-24 (session 009) ---
 For the "margins" feature, I want to be able to click on a column and it would load the list of meetings that occured that built the data for that column.
+
+--- 2026-06-24 (session 009) ---
+keep working on the backlog features

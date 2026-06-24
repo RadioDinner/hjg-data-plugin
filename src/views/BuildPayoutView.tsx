@@ -40,15 +40,26 @@ function currentYm(): string {
 // optionally override a line's payout with a note). A running total updates live;
 // the reviewed payout can be saved as a draft and signed off (approved). The
 // engine stays the source of truth — this only records the human review.
-export function BuildPayoutView({ onBack }: { onBack?: () => void }) {
+//
+// Hosted inside the Pay staff tab (not a top-nav tab): `onBack` returns to the
+// overview; `initialCoachId` / `initialYm` pre-scope it to a clicked mentor+month.
+export function BuildPayoutView({
+  onBack,
+  initialCoachId = null,
+  initialYm = "",
+}: {
+  onBack?: () => void;
+  initialCoachId?: number | null;
+  initialYm?: string;
+}) {
   const { user } = useAuth();
   const [data, setData] = useState<PayData | null>(null);
   const [builds, setBuilds] = useState<Map<string, PayoutBuildRecord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [coach, setCoach] = useState<number | null>(null);
-  const [ym, setYm] = useState<string>("");
+  const [coach, setCoach] = useState<number | null>(initialCoachId);
+  const [ym, setYm] = useState<string>(initialYm);
 
   // Working review state for the selected coach+month (reset on selection change).
   const [lineStates, setLineStates] = useState<Record<number, BuildLineState>>({});

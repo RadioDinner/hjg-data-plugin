@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimeline, type PayMonth } from "../db";
 import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
+import { BuildPayoutView } from "./BuildPayoutView";
 import { HelpButton } from "../components/HelpDrawer";
 import { useChartTokens } from "../theme";
 
@@ -37,7 +38,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 // The per-mentor breakdown revealed when a month row is expanded: one row per
 // mentor that month, the unassigned bucket if any, and a jump into the explorer
 // pre-filtered to this month.
-function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => void }) {
+function MonthDetail({ month, onExplore, onBuild }: { month: PayMonth; onExplore: () => void; onBuild: (coachId: number, ym: string) => void }) {
   const r = month.report;
   if (r.mentors.length === 0 && r.unassigned.length === 0) {
     return <p className="muted" style={{ margin: "4px 0" }}>No payouts for {monthLabel(month.ym)}.</p>;
@@ -64,6 +65,7 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
               <th>Billed</th>
               <th>Earned</th>
               <th>Payout</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -76,6 +78,15 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
                 <td className="num">{fmtUsd(m.billed)}</td>
                 <td className="num">{fmtUsd(m.earned)}</td>
                 <td className="num">{fmtUsd(m.payout)}</td>
+                <td className="num">
+                  <button
+                    className="btn btn--sm"
+                    onClick={() => onBuild(m.coachId, month.ym)}
+                    title={`Review & sign off ${m.coachName}'s payout for ${monthLabel(month.ym)}`}
+                  >
+                    Build →
+                  </button>
+                </td>
               </tr>
             ))}
             {r.unassigned.length > 0 && (
@@ -87,6 +98,7 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
                 <td className="num">{fmtUsd(r.unassigned.reduce((s, u) => s + u.billed, 0))}</td>
                 <td className="num">—</td>
                 <td className="num">—</td>
+                <td className="num">—</td>
               </tr>
             )}
           </tbody>
@@ -96,12 +108,15 @@ function MonthDetail({ month, onExplore }: { month: PayMonth; onExplore: () => v
   );
 }
 
-export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } = {}) {
+export function PayStaffView() {
   const [data, setData] = useState<PayData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [explore, setExplore] = useState<{ initialMonth?: string } | null>(null);
+  // Build payout is hosted INSIDE this tab (no separate top-nav tab). null = the
+  // overview; an object = the builder, optionally pre-scoped to a mentor+month.
+  const [build, setBuild] = useState<{ coachId: number | null; ym: string } | null>(null);
   const ct = useChartTokens();
   const AXIS = ct.axis;
   const GRID = ct.grid;
@@ -150,6 +165,16 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
       payout: m.report.totals.payout,
     }));
   }, [timeline]);
+
+  // Build payout is a sub-mode of this tab: render the builder full-screen here,
+  // scoped to the clicked mentor+month, with a Back to return to the overview.
+  if (build) {
+    return (
+      <div className="stack">
+        <BuildPayoutView onBack={() => setBuild(null)} initialCoachId={build.coachId} initialYm={build.ym} />
+      </div>
+    );
+  }
 
   if (loading) return <div className="loading">Loading…</div>;
   if (error) return <div className="notice notice--warn">Failed to load payment data: {error}</div>;
@@ -202,11 +227,13 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
           </div>
           {!noInvoices && (
             <div style={{ display: "flex", gap: 8 }}>
-              {onBuildPayout && (
-                <button className="btn btn--sm btn--primary" onClick={onBuildPayout} title="Review and sign off a mentor's payout line by line">
-                  Build payout →
-                </button>
-              )}
+              <button
+                className="btn btn--sm btn--primary"
+                onClick={() => setBuild({ coachId: null, ym: "" })}
+                title="Review and sign off a mentor's payout line by line"
+              >
+                Build payout →
+              </button>
               <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
                 Explore source data
               </button>
@@ -291,7 +318,11 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
                         {isOpen && (
                           <tr className="row--detail">
                             <td colSpan={5} style={{ textAlign: "left" }}>
-                              <MonthDetail month={m} onExplore={() => setExplore({ initialMonth: m.ym })} />
+                              <MonthDetail
+                                month={m}
+                                onExplore={() => setExplore({ initialMonth: m.ym })}
+                                onBuild={(coachId, ym) => setBuild({ coachId, ym })}
+                              />
                             </td>
                           </tr>
                         )}
