@@ -403,7 +403,14 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
     let graduated = 0;
     let total = 0;
     let excluded = 0;
+    let offRoster = 0;
     for (const j of journeys) {
+      // Off-roster mentees (CA's other pipelines, not in the Mentees source of truth)
+      // are dropped from the board roll-up — same treatment as excluded mentees.
+      if (!j.inSourceOfTruth) {
+        offRoster++;
+        continue;
+      }
       if (j.excluded) {
         excluded++;
         continue; // excluded mentees don't count toward the board roll-up
@@ -412,7 +419,7 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
       if (j.resolvedStatus === "active") active++;
       if (j.resolvedStatus === "graduated") graduated++;
     }
-    return { total, active, graduated, excluded };
+    return { total, active, graduated, excluded, offRoster };
   }, [journeys]);
   const grad = legs.find((l) => l.key === "dc_grad");
   const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n }));
@@ -425,9 +432,12 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
       <p className="view__hint">
         Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg).
         Stages come from CoachAccountable engagements (JumpStart → 4x → 2x → 1x), and graduation from an “After Graduation
-        Care” engagement.
+        Care” engagement. Only mentees in the <strong>Mentees source of truth</strong> (JYF / 4x / 2x / 1x) are counted.
+        {counts.offRoster > 0 && (
+          <> · {counts.offRoster} off-roster mentee{counts.offRoster === 1 ? "" : "s"} (other CA pipelines) excluded.</>
+        )}
         {counts.excluded > 0 && (
-          <> · {counts.excluded} mentee{counts.excluded === 1 ? "" : "s"} excluded from these figures.</>
+          <> · {counts.excluded} mentee{counts.excluded === 1 ? "" : "s"} manually excluded.</>
         )}
       </p>
       <div className="stat-row">
@@ -635,6 +645,9 @@ export function JourneysView() {
   const [stageBasis, setStageBasis] = useState<StageBasis>("engagement_start");
   const [stageColors, setStageColors] = useState<string[]>(DEFAULT_STAGE_COLORS);
   const [records, setRecords] = useState<Map<number, MenteeRecord>>(new Map());
+  // Default to the Mentees source-of-truth roster only (JYF / 4x / 2x / 1x). Off
+  // shows CA's other pipelines too (greyed). Metrics always exclude off-roster.
+  const [rosterOnly, setRosterOnly] = useState(true);
 
   async function load(basis: StageBasis) {
     setLoading(true);
@@ -700,10 +713,14 @@ export function JourneysView() {
     await load(basis);
   }
 
+  const offRosterCount = useMemo(() => journeys.filter((j) => !j.inSourceOfTruth).length, [journeys]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? journeys.filter((j) => j.name.toLowerCase().includes(q)) : journeys;
-  }, [journeys, search]);
+    let list = rosterOnly ? journeys.filter((j) => j.inSourceOfTruth) : journeys;
+    if (q) list = list.filter((j) => j.name.toLowerCase().includes(q));
+    return list;
+  }, [journeys, search, rosterOnly]);
 
   const current = journeys.find((j) => j.clientId === selected) ?? null;
 
@@ -762,23 +779,33 @@ export function JourneysView() {
             <input
               type="search"
               className="journeys__search"
-              placeholder={`Search ${journeys.length} mentees…`}
+              placeholder={`Search ${filtered.length} mentees…`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <label className="journeys__roster-toggle" title="Show only mentees in the Mentees source-of-truth roster (JYF / 4x / 2x / 1x). Off shows CA's other pipelines too.">
+              <input type="checkbox" checked={rosterOnly} onChange={(e) => setRosterOnly(e.target.checked)} />
+              <span>Roster only{offRosterCount > 0 ? ` (${offRosterCount} off-roster hidden)` : ""}</span>
+            </label>
             <div className="journeys__rows">
               {filtered.map((j) => (
                 <button
                   key={j.clientId}
                   className={`journeys__row ${j.clientId === selected ? "journeys__row--active" : ""} ${
-                    j.excluded ? "journeys__row--excluded" : ""
+                    j.excluded || !j.inSourceOfTruth ? "journeys__row--excluded" : ""
                   }`}
                   onClick={() => setSelected(j.clientId)}
-                  title={j.excluded ? "Excluded from metrics" : undefined}
+                  title={j.excluded ? "Excluded from metrics" : !j.inSourceOfTruth ? "Off-roster — not in the Mentees source of truth; excluded from metrics" : undefined}
                 >
                   <span className="journeys__row-name">{j.name}</span>
                   <span className="journeys__row-meta">
-                    {j.excluded ? <span className="pill">excluded</span> : <StatusPill status={j.resolvedStatus} />}
+                    {j.excluded ? (
+                      <span className="pill">excluded</span>
+                    ) : !j.inSourceOfTruth ? (
+                      <span className="pill">off-roster</span>
+                    ) : (
+                      <StatusPill status={j.resolvedStatus} />
+                    )}
                     <span className="muted">{j.lastMeeting ?? "—"}</span>
                   </span>
                 </button>

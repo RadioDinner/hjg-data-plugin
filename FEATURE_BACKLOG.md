@@ -11,6 +11,66 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
+### "Margins" tab — staff-hours vs delivered-hours, by program — requested session 009, 2026-06-24
+
+**What.** A new top-nav **"Margins"** tab with **sub-tabs per program**. Start with two:
+**JumpStart Your Freedom** and **Mentoring**. In the **JumpStart Your Freedom** sub-tab, let staff
+**enter all the staff hours for a given month** and **compare them to the total JYF meeting hours
+delivered that month** (a graph + table — the north star). **Money numbers come later** — for now
+build the *bones*: the tab, the sub-tab shell, the month picker, the staff-hours entry, and the
+delivered-hours roll-up + the comparison.
+
+**Why.** HJG wants to understand program **margins** — how much staff time goes into each program
+vs how much mentoring is actually delivered. The hours comparison is the foundation; dollar
+cost/revenue layers on top once the hours model is trusted.
+
+**Where in code / approach.**
+- New `src/views/MarginsView.tsx` + a top-nav tab in `src/App.tsx` (sub-tab switch inside the view,
+  same pattern as the Maps tab's Data-map/Payments toggle).
+- **Staff hours = manual input** → a new HJG-owned table (e.g. `program_hours`: program, `YYYY-MM`,
+  hours, notes; staff RLS; new descending migration). Reuse the `manual_metrics` editing pattern.
+- **Delivered JYF hours** = sum the **duration of JYF meetings** in the month. JYF = appointments
+  under a JumpStart engagement (tier `jumpstart` via `engagementTier`). **Caveat:** appointment
+  duration needs `start_raw` + an end time; `ca_appointments` currently stores `start_raw` (no end)
+  — confirm CA exposes a duration/end, else assume a per-meeting standard length (config) as a stand-in.
+- Pure roll-up in a `lib/` module (verify-locked); view shows graph + table side by side.
+
+**Acceptance criteria.**
+- Margins tab with JumpStart Your Freedom + Mentoring sub-tabs.
+- JYF sub-tab: pick a month → enter staff hours (persisted) → see staff hours vs delivered JYF
+  meeting hours as a graph **and** a table. No dollars yet; structure ready to add them.
+
+---
+
+### Pipeline-timing card — mentee filters (Journeys) — requested session 009, 2026-06-24
+
+**What.** On the **"Pipeline timing — all mentees"** card (Journeys tab), add a small set of
+**filters that scope which mentees are evaluated** in that roll-up. Examples the user named:
+**only mentees with a manually-overridden graduation date** (i.e. staff edited it), **only mentees
+active in the last year**, and similar cohort cuts. Filters should recompute the leg-duration
+averages/medians + the stat tiles for just the selected cohort.
+
+**Why.** The board aggregate currently spans *every* mentee. Being able to slice it — recent
+cohorts, manually-corrected records, etc. — makes the timing numbers far more useful for
+decision-making (e.g. "how long is graduation taking for mentees who started in the last year?").
+
+**Where in code / approach.**
+- `src/views/JourneysView.tsx` `PipelineSummary` + `aggregateJourneyDurations` in `src/db.ts`.
+- Add a filter bar on the card; candidate predicates (compose-able):
+  - **Overridden graduation date** — `journey.stageOverrides.graduated != null` (manual edit; the
+    override fields already exist on `MenteeJourney`).
+  - **Last N months** — by `discoveryDate` / first activity within a window (reuse the range helpers).
+  - **Current tier**, **status** (active/graduated/exited), **owner (coach)**.
+- Pass the active filters into `aggregateJourneyDurations` (or pre-filter the journeys array) so the
+  graph, table, and tiles all reflect the cohort. Keep filters ephemeral local state (like the
+  Metrics range), or persist later.
+
+**Acceptance criteria.**
+- A filter control on the Pipeline-timing card; toggling a filter recomputes the legs + tiles live.
+- At minimum: "overridden graduation date" and a "last year" (date-window) filter work and compose.
+
+---
+
 ### Unique 3-digit identifier on every card / modal / screen — requested session 008, 2026-06-24
 
 **What.** Give **every self-contained section of data** — each ChartCard, each tab/screen,

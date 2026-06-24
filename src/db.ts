@@ -702,6 +702,13 @@ export interface MenteeJourney {
   ownerCoachId: number | null;
   ownerCoachName: string | null;
   ownerSource: "primary" | "fallback" | "none";
+  // True when this journey's mentee is in the HJG "Mentees source of truth" roster
+  // (the Notion-mirrored `mentees` table) — i.e. a real JYF / 4x / 2x / 1x pipeline
+  // mentee, not one of CA's OTHER pipelines (independent IMN, after-graduation care,
+  // mentor training, …). Matched by client_id or normalized name. Non-roster mentees
+  // are dropped from the pipeline metrics. Always true when the roster is unavailable
+  // (mentees table missing/empty) so we never hide everyone.
+  inSourceOfTruth: boolean;
 }
 
 // Whole days from `a` to `b` (both YYYY-MM-DD), parsed at UTC midnight.
@@ -918,7 +925,7 @@ async function fetchMenteeOutcomeRows(): Promise<OutcomeRow[]> {
 // pipeline engagement), sorted by most-recent activity first. Excludes
 // placeholder/group "clients". Reads the full mirror once; the tab filters it.
 export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_start"): Promise<MenteeJourney[]> {
-  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomeRows, excludedSet, primaryCoach] = await Promise.all([
+  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomeRows, excludedSet, primaryCoach, roster] = await Promise.all([
     fetchAllMentoring(),
     fetchAllEngagements(),
     fetchDiscoveryDatesByClient(),
@@ -927,6 +934,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
     fetchMenteeOutcomeRows(),
     fetchExcludedClientIds(),
     fetchPrimaryCoachByClient(),
+    fetchMenteeRosterKeys(),
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
@@ -1038,6 +1046,12 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       override ?? (stageDates.graduated ? "graduated" : active ? "active" : "inactive");
     const source: ResolvedOutcomeSource = override ? "manual" : "auto";
 
+    // In the Mentees source-of-truth roster? Match by client_id or normalized name.
+    // Fail-open when the roster is unavailable so we never hide every mentee.
+    const menteeName = clientMap.get(clientId)?.name ?? null;
+    const inSourceOfTruth =
+      !roster.available || roster.clientIds.has(clientId) || roster.names.has(normalizeName(menteeName));
+
     // Owner = CoachAccountable primary coach (ca_clients.coach_id). Falls back to
     // the coach of the most recent meeting until the primary coach is synced.
     const ownerCoachId = primaryCoach.get(clientId) ?? null;
@@ -1088,6 +1102,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       ownerCoachId,
       ownerCoachName,
       ownerSource,
+      inSourceOfTruth,
     });
   }
 
@@ -1149,6 +1164,11 @@ export async function setMenteeOutcome(
     tier_2x_date: sd["2x"] ?? null,
     tier_1x_date: sd["1x"] ?? null,
     graduation_date: sd.graduated ?? null,
+    // Per-exit date columns (9982): record WHEN the chosen exit happened, mirroring
+    // status_date for that one status; the others are cleared so only one is set.
+    quit_date: values.status === "quit" ? values.statusDate : null,
+    no_mentoring_date: values.status === "no_mentoring" ? values.statusDate : null,
+    fired_date: values.status === "fired" ? values.statusDate : null,
   };
   let { error } = await supabase.from("mentee_outcomes").upsert(full, { onConflict: "client_id" });
   if (error) {
@@ -1244,6 +1264,29 @@ function normalizeMenteeRecord(r: MenteeRecord): MenteeRecord {
   return out as unknown as MenteeRecord;
 }
 
+// Normalize a person's name for cross-source matching (case/whitespace-insensitive).
+function normalizeName(n: string | null | undefined): string {
+  return (n ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Identity keys from the Mentees SOURCE OF TRUTH roster (the Notion-mirrored
+// `mentees` table): matched `client_id`s + normalized names. Used to scope the
+// Journeys tab to real HJG pipeline mentees, excluding CA's other pipelines.
+// Defensive + FAIL-OPEN: if the `mentees` table is missing/empty (9986 unapplied),
+// returns `available: false` so callers don't filter anyone out.
+export async function fetchMenteeRosterKeys(): Promise<{ available: boolean; names: Set<string>; clientIds: Set<number> }> {
+  const names = new Set<string>();
+  const clientIds = new Set<number>();
+  const { data, error } = await supabase.from("mentees").select("client_id,name");
+  if (error) return { available: false, names, clientIds };
+  for (const r of (data ?? []) as { client_id: number | null; name: string | null }[]) {
+    const nm = normalizeName(r.name);
+    if (nm) names.add(nm);
+    if (r.client_id != null) clientIds.add(r.client_id);
+  }
+  return { available: names.size > 0 || clientIds.size > 0, names, clientIds };
+}
+
 // All mentee records keyed by client_id. Rows with a null client_id (prospects not
 // yet in CA) are dropped here — they aren't reachable from the Journeys mentee list.
 export async function fetchMenteeRecordsByClient(): Promise<Map<number, MenteeRecord>> {
@@ -1325,7 +1368,9 @@ export interface LegStat {
 }
 
 export function aggregateJourneyDurations(allJourneys: MenteeJourney[]): LegStat[] {
-  const journeys = allJourneys.filter((j) => !j.excluded); // excluded mentees don't skew the board aggregate
+  // Excluded mentees + anyone not in the Mentees source-of-truth roster (CA's other
+  // pipelines) don't skew the board aggregate.
+  const journeys = allJourneys.filter((j) => !j.excluded && j.inSourceOfTruth);
   const legs: { key: string; label: string; pick: (j: MenteeJourney) => number | null }[] = [
     { key: "dc_js", label: "Discovery → JumpStart", pick: (j) => dayspan(j.discoveryDate, j.stageDates.jumpstart) },
     { key: "js_4x", label: "JumpStart → 4x", pick: (j) => dayspan(j.stageDates.jumpstart, j.stageDates["4x"]) },

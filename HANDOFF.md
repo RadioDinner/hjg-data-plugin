@@ -9,18 +9,28 @@ Picking this up cold — start here. **Session 009 committed straight to `main`*
 user). `typecheck` + `verify` (**16 sections**, §8 gained owner-override cases) + `build`
 all pass. **UI NOT browser-tested** (headless).
 
-**⚠ TWO NEW MIGRATIONS — both MUST be applied** (Supabase SQL Editor):
-- **`9984_ca_clients_primary_coach.sql`** — adds `ca_clients.coach_id` (CA primary coach =
-  the mentee's OWNER). **APPLY BEFORE THE NEXT SYNC** — the sync now writes `coach_id`, so an
-  unapplied column makes the `ca_clients` upsert error. After applying, **re-sync** (Admin →
-  Sync now) to populate owners. Until synced, every owner-driven surface gracefully falls back
-  to the old engagement/appointment-derived coach.
-- **`9983_mentee_outcomes_no_mentoring.sql`** — widens the `mentee_outcomes.status` CHECK to
-  allow the new `no_mentoring` exit. Until applied, saving a "No mentoring" outcome errors.
+**⚠ MIGRATIONS — the user reports applying ALL of them this session** (9982/9983/9984 + the
+manual exit-date SQL). **Still REQUIRED: a re-sync** (Admin → Sync now) so `ca_clients.coach_id`
+(owner) populates — until then every owner-driven surface falls back to the old derived coach.
+- **`9984_ca_clients_primary_coach.sql`** — `ca_clients.coach_id` (CA primary coach = OWNER). Sync
+  now writes it, so it must exist before any sync (applied).
+- **`9983_mentee_outcomes_no_mentoring.sql`** — widens the status CHECK for `no_mentoring`.
+- **`9982_mentee_outcomes_exit_dates.sql`** — `quit_date` / `no_mentoring_date` / `fired_date`
+  (captures the SQL the user ran by hand; re-runnable no-op for them).
 
-**Next new migration is `9982_…`.**
+**Next new migration is `9981_…`.**
 
 **Shipped this session (009), newest first:**
+- **Journeys scoped to the Mentees source-of-truth roster** (219 → ~181). A journey counts only if
+  its mentee is in the `mentees` roster (matched by **client_id OR normalized name**;
+  `fetchMenteeRosterKeys`, **fail-open** if the table's absent). `MenteeJourney.inSourceOfTruth`;
+  `aggregateJourneyDurations` + count tiles drop off-roster; **"Roster only"** toggle (default on)
+  hides them from the list (greyed + "off-roster" pill when shown). CA's other pipelines (IMN,
+  after-grad, mentor training) are excluded from the metrics.
+- **Exit-date columns** (`9982`): `setMenteeOutcome` writes `quit_date`/`no_mentoring_date`/
+  `fired_date` matching the chosen exit (mirrors `status_date`). No dedicated editor field yet.
+- **Backlog +2**: **Margins tab** (JYF + Mentoring sub-tabs; staff hours vs delivered JYF hours,
+  money later) and **Pipeline-timing filters** (overridden-grad-date / last-year cohort cuts).
 - **OWNER = CoachAccountable primary coach, EVERYWHERE incl. pay** (user chose this scope).
   Sync captures `Client.CoachID` → `ca_clients.coach_id` (`9984`); `fetchPrimaryCoachByClient()`
   (defensive, empty map if unapplied). **Pay** (`lib/pay.ts` `primaryCoachOf`): invoices credit
@@ -39,10 +49,12 @@ all pass. **UI NOT browser-tested** (headless).
   meeting list); rewritten for the owner model; pay/capacity/journeys articles updated.
 
 **▶ Next-session checklist (session 009):**
-1. **Apply `9984` (before any sync) + `9983`, then re-sync.** Jonathan only flips to Caleb if the
-   user **re-pairs him to Caleb in CoachAccountable** (the CSV still has him under Arthur).
-2. **Browser-verify**: Journeys "Owner: …" line + the red exit node (quit/fired/no-mentoring);
-   Pay-staff payouts re-attributed to owners; capacity grouped by owner (no cross-coach
+1. **RE-SYNC (Admin → Sync now)** — migrations are applied; the re-sync is what populates
+   `ca_clients.coach_id` (owner). Jonathan only flips to Caleb if the user **re-pairs him to Caleb
+   in CoachAccountable** first (the CSV still has him under Arthur on both engagements).
+2. **Browser-verify**: Journeys roster scoping (count ≈181, "Roster only" toggle, off-roster pill);
+   "Owner: …" line + the red exit node (quit/fired/no-mentoring); Pay-staff payouts re-attributed
+   to owners; capacity grouped by owner (no cross-coach
    double-count).
 3. Optional: surface the owner in the Journeys mentee LIST + the Mentee-record card too.
 

@@ -67,6 +67,25 @@ AskUserQuestion: "Everywhere, incl. pay")
   than appending a marker — matches "alternative ending added to the graduation status."
 - `no_mentoring` is a **manual exit label** (parallel to quit/fired), not an auto-inferred state.
 
+## Third batch (same session) — roster scoping, backlog, exit-date columns
+
+**5. Journeys scoped to the Mentees source-of-truth roster** (the 219→~181 fix)
+- The journeys list showed 219 because CA runs multiple pipelines (independent IMN, after-grad
+  care, mentor training, …). Now a journey counts only if the mentee is in the **`mentees`** roster,
+  matched by **client_id OR normalized name** (`fetchMenteeRosterKeys`, **fail-open** if the table is
+  missing). `MenteeJourney.inSourceOfTruth`; `aggregateJourneyDurations` + the count tiles drop
+  off-roster mentees; new **"Roster only"** toggle (default on) hides them from the list (shown
+  greyed with an "off-roster" pill when off). Metrics always exclude off-roster.
+
+**6. Exit-date columns** (`9982`, captures the SQL the user ran manually): `quit_date` /
+`no_mentoring_date` / `fired_date`. `setMenteeOutcome` now writes the one matching the chosen exit
+status (mirrors `status_date`, clears the others). No new editor UI yet (the single "Ended on"
+field drives it) — a per-exit-date editor could be a follow-up.
+
+**7. Backlog** (`FEATURE_BACKLOG.md`, newest on top): **Margins tab** (JYF + Mentoring sub-tabs;
+JYF = enter staff hours vs delivered JYF meeting hours, money later) and **Pipeline-timing
+filters** (overridden-graduation-date, last-year, etc. cohort cuts on the Journeys aggregate).
+
 ## Open questions / next step
 1. **Apply `9984` then re-sync** (and `9983`). Verify Jonathan flips to Caleb *only if the user
    re-pairs him to Caleb in CA* — the data export still has him under Arthur on both engagements,

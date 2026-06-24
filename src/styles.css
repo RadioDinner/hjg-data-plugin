@@ -353,6 +353,8 @@ body {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
   border-radius: var(--r-control); padding: 8px 12px; font-size: 14px;
 }
+.journeys__roster-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+.journeys__roster-toggle input { cursor: pointer; }
 .journeys__rows { display: flex; flex-direction: column; gap: 4px; max-height: 620px; overflow-y: auto; }
 .journeys__row {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;

@@ -150,6 +150,9 @@ Pure math lives in \`lib/compare.ts\`.`,
 ### Logic
 - For each leg, the **average / median** are computed only over mentees where **both endpoints exist**, so a small **n** stays honest rather than zero-padded. Negative spans (data anomalies) are dropped.
 
+### Who's counted
+- Only mentees in the **Mentees source of truth** (the Notion-mirrored \`mentees\` roster) — i.e. real **JYF / 4x / 2x / 1x** pipeline mentees. CoachAccountable's **other pipelines** (independent IMN mentoring, after-graduation care, mentor training, …) appear in CA but **aren't counted here**. Matched by client id or name; manually-excluded mentees are dropped too.
+
 ### Stage-date basis
 - Stage dates can be read two ways (toggle on this tab, set org-wide in Company options):
   - **Engagement start** — the CA engagement's start date for that tier.
