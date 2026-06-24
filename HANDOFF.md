@@ -45,9 +45,11 @@ pending too.)
   first cell now sizes to its node (`flex: 0 0 auto`) so connectors absorb the slack evenly.
 - **"Mentees" source-of-truth table — BUILT** (the backlog item, scoped with the user). New
   HJG-owned **`mentees`** table (migration **`9986`**, staff RLS) is HJG's internal source of
-  truth, one row per person, **mirroring all 19 Notion "Mentees Database" columns** (Notion
-  page-link URLs stripped). Seeded ONCE from the user's Notion export (`client_id` matched to
-  `ca_clients` by name — **152/182 matched**; ~30 unmatched are prospects not yet in CA). The
+  truth, one row per person, **mirroring 15 selected Notion "Mentees Database" columns** (Notion
+  page-link URLs stripped; the 4 low-signal columns — Associated Tasks, JS Lesson, MN Equivalency,
+  dd w a — dropped per the user, and the 'Test Locked Page' test row excluded). Seeded ONCE from
+  the user's Notion export (`client_id` matched to `ca_clients` by name — **152/181 matched**;
+  29 unmatched are prospects not yet in CA). The
   seed is re-runnable + insert-if-absent so it **never clobbers dashboard edits**. db.ts:
   `MenteeRecord`/`MenteeRecordEdit`, `fetchMenteeRecordsByClient`, `saveMenteeRecord`
   (read-modify-write by client_id; numeric coercion since PostgREST returns numeric as strings),

@@ -87,22 +87,27 @@ Commits added after the wrap above (newest first):
     **grid below a list of every meeting** (date, name, tier swatch, coach). This
     REPLACED the earlier meeting-rhythm-by-tier chart (user wanted time-in-stage).
 - `d7e948d` **Mentees source-of-truth table BUILT** (migration `9986_mentees.sql`,
-  staff RLS) — mirrors all 19 Notion "Mentees Database" columns, seeded once from
-  the user's export (152/182 client_id-matched by name), editable in-dashboard via a
+  staff RLS) — seeded once from the user's Notion export, editable in-dashboard via a
   new "Mentee record" card on Journeys. db.ts fetch/save + RAW_TABLES + help article.
   Adversarially reviewed (10 findings; key-by-clientId medium fixed + low-sev fixes).
+  **Then curated (this turn) per the user:** mirror **15 selected columns** (dropped the
+  4 low-signal ones — Associated Tasks, JS Lesson, MN Equivalency, dd w a) and **drop the
+  'Test Locked Page' test row** → **181 rows, 152 client_id-matched** by name.
 - `dbea260` **Fixed the Journeys stage-rail white-space gap** before the Discovery
   node (`.stage:first-child { flex: 0 0 auto }`).
 - `1ba9ab7` Backlog entry for the Mentees table (later built).
 
 ## Directional decisions (continued)
 
-- **Mentees table design (confirmed with the user via AskUserQuestion):** mirror
-  ALL 19 Notion columns; EDITABLE in the dashboard (one-time Notion import, edits
-  persist, re-seed won't clobber); surfaced as a card in the Journeys detail pane.
-  Architecture: a real HJG-owned table (not a view) because it mirrors external
-  Notion data + must be editable. client_id auto-matched by name; ~30 prospects not
-  in CA get null client_id (seeded, but only reachable via Raw data).
+- **Mentees table design (confirmed with the user via AskUserQuestion):** EDITABLE in
+  the dashboard (one-time Notion import, edits persist, re-seed won't clobber); surfaced
+  as a card in the Journeys detail pane. Architecture: a real HJG-owned table (not a view)
+  because it mirrors external Notion data + must be editable. client_id auto-matched by
+  name; the 29 prospects not in CA get null client_id (seeded, but only reachable via Raw
+  data). **Column scope (re-confirmed later):** the user first said "all 19" but then chose
+  to **curate to 15 columns** (drop Associated Tasks, JS Lesson, MN Equivalency, dd w a) and
+  **exclude the 'Test Locked Page' test row** — done by regenerating `9986` + trimming the
+  `MenteeRecord` type, the card fields, the help article, and dead CSS.
 - **Export-all question answered:** yes it includes hand-entered tables, but the
   user's export had EMPTY discovery_outcomes + mentee_outcomes (no saved overrides
   yet) — so step-2 data comes from Notion + the CA mirror, not dashboard overrides.

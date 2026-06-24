@@ -37,3 +37,11 @@ Also, there is a random card below the Jumpstart your freedom vs active mentorin
 I want that removed.
 
 Also, on the Journeys tab, where I select an individual mentee, in the grid below the columns, I want a list of each meeting name, and I want the columns to reflect the amount of days spent in each category of the program, it seems like it isn't visually displaying the time spent in each category correctly
+
+--- 2026-06-24 (AskUserQuestion answers — Mentees refinement) ---
+[Field scope] I want to choose the columns
+[Population] All 182, even non-CA prospects (skip the 'Test Locked Page' test row)
+[UI surface] Editable card + Raw-data table
+
+--- 2026-06-24 (AskUserQuestion answer — Mentees columns) ---
+[Columns] Keep 15, drop the 4 cryptic (Associated Tasks, JS Lesson?, MN Equivalency, dd w a). Drop the 'Test Locked Page' test row.

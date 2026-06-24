@@ -1046,7 +1046,8 @@ export async function removeMenteeExclusion(clientId: number): Promise<void> {
 // One row per mentee (HJG-owned, staff RLS, migration 9986). `client_id` soft-refs
 // ca_clients.id (null for prospects not yet in CoachAccountable). Seeded once from
 // the Notion export; edited in the dashboard thereafter via the Journeys "Mentee
-// record" card. All 19 Notion columns are mirrored.
+// record" card. 15 selected Notion columns are mirrored (the 4 low-signal Notion
+// columns — Associated Tasks, JS Lesson, MN Equivalency, dd w a — were dropped).
 
 export interface MenteeRecord {
   id: string;
@@ -1058,15 +1059,11 @@ export interface MenteeRecord {
   status: string | null;
   mt_prayer_partner: string | null;
   projected_start: string | null;
-  associated_tasks: string | null;
   current_invoice_amount: number | null;
   ff_amount: number | null;
   freedom_fight_paid: string | null;
-  js_lesson: string | null;
-  mn_equivalency: number | null;
   mentor: string | null;
   offering_signup: string | null;
-  dd_w_a: number | null;
   dc_date: string | null;
   email: string | null;
   date_ff_paid: string | null;
@@ -1081,11 +1078,11 @@ export type MenteeRecordEdit = Partial<
 >;
 
 const MENTEE_SELECT =
-  "id,client_id,notion_key,name,wants_pp,mentor_1,status,mt_prayer_partner,projected_start,associated_tasks,current_invoice_amount,ff_amount,freedom_fight_paid,js_lesson,mn_equivalency,mentor,offering_signup,dd_w_a,dc_date,email,date_ff_paid,phone,created_at,updated_at";
+  "id,client_id,notion_key,name,wants_pp,mentor_1,status,mt_prayer_partner,projected_start,current_invoice_amount,ff_amount,freedom_fight_paid,mentor,offering_signup,dc_date,email,date_ff_paid,phone,created_at,updated_at";
 
 // PostgREST returns numeric(12,2) columns as strings to preserve precision; coerce
 // them back to numbers so MenteeRecord's `number | null` contract actually holds.
-const MENTEE_NUM_FIELDS = ["current_invoice_amount", "ff_amount", "mn_equivalency", "dd_w_a"] as const;
+const MENTEE_NUM_FIELDS = ["current_invoice_amount", "ff_amount"] as const;
 function normalizeMenteeRecord(r: MenteeRecord): MenteeRecord {
   const out = { ...r } as Record<string, unknown>;
   for (const k of MENTEE_NUM_FIELDS) {
