@@ -5,10 +5,11 @@ Working notes for resuming this project in a future session. Last updated
 
 ## Resume here (live state — 2026-06-24, session 009b — WRAPPED)
 
-Picking this up cold — start here. **Session 009b worked on branch
-`claude/jolly-cannon-rd1s1z`** (per the task's branch requirement, NOT straight to
-`main` like recent sessions). `typecheck` + `verify` (**17 sections**) + `build` all
-pass. **UI NOT browser-tested** (headless).
+Picking this up cold — start here. **Session 009b first committed on branch
+`claude/jolly-cannon-rd1s1z`, then merged to `main` (fast-forward) at the user's
+request — `main` is the live branch and the rest of the session commits straight to
+`main`.** `typecheck` + `verify` (**17 sections**) + `build` all pass. **UI NOT
+browser-tested** (headless).
 
 **⚠ ONE NEW MIGRATION — `9979_mentees_drop_fields.sql` — MUST be applied** (Supabase
 SQL Editor) on the existing database. It **drops 9 columns** from the `mentees`
