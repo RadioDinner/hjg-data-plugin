@@ -48,6 +48,7 @@ import {
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { PipelineTimingCard } from "../components/PipelineTimingCard";
 import { useChartTokens } from "../theme";
 import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp, fmtDate, fmtDateTime } from "../format";
@@ -1696,6 +1697,10 @@ export function MetricsView() {
                 <Bar dataKey="meetings" name="1-on-1 sessions" fill={C.mentees} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartCard>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <PipelineTimingCard />
           </div>
 
           <div style={{ marginTop: 18 }}>

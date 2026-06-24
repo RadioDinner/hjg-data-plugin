@@ -183,6 +183,21 @@ Pure logic in \`lib/menteeJourney.ts\` (CA derivation) + \`lib/menteeView.ts\` (
 Pure logic in \`lib/menteeFunnel.ts\`.`,
   },
 
+  "metrics.pipelineTiming": {
+    title: "Pipeline timing",
+    body: `How long mentees take to move through each leg of the pipeline: **Discovery → JumpStart → 4x → 2x → 1x → Graduation**.
+
+### Logic
+- For each leg, the **average / median** are over only the mentees where **both endpoints exist**, so a small **n** stays honest. Dates are the **effective** ones from the Mentees source of truth (your hand corrections win over CA); **test** mentees are excluded. All-time — not tied to the date range.
+- Filter by **status**, **current tier**, or **owner**. The **Discovery → graduation** total is summarized in the **"Avg time to graduate"** tile rather than charted as its own bar.
+
+### Compare start-date cohorts
+- Tick **Compare start-date cohorts** to split the roster into two start-date bands — "started between N and M months ago" — and compare them (default **A = 0–3 mo ago** vs **B = 4–6 mo ago**, editable). A mentee's **start** is their **system start** (discovery → JumpStart → JYF → first meeting), the same basis as days in system.
+- Compare mode shows, per cohort: **Mentees**, **Avg days in system**, **Avg time to graduate**, **% graduated**, the **stage-leg durations** (paired bars + Δ), and the **current-tier mix**. **Δ = A − B**; for durations a negative Δ means A is faster. Newer cohorts naturally show fewer days/graduates and smaller n.
+
+Pure logic in \`lib/menteeView.ts\` (leg durations) + \`lib/cohortCompare.ts\` (cohort split).`,
+  },
+
   "journeys.aggregate": {
     title: "Pipeline leg durations",
     body: `Board-level view of how long mentees take to move through the pipeline: **Discovery → JumpStart → 4x → 2x → 1x → Graduation**.
