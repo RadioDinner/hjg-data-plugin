@@ -1,12 +1,62 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-22 (session 006c).
+2026-06-24 (session 008).
 
 > **North star:** be a *weapon with the data* — a powerful board-grade dashboard
 > where **every metric is viewable as a graph AND a table simultaneously**. See
 > `CLAUDE.md` for standing goals, `new_session_instructions.md` for standing
 > orders (session logs, prompt history), and `CSHARP_PORT.md` for the C# track.
+
+## Resume here (live state — 2026-06-24, session 008 — WRAPPED)
+
+Picking this up cold — start here. **Session 008 committed straight to `main`** (per the
+user's instruction this session). `typecheck` + `verify` (**16 sections**) + `build` all
+pass. **UI NOT browser-tested** (headless) — eyeball on a Vercel preview. **No migration
+this session.**
+
+> ⚠ Git-state note resolved: at session start the *local* `main` was stale at the old
+> session-002 commit (`88b8490`) with unrelated history, while `origin/main` was the full
+> lineage (`e79b536`). Reset local `main` to `origin/main` and worked there. `main` is and
+> stays the primary branch.
+
+**Shipped this session (008):**
+- **Journeys → meeting-rhythm columns color-coded by pipeline tier.** The "Observed meeting
+  rhythm" chart (per selected mentee) was one flat-purple bar per month (count only). Now each
+  month's column is **stacked by the pipeline tier** of its meetings (JumpStart / 4x / 2x / 1x),
+  colored with the **same org-configurable red→green stage palette** used on the stage rail, so
+  you can see how a mentee's meetings distribute across stages over time. Meetings whose
+  engagement isn't a pipeline tier (group / untiered) fall into a neutral **"Other"** bucket.
+  Added a **legend**, a **custom per-tier tooltip** (lists only tiers present that month + a
+  total), and a **matching per-month table** (north star: graph + table together) of the exact
+  counts. **Data layer:** `MenteeMeeting` gained a **`tier`** field, populated from a new shared
+  **`engagementTierMap()`** helper extracted from `buildClientStages` (which now receives the
+  map) — the helper mirrors `buildClientStages`' guards exactly (`id` and `client_id` non-null)
+  so stage dating is unchanged. `src/db.ts` + `src/views/JourneysView.tsx` + `src/styles.css`.
+  **No migration.** Adversarially code-reviewed (one low-sev refactor-divergence found + fixed;
+  three nits triaged). ⚠ **Browser-verify** the stacked colors in light + dark, the legend,
+  tooltip, and table.
+- **Backlog: "Mentees" source-of-truth table** (user request — backlog only, not built). One
+  row per mentee assembled from **`ca_clients`** (identity spine) + **`discovery_outcomes`**
+  (discovery result) + **`mentee_outcomes`** (journey status), soft-joined on `client_id`. The
+  entry (`FEATURE_BACKLOG.md`, newest on top) captures the schema of all three tables, the
+  **differing grain** (`mentee_outcomes` per-client vs `discovery_outcomes` per-appointment),
+  a **⚠ reality-check** that the outcome tables are **sparse override layers** (the user's
+  premise "every mentee has a discovery call + outcome" is **not guaranteed by the data** — the
+  discovery *call* lives in `ca_appointments`, `discovery_outcomes` only stores staff overrides,
+  `mentee_outcomes` is optional), plus design decisions (view vs table, which discovery outcome,
+  who is a mentee) and acceptance criteria. **Next new migration is `9986_…`.**
+
+**▶ Next-session checklist (session 008):**
+1. **Browser-verify** the Journeys meeting-rhythm coloring (stacked-by-tier, light + dark), the
+   legend, the per-tier tooltip, and the per-month table. Pick a mentee with meetings across
+   multiple tiers to see the distribution clearly.
+2. **Apply `9987_journeys_stage_colors.sql`** (still pending from session 007) so the stage-color
+   Company option persists — it also governs the colors this new rhythm chart uses.
+3. When ready, **build the "Mentees" table** from the backlog entry (recommend a SQL **view**
+   first; mind the reality-check that outcome rows are sparse).
+
+---
 
 ## Resume here (live state — 2026-06-23, session 007 — WRAPPED)
 
