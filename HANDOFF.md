@@ -39,21 +39,14 @@ A **major from-scratch rework** of the mentee/journey system — **complete and 
   §102 leg-duration card + the start-date **cohort-compare** tool, now a Metrics card reading
   the new table (`aggregateLegDurations` + `cohortCompare`).
 
-### ▶ ONE follow-up (tech debt, non-urgent): remove dead db.ts code
-The old journey/mentee functions remain in `src/db.ts` as **dead code** (no callers —
-confirmed by grep; build is green). They're interleaved with LIVE helpers, so deletion was
-deferred to avoid risk. **Safe to delete (typecheck is the safety net):** `fetchMenteeJourneys`,
-`aggregateJourneyDurations` (+`LegStat`), `setMenteeOutcome`, `clearMenteeOutcome`,
-`addMenteeExclusion`, `removeMenteeExclusion`, `fetchExcludedClientIds`, `fetchMenteeRosterKeys`,
-`fetchMenteeRecordsByClient`, `fetchAllMenteeRecords`, `updateMenteeRecordById`,
-`createMenteeRecord`, `saveMenteeRecord`, `fetchMenteeOutcomeRows`, `fetchDiscoveryDatesByClient`,
-`engagementTierMap`, `buildClientStages`, and types `MenteeJourney`/`MenteeMeeting`/`StageDates6`/
-`MenteeRecord`/`MenteeRecordEdit`/`MenteeStatus`/`ResolvedMenteeStatus`/`ClientStages`/`OutcomeRow`,
-consts `EXIT_STATUSES`/`MENTEE_ACTIVE_WINDOW_DAYS`/`MENTEE_SELECT`/`MENTEE_NUM_FIELDS`,
-`normalizeMenteeRecord`/`normalizeName`/`dayspan`/`maxDate` (the last two only if typecheck flags
-them unused). **KEEP:** `fetchAllMentoring`, `fetchAllEngagements`, `fetchPrimaryCoachByClient`,
-`fetchConversionPurchasesByClient`, `EngagementRow`, `fetchJyfVsMentoring`, `todayYmd`. Delete →
-`npm run typecheck` → delete whatever it flags as newly-unused → repeat until green.
+### ✅ Dead-code cleanup DONE
+The old journey/mentee functions were removed from `src/db.ts` (~600 lines:
+`fetchMenteeJourneys`, `aggregateJourneyDurations`, `setMenteeOutcome`/`clearMenteeOutcome`,
+the `mentee_exclusions` helpers, the `MenteeRecord` CRUD, `buildClientStages`,
+`fetchMenteeOutcomeRows`, `dayspan`/`maxDate`/`normalizeName`, and the `MenteeJourney`/
+`MenteeRecord`/etc. types). `engagementTierMap` was kept (the Margins delivered-sessions
+roll-up uses it). No remaining references to dropped tables. typecheck + verify (22) + build
+green. db.ts is now ~1480 lines.
 
 ### Original decisions (locked via AskUserQuestion)
 - **Per-field sync split:** the new `mentees` table has a **CA layer** (`ca_*`, sync
