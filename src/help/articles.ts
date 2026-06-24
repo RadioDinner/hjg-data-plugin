@@ -175,6 +175,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 ### Column colors
 - Each leg's bar (and its table swatch) is colored to match the stage it leads **into** on the mentee rail — the same palette set in **Company options → Journeys → Pipeline stage colors**.
+- The **Discovery → graduation** total uses its own distinct color (not the graduation color), since it spans the whole pipeline rather than a single leg.
 
 ### Owner & alternative exits
 - Each mentee's **owner** is their CoachAccountable **primary coach** (\`ca_clients.coach_id\`), shown on the mentee's timeline. The per-meeting **Coach** column still shows whoever ran each meeting. See the **"How clients are matched to coaches"** help.

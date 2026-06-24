@@ -24,3 +24,6 @@ On screen 107 I want the "synced: yyyy-mm-dd" to become a button that I can clic
 
 --- 2026-06-24 (session 009b) ---
 I also want a filter option for screen 102 with a checkbox of "Only hand reviewed" so that when I check it, it only loads and calculates the data from the hand reviewed mentees. Also, I want the colors in the pipeline timing columns to match teh color options set in the individual mentee rail display
+
+--- 2026-06-24 (session 009b) ---
+[Attached hjgrawdata20260624.xlsx — near-live sync] In the journeys I'm seeing a start date of 01-27-2026 for Roscoe Horst, but CA shows 01/17/2026 for the 2x engagement. Why different? Same for Jeffrey Horst (sync 2026-05-07 vs CA 04/24/2026) and Harold Hostetter (sync 2026-06-19 vs CA 06/06/2026).

@@ -80,7 +80,9 @@ source-of-truth record has `hand_reviewed = true` (set derived from the already-
 `records` map, passed in as `handReviewedIds`). The **leg-duration bars** (and matching
 **table swatches**) are now colored by the stage each leg leads **into**, using the same
 `stageColors` as the mentee rail (`journeys_stage_colors` company option; `LEG_COLOR_INDEX`
-maps leg→stage index). `journeys.aggregate` help updated. UI-only (no migration / no verify).
+maps leg→stage index). The **Discovery → graduation** total column uses a distinct color
+(`TOTAL_LEG_COLOR`, violet), not graduation-green, since it spans the whole pipeline.
+`journeys.aggregate` help updated. UI-only (no migration / no verify).
 
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all

@@ -34,15 +34,19 @@ const TIER_COLOR_INDEX: Record<PipelineTier, number> = { jumpstart: 1, "4x": 2, 
 
 // Pipeline-timing leg -> stage-palette index of the stage the leg leads INTO, so each
 // duration column matches the color of its destination node on the mentee rail.
-// (Stage order: 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.)
+// (Stage order: 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.) The
+// "dc_grad" total leg is intentionally NOT here — it gets its own distinct color
+// (legColor) so it doesn't read as the 1x → graduation leg.
 const LEG_COLOR_INDEX: Record<string, number> = {
   dc_js: 1,
   js_4x: 2,
   "4x_2x": 3,
   "2x_1x": 4,
   "1x_grad": 5,
-  dc_grad: 5,
 };
+// Distinct color for the Discovery → Graduation total column (kept different from the
+// graduation-green stage color used by the 1x → graduation leg).
+const TOTAL_LEG_COLOR = "#7c3aed"; // violet — stands apart from the red→green stage palette
 
 // Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
 function spanDays(a: string | null, b: string | null): number | null {
@@ -449,7 +453,8 @@ function PipelineSummary({
   handReviewedIds: Set<number>;
 }) {
   const ct = useChartTokens();
-  const legColor = (key: string) => stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
+  const legColor = (key: string) =>
+    key === "dc_grad" ? TOTAL_LEG_COLOR : stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
   const AXIS = ct.axis;
   const GRID = ct.grid;
   const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
