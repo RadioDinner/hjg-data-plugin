@@ -32,6 +32,18 @@ const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x":
 // reuses the exact color its stage shows on the rail.
 const TIER_COLOR_INDEX: Record<PipelineTier, number> = { jumpstart: 1, "4x": 2, "2x": 3, "1x": 4, graduated: 5 };
 
+// Pipeline-timing leg -> stage-palette index of the stage the leg leads INTO, so each
+// duration column matches the color of its destination node on the mentee rail.
+// (Stage order: 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.)
+const LEG_COLOR_INDEX: Record<string, number> = {
+  dc_js: 1,
+  js_4x: 2,
+  "4x_2x": 3,
+  "2x_1x": 4,
+  "1x_grad": 5,
+  dc_grad: 5,
+};
+
 // Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
 function spanDays(a: string | null, b: string | null): number | null {
   if (!a || !b) return null;
@@ -427,8 +439,17 @@ function LegTooltip({ active, payload, tip }: { active?: boolean; payload?: { pa
 }
 
 // Board-level roll-up of the pipeline-leg durations across every mentee.
-function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
+function PipelineSummary({
+  journeys,
+  stageColors,
+  handReviewedIds,
+}: {
+  journeys: MenteeJourney[];
+  stageColors: string[];
+  handReviewedIds: Set<number>;
+}) {
   const ct = useChartTokens();
+  const legColor = (key: string) => stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
   const AXIS = ct.axis;
   const GRID = ct.grid;
   const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
@@ -439,13 +460,16 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
   const [tierF, setTierF] = useState<TierFilter>("all");
   const [ownerF, setOwnerF] = useState<string>("all");
   const [overriddenGradOnly, setOverriddenGradOnly] = useState(false);
-  const anyFilter = windowM !== "all" || statusF !== "all" || tierF !== "all" || ownerF !== "all" || overriddenGradOnly;
+  const [handReviewedOnly, setHandReviewedOnly] = useState(false);
+  const anyFilter =
+    windowM !== "all" || statusF !== "all" || tierF !== "all" || ownerF !== "all" || overriddenGradOnly || handReviewedOnly;
   const clearFilters = () => {
     setWindowM("all");
     setStatusF("all");
     setTierF("all");
     setOwnerF("all");
     setOverriddenGradOnly(false);
+    setHandReviewedOnly(false);
   };
 
   // Owner options = distinct owners among in-roster, non-excluded mentees.
@@ -471,9 +495,10 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
       if (tierF !== "all" && j.currentTier !== tierF) return false;
       if (ownerF !== "all" && j.ownerCoachName !== ownerF) return false;
       if (overriddenGradOnly && !j.stageOverrides.graduated) return false;
+      if (handReviewedOnly && !handReviewedIds.has(j.clientId)) return false;
       return true;
     });
-  }, [journeys, windowM, statusF, tierF, ownerF, overriddenGradOnly]);
+  }, [journeys, windowM, statusF, tierF, ownerF, overriddenGradOnly, handReviewedOnly, handReviewedIds]);
 
   const legs = useMemo(() => aggregateJourneyDurations(cohort), [cohort]);
   const counts = useMemo(() => {
@@ -502,7 +527,7 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
   // Denominator for "showing N of M": all in-roster, non-excluded mentees (no filters).
   const rosterTotal = useMemo(() => journeys.filter((j) => j.inSourceOfTruth && !j.excluded).length, [journeys]);
   const grad = legs.find((l) => l.key === "dc_grad");
-  const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n }));
+  const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n, color: legColor(l.key) }));
 
   return (
     <div className="card card--inset" style={{ marginBottom: 18 }}>
@@ -566,6 +591,10 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
           <input type="checkbox" checked={overriddenGradOnly} onChange={(e) => setOverriddenGradOnly(e.target.checked)} />
           <span>Overridden graduation date</span>
         </label>
+        <label className="journey-filters__check" title="Only mentees whose source-of-truth record has been hand/human reviewed">
+          <input type="checkbox" checked={handReviewedOnly} onChange={(e) => setHandReviewedOnly(e.target.checked)} />
+          <span>Only hand reviewed</span>
+        </label>
         <span className="journey-filters__count muted">
           Showing {counts.total} of {rosterTotal}
           {anyFilter && (
@@ -603,7 +632,11 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
               <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
               <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
               <Tooltip content={<LegTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-              <Bar dataKey="avg" fill={ct.accent} radius={[0, 3, 3, 0]} />
+              <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
+                {chartData.map((d, i) => (
+                  <Cell key={i} fill={d.color} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -620,7 +653,15 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
             <tbody>
               {legs.map((l) => (
                 <tr key={l.key}>
-                  <td>{l.label}</td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block", width: 10, height: 10, borderRadius: 2,
+                        background: legColor(l.key), marginRight: 6, verticalAlign: "middle",
+                      }}
+                    />
+                    {l.label}
+                  </td>
                   <td className="num">{l.n}</td>
                   <td className="num">{humanizeDays(l.avgDays)}</td>
                   <td className="num">{humanizeDays(l.medianDays)}</td>
@@ -810,6 +851,14 @@ export function JourneysView() {
   // shows CA's other pipelines too (greyed). Metrics always exclude off-roster.
   const [rosterOnly, setRosterOnly] = useState(true);
 
+  // Client IDs whose source-of-truth record is hand/human reviewed — powers the
+  // Pipeline-timing "Only hand reviewed" cohort filter.
+  const handReviewedIds = useMemo(() => {
+    const s = new Set<number>();
+    for (const [cid, rec] of records) if (rec.hand_reviewed) s.add(cid);
+    return s;
+  }, [records]);
+
   async function load(basis: StageBasis) {
     setLoading(true);
     setError(null);
@@ -922,7 +971,9 @@ export function JourneysView() {
         <div className="loading">Loading…</div>
       ) : (
         <>
-          {journeys.length > 0 && <PipelineSummary journeys={journeys} />}
+          {journeys.length > 0 && (
+            <PipelineSummary journeys={journeys} stageColors={stageColors} handReviewedIds={handReviewedIds} />
+          )}
           {journeys.length > 0 && (
             <div style={{ marginBottom: 18 }}>
               <MenteeStatusEditor

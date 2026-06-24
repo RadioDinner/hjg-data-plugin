@@ -21,3 +21,6 @@ all migrations applied
 
 --- 2026-06-24 (session 009b) ---
 On screen 107 I want the "synced: yyyy-mm-dd" to become a button that I can click to confirm the date, rather than re-entering it it.
+
+--- 2026-06-24 (session 009b) ---
+I also want a filter option for screen 102 with a checkbox of "Only hand reviewed" so that when I check it, it only loads and calculates the data from the hand reviewed mentees. Also, I want the colors in the pipeline timing columns to match teh color options set in the individual mentee rail display

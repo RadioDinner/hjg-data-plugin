@@ -170,7 +170,11 @@ Pure math lives in \`lib/compare.ts\`.`,
   - **Current tier** — JumpStart / 4x / 2x / 1x / Graduated.
   - **Owner** — the mentee's primary coach.
   - **Overridden graduation date** — only mentees whose graduation date was set manually (an override).
+  - **Only hand reviewed** — only mentees whose source-of-truth record has been hand/human reviewed (the flag on the Mentee-record card).
 - "Showing N of M" shows how many roster mentees pass the filters; **Clear filters** resets them. Filters are not saved — they reset on reload.
+
+### Column colors
+- Each leg's bar (and its table swatch) is colored to match the stage it leads **into** on the mentee rail — the same palette set in **Company options → Journeys → Pipeline stage colors**.
 
 ### Owner & alternative exits
 - Each mentee's **owner** is their CoachAccountable **primary coach** (\`ca_clients.coach_id\`), shown on the mentee's timeline. The per-meeting **Coach** column still shows whoever ran each meeting. See the **"How clients are matched to coaches"** help.

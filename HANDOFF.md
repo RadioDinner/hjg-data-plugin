@@ -73,6 +73,15 @@ so you confirm a date without retyping. Shows "✓ synced: …" + disables once 
 already equals the synced value. No-synced fields stay a muted "synced: —". UI-only
 (no migration / no verify change).
 
+**(5) Pipeline-timing (§102) — "Only hand reviewed" filter + stage-colored columns.**
+`PipelineSummary` gained an **"Only hand reviewed"** cohort checkbox (composes with the
+existing filters); when checked, the graph + table + tiles only count mentees whose
+source-of-truth record has `hand_reviewed = true` (set derived from the already-loaded
+`records` map, passed in as `handReviewedIds`). The **leg-duration bars** (and matching
+**table swatches**) are now colored by the stage each leg leads **into**, using the same
+`stageColors` as the mentee rail (`journeys_stage_colors` company option; `LEG_COLOR_INDEX`
+maps leg→stage index). `journeys.aggregate` help updated. UI-only (no migration / no verify).
+
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
    HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.
