@@ -11,7 +11,7 @@ request — `main` is the live branch and the rest of the session commits straig
 `main`.** `typecheck` + `verify` (**18 sections**) + `build` all pass. **UI NOT
 browser-tested** (headless).
 
-**⚠ THREE NEW MIGRATIONS this session — all MUST be applied** (Supabase SQL Editor,
+**⚠ FOUR NEW MIGRATIONS this session — all MUST be applied** (Supabase SQL Editor,
 re-runnable):
 - **`9979_mentees_drop_fields.sql`** — **drops 9 columns** from `mentees` (destroys
   their data, per the user's explicit choice): `ff_amount`, `freedom_fight_paid`,
@@ -22,8 +22,16 @@ re-runnable):
   in-session but won't persist (staff can UPDATE app_settings but not INSERT).
 - **`9977_mentees_hand_reviewed.sql`** — adds `hand_reviewed` (bool) + `hand_reviewed_at`
   to `mentees`. The Journeys card writes these; an unapplied column errors the save.
+- **`9976_mentee_graduation_backfill.sql`** — adds `mentees.graduation_date` and
+  backfills graduated mentees' grad date = **last 1x meeting + 7 days** (only the **12**
+  graduates who reached 1x; the 29 who graduated from 2x/4x are left unset, per the
+  user). Writes BOTH `mentees.graduation_date` and `mentee_outcomes.graduation_date`
+  (the latter drives the Journeys graduation timeline). Idempotent; expected-12 list is
+  in the file. **Next new migration is `9975_…`.**
 
-**Next new migration is `9976_…`.** No re-sync needed (all three touch HJG-owned tables).
+
+No re-sync needed (all four touch HJG-owned tables). Migration 9976 reads the synced
+`ca_engagements`/`ca_appointments` to compute the dates — apply it after data is synced.
 
 **What shipped this session (009b):**
 

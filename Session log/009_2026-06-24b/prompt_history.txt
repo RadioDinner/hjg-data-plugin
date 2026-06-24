@@ -40,3 +40,6 @@ If I make changes to the 107 screen in the journeys, even just clicking the date
 --- 2026-06-24 (AskUserQuestion answers) ---
 Q: §107 edits → mentees table? A: Stamp hand-reviewed only (keep status/date edits in mentee_outcomes; on any §107 save, set mentees.hand_reviewed=true + timestamp).
 Q: §105 editing? A: It's fine as read-only, but don't make it look like I can save information there.
+
+--- 2026-06-24 (session 009b) ---
+ok, now I want you to look at the data that came from the notion export. Where the status of the mentee in that table is "Done (Graduated)" I want you to set the graduation date to 7 days after their last 1x meeting. And I want it to be saved in the "Mentees table" in supabase.

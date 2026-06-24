@@ -81,6 +81,17 @@ lists exact per-month rates). Window is org-configurable as **N weeks or N month
   installs). `MenteeRecord` + `MENTEE_SELECT` updated. `journeys.menteeRecord` help
   updated. Scoped to the Journeys card per the request (not the Mentees grid).
 
+## Data backfill: graduation dates (migration 9976)
+
+- For mentees with Notion status `Done (Graduated)` AND a 1x meeting, set graduation
+  date = **last 1x meeting + 7 days**. Per the user: only the **12** with a 1x meeting
+  (the 29 who graduated from 2x/4x are left unset); written to **both**
+  `mentees.graduation_date` (new column) and `mentee_outcomes.graduation_date`.
+- Live-computing, idempotent SQL (joins `ca_engagements`/`ca_appointments`); the
+  expected-12 list is embedded in the migration as a comment for audit. No TS change —
+  Raw data (`select *`) surfaces the new column; `mentee_outcomes` already drives the
+  Journeys timeline. Decisions captured via AskUserQuestion.
+
 ## Notes for future-me
 - The `mentees` seed (`9986`) is a one-shot Notion import, `on conflict (notion_key)
   do nothing` — re-running never clobbers dashboard edits.
