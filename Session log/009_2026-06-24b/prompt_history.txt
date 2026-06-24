@@ -56,3 +56,14 @@ I want to build a compare tool in the Journey's pipeline timing. I want to be ab
 Q: Start-date basis? A: System start (discovery -> jumpstart -> JYF -> first meeting; same as days-in-system).
 Q: Cohort controls? A: Two editable month windows (default 0-3 vs 4-6).
 Q: Compare metrics (besides leg durations)? A: ALL four — Avg days in system, Avg time to graduate, % graduated, Current-tier mix.
+
+--- 2026-06-24 (MAJOR rework — mentee management overhaul) ---
+I have a problem, in our funnel, all clients/mentees start with a discovery call. Then they either choose to join JumpStart Your Freedom or they decide not to do our program, so that is exit 1 if they don't continue, same thing goes for if they go from JYF to 4x, sometimes they drop out for financial reasons, or our staff "fire" them because we feel as though it unfair to keep charging them if they're not making progress, or they sometimes graduate from 4x or 2x directly, rather than following cleanly through the 4x to 2x to 1x funnel. I think we need to overhaul the mentee journey pipeline / system to both visually display this data and keep it up to date? I think we need to trash the mentee management system and start from scratch. I want a "Mentees" page that saves and holds all the data on our mentees, current status, current coach, engagement, everything about a mentee from the time they hit our system to the time they quit, graduate or get fired. So build a "Mentee management" system and "Journey's" pipeline timing graph/card (102) to become a metric display card in the metrics. This is a major major rework and I want to start from scratch.
+The first layer of Mentee data, I want to be built from Coach Accountable data history. I will hand enter data from our Notion database, then we will consider OUR mentee management system to be the "Mentee status / information" "source of truth". Any sync from CA would over ride changes we made BY HAND to the mentee management system.
+THROW OUT EVERYTHING that we have on the Journey's pipeline and Mentee data so far. We're starting over
+
+--- 2026-06-24 (AskUserQuestion answers — mentee management rebuild) ---
+Q: Sync vs hand precedence? A: Per-field split (CA owns objective history & refreshes it; hand-entered status/info is source of truth, never overwritten).
+Q: Tab layout? A: Mentees replaces both (new Mentees mgmt tab = table + detail + funnel viz; Journeys tab removed; §102 leg-timing -> Metrics card).
+Q: DB cleanup? A: Drop all three (mentees, mentee_outcomes, mentee_exclusions); fold excluded/test into new mentee status; rewire Metrics exclusion to new table.
+Q: Status model? A: Active / Graduated / Quit / Fired / Paused / Declined (each exit/grad records stage + date).
