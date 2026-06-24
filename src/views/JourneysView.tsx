@@ -9,7 +9,6 @@ import {
   fetchMenteeRecordsByClient,
   removeMenteeExclusion,
   saveMenteeRecord,
-  setCompanyOption,
   stageColorsFromRaw,
   DEFAULT_STAGE_COLORS,
   EXIT_STATUSES,
@@ -35,8 +34,8 @@ const TIER_COLOR_INDEX: Record<PipelineTier, number> = { jumpstart: 1, "4x": 2, 
 // Pipeline-timing leg -> stage-palette index of the stage the leg leads INTO, so each
 // duration column matches the color of its destination node on the mentee rail.
 // (Stage order: 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.) The
-// "dc_grad" total leg is intentionally NOT here — it gets its own distinct color
-// (legColor) so it doesn't read as the 1x → graduation leg.
+// "dc_grad" total leg is intentionally NOT here — it spans the whole pipeline, so it's
+// painted with a gradient blending the other legs' colors (see PipelineSummary).
 const LEG_COLOR_INDEX: Record<string, number> = {
   dc_js: 1,
   js_4x: 2,
@@ -44,9 +43,7 @@ const LEG_COLOR_INDEX: Record<string, number> = {
   "2x_1x": 4,
   "1x_grad": 5,
 };
-// Distinct color for the Discovery → Graduation total column (kept different from the
-// graduation-green stage color used by the 1x → graduation leg).
-const TOTAL_LEG_COLOR = "#7c3aed"; // violet — stands apart from the red→green stage palette
+const TOTAL_GRAD_ID = "pipeline-total-grad"; // SVG gradient id for the dc_grad bar
 
 // Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
 function spanDays(a: string | null, b: string | null): number | null {
@@ -453,8 +450,11 @@ function PipelineSummary({
   handReviewedIds: Set<number>;
 }) {
   const ct = useChartTokens();
-  const legColor = (key: string) =>
-    key === "dc_grad" ? TOTAL_LEG_COLOR : stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
+  // The five non-total leg colors (JumpStart → Graduation), in order — also the
+  // stops for the Discovery → graduation total's blended gradient.
+  const gradStops = [1, 2, 3, 4, 5].map((i) => stageColors[i] ?? ct.accent);
+  const totalGradientCss = `linear-gradient(90deg, ${gradStops.join(", ")})`;
+  const legColor = (key: string) => stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
   const AXIS = ct.axis;
   const GRID = ct.grid;
   const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
@@ -532,7 +532,7 @@ function PipelineSummary({
   // Denominator for "showing N of M": all in-roster, non-excluded mentees (no filters).
   const rosterTotal = useMemo(() => journeys.filter((j) => j.inSourceOfTruth && !j.excluded).length, [journeys]);
   const grad = legs.find((l) => l.key === "dc_grad");
-  const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n, color: legColor(l.key) }));
+  const chartData = legs.map((l) => ({ leg: l.label, key: l.key, avg: l.avgDays, median: l.medianDays, n: l.n, color: legColor(l.key) }));
 
   return (
     <div className="card card--inset" style={{ marginBottom: 18 }}>
@@ -633,13 +633,24 @@ function PipelineSummary({
         <div style={{ width: "100%", height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <defs>
+                <linearGradient id={TOTAL_GRAD_ID} x1="0" y1="0" x2="1" y2="0">
+                  {gradStops.map((c, i) => (
+                    <stop
+                      key={i}
+                      offset={`${gradStops.length === 1 ? 0 : (i / (gradStops.length - 1)) * 100}%`}
+                      stopColor={c}
+                    />
+                  ))}
+                </linearGradient>
+              </defs>
               <CartesianGrid stroke={GRID} horizontal={false} />
               <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
               <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
               <Tooltip content={<LegTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
               <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
                 {chartData.map((d, i) => (
-                  <Cell key={i} fill={d.color} />
+                  <Cell key={i} fill={d.key === "dc_grad" ? `url(#${TOTAL_GRAD_ID})` : d.color} />
                 ))}
               </Bar>
             </BarChart>
@@ -662,7 +673,8 @@ function PipelineSummary({
                     <span
                       style={{
                         display: "inline-block", width: 10, height: 10, borderRadius: 2,
-                        background: legColor(l.key), marginRight: 6, verticalAlign: "middle",
+                        background: l.key === "dc_grad" ? totalGradientCss : legColor(l.key),
+                        marginRight: 6, verticalAlign: "middle",
                       }}
                     />
                     {l.label}
@@ -849,7 +861,10 @@ export function JourneysView() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stageBasis, setStageBasis] = useState<StageBasis>("engagement_start");
+  // Stage-date basis is PINNED to "first 1-on-1 meeting" for now. The inline
+  // engagement-start/first-meeting toggle was removed and the Company-options entry
+  // is kept but disabled until the feature is built out more fully.
+  const stageBasis: StageBasis = "first_meeting";
   const [stageColors, setStageColors] = useState<string[]>(DEFAULT_STAGE_COLORS);
   const [records, setRecords] = useState<Map<number, MenteeRecord>>(new Map());
   // Default to the Mentees source-of-truth roster only (JYF / 4x / 2x / 1x). Off
@@ -892,41 +907,25 @@ export function JourneysView() {
     setRecords((prev) => new Map(prev).set(rec.client_id as number, rec));
   }
 
-  // On mount, read the org-wide stage-date basis (Company options), then load.
+  // On mount, read the org-wide stage colors (Company options), then load. The
+  // stage-date basis is pinned to first_meeting (toggle removed), so it isn't read.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      let basis: StageBasis = "engagement_start";
       try {
         const opts = await fetchCompanyOptions();
-        const v = opts["journeys_stage_basis"];
-        if (v === "first_meeting" || v === "engagement_start") basis = v;
         if (!cancelled) setStageColors(stageColorsFromRaw(opts["journeys_stage_colors"]));
       } catch {
-        /* fall back to the default basis + colors */
+        /* fall back to the default colors */
       }
       if (cancelled) return;
-      setStageBasis(basis);
-      await load(basis);
+      await load(stageBasis);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Flip the stage-date basis. Persists org-wide (same app_settings key the
-  // Company options tab edits), then reloads with the new basis.
-  async function changeBasis(basis: StageBasis) {
-    if (basis === stageBasis) return;
-    setStageBasis(basis);
-    try {
-      await setCompanyOption("journeys_stage_basis", basis);
-    } catch (e) {
-      setError(String(e));
-    }
-    await load(basis);
-  }
 
   const offRosterCount = useMemo(() => journeys.filter((j) => !j.inSourceOfTruth).length, [journeys]);
 
@@ -948,27 +947,6 @@ export function JourneysView() {
         “After Graduation Care” engagement. A mentee can take an <strong>alternative exit at any stage</strong> — Quit,
         Fired, or No mentoring — set in the editor below; the rail then ends in that exit instead of Graduation.)
       </p>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0 14px", flexWrap: "wrap" }}>
-        <span className="muted">Stage dates from:</span>
-        <div className="seg" role="tablist" aria-label="Stage-date basis">
-          <button
-            className={`seg__btn ${stageBasis === "engagement_start" ? "seg__btn--active" : ""}`}
-            onClick={() => changeBasis("engagement_start")}
-          >
-            Engagement start
-          </button>
-          <button
-            className={`seg__btn ${stageBasis === "first_meeting" ? "seg__btn--active" : ""}`}
-            onClick={() => changeBasis("first_meeting")}
-          >
-            First 1-on-1 meeting
-          </button>
-        </div>
-        <span className="muted" style={{ fontSize: 12 }}>
-          · org-wide setting (also in Company options)
-        </span>
-      </div>
 
       {error && <div className="notice notice--warn">{error}</div>}
 

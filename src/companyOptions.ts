@@ -20,7 +20,7 @@ export interface CompanyOptionChoice {
   label: string;
 }
 
-export type CompanyOptionType = "select" | "stageColors" | "duration";
+export type CompanyOptionType = "select" | "stageColors" | "duration" | "action";
 
 export interface CompanyOption {
   key: string; // app_settings key
@@ -30,6 +30,7 @@ export interface CompanyOption {
   default: string;
   type?: CompanyOptionType; // defaults to "select"
   choices: CompanyOptionChoice[]; // ignored for non-select types
+  disabled?: boolean; // shown but not editable (feature parked); displays the default
 }
 
 export const COMPANY_OPTIONS: CompanyOption[] = [
@@ -42,12 +43,30 @@ export const COMPANY_OPTIONS: CompanyOption[] = [
       "“Engagement start date” uses the CoachAccountable engagement's start date. " +
       "“First 1-on-1 meeting” uses the first individual mentoring meeting under that " +
       "engagement (group sessions excluded), falling back to the engagement start " +
-      "when there's no meeting yet. Affects the stage rail and the pipeline-leg timing.",
-    default: "engagement_start",
+      "when there's no meeting yet. Affects the stage rail and the pipeline-leg timing. " +
+      "Currently FIXED to “First 1-on-1 meeting” — editing is disabled here while this " +
+      "feature is built out further.",
+    default: "first_meeting",
+    type: "select",
+    disabled: true,
     choices: [
       { value: "engagement_start", label: "Engagement start date" },
       { value: "first_meeting", label: "First 1-on-1 meeting" },
     ],
+  },
+  {
+    key: "journeys_recalculate_dates",
+    section: "Journeys",
+    label: "Recalculate journey dates",
+    help:
+      "Recompute every mentee's pipeline stage dates using the “Pipeline stage dates” logic " +
+      "above. Use this after changing that setting — e.g. if the board decides to date stages " +
+      "by engagement start instead of first 1-on-1 meeting. Enabled once the stage-date logic " +
+      "toggle is re-enabled and changed.",
+    default: "",
+    type: "action",
+    disabled: true,
+    choices: [],
   },
   {
     key: "journeys_stage_colors",

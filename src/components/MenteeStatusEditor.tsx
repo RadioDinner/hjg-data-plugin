@@ -78,6 +78,9 @@ export function MenteeStatusEditor({
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  // Collapsible card — collapsed by default so it doesn't take up scroll space;
+  // expand it when you actually want to do mentee edit work.
+  const [open, setOpen] = useState(false);
 
   const selected = useMemo(() => sorted.find((j) => j.clientId === clientId) ?? null, [sorted, clientId]);
 
@@ -146,7 +149,16 @@ export function MenteeStatusEditor({
 
   return (
     <div className="card card--inset grad-editor">
-      <h3>Edit graduation status <SectionId id="journeys.statusEditor" /></h3>
+      <h3 className="grad-editor__head">
+        <button type="button" className="grad-editor__toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <span className="grad-editor__caret" aria-hidden>{open ? "▾" : "▸"}</span>
+          Edit graduation status
+          {!open && selected && <span className="grad-editor__head-sel muted">— {selected.name}</span>}
+        </button>
+        <SectionId id="journeys.statusEditor" />
+      </h3>
+      {open && (
+      <>
       <p className="view__hint">
         Pick a mentee (or select one from the list below) and correct their outcome and/or pipeline dates. Overrides here{" "}
         <strong>always win over synced data</strong> and are never overwritten by a re-sync — the synced data still comes in,
@@ -253,6 +265,8 @@ export function MenteeStatusEditor({
         )}
         {savedMsg && <span className="muted" style={{ alignSelf: "center" }}>{savedMsg}</span>}
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -80,9 +80,25 @@ source-of-truth record has `hand_reviewed = true` (set derived from the already-
 `records` map, passed in as `handReviewedIds`). The **leg-duration bars** (and matching
 **table swatches**) are now colored by the stage each leg leads **into**, using the same
 `stageColors` as the mentee rail (`journeys_stage_colors` company option; `LEG_COLOR_INDEX`
-maps leg→stage index). The **Discovery → graduation** total column uses a distinct color
-(`TOTAL_LEG_COLOR`, violet), not graduation-green, since it spans the whole pipeline.
+maps leg→stage index). The **Discovery → graduation** total column is painted with a
+**gradient blending the other stage colors** (SVG `linearGradient #pipeline-total-grad`
+for the bar + a CSS `linear-gradient` swatch in the table), not any single stage color.
 `journeys.aggregate` help updated. UI-only (no migration / no verify).
+
+**(6) Journeys basis pinned to first-meeting + editor collapsible + parked controls.**
+- **Stage-date basis PINNED to `first_meeting`** in `JourneysView` (`const stageBasis`);
+  the inline engagement-start/first-meeting **toggle was removed**, and the mount effect
+  no longer reads `journeys_stage_basis` (still reads `journeys_stage_colors`).
+- **Company option `journeys_stage_basis`** is kept but **`disabled`** (new registry flag),
+  default flipped to `first_meeting`; the disabled select shows the default. New parked
+  **`journeys_recalculate_dates`** action (new `"action"` control type) — a disabled
+  "Recalculate" button in Company options → Journeys, to be enabled once the basis toggle
+  is re-enabled and changed. **Note:** journey dates are computed LIVE on each load from
+  the active basis, so recalculation is automatic today; the button is a forward hook for
+  when basis-switching becomes a deliberate, materialized step.
+- **"Edit graduation status" card (§107) is now collapsible** (collapsed by default; the
+  header is a disclosure button showing the selected mentee's name when collapsed).
+- UI-only — no migration, no verify change.
 
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all

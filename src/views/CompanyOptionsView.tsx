@@ -103,12 +103,21 @@ export function CompanyOptionsView() {
                       <StageColorsControl value={valueOf(o)} onSave={(v) => change(o, v)} />
                     ) : o.type === "duration" ? (
                       <DurationControl value={valueOf(o)} onSave={(v) => change(o, v)} disabled={savingKey === o.key} />
+                    ) : o.type === "action" ? (
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        disabled={o.disabled}
+                        title={o.disabled ? "Disabled until the stage-date logic toggle is re-enabled and changed" : undefined}
+                      >
+                        Recalculate
+                      </button>
                     ) : (
                       <select
                         id={`opt-${o.key}`}
-                        value={valueOf(o)}
+                        value={o.disabled ? companyOptionDefault(o.key) : valueOf(o)}
                         onChange={(e) => change(o, e.target.value)}
-                        disabled={savingKey === o.key}
+                        disabled={o.disabled || savingKey === o.key}
                       >
                         {o.choices.map((c) => (
                           <option key={c.value} value={c.value}>
