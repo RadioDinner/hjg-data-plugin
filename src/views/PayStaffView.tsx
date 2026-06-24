@@ -190,6 +190,7 @@ export function PayStaffView({ onBuildPayout }: { onBuildPayout?: () => void } =
           <div>
             <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Pay staff <HelpButton id="pay.payout" label="Pay staff" />
+              <HelpButton id="general.coachAttribution" label="How coaches are matched" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
               Mentors earn a ramped share ({PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by mentor-tenure

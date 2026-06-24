@@ -278,7 +278,9 @@ function Timeline({
 
       <div className="journey__rhythm">
         <div className="journey__rhythm-head">
-          <h3>Meetings ({meetingList.length})</h3>
+          <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            Meetings ({meetingList.length}) <HelpButton id="general.coachAttribution" label="How coaches are matched" />
+          </h3>
           <span className="muted">Every recorded meeting for this mentee, earliest first.</span>
         </div>
         {meetingList.length > 0 ? (

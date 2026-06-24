@@ -1,0 +1,4 @@
+--- 2026-06-24 (session 009 start) ---
+Lets kick off a new session, commit to main  for the entirety of this session. 
+
+I applied all migrations. You found Ty, but I was looking for you to find Jonathan Heinzman. I checked Caleb Ottos clients and he has more than Ty, Joash and Jonathan but for some reason the "managed by" of some of Calebs clients is still Arthur. Is your system set to find clients primary coach? Or how does it work? I want you to do a few things.  First, tell me how the clients are assumed to coaches. Give me your logic. Second, add that explaination to the "?" card on the appropriate cards/pages on the dashboard.
