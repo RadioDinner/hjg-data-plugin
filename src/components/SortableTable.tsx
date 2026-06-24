@@ -25,11 +25,15 @@ export function SortableTable({
   rows,
   exportName,
   emptyText = "No rows.",
+  maxRows,
 }: {
   columns: SortColumn[];
   rows: Row[];
   exportName: string;
   emptyText?: string;
+  // Cap the number of RENDERED rows (after sorting) for performance on huge tables.
+  // Sorting and CSV export still cover the full row set; only the DOM is capped.
+  maxRows?: number;
 }) {
   const [sort, setSort] = useState<SortState>(null);
 
@@ -51,6 +55,9 @@ export function SortableTable({
     return arr;
   }, [rows, sort, columns]);
 
+  const capped = maxRows != null && sorted.length > maxRows;
+  const display = capped ? sorted.slice(0, maxRows) : sorted;
+
   function toggle(key: string) {
     setSort((s) => {
       if (!s || s.key !== key) return { key, dir: "asc" };
@@ -68,8 +75,10 @@ export function SortableTable({
   return (
     <>
       <div className="table-toolbar">
-        <span className="muted">{sorted.length} rows</span>
-        <button className="btn btn--sm" onClick={exportCsv} disabled={sorted.length === 0} title="Download the current view as CSV">
+        <span className="muted">
+          {sorted.length} rows{capped ? ` (showing first ${maxRows} — refine the search to narrow; CSV exports all ${sorted.length})` : ""}
+        </span>
+        <button className="btn btn--sm" onClick={exportCsv} disabled={sorted.length === 0} title="Download the current (filtered + sorted) view as CSV">
           Export CSV
         </button>
       </div>
@@ -95,7 +104,7 @@ export function SortableTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r, i) => (
+            {display.map((r, i) => (
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.numeric ? "num" : ""}>

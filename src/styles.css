@@ -366,6 +366,12 @@ body {
 .margins__row--drill:hover { background: var(--row-hover, rgba(148, 163, 184, 0.12)); }
 .margins__hours-input { width: 72px; text-align: right; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-control); padding: 3px 6px; font-size: 13px; }
 
+/* Raw-data search + per-column filters */
+.rawdata__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.rawdata__colfilters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; padding: 10px 12px; background: var(--panel-2, var(--panel)); border: 1px solid var(--line); border-radius: var(--r-control); }
+.rawdata__colfilter { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.rawdata__colfilter input { font-size: 12px; padding: 4px 6px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-control); min-width: 120px; }
+
 .journeys__roster-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
 .journeys__roster-toggle input { cursor: pointer; }
 .journeys__rows { display: flex; flex-direction: column; gap: 4px; max-height: 620px; overflow-y: auto; }
