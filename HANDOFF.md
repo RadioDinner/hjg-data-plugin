@@ -12,49 +12,70 @@ Working notes for resuming this project in a future session. Last updated
 
 Picking this up cold — start here. **Session 008 committed straight to `main`** (per the
 user's instruction this session). `typecheck` + `verify` (**16 sections**) + `build` all
-pass. **UI NOT browser-tested** (headless) — eyeball on a Vercel preview. **No migration
-this session.**
+pass. **UI NOT browser-tested** (headless) — eyeball on a Vercel preview.
+
+**⚠ ONE NEW MIGRATION this session — MUST be applied** (Supabase SQL Editor):
+**`9986_mentees.sql`** creates + seeds the `mentees` source-of-truth table (182 Notion rows).
+Until it's applied, the Journeys "Mentee record" card shows the empty/create state and the
+table is absent from Raw data. Re-runnable, insert-if-absent (won't clobber edits).
+**Next new migration is `9985_…`.** (Session 007's `9987_journeys_stage_colors.sql` is still
+pending too.)
 
 > ⚠ Git-state note resolved: at session start the *local* `main` was stale at the old
 > session-002 commit (`88b8490`) with unrelated history, while `origin/main` was the full
-> lineage (`e79b536`). Reset local `main` to `origin/main` and worked there. `main` is and
-> stays the primary branch.
+> lineage (`e79b536`). Reset local `main` to `origin/main` and worked there. `main` is primary.
 
-**Shipped this session (008):**
-- **Journeys → meeting-rhythm columns color-coded by pipeline tier.** The "Observed meeting
-  rhythm" chart (per selected mentee) was one flat-purple bar per month (count only). Now each
-  month's column is **stacked by the pipeline tier** of its meetings (JumpStart / 4x / 2x / 1x),
-  colored with the **same org-configurable red→green stage palette** used on the stage rail, so
-  you can see how a mentee's meetings distribute across stages over time. Meetings whose
-  engagement isn't a pipeline tier (group / untiered) fall into a neutral **"Other"** bucket.
-  Added a **legend**, a **custom per-tier tooltip** (lists only tiers present that month + a
-  total), and a **matching per-month table** (north star: graph + table together) of the exact
-  counts. **Data layer:** `MenteeMeeting` gained a **`tier`** field, populated from a new shared
-  **`engagementTierMap()`** helper extracted from `buildClientStages` (which now receives the
-  map) — the helper mirrors `buildClientStages`' guards exactly (`id` and `client_id` non-null)
-  so stage dating is unchanged. `src/db.ts` + `src/views/JourneysView.tsx` + `src/styles.css`.
-  **No migration.** Adversarially code-reviewed (one low-sev refactor-divergence found + fixed;
-  three nits triaged). ⚠ **Browser-verify** the stacked colors in light + dark, the legend,
-  tooltip, and table.
-- **Backlog: "Mentees" source-of-truth table** (user request — backlog only, not built). One
-  row per mentee assembled from **`ca_clients`** (identity spine) + **`discovery_outcomes`**
-  (discovery result) + **`mentee_outcomes`** (journey status), soft-joined on `client_id`. The
-  entry (`FEATURE_BACKLOG.md`, newest on top) captures the schema of all three tables, the
-  **differing grain** (`mentee_outcomes` per-client vs `discovery_outcomes` per-appointment),
-  a **⚠ reality-check** that the outcome tables are **sparse override layers** (the user's
-  premise "every mentee has a discovery call + outcome" is **not guaranteed by the data** — the
-  discovery *call* lives in `ca_appointments`, `discovery_outcomes` only stores staff overrides,
-  `mentee_outcomes` is optional), plus design decisions (view vs table, which discovery outcome,
-  who is a mentee) and acceptance criteria. **Next new migration is `9986_…`.**
+**Shipped this session (008), newest first:**
+- **Journeys per-mentee detail reworked → "Time in each program stage" + meeting list** (user
+  follow-up). The per-mentee **columns now show DAYS spent in each category** (Discovery→JumpStart,
+  JumpStart, 4x, 2x, 1x) — one bar per stage, colored to match the rail, spanning from entering a
+  stage to entering the next (current stage runs to today). The **grid below is now a list of every
+  meeting** (date, name, tier swatch, coach). **This REPLACED the earlier "meeting-rhythm columns
+  colored by tier" chart** built earlier this same session (the user wanted time-in-stage, not
+  per-month counts). Pure-ish view logic `stageDays` in `JourneysView.tsx`. The `MenteeMeeting.tier`
+  field (added earlier) now feeds the meeting-list tier swatch. **No migration.**
+- **Moved "Edit graduation status" to the Journeys tab.** The standalone `MenteeStatusEditor`
+  (pick any mentee → set active/graduated/quit/fired) now renders on **Journeys** (below the
+  pipeline-timing summary) instead of the Metrics "Meetings to Freedom!" card. Removed the
+  now-dead `reloadJourneys` + `useAuth/user` from `MetricsView`. (Journeys' Timeline still also
+  has its own per-selected-mentee status editor; both write `mentee_outcomes`.)
+- **Removed the stray KPI strip** (Discovery calls / Mentee meetings / Active mentees / Mentors)
+  that sat below the "JYF vs Active Mentoring" card on Metrics.
+- **Fixed the Journeys stage-rail white-space gap** before the first (Discovery) node — the
+  first cell now sizes to its node (`flex: 0 0 auto`) so connectors absorb the slack evenly.
+- **"Mentees" source-of-truth table — BUILT** (the backlog item, scoped with the user). New
+  HJG-owned **`mentees`** table (migration **`9986`**, staff RLS) is HJG's internal source of
+  truth, one row per person, **mirroring all 19 Notion "Mentees Database" columns** (Notion
+  page-link URLs stripped). Seeded ONCE from the user's Notion export (`client_id` matched to
+  `ca_clients` by name — **152/182 matched**; ~30 unmatched are prospects not yet in CA). The
+  seed is re-runnable + insert-if-absent so it **never clobbers dashboard edits**. db.ts:
+  `MenteeRecord`/`MenteeRecordEdit`, `fetchMenteeRecordsByClient`, `saveMenteeRecord`
+  (read-modify-write by client_id; numeric coercion since PostgREST returns numeric as strings),
+  `"mentees"` added to `RAW_TABLES`. JourneysView: an **editable "Mentee record — source of
+  truth" card** in the selected mentee's detail pane (keyed by clientId; "?" help article).
+  Adversarially reviewed (10 findings; medium key-by-clientId bug + low-sev fixes applied).
+- **Backlog entry** for the Mentees table (now built) is in `FEATURE_BACKLOG.md` with the
+  schema/grain/reality-check write-up (kept for reference).
+
+**Answered (user question):** "Export all (.xlsx)" **does** include the hand-entered tables — it
+iterates `RAW_TABLES` (all 14 incl. `discovery_outcomes`, `mentee_outcomes`, etc.). But in the
+user's 2026-06-23 export, **`discovery_outcomes` and `mentee_outcomes` were EMPTY** (0 data rows)
+— no saved discovery/graduation overrides existed yet; `manual_metrics`(22)/`mentee_exclusions`(7)
+/`coach_settings`(5) had data.
 
 **▶ Next-session checklist (session 008):**
-1. **Browser-verify** the Journeys meeting-rhythm coloring (stacked-by-tier, light + dark), the
-   legend, the per-tier tooltip, and the per-month table. Pick a mentee with meetings across
-   multiple tiers to see the distribution clearly.
-2. **Apply `9987_journeys_stage_colors.sql`** (still pending from session 007) so the stage-color
-   Company option persists — it also governs the colors this new rhythm chart uses.
-3. When ready, **build the "Mentees" table** from the backlog entry (recommend a SQL **view**
-   first; mind the reality-check that outcome rows are sparse).
+1. **Apply `9986_mentees.sql`** (Supabase SQL Editor) — creates + seeds the `mentees` table.
+   Then browser-verify the **Journeys "Mentee record" card** (edit + save round-trip, persists a
+   re-sync), and that `mentees` appears in **Raw data** + Export-all.
+2. **Browser-verify** the reworked Journeys per-mentee detail: the **"Time in each program stage"**
+   days bars (colors match the rail), the **meeting list** grid, and the **stage-rail white-space
+   fix** (first-node gap gone) in light + dark. Confirm "Edit graduation status" now on Journeys,
+   and the stray KPI card gone from Metrics.
+3. **Apply `9987_journeys_stage_colors.sql`** (still pending from session 007) so the stage-color
+   Company option persists.
+4. Possible follow-ups: surface the ~30 unmatched/null-`client_id` Notion mentees (prospects not in
+   CA) somewhere (they're in Raw data only); reconcile the messy Notion columns (`js_lesson`,
+   `dd_w_a`, `freedom_fight_paid`) if the user wants them cleaned.
 
 ---
 

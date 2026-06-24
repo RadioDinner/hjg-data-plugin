@@ -67,3 +67,54 @@ check the rhythm coloring (light + dark), legend, tooltip, and table.
   the palette this rhythm chart uses too). Next new migration is `9986_…`.
 - Build the **"Mentees" table** from the new backlog entry when ready (recommend a
   SQL view first; mind the sparse-outcome reality-check).
+
+---
+
+## Continued (2026-06-24) — more shipped this session
+
+Commits added after the wrap above (newest first):
+
+- `f60c587` **Journeys/Metrics UX (3 user requests in one prompt):**
+  - Moved the standalone **"Edit graduation status"** editor (`MenteeStatusEditor`)
+    from the Metrics "Meetings to Freedom!" card to the **Journeys** tab (below the
+    pipeline-timing summary). Removed now-dead `reloadJourneys` + `useAuth/user`
+    from MetricsView.
+  - Removed the **stray KPI strip** (Discovery calls / Mentee meetings / Active
+    mentees / Mentors) below the "JYF vs Active Mentoring" card on Metrics.
+  - Reworked the Journeys per-mentee **columns to show DAYS spent in each program
+    stage** ("Time in each program stage": Discovery→JumpStart, JumpStart, 4x, 2x,
+    1x — bars colored to match the rail, current stage runs to today), and made the
+    **grid below a list of every meeting** (date, name, tier swatch, coach). This
+    REPLACED the earlier meeting-rhythm-by-tier chart (user wanted time-in-stage).
+- `d7e948d` **Mentees source-of-truth table BUILT** (migration `9986_mentees.sql`,
+  staff RLS) — mirrors all 19 Notion "Mentees Database" columns, seeded once from
+  the user's export (152/182 client_id-matched by name), editable in-dashboard via a
+  new "Mentee record" card on Journeys. db.ts fetch/save + RAW_TABLES + help article.
+  Adversarially reviewed (10 findings; key-by-clientId medium fixed + low-sev fixes).
+- `dbea260` **Fixed the Journeys stage-rail white-space gap** before the Discovery
+  node (`.stage:first-child { flex: 0 0 auto }`).
+- `1ba9ab7` Backlog entry for the Mentees table (later built).
+
+## Directional decisions (continued)
+
+- **Mentees table design (confirmed with the user via AskUserQuestion):** mirror
+  ALL 19 Notion columns; EDITABLE in the dashboard (one-time Notion import, edits
+  persist, re-seed won't clobber); surfaced as a card in the Journeys detail pane.
+  Architecture: a real HJG-owned table (not a view) because it mirrors external
+  Notion data + must be editable. client_id auto-matched by name; ~30 prospects not
+  in CA get null client_id (seeded, but only reachable via Raw data).
+- **Export-all question answered:** yes it includes hand-entered tables, but the
+  user's export had EMPTY discovery_outcomes + mentee_outcomes (no saved overrides
+  yet) — so step-2 data comes from Notion + the CA mirror, not dashboard overrides.
+- **Days-per-category over meeting-counts:** the user clarified the per-mentee
+  columns should show TIME spent in each program category, not per-month meeting
+  counts — so the tier-stacked rhythm chart was replaced by a days-per-stage chart.
+
+## Open / next (updated)
+
+- **Apply `9986_mentees.sql`** (Supabase SQL Editor) to create + seed the mentees
+  table. Next new migration is `9985_…`. `9987_journeys_stage_colors.sql` (session
+  007) still pending too.
+- Browser-verify: the Mentee-record card round-trip; the new days-per-stage chart +
+  meeting list; the stage-rail gap fix; the moved graduation editor; the removed KPI
+  card — all in light + dark.
