@@ -1213,6 +1213,36 @@ export async function fetchMenteeRecordsByClient(): Promise<Map<number, MenteeRe
   return map;
 }
 
+// Every mentee record (incl. prospects with a null client_id), normalized and
+// sorted by name. Powers the standalone, Notion-like "Mentees" tab.
+export async function fetchAllMenteeRecords(): Promise<MenteeRecord[]> {
+  const { data, error } = await supabase.from("mentees").select(MENTEE_SELECT);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as MenteeRecord[])
+    .map(normalizeMenteeRecord)
+    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+}
+
+// Update a mentee record by its uuid PK — works for ANY row, including the
+// null-client_id prospects the Journeys card can't reach. Returns the saved row.
+export async function updateMenteeRecordById(id: string, edits: MenteeRecordEdit): Promise<MenteeRecord> {
+  const { data, error } = await supabase.from("mentees").update(edits).eq("id", id).select(MENTEE_SELECT).single();
+  if (error) throw new Error(error.message);
+  return normalizeMenteeRecord(data as MenteeRecord);
+}
+
+// Create a brand-new mentee record (a manually added person, no Notion/CA origin).
+export async function createMenteeRecord(userId: string, name: string, edits: MenteeRecordEdit = {}): Promise<MenteeRecord> {
+  const notionKey = `manual:${name.trim().toLowerCase()}:${Date.now()}`;
+  const { data, error } = await supabase
+    .from("mentees")
+    .insert({ client_id: null, notion_key: notionKey, name: name.trim() || "New mentee", created_by: userId || null, ...edits })
+    .select(MENTEE_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  return normalizeMenteeRecord(data as MenteeRecord);
+}
+
 // Create or update the source-of-truth record for a CA client. Read-modify-write
 // by client_id so it works whether or not a Notion-seeded row already exists.
 export async function saveMenteeRecord(

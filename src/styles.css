@@ -442,6 +442,20 @@ body {
 }
 .grad-editor__synced { font-size: 11px; }
 
+/* --- Mentees tab (Notion-like editable grid) --- */
+.mentees__toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+.mentees__scroll { max-height: 70vh; overflow: auto; margin-top: 10px; }
+.mentees__table thead th { position: sticky; top: 0; z-index: 1; background: var(--panel-2); white-space: nowrap; }
+.mentees__table td { padding: 0; }
+.mentees__ca { text-align: center; color: var(--muted); font-size: 12px; min-width: 30px; }
+.mentees__cell {
+  width: 100%; min-width: 80px; box-sizing: border-box; border: 1px solid transparent; background: transparent;
+  color: var(--text); padding: 6px 8px; font-size: 13px; border-radius: 0;
+}
+.mentees__cell:hover { border-color: var(--line); }
+.mentees__cell:focus { border-color: var(--accent); outline: none; background: var(--panel); }
+.mentees__row--saving { opacity: 0.6; }
+
 /* --- Company options tab --- */
 .options-grid { display: flex; flex-direction: column; gap: 18px; }
 .option-row { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
