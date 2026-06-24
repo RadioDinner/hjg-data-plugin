@@ -400,8 +400,7 @@ body {
 .journey__rhythm-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .journey__rhythm-head h3 { margin: 0; font-size: 14px; }
 .journey__rhythm-head .muted { font-size: 12px; }
-.rhythm-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
-.rhythm-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+/* Small colored square used to mark a meeting's pipeline tier in the meeting list. */
 .rhythm-legend__swatch { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; flex: none; box-sizing: border-box; }
 
 /* --- Mentee record (source of truth) card --- */

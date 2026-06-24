@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../auth";
 import {
   MENTEE_ACTIVE_WINDOW_DAYS,
@@ -24,6 +24,7 @@ import {
   type StageBasis,
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
+import { MenteeStatusEditor } from "../components/MenteeStatusEditor";
 import { useChartTokens } from "../theme";
 
 const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
@@ -32,11 +33,6 @@ const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x":
 // 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation — so a meeting's tier
 // reuses the exact color its stage shows on the rail.
 const TIER_COLOR_INDEX: Record<PipelineTier, number> = { jumpstart: 1, "4x": 2, "2x": 3, "1x": 4, graduated: 5 };
-// Meeting-rhythm stack order, bottom→top: pipeline progression reads red→green
-// upward, matching the rail. "Other" (below) sits underneath as a neutral base.
-const RHYTHM_TIERS: PipelineTier[] = ["jumpstart", "4x", "2x", "1x", "graduated"];
-// Meetings with no resolvable pipeline tier (group sessions / untiered) — neutral grey.
-const OTHER_TIER_COLOR = "#94a3b8";
 
 // Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
 function spanDays(a: string | null, b: string | null): number | null {
@@ -45,7 +41,6 @@ function spanDays(a: string | null, b: string | null): number | null {
 }
 
 type ChartStyle = { background: string; border: string; borderRadius: number; color: string };
-const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const STATUS_LABEL: Record<ResolvedMenteeStatus, string> = {
   active: "Active",
@@ -101,32 +96,29 @@ function StageNode({ label, date, gap, color }: { label: string; date: string | 
   );
 }
 
-// Tooltip for the per-tier meeting-rhythm chart: lists only the tiers present
-// that month (with their swatch) plus the month total.
-function RhythmTooltip({
+// Tooltip for the "time in each program stage" chart: the category + how long the
+// mentee spent in it (humanized + exact days).
+function DaysTooltip({
   active,
   payload,
-  label,
   tip,
 }: {
   active?: boolean;
-  payload?: { name: string; dataKey: string; value: number; color: string; payload: { total: number } }[];
-  label?: string;
+  payload?: { payload: { category: string; days: number; ongoing: boolean } }[];
   tip?: ChartStyle;
 }) {
   if (!active || !payload || !payload.length) return null;
-  const rows = payload.filter((p) => p.value > 0);
-  const total = payload[0]?.payload?.total ?? rows.reduce((s, p) => s + p.value, 0);
+  const p = payload[0].payload;
   return (
     <div style={{ ...tip, padding: "6px 10px", fontSize: 13 }}>
-      <div style={{ marginBottom: 4 }}>{label}</div>
-      {rows.map((p) => (
-        <div key={p.dataKey} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 2, background: p.color, display: "inline-block" }} />
-          {p.name}: {p.value}
-        </div>
-      ))}
-      <div className="muted" style={{ marginTop: 2 }}>Total: {total}</div>
+      <div style={{ marginBottom: 2 }}>{p.category}</div>
+      <div>
+        {humanizeDays(p.days)}
+        {p.ongoing ? " (so far)" : ""}
+      </div>
+      <div className="muted" style={{ marginTop: 2 }}>
+        {p.days} day{p.days === 1 ? "" : "s"}
+      </div>
     </div>
   );
 }
@@ -199,34 +191,50 @@ function Timeline({
     }
   }
 
-  // Observed meeting rhythm: meetings per calendar month, split by the pipeline
-  // tier of each meeting (its engagement's tier) so the column shows how a
-  // mentee's meetings distribute across stages over time. Untiered/group meetings
-  // fall into "other".
-  const rhythm = useMemo(() => {
-    type Row = Record<PipelineTier, number> & { other: number; total: number };
-    const m = new Map<string, Row>();
-    for (const mt of journey.meetings) {
-      const k = mt.date.slice(0, 7);
-      let row = m.get(k);
-      if (!row) {
-        row = { jumpstart: 0, "4x": 0, "2x": 0, "1x": 0, graduated: 0, other: 0, total: 0 };
-        m.set(k, row);
+  // Days spent in each program category: the span from entering a stage to
+  // entering the next reached stage. The current (last reached) stage runs to
+  // today if the mentee is still active, else to their last activity. Each column
+  // is colored to match its stage on the rail above, so the bar heights show —
+  // visually — how long the mentee spent in each category.
+  const stageDays = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const milestones = [
+      journey.discoveryDate,
+      journey.stageDates.jumpstart,
+      journey.stageDates["4x"],
+      journey.stageDates["2x"],
+      journey.stageDates["1x"],
+      journey.stageDates.graduated,
+    ];
+    const cats = [
+      { full: "Discovery → JumpStart", short: "Disc→JS", colorIdx: 0 },
+      { full: "JumpStart", short: "JumpStart", colorIdx: 1 },
+      { full: "4x mentoring", short: "4x", colorIdx: 2 },
+      { full: "2x mentoring", short: "2x", colorIdx: 3 },
+      { full: "1x mentoring", short: "1x", colorIdx: 4 },
+    ];
+    const out: { category: string; short: string; days: number; color: string; ongoing: boolean }[] = [];
+    for (let i = 0; i < cats.length; i++) {
+      const start = milestones[i];
+      if (!start) continue;
+      let end: string | null = null;
+      for (let j = i + 1; j < milestones.length; j++) {
+        if (milestones[j]) {
+          end = milestones[j];
+          break;
+        }
       }
-      if (mt.tier) row[mt.tier] += 1;
-      else row.other += 1;
-      row.total += 1;
+      const ongoing = !end;
+      if (!end) end = journey.resolvedStatus === "active" ? today : journey.lastMeeting ?? today;
+      const days = spanDays(start, end);
+      if (days == null || days < 0) continue;
+      out.push({ category: cats[i].full, short: cats[i].short, days, color: colors[cats[i].colorIdx], ongoing });
     }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, row]) => {
-      const [y, mo] = k.split("-").map(Number);
-      return { month: `${SHORT[mo - 1]} ’${String(y).slice(2)}`, ...row };
-    });
-  }, [journey.meetings]);
+    return out;
+  }, [journey.discoveryDate, journey.stageDates, journey.resolvedStatus, journey.lastMeeting, colors]);
 
-  // Which tiers / "other" actually occur — drives the legend and table columns so
-  // empty buckets don't clutter the view.
-  const presentTiers = useMemo(() => RHYTHM_TIERS.filter((t) => rhythm.some((r) => r[t] > 0)), [rhythm]);
-  const hasOther = useMemo(() => rhythm.some((r) => r.other > 0), [rhythm]);
+  // Every recorded meeting, ascending — listed in the grid below the chart.
+  const meetingList = journey.meetings;
 
   return (
     <div className="journey">
@@ -288,78 +296,80 @@ function Timeline({
 
       <div className="journey__rhythm">
         <div className="journey__rhythm-head">
-          <h3>Observed meeting rhythm</h3>
+          <h3>Time in each program stage</h3>
           <span className="muted">
-            Meetings per month, colored by the pipeline tier of each meeting — see how a mentee’s meetings distribute
-            across stages over time (the tier comes from the engagement).
+            Days spent in each category — from entering a stage to entering the next (the current stage runs to today).
+            Bars match the stage-rail colors above.
           </span>
         </div>
-
-        {(presentTiers.length > 0 || hasOther) && (
-          <div className="rhythm-legend">
-            {presentTiers.map((t) => (
-              <span key={t} className="rhythm-legend__item">
-                <span className="rhythm-legend__swatch" style={{ background: colors[TIER_COLOR_INDEX[t]] }} />
-                {TIER_LABEL[t]}
-              </span>
-            ))}
-            {hasOther && (
-              <span className="rhythm-legend__item">
-                <span className="rhythm-legend__swatch" style={{ background: OTHER_TIER_COLOR }} />
-                Other
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="chart-card__split chart-card__split--both">
-          <div style={{ width: "100%", height: 180 }}>
+        {stageDays.length > 0 ? (
+          <div style={{ width: "100%", height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rhythm}>
+              <BarChart data={stageDays} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} interval="preserveStartEnd" />
-                <YAxis allowDecimals={false} width={24} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
-                <Tooltip content={<RhythmTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                <Bar dataKey="other" stackId="r" fill={OTHER_TIER_COLOR} name="Other" />
-                <Bar dataKey="jumpstart" stackId="r" fill={colors[1]} name="JumpStart" />
-                <Bar dataKey="4x" stackId="r" fill={colors[2]} name="4x" />
-                <Bar dataKey="2x" stackId="r" fill={colors[3]} name="2x" />
-                <Bar dataKey="1x" stackId="r" fill={colors[4]} name="1x" />
-                <Bar dataKey="graduated" stackId="r" fill={colors[5]} name="Graduated" />
+                <XAxis dataKey="short" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} interval={0} />
+                <YAxis allowDecimals={false} width={34} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
+                <Tooltip content={<DaysTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Bar dataKey="days" radius={[3, 3, 0, 0]}>
+                  {stageDays.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {rhythm.length > 0 && (
-            <div className="table-scroll" style={{ width: "100%" }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Month</th>
-                    {presentTiers.map((t) => (
-                      <th key={t}>{TIER_LABEL[t]}</th>
-                    ))}
-                    {hasOther && <th>Other</th>}
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rhythm.map((r) => (
-                    <tr key={r.month}>
-                      <td>{r.month}</td>
-                      {presentTiers.map((t) => (
-                        <td key={t} className="num">
-                          {r[t] || "—"}
-                        </td>
-                      ))}
-                      {hasOther && <td className="num">{r.other || "—"}</td>}
-                      <td className="num">{r.total}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        ) : (
+          <div className="muted" style={{ fontSize: 12, padding: "8px 0" }}>No stage dates recorded yet for this mentee.</div>
+        )}
+      </div>
+
+      <div className="journey__rhythm">
+        <div className="journey__rhythm-head">
+          <h3>Meetings ({meetingList.length})</h3>
+          <span className="muted">Every recorded meeting for this mentee, earliest first.</span>
         </div>
+        {meetingList.length > 0 ? (
+          <div className="table-scroll" style={{ width: "100%", maxHeight: 320, overflowY: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Meeting</th>
+                  <th>Tier</th>
+                  <th>Coach</th>
+                </tr>
+              </thead>
+              <tbody>
+                {meetingList.map((m, i) => (
+                  <tr key={i}>
+                    <td className="num">{m.date}</td>
+                    <td>
+                      {m.name}
+                      {m.isGroup && (
+                        <span className="pill" style={{ marginLeft: 6 }}>
+                          group
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {m.tier ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span className="rhythm-legend__swatch" style={{ background: colors[TIER_COLOR_INDEX[m.tier]] }} />
+                          {TIER_LABEL[m.tier]}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>{m.coachName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="muted" style={{ fontSize: 12, padding: "8px 0" }}>No meetings recorded.</div>
+        )}
       </div>
 
       <div className="journey__status card card--inset">
@@ -771,6 +781,16 @@ export function JourneysView() {
       ) : (
         <>
           {journeys.length > 0 && <PipelineSummary journeys={journeys} />}
+          {journeys.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <MenteeStatusEditor
+                journeys={journeys}
+                userId={user?.id ?? ""}
+                onSaved={() => load(stageBasis)}
+                onError={setError}
+              />
+            </div>
+          )}
           <div className="journeys">
           <div className="journeys__list">
             <input
