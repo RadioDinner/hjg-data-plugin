@@ -1,5 +1,6 @@
 import { downloadCsv } from "../csv";
 import { SectionId } from "./SectionId";
+import { formatMaybeDate } from "../format";
 
 interface Props {
   title: string;
@@ -42,7 +43,7 @@ export function ExploreModal({ title, columns, rows, onClose }: Props) {
                 <tr key={i}>
                   {row.map((cell, j) => (
                     <td key={j} className={typeof cell === "number" ? "num" : ""}>
-                      {cell}
+                      {typeof cell === "number" ? cell : formatMaybeDate(cell)}
                     </td>
                   ))}
                 </tr>

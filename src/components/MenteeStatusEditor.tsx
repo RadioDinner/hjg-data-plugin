@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SectionId } from "./SectionId";
+import { fmtDate } from "../format";
 import {
   clearMenteeOutcome,
   saveMenteeRecord,
@@ -258,7 +259,7 @@ export function MenteeStatusEditor({
                     title={confirmed ? "Confirmed — using the synced date" : "Click to confirm: use this synced date as the override"}
                     onClick={() => setDates((d) => ({ ...d, [f.key]: syncedVal }))}
                   >
-                    {confirmed ? "✓ " : ""}synced: {syncedVal}
+                    {confirmed ? "✓ " : ""}synced: {fmtDate(syncedVal)}
                   </button>
                 ) : (
                   <span className="grad-editor__synced muted">synced: —</span>

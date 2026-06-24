@@ -110,6 +110,20 @@ duplication). `onSaved → load()` reloads records so §106 + the "Only hand rev
 update. **Data-model note for future-me:** §106 → `mentees`; §107 → `mentee_outcomes`;
 §105 Meetings is read-only (kept that way — no save affordances). UI-only.
 
+**(8) Dates display as MM-DD-YYYY everywhere (US format).** New `src/format.ts` helpers:
+`fmtDate` (YYYY-MM-DD → MM-DD-YYYY), `fmtDateTime` (ISO ts → MM-DD-YYYY h:mm AM),
+`formatMaybeDate` (reformats a leading ISO date inside any string, preserving trailing
+time). Applied at: the generic display tables — `SortableTable` (covers Raw data + Pay
+Explore) + `ExploreModal` (auto-detect, render-only) — and bespoke sites: Journeys rail
+nodes + meetings + hand-reviewed badge, `MenteeStatusEditor` synced button, Margins
+sessions, Discovery call date, `freedomTable`, Pay-Explore engagement end, Metrics "Data
+as of" + compare range labels, Admin sync times, Build-payout "Last saved".
+**Deliberately NOT changed:** `<input type="date">` fields (browser renders the OS locale
+— US already shows MM/DD/YYYY; can't restyle) and **CSV/XLSX exports stay ISO YYYY-MM-DD**
+(sortable / unambiguous for machines — display formatting is render-only, exports use raw
+values). If the user wants exports in MM-DD-YYYY too, change `csv.ts`/`xlsx.ts`/the `csv`
+column fns. UI-only — no migration, no verify change.
+
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
    HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.

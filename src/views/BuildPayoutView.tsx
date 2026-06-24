@@ -18,6 +18,7 @@ import {
 } from "../db";
 import { useAuth } from "../auth";
 import { downloadCsv } from "../csv";
+import { fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 
@@ -553,7 +554,7 @@ export function BuildPayoutView({
               )}
               {savedRec && (
                 <div className="muted" style={{ fontSize: 11, marginTop: 8 }}>
-                  Last saved {savedRec.reviewedAt ? new Date(savedRec.reviewedAt).toLocaleString() : "—"} · status{" "}
+                  Last saved {fmtDateTime(savedRec.reviewedAt)} · status{" "}
                   {savedRec.status}
                 </div>
               )}

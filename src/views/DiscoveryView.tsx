@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { HelpButton } from "../components/HelpDrawer";
+import { fmtDate } from "../format";
 import {
   clearDiscoveryOutcome,
   fetchDiscoveryCalls,
@@ -79,7 +80,7 @@ function DiscoveryRow({
 
   return (
     <tr>
-      <td>{call.date ?? "—"}</td>
+      <td>{call.date ? fmtDate(call.date) : "—"}</td>
       <td>{call.prospect}</td>
       <td className="muted">{call.type}</td>
       <td>

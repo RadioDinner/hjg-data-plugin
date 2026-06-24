@@ -52,7 +52,7 @@ import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 import { useChartTokens } from "../theme";
 import { downloadCsv } from "../csv";
-import { num, pct, signed, signedPct, signedPp } from "../format";
+import { num, pct, signed, signedPct, signedPp, fmtDate, fmtDateTime } from "../format";
 
 type ChartCardCell = string | number;
 type ChartCardTable = { columns: string[]; rows: ChartCardCell[][] };
@@ -233,7 +233,7 @@ function reduceConvRate(
 }
 
 function rangeLabel(from: string, to: string): string {
-  return `${from} → ${to}`;
+  return `${fmtDate(from)} → ${fmtDate(to)}`;
 }
 
 // A per-month Δ table for a single metric, zipping Period A and Period B by month
@@ -964,7 +964,7 @@ export function MetricsView() {
   const freedomTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Mentee", "JumpStart completed", "Graduated", "1-on-1 sessions"],
-      rows: freedomReport.rows.map((r) => [r.name, r.windowStart, r.graduationDate, r.meetings]),
+      rows: freedomReport.rows.map((r) => [r.name, fmtDate(r.windowStart), fmtDate(r.graduationDate), r.meetings]),
     }),
     [freedomReport]
   );
@@ -1491,7 +1491,7 @@ export function MetricsView() {
 
       {lastSync && (
         <p className="view__hint" style={{ marginTop: 4 }}>
-          Data as of {new Date(lastSync).toLocaleString()} — re-sync on the Admin tab to refresh.
+          Data as of {fmtDateTime(lastSync)} — re-sync on the Admin tab to refresh.
         </p>
       )}
 

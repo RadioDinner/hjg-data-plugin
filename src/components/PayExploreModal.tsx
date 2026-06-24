@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { engagementTier, type PayLedgerRow, type PayInvoiceInput, type PayEngagementInput } from "../db";
 import { SortableTable, type Row, type SortColumn } from "./SortableTable";
 import { SectionId } from "./SectionId";
+import { fmtDate } from "../format";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -219,7 +220,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       { key: "tier", label: "Tier" },
       { key: "name", label: "Engagement" },
       { key: "startDate", label: "Start" },
-      { key: "endDate", label: "End", format: (r) => (r.endDate ? String(r.endDate) : "ongoing") },
+      { key: "endDate", label: "End", format: (r) => (r.endDate ? fmtDate(String(r.endDate)) : "ongoing") },
       { key: "isCanceled", label: "Canceled", format: (r) => (r.isCanceled ? "yes" : "no") },
     ];
     return { columns, rows };

@@ -5,6 +5,7 @@ import { useChartTokens } from "../theme";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 import { downloadCsv } from "../csv";
+import { fmtDate } from "../format";
 import {
   PROGRAMS,
   PROGRAM_MEETING_HOURS,
@@ -346,7 +347,7 @@ export function MarginsView() {
                   <tbody>
                     {drillSessions.map((s, i) => (
                       <tr key={i}>
-                        <td className="num">{s.date}</td>
+                        <td className="num">{fmtDate(s.date)}</td>
                         <td className="num">{s.time ?? "—"}</td>
                         <td>{s.coachName}</td>
                         <td>

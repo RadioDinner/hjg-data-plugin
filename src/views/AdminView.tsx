@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { triggerSync } from "../api";
 import { useAuth } from "../auth";
 import { SectionId } from "../components/SectionId";
+import { fmtDateTime } from "../format";
 import {
   MANUAL_METRICS,
   fetchCoachesWithSettings,
@@ -18,7 +19,7 @@ import {
 } from "../db";
 
 function fmtTime(s: string | null): string {
-  return s ? new Date(s).toLocaleString() : "—";
+  return fmtDateTime(s);
 }
 
 function currentMonthYm(): string {

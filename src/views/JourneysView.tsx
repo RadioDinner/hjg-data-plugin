@@ -21,6 +21,7 @@ import {
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { fmtDate } from "../format";
 import { MenteeStatusEditor } from "../components/MenteeStatusEditor";
 import { useChartTokens } from "../theme";
 
@@ -146,7 +147,7 @@ function StageNode({
         <span className="stage__label" style={reached ? { color } : undefined}>
           {label}
         </span>
-        <span className="stage__date">{date ?? (exit ? "exited" : "—")}</span>
+        <span className="stage__date">{date ? fmtDate(date) : exit ? "exited" : "—"}</span>
       </div>
     </div>
   );
@@ -392,7 +393,7 @@ function Timeline({
               <tbody>
                 {meetingList.map((m, i) => (
                   <tr key={i}>
-                    <td className="num">{m.date}</td>
+                    <td className="num">{fmtDate(m.date)}</td>
                     <td>
                       {m.name}
                       {m.isGroup && (
@@ -842,8 +843,8 @@ function MenteeRecordCard({
           <span>Hand reviewed</span>
         </label>
         {reviewed ? (
-          <span className="pill pill--mentee-graduated" title={reviewedAt ? `Reviewed ${reviewedAt}` : undefined}>
-            ✓ Hand reviewed{reviewedAt ? ` · ${reviewedAt.slice(0, 10)}` : ""}
+          <span className="pill pill--mentee-graduated" title={reviewedAt ? `Reviewed ${fmtDate(reviewedAt)}` : undefined}>
+            ✓ Hand reviewed{reviewedAt ? ` · ${fmtDate(reviewedAt)}` : ""}
           </span>
         ) : (
           <span className="muted" style={{ fontSize: 12 }}>Not yet hand-reviewed</span>

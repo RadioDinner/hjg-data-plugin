@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { downloadCsv } from "../csv";
+import { formatMaybeDate } from "../format";
 
 export type Cell = string | number | boolean | null;
 export type Row = Record<string, Cell>;
@@ -16,6 +17,13 @@ export interface SortColumn {
 }
 
 type SortState = { key: string; dir: "asc" | "desc" } | null;
+
+// Default cell rendering: blanks -> "—", ISO date strings -> MM-DD-YYYY, everything
+// else (numbers, booleans) unchanged from prior behavior.
+function displayCell(v: Cell): ReactNode {
+  if (v == null || v === "") return "—";
+  return typeof v === "string" ? formatMaybeDate(v) : v;
+}
 
 // A presentational table whose columns sort on click (tri-state: none → asc →
 // desc → none) and whose current (sorted) view exports to CSV. Filtering lives
@@ -108,7 +116,7 @@ export function SortableTable({
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.numeric ? "num" : ""}>
-                    {c.format ? c.format(r) : (r[c.key] ?? "—")}
+                    {c.format ? c.format(r) : displayCell(r[c.key])}
                   </td>
                 ))}
               </tr>
