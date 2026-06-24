@@ -3,10 +3,59 @@
 Working notes for resuming this project in a future session. Last updated
 2026-06-24 (session 009b — mentee-management rework underway).
 
-## ⏳ MENTEE MANAGEMENT REWORK (2026-06-24, session 009b) — Phase 1 of 4 SHIPPED
+## ✅ MENTEE MANAGEMENT REWORK (2026-06-24, session 009b) — ALL 4 PHASES SHIPPED
 
-A **major from-scratch rework** of the mentee/journey system is in progress (user
-directive). Decisions locked (via AskUserQuestion):
+A **major from-scratch rework** of the mentee/journey system — **complete and on
+`main`** (commits `34b5f21` P1, `90a4cbe` P2, `0eb5112` P3, `c28a6f7` P4).
+`typecheck` + `verify` (**22 sections**) + `build` all pass. **UI NOT browser-tested.**
+
+### ⚠⚠ CUTOVER — DO THIS FIRST (the new code needs it)
+1. **Apply `9975_mentees_rebuild.sql`** (Supabase SQL Editor). It **DROPS** the old
+   `mentees`, `mentee_outcomes`, `mentee_exclusions` and creates the new two-layer
+   `mentees`. Destructive + re-runnable (guarded). **Next new migration is `9974_…`.**
+2. **Re-sync** (Admin → Sync now) to populate the CA layer (the sync now materializes it),
+   **or** click **Rebuild from CA** on the Mentees tab (recomputes from the synced mirror,
+   no CA calls).
+3. **Re-enter the Notion data by hand** on the Mentees tab (status, corrections, notes).
+   Until cutover the app degrades gracefully — test-exclusion + the Freedom report fail
+   open, the Mentees tab shows an error (its new columns don't exist yet).
+
+### What shipped (4 phases)
+- **P1 — schema + CA materialization:** `9975` (two-layer `mentees`), `lib/menteeJourney.ts`
+  (pure `deriveMenteeCaRecords` + `toMenteeCaUpsertRow`, verify §20), sync materialize step
+  (writes ONLY `ca_*`), db.ts API (`fetchMentees`, `saveMenteeHand`, `createMentee`,
+  `fetchTestClientIds`, `rebuildMenteesFromCa`).
+- **P2 — Mentees management page** (`src/views/MenteesView.tsx`, rebuilt): roster table
+  (status/stage/owner/dates/meetings · search/sort/filter/CSV) + per-mentee detail (effective
+  stage rail · CA engagements + meetings history · editable hand-layer form) · Rebuild from CA
+  · + Add mentee. `lib/menteeView.ts` (effective view-model `hand ?? ca`, verify §21). **Removed**
+  JourneysView + MenteeStatusEditor + old Mentees grid; **App.tsx** drops the Journeys tab.
+  MetricsView "Meetings to Freedom!" rewired to `fetchFreedomReport()`; exclusion rewired
+  `mentee_exclusions` → `mentees.is_test`; RAW_TABLES updated.
+- **P3 — funnel & exits** (`lib/menteeFunnel.ts`, verify §22): a graph+table card on the
+  Mentees page — entered / active / exited (declined·quit·fired) / conversion per stage,
+  honoring direct graduation from 4x/2x.
+- **P4 — pipeline timing → Metrics** (`src/components/PipelineTimingCard.tsx`): the former
+  §102 leg-duration card + the start-date **cohort-compare** tool, now a Metrics card reading
+  the new table (`aggregateLegDurations` + `cohortCompare`).
+
+### ▶ ONE follow-up (tech debt, non-urgent): remove dead db.ts code
+The old journey/mentee functions remain in `src/db.ts` as **dead code** (no callers —
+confirmed by grep; build is green). They're interleaved with LIVE helpers, so deletion was
+deferred to avoid risk. **Safe to delete (typecheck is the safety net):** `fetchMenteeJourneys`,
+`aggregateJourneyDurations` (+`LegStat`), `setMenteeOutcome`, `clearMenteeOutcome`,
+`addMenteeExclusion`, `removeMenteeExclusion`, `fetchExcludedClientIds`, `fetchMenteeRosterKeys`,
+`fetchMenteeRecordsByClient`, `fetchAllMenteeRecords`, `updateMenteeRecordById`,
+`createMenteeRecord`, `saveMenteeRecord`, `fetchMenteeOutcomeRows`, `fetchDiscoveryDatesByClient`,
+`engagementTierMap`, `buildClientStages`, and types `MenteeJourney`/`MenteeMeeting`/`StageDates6`/
+`MenteeRecord`/`MenteeRecordEdit`/`MenteeStatus`/`ResolvedMenteeStatus`/`ClientStages`/`OutcomeRow`,
+consts `EXIT_STATUSES`/`MENTEE_ACTIVE_WINDOW_DAYS`/`MENTEE_SELECT`/`MENTEE_NUM_FIELDS`,
+`normalizeMenteeRecord`/`normalizeName`/`dayspan`/`maxDate` (the last two only if typecheck flags
+them unused). **KEEP:** `fetchAllMentoring`, `fetchAllEngagements`, `fetchPrimaryCoachByClient`,
+`fetchConversionPurchasesByClient`, `EngagementRow`, `fetchJyfVsMentoring`, `todayYmd`. Delete →
+`npm run typecheck` → delete whatever it flags as newly-unused → repeat until green.
+
+### Original decisions (locked via AskUserQuestion)
 - **Per-field sync split:** the new `mentees` table has a **CA layer** (`ca_*`, sync
   refreshes every run) and a **HAND layer** (status / `*_override` / Notion info /
   notes / `is_test`, staff-owned, NEVER touched by sync). App reads effective =
@@ -17,37 +66,6 @@ directive). Decisions locked (via AskUserQuestion):
   `mentee_exclusions`); "excluded/test" folds into `mentees.is_test`.
 - **Statuses:** active / graduated / quit / fired / paused / declined (each exit/grad
   records a stage + date).
-
-**Phase plan:** 1 = schema + CA materialization (DONE) · 2 = Mentees management page
-(replaces both tabs) · 3 = funnel/exit visualization · 4 = §102 → Metrics card + final
-cleanup.
-
-**▶ Phase 1 shipped (this commit) — purely ADDITIVE, build stays green, OLD tabs still
-work because `9975` is NOT applied yet:**
-- **`9975_mentees_rebuild.sql`** — drops the 3 old tables and creates the new two-layer
-  `mentees`. **DESTRUCTIVE; apply ONCE at the Phase-2 cutover, then re-sync.** Re-runnable
-  (guarded drop: only drops the OLD-schema `mentees`, detected via `notion_key`, so
-  re-pasting after cutover won't wipe hand data). `client_id` is `unique` (NULLs allowed)
-  = the onConflict target. **Next new migration is `9974_…`.**
-- **`lib/menteeJourney.ts`** — pure `deriveMenteeCaRecords()` (CA rows → per-mentee CA
-  layer: owner, stage dates, current tier, meeting counts, status guess, system start;
-  INCLUDES discovery-only clients so the funnel can count decliners) + `toMenteeCaUpsertRow()`
-  (ca_* columns only). Verify **§20** (now 20 sections).
-- **`lib/sync.ts`** — new best-effort materialize step: after the CA upserts, recompute the
-  CA layer and upsert ONLY `ca_*` columns of `mentees` (onConflict `client_id`) so a sync
-  refreshes facts without touching the hand layer. Fails soft (warning) if `9975` isn't
-  applied.
-- **`src/db.ts`** — new API: `MenteeRow`/`MenteeHandEdit`/`MenteeMgmtStatus`, `fetchMentees`,
-  `saveMenteeHand`, `createMentee`, `fetchTestClientIds` (Metrics exclusion, wired in P2),
-  `rebuildMenteesFromCa` (manual refresh over the mirror, no CA calls). **Old journey/mentee
-  functions are still present and untouched** (removed in Phase 2 at cutover).
-
-**▶ Phase 2 (next):** build the new `MenteesView` (roster table + per-mentee detail with
-CA history + editable hand layer); remove `JourneysView`, `MenteeStatusEditor`, the old
-`MenteesView` grid, and the old db.ts journey/mentee functions; rewire Metrics exclusion
-from `mentee_exclusions` → `fetchTestClientIds`; remove the Journeys tab from `App.tsx`.
-**Apply `9975` + re-sync as part of the Phase-2 cutover** (until then the new table doesn't
-exist; the materialize step no-ops with a warning).
 
 ---
 

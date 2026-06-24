@@ -67,3 +67,6 @@ Q: Sync vs hand precedence? A: Per-field split (CA owns objective history & refr
 Q: Tab layout? A: Mentees replaces both (new Mentees mgmt tab = table + detail + funnel viz; Journeys tab removed; §102 leg-timing -> Metrics card).
 Q: DB cleanup? A: Drop all three (mentees, mentee_outcomes, mentee_exclusions); fold excluded/test into new mentee status; rewire Metrics exclusion to new table.
 Q: Status model? A: Active / Graduated / Quit / Fired / Paused / Declined (each exit/grad records stage + date).
+
+--- 2026-06-24 (mid-build interjection) ---
+continue with all phases. Don't stop. You can run agents and use usage. Whatever it takes, just don't stop. I'm leaving for the night

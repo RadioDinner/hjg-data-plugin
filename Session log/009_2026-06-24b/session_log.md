@@ -129,17 +129,42 @@ scratch. Decisions locked via AskUserQuestion:
 
 Phases: 1 schema+materialize (DONE) · 2 mgmt page (replaces tabs) · 3 funnel viz · 4 §102→Metrics.
 
-### Phase 1 shipped (additive — build green, old tabs still work; `9975` NOT applied yet)
-- `supabase/migrations/9975_mentees_rebuild.sql` — drop 3 old tables + create new two-layer
-  `mentees`. DESTRUCTIVE, apply once at Phase-2 cutover then re-sync. Re-runnable via a guarded
-  drop (only the OLD-schema `mentees`, detected by `notion_key`). `client_id bigint unique`
-  (NULLs allowed) = onConflict target. Next migration `9974_`.
-- `lib/menteeJourney.ts` — pure `deriveMenteeCaRecords` (+ `toMenteeCaUpsertRow`). Includes
-  discovery-only clients (decliners) for the funnel. Verify §20.
+### ALL 4 PHASES SHIPPED to main (user said "continue all phases, don't stop")
+Commits: 34b5f21 (P1) · 90a4cbe (P2) · 0eb5112 (P3) · c28a6f7 (P4). typecheck + verify
+(**22 sections**) + build all pass at each. NOT browser-tested (headless).
+
+**P1 — schema + CA materialization (additive)**
+- `9975_mentees_rebuild.sql` — drop 3 old tables + create new two-layer `mentees`. DESTRUCTIVE,
+  apply once at cutover then re-sync. Re-runnable via guarded drop (old-schema only, by `notion_key`).
+  `client_id bigint unique` (NULLs allowed) = onConflict target. **Next migration `9974_`.**
+- `lib/menteeJourney.ts` — pure `deriveMenteeCaRecords` (+ `toMenteeCaUpsertRow`); includes
+  discovery-only decliners. Verify §20.
 - `lib/sync.ts` — best-effort materialize step writes ONLY `ca_*` columns (onConflict client_id).
 - `src/db.ts` — `MenteeRow`/`MenteeHandEdit`/`MenteeMgmtStatus`, `fetchMentees`, `saveMenteeHand`,
-  `createMentee`, `fetchTestClientIds`, `rebuildMenteesFromCa`. Old functions untouched (removed P2).
-- typecheck + verify (20) + build all pass. Committed to main.
+  `createMentee`, `fetchTestClientIds` (fail-open), `rebuildMenteesFromCa`.
+
+**P2 — Mentees management page + cutover wiring**
+- `lib/menteeView.ts` — pure effective view-model (`hand ?? ca`) + `toEffectiveMentee` +
+  `aggregateLegDurations`. Verify §21.
+- `src/views/MenteesView.tsx` rebuilt — roster table (search/sort/filter/CSV) + per-mentee detail
+  (effective stage rail, CA engagements + meetings, editable hand-layer form), Rebuild from CA,
+  + Add mentee. New db.ts: `fetchMenteeMeetings`, `fetchMenteeEngagements`, `fetchFreedomReport`.
+- Removed `JourneysView.tsx` + `MenteeStatusEditor.tsx`; App.tsx drops Journeys tab. MetricsView
+  freedom card → `fetchFreedomReport`; exclusion → `mentees.is_test`; RAW_TABLES trimmed; uiRegistry
+  retires journeys.* + adds mentees.roster/detail/funnel + metrics.pipelineTiming; help mentees.screen.
+
+**P3 — funnel & exits**
+- `lib/menteeFunnel.ts` — pure `computeFunnel` (entered/active/exited-by-reason/conversion per
+  stage; honors direct graduation from 4x/2x). Verify §22. Funnel card (graph+table) on Mentees tab;
+  help mentees.funnel.
+
+**P4 — pipeline timing → Metrics**
+- `src/components/PipelineTimingCard.tsx` — former §102 leg-durations + start-date cohort-compare,
+  now a Metrics card reading the new table. help metrics.pipelineTiming.
+
+### CUTOVER required (see HANDOFF): apply 9975 → re-sync (or Rebuild from CA) → re-enter Notion data.
+### Follow-up tech debt: remove the dead old journey/mentee functions still in db.ts (no callers;
+  interleaved with live helpers; deletion list in HANDOFF; typecheck is the safety net).
 
 ## Notes for future-me
 - The `mentees` seed (`9986`) is a one-shot Notion import, `on conflict (notion_key)
