@@ -10,8 +10,15 @@ import {
   removeMenteeExclusion,
   saveMenteeRecord,
   stageColorsFromRaw,
+  inStartWindow,
+  summarizeCohort,
+  startWindowLabel,
+  COHORT_TIERS,
   DEFAULT_STAGE_COLORS,
   EXIT_STATUSES,
+  type CohortStats,
+  type CohortTier,
+  type StartWindow,
   type MenteeJourney,
   type MenteeRecord,
   type MenteeRecordEdit,
@@ -21,7 +28,7 @@ import {
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
-import { fmtDate } from "../format";
+import { fmtDate, pct, signed, signedPp } from "../format";
 import { MenteeStatusEditor } from "../components/MenteeStatusEditor";
 import { useChartTokens } from "../theme";
 
@@ -462,6 +469,15 @@ function PipelineSummary({
   const [ownerF, setOwnerF] = useState<string>("all");
   const [overriddenGradOnly, setOverriddenGradOnly] = useState(false);
   const [handReviewedOnly, setHandReviewedOnly] = useState(false);
+  // Compare start-date cohorts (ephemeral). Off => the single roll-up (prior
+  // behavior). On => split the filtered roster into two start-date bands (A vs B)
+  // expressed as "started between N and M months ago" and compare them.
+  const [compareMode, setCompareMode] = useState(false);
+  const [aFrom, setAFrom] = useState(0);
+  const [aTo, setATo] = useState(3);
+  const [bFrom, setBFrom] = useState(4);
+  const [bTo, setBTo] = useState(6);
+  const clampMo = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
   const anyFilter =
     windowM !== "all" || statusF !== "all" || tierF !== "all" || ownerF !== "all" || overriddenGradOnly || handReviewedOnly;
   const clearFilters = () => {
@@ -533,10 +549,37 @@ function PipelineSummary({
   const displayLegs = legs.filter((l) => l.key !== "dc_grad");
   const chartData = displayLegs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n, color: legColor(l.key) }));
 
+  // --- Compare start-date cohorts. Split the (already filtered) population into
+  // two start-date bands, then run the same board roll-up on each. ---
+  const today = ymdMonthsAgo(0); // local YYYY-MM-DD, used as the windows' anchor
+  const winA: StartWindow = { fromMonths: aFrom, toMonths: aTo };
+  const winB: StartWindow = { fromMonths: bFrom, toMonths: bTo };
+  const labelA = startWindowLabel(winA);
+  const labelB = startWindowLabel(winB);
+  const cohortA = useMemo(() => cohort.filter((j) => inStartWindow(j.startDate, winA, today)), [cohort, aFrom, aTo, today]);
+  const cohortB = useMemo(() => cohort.filter((j) => inStartWindow(j.startDate, winB, today)), [cohort, bFrom, bTo, today]);
+  const legsA = useMemo(() => aggregateJourneyDurations(cohortA), [cohortA]);
+  const legsB = useMemo(() => aggregateJourneyDurations(cohortB), [cohortB]);
+  const statsA: CohortStats = useMemo(() => summarizeCohort(cohortA), [cohortA]);
+  const statsB: CohortStats = useMemo(() => summarizeCohort(cohortB), [cohortB]);
+  const gradA = legsA.find((l) => l.key === "dc_grad");
+  const gradB = legsB.find((l) => l.key === "dc_grad");
+  // Paired leg rows (A + B aligned by leg key; dc_grad lives in the tile instead).
+  const cmpLegs = useMemo(() => {
+    const ad = legsA.filter((l) => l.key !== "dc_grad");
+    const bd = legsB.filter((l) => l.key !== "dc_grad");
+    return ad.map((l, i) => ({ key: l.key, leg: l.label, avgA: l.avgDays, nA: l.n, avgB: bd[i]?.avgDays ?? null, nB: bd[i]?.n ?? 0 }));
+  }, [legsA, legsB]);
+  // Δ helpers (A − B). Lower days = faster; shown signed. Null endpoints => "—".
+  const dDelta = (a: number | null, b: number | null) => (a != null && b != null ? `${signed(a - b)}d` : "—");
+  const ppDelta = (a: number | null, b: number | null) => (a != null && b != null ? signedPp((a - b) * 100) : "—");
+  const tierPct = (n: number, total: number) => (total ? Math.round((n / total) * 100) : 0);
+
   return (
     <div className="card card--inset" style={{ marginBottom: 18 }}>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        Pipeline timing — {anyFilter ? "filtered" : "all"} mentees <HelpButton id="journeys.aggregate" label="Pipeline timing" />
+        Pipeline timing — {compareMode ? "comparing start-date cohorts" : `${anyFilter ? "filtered" : "all"} mentees`}{" "}
+        <HelpButton id="journeys.aggregate" label="Pipeline timing" />
         <SectionId id="journeys.pipelineTiming" />
       </h2>
       <p className="view__hint">
@@ -599,8 +642,21 @@ function PipelineSummary({
           <input type="checkbox" checked={handReviewedOnly} onChange={(e) => setHandReviewedOnly(e.target.checked)} />
           <span>Only hand reviewed</span>
         </label>
+        <label
+          className="journey-filters__check"
+          title="Split the roster into two start-date bands and compare how each is doing"
+        >
+          <input type="checkbox" checked={compareMode} onChange={(e) => setCompareMode(e.target.checked)} />
+          <span>Compare start-date cohorts</span>
+        </label>
         <span className="journey-filters__count muted">
-          Showing {counts.total} of {rosterTotal}
+          {compareMode ? (
+            <>
+              A: {statsA.total} · B: {statsB.total}
+            </>
+          ) : (
+            <>Showing {counts.total} of {rosterTotal}</>
+          )}
           {anyFilter && (
             <button className="btn btn--sm" style={{ marginLeft: 8 }} onClick={clearFilters}>
               Clear filters
@@ -609,78 +665,244 @@ function PipelineSummary({
         </span>
       </div>
 
-      <div className="stat-row">
-        <div className="stat">
-          <span className="stat__value">{counts.total}</span>
-          <span className="stat__label">Mentees</span>
+      {compareMode && (
+        <div
+          className="cohort-windows"
+          style={{ display: "flex", flexWrap: "wrap", gap: 18, margin: "4px 0 14px", alignItems: "center" }}
+        >
+          <span className="muted" style={{ fontSize: 12 }}>
+            “Start” = system start (discovery → JumpStart → JYF → first meeting), the basis for days in system.
+          </span>
+          {([
+            { tag: "A", color: ct.accent, from: aFrom, to: aTo, setFrom: setAFrom, setTo: setATo, n: statsA.total },
+            { tag: "B", color: ct.cmp, from: bFrom, to: bTo, setFrom: setBFrom, setTo: setBTo, n: statsB.total },
+          ] as const).map((c) => (
+            <span key={c.tag} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <span style={{ width: 11, height: 11, borderRadius: 2, background: c.color, display: "inline-block" }} />
+              <strong>Cohort {c.tag}</strong> — started
+              <input
+                type="number"
+                min={0}
+                value={c.from}
+                onChange={(e) => c.setFrom(clampMo(e.target.value))}
+                style={{ width: 52 }}
+                aria-label={`Cohort ${c.tag} from months ago`}
+              />
+              to
+              <input
+                type="number"
+                min={0}
+                value={c.to}
+                onChange={(e) => c.setTo(clampMo(e.target.value))}
+                style={{ width: 52 }}
+                aria-label={`Cohort ${c.tag} to months ago`}
+              />
+              months ago
+              <span className="muted">· {c.n} mentees</span>
+            </span>
+          ))}
         </div>
-        <div className="stat">
-          <span className="stat__value">{counts.active}</span>
-          <span className="stat__label">Active</span>
-        </div>
-        <div className="stat">
-          <span className="stat__value">{counts.graduated}</span>
-          <span className="stat__label">Graduated</span>
-        </div>
-        <div className="stat">
-          <span className="stat__value">{humanizeDays(grad?.avgDays ?? null)}</span>
-          <span className="stat__label">Avg time to graduate</span>
-        </div>
-      </div>
+      )}
 
-      <div className="chart-card__split chart-card__split--both">
-        <div style={{ width: "100%", height: 220 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 48 }}>
-              <CartesianGrid stroke={GRID} horizontal={false} />
-              <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
-              <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
-              <Tooltip content={<LegTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-              <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
-                {chartData.map((d, i) => (
-                  <Cell key={i} fill={d.color} />
-                ))}
-                <LabelList
-                  dataKey="avg"
-                  position="right"
-                  style={{ fill: AXIS, fontSize: 11 }}
-                  formatter={(v) => (v == null ? "" : `${v}d`)}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="table-scroll" style={{ width: "100%" }}>
+      {compareMode ? (
+        <div className="table-scroll" style={{ marginBottom: 14 }}>
           <table className="table">
             <thead>
               <tr>
-                <th>Stage leg</th>
-                <th>Mentees</th>
-                <th>Average</th>
-                <th>Median</th>
+                <th>How they’re doing</th>
+                <th>
+                  <span style={{ color: ct.accent }}>● </span>A · {labelA}
+                </th>
+                <th>
+                  <span style={{ color: ct.cmp }}>● </span>B · {labelB}
+                </th>
+                <th>Δ (A − B)</th>
               </tr>
             </thead>
             <tbody>
-              {displayLegs.map((l) => (
-                <tr key={l.key}>
-                  <td>
-                    <span
-                      style={{
-                        display: "inline-block", width: 10, height: 10, borderRadius: 2,
-                        background: legColor(l.key), marginRight: 6, verticalAlign: "middle",
-                      }}
-                    />
-                    {l.label}
-                  </td>
-                  <td className="num">{l.n}</td>
-                  <td className="num">{humanizeDays(l.avgDays)}</td>
-                  <td className="num">{humanizeDays(l.medianDays)}</td>
-                </tr>
-              ))}
+              <tr>
+                <td>Mentees</td>
+                <td className="num">{statsA.total}</td>
+                <td className="num">{statsB.total}</td>
+                <td className="num">{signed(statsA.total - statsB.total)}</td>
+              </tr>
+              <tr>
+                <td>Avg days in system</td>
+                <td className="num">{humanizeDays(statsA.avgDaysInSystem)}</td>
+                <td className="num">{humanizeDays(statsB.avgDaysInSystem)}</td>
+                <td className="num">{dDelta(statsA.avgDaysInSystem, statsB.avgDaysInSystem)}</td>
+              </tr>
+              <tr>
+                <td>Avg time to graduate</td>
+                <td className="num">{humanizeDays(gradA?.avgDays ?? null)}</td>
+                <td className="num">{humanizeDays(gradB?.avgDays ?? null)}</td>
+                <td className="num">{dDelta(gradA?.avgDays ?? null, gradB?.avgDays ?? null)}</td>
+              </tr>
+              <tr>
+                <td>% graduated</td>
+                <td className="num">{pct(statsA.pctGraduated)}</td>
+                <td className="num">{pct(statsB.pctGraduated)}</td>
+                <td className="num">{ppDelta(statsA.pctGraduated, statsB.pctGraduated)}</td>
+              </tr>
             </tbody>
           </table>
         </div>
-      </div>
+      ) : (
+        <div className="stat-row">
+          <div className="stat">
+            <span className="stat__value">{counts.total}</span>
+            <span className="stat__label">Mentees</span>
+          </div>
+          <div className="stat">
+            <span className="stat__value">{counts.active}</span>
+            <span className="stat__label">Active</span>
+          </div>
+          <div className="stat">
+            <span className="stat__value">{counts.graduated}</span>
+            <span className="stat__label">Graduated</span>
+          </div>
+          <div className="stat">
+            <span className="stat__value">{humanizeDays(grad?.avgDays ?? null)}</span>
+            <span className="stat__label">Avg time to graduate</span>
+          </div>
+        </div>
+      )}
+
+      {compareMode ? (
+        <>
+          <div className="chart-card__split chart-card__split--both">
+            <div style={{ width: "100%", height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cmpLegs} layout="vertical" margin={{ left: 8, right: 56 }} barGap={2}>
+                  <CartesianGrid stroke={GRID} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
+                  <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
+                  <Tooltip
+                    contentStyle={TOOLTIP}
+                    cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                    formatter={(v, n) => [v == null ? "—" : `${v}d`, n === "avgA" ? labelA : labelB]}
+                  />
+                  <Bar dataKey="avgA" fill={ct.accent} radius={[0, 3, 3, 0]}>
+                    <LabelList dataKey="avgA" position="right" style={{ fill: AXIS, fontSize: 10 }} formatter={(v) => (v == null ? "" : `${v}d`)} />
+                  </Bar>
+                  <Bar dataKey="avgB" fill={ct.cmp} radius={[0, 3, 3, 0]}>
+                    <LabelList dataKey="avgB" position="right" style={{ fill: AXIS, fontSize: 10 }} formatter={(v) => (v == null ? "" : `${v}d`)} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="table-scroll" style={{ width: "100%" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Stage leg</th>
+                    <th>A n</th>
+                    <th>A avg</th>
+                    <th>B n</th>
+                    <th>B avg</th>
+                    <th>Δ (A − B)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cmpLegs.map((l) => (
+                    <tr key={l.key}>
+                      <td>{l.leg}</td>
+                      <td className="num">{l.nA}</td>
+                      <td className="num">{humanizeDays(l.avgA)}</td>
+                      <td className="num">{l.nB}</td>
+                      <td className="num">{humanizeDays(l.avgB)}</td>
+                      <td className="num">{dDelta(l.avgA, l.avgB)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="table-scroll" style={{ marginTop: 6 }}>
+            <h3 style={{ margin: "8px 0 6px", fontSize: 14 }}>Current-tier mix (how far each cohort has progressed)</h3>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Current tier</th>
+                  <th>
+                    <span style={{ color: ct.accent }}>● </span>A — {labelA}
+                  </th>
+                  <th>
+                    <span style={{ color: ct.cmp }}>● </span>B — {labelB}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {COHORT_TIERS.map((t: CohortTier) => (
+                  <tr key={t}>
+                    <td>{TIER_LABEL[t]}</td>
+                    <td className="num">
+                      {statsA.tierMix[t]} ({tierPct(statsA.tierMix[t], statsA.total)}%)
+                    </td>
+                    <td className="num">
+                      {statsB.tierMix[t]} ({tierPct(statsB.tierMix[t], statsB.total)}%)
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <div className="chart-card__split chart-card__split--both">
+          <div style={{ width: "100%", height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 48 }}>
+                <CartesianGrid stroke={GRID} horizontal={false} />
+                <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
+                <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
+                <Tooltip content={<LegTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
+                  {chartData.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
+                  ))}
+                  <LabelList
+                    dataKey="avg"
+                    position="right"
+                    style={{ fill: AXIS, fontSize: 11 }}
+                    formatter={(v) => (v == null ? "" : `${v}d`)}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="table-scroll" style={{ width: "100%" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Stage leg</th>
+                  <th>Mentees</th>
+                  <th>Average</th>
+                  <th>Median</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayLegs.map((l) => (
+                  <tr key={l.key}>
+                    <td>
+                      <span
+                        style={{
+                          display: "inline-block", width: 10, height: 10, borderRadius: 2,
+                          background: legColor(l.key), marginRight: 6, verticalAlign: "middle",
+                        }}
+                      />
+                      {l.label}
+                    </td>
+                    <td className="num">{l.n}</td>
+                    <td className="num">{humanizeDays(l.avgDays)}</td>
+                    <td className="num">{humanizeDays(l.medianDays)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

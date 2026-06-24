@@ -139,6 +139,19 @@ tile. Each bar now has a **day-count `LabelList`** ("Nd", position right; chart 
 widened to fit). Removed the now-dead dc_grad gradient (`<defs>`/`TOTAL_GRAD_ID`/`gradStops`/
 `totalGradientCss`). `journeys.aggregate` help updated. UI-only.
 
+**(10) Pipeline-timing (§102): "Compare start-date cohorts" tool.** A new checkbox on the
+Pipeline-timing filter bar splits the (already filtered) roster into **two start-date bands**
+— "started between N and M months ago" — and compares them side by side (default **A = 0–3 mo
+ago** vs **B = 4–6 mo ago**, both editable). A cohort's **start = system start** (discovery →
+JumpStart → JYF → first meeting; the `daysInSystem` basis, now exposed as **`MenteeJourney.startDate`**).
+In compare mode the card shows, per cohort: a headline A/B/Δ table (**Mentees, Avg days in
+system, Avg time to graduate, % graduated**), **paired stage-leg bars** (A = accent, B = cmp
+color) + a leg table with a **Δ (A − B)** column, and a **current-tier-mix** table (how far each
+cohort progressed). Pure logic in **`lib/cohortCompare.ts`** (`inStartWindow`, `monthsAgoYmd`,
+`summarizeCohort`, `startWindowLabel`), re-exported via `db.ts`, locked by **verify §19** (now 19
+sections). Single mode is unchanged. `journeys.aggregate` help updated. **UI-only — no migration,
+no schema change.**
+
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
    HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.

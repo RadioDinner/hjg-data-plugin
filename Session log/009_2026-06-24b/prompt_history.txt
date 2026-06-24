@@ -48,3 +48,11 @@ ok, now I want you to look at the data that came from the notion export. Where t
 Q: 29 graduates with no 1x meeting? A: Leave the 29 blank (only the 12 with a 1x meeting).
 Q: Where to save? A: mentees + Journeys pipeline (both mentees.graduation_date AND mentee_outcomes.graduation_date).
 -> Confirms migration 9976 as already built/pushed (d50380d). No change needed.
+
+--- 2026-06-24 (new feature request) ---
+I want to build a compare tool in the Journey's pipeline timing. I want to be able to compare how long a mentee is in the system according to start date. Like I want to compare how well our mentees are doing that have started in the last 3 months, vs ones that started between 4 and 6 months ago
+
+--- 2026-06-24 (AskUserQuestion answers — compare tool) ---
+Q: Start-date basis? A: System start (discovery -> jumpstart -> JYF -> first meeting; same as days-in-system).
+Q: Cohort controls? A: Two editable month windows (default 0-3 vs 4-6).
+Q: Compare metrics (besides leg durations)? A: ALL four — Avg days in system, Avg time to graduate, % graduated, Current-tier mix.

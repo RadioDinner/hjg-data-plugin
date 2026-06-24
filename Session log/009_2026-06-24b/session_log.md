@@ -92,8 +92,34 @@ lists exact per-month rates). Window is org-configurable as **N weeks or N month
   Raw data (`select *`) surfaces the new column; `mentee_outcomes` already drives the
   Journeys timeline. Decisions captured via AskUserQuestion.
 
+## Feature: Pipeline-timing "Compare start-date cohorts" tool (§102)
+
+- New checkbox on the Pipeline-timing filter bar (`PipelineSummary`, `JourneysView.tsx`).
+  When on, splits the (already filtered) roster into **two start-date bands** —
+  "started between N and M months ago" — and compares them. Default **A = 0–3 mo ago**
+  vs **B = 4–6 mo ago**, both editable (number inputs).
+- A cohort's **start = system start** = first of discovery → JumpStart → JYF purchase →
+  first meeting (the existing `daysInSystem` basis). Exposed as a new
+  **`MenteeJourney.startDate`** field (already computed in `fetchMenteeJourneys`; just
+  surfaced).
+- Compare-mode UI: a headline **A / B / Δ** table (Mentees, Avg days in system, Avg
+  time to graduate, % graduated), **paired stage-leg bars** (A = accent, B = cmp color)
+  with a leg table carrying a **Δ (A − B)** column, and a **current-tier-mix** table.
+  Single mode is byte-for-byte the prior behavior.
+- Decisions via AskUserQuestion: start basis = **system start**; controls = **two
+  editable month windows**; compare metrics = **all four** (avg days in system, avg
+  time to graduate, % graduated, current-tier mix).
+- Pure logic in **`lib/cohortCompare.ts`** (`monthsAgoYmd`, `inStartWindow`,
+  `summarizeCohort`, `startWindowLabel`; structural `CohortJourneyInput` so it stays
+  decoupled from db.ts), re-exported via `db.ts`, locked by **verify §19** (now 19
+  sections). `journeys.aggregate` help article updated. **UI-only — no migration.**
+- typecheck + verify (19) + build all pass. Not browser-tested (headless).
+
 ## Notes for future-me
 - The `mentees` seed (`9986`) is a one-shot Notion import, `on conflict (notion_key)
   do nothing` — re-running never clobbers dashboard edits.
 - Migrations are pasted by hand into the Supabase SQL Editor; descending numbering,
   newest = lowest. Make them re-runnable.
+- The cohort "start date" basis is fixed to **system start** in code. If the user later
+  wants to flip it (JumpStart start / first meeting / discovery), the natural hook is to
+  pass a basis to the cohort split (the per-basis dates already live on `MenteeJourney`).

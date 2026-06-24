@@ -94,6 +94,11 @@ import {
 } from "../lib/journey";
 export type { StageBasis };
 
+// Pure cohort-comparison logic for the Pipeline-timing "Compare start-date
+// cohorts" tool (windowing + per-cohort roll-up).
+export { monthsAgoYmd, inStartWindow, summarizeCohort, startWindowLabel, COHORT_TIERS } from "../lib/cohortCompare";
+export type { CohortJourneyInput, CohortStats, CohortTier, StartWindow } from "../lib/cohortCompare";
+
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
 async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
@@ -706,6 +711,10 @@ export interface MenteeJourney {
   // engagement => graduated; else inferred active/inactive from activity.
   resolvedStatus: ResolvedMenteeStatus;
   source: ResolvedOutcomeSource;
+  // System start = first of: discovery call -> JumpStart -> JYF purchase -> first
+  // meeting. The basis for `daysInSystem` and the Pipeline-timing start-date
+  // cohort split (Compare start-date cohorts). Null when none of those exist.
+  startDate: string | null;
   // Durations in whole days (null when an endpoint is missing).
   activeSpanDays: number | null; // first -> last meeting
   daysInSystem: number | null; // earliest start -> exit / last activity / today
@@ -1112,6 +1121,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       notes: o?.notes ?? null,
       resolvedStatus,
       source,
+      startDate,
       activeSpanDays: dayspan(firstMeeting, lastMeeting),
       daysInSystem: dayspan(startDate, exitDate),
       excluded: excludedSet.has(clientId),

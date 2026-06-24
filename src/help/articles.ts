@@ -173,6 +173,12 @@ Pure math lives in \`lib/compare.ts\`.`,
   - **Only hand reviewed** — only mentees whose source-of-truth record has been hand/human reviewed (the flag on the Mentee-record card).
 - "Showing N of M" shows how many roster mentees pass the filters; **Clear filters** resets them. Filters are not saved — they reset on reload.
 
+### Compare start-date cohorts
+- Tick **Compare start-date cohorts** to split the (filtered) roster into **two start-date bands** and see how each is doing side by side — e.g. mentees who **started 0–3 months ago** (Cohort A) vs **4–6 months ago** (Cohort B).
+- Each band is **"started between N and M months ago"** (editable). A mentee's **start** is their **system start** — the first of: discovery call → JumpStart → JYF purchase → first meeting (the same basis as **days in system**).
+- The card then shows, per cohort: **Mentees**, **Avg days in system**, **Avg time to graduate**, **% graduated**, the **stage-leg durations** (paired bars + a leg table with a Δ column), and a **current-tier mix** (how far each cohort has progressed). **Δ = A − B**; for durations a negative Δ means Cohort A is **faster**.
+- Newer cohorts naturally show **lower days-in-system** and **fewer graduates** (they've had less time) and smaller **n** on the later legs — that's expected, and the per-leg **n** keeps it honest. The other filters still apply to **both** cohorts.
+
 ### Column colors & labels
 - Each leg's bar (and its table swatch) is colored to match the stage it leads **into** on the mentee rail — the same palette set in **Company options → Journeys → Pipeline stage colors**.
 - Each bar is labeled with its **average days**. The overall **Discovery → graduation** time isn't a bar of its own — it's the **"Avg time to graduate"** tile above.
@@ -181,7 +187,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 - Each mentee's **owner** is their CoachAccountable **primary coach** (\`ca_clients.coach_id\`), shown on the mentee's timeline. The per-meeting **Coach** column still shows whoever ran each meeting. See the **"How clients are matched to coaches"** help.
 - A mentee can take an **alternative exit at any stage** — **Quit**, **Fired**, or **No mentoring** — set in the "Edit graduation status" editor. The stage rail then ends in a red exit node *in place of* Graduation, at the point they left.
 
-Pure logic in \`lib/journey.ts\`.`,
+Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (cohort split + roll-up).`,
   },
 
   "journeys.menteeRecord": {

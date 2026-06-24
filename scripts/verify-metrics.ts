@@ -16,6 +16,13 @@ import { computeStageDates, highestTier, type EngagementStageInput, type Meeting
 import { computeMeetingsToFreedom, type FreedomMenteeInput } from "../lib/freedom.js";
 import { computeJyfVsMentoring, type CohortEngagementInput } from "../lib/cohort.js";
 import {
+  monthsAgoYmd,
+  inStartWindow,
+  summarizeCohort,
+  startWindowLabel,
+  type CohortJourneyInput,
+} from "../lib/cohortCompare.js";
+import {
   gradientColors,
   resolveStageColors,
   parseStageColorConfig,
@@ -808,6 +815,59 @@ console.log("[18] Conversion-rate trend window (parse + rolling trailing rate)")
   const w8 = rollingConversionTrend(calls, buckets, { n: 8, unit: "weeks" });
   eq(w8[2].total, 6, "weeks n=8 Mar includes Feb 15-16 + all March = 6 calls");
   eq(w8[2].rate, 50, "weeks n=8 Mar = 3 of 6 = 50");
+}
+
+console.log("[19] Pipeline-timing start-date cohort compare (windowing + roll-up)");
+{
+  const today = "2026-06-24";
+  eq(monthsAgoYmd(today, 0), "2026-06-24", "monthsAgo 0 = today");
+  eq(monthsAgoYmd(today, 3), "2026-03-24", "monthsAgo 3 = Mar 24");
+  eq(monthsAgoYmd(today, 6), "2025-12-24", "monthsAgo 6 = prev-year Dec 24");
+
+  // Cohort A = started 0–3 months ago (Mar 24 .. Jun 24 inclusive).
+  const winA = { fromMonths: 0, toMonths: 3 };
+  assert(inStartWindow("2026-05-01", winA, today), "A: May 1 in 0–3");
+  assert(inStartWindow("2026-06-24", winA, today), "A: today edge inclusive");
+  assert(inStartWindow("2026-03-24", winA, today), "A: far edge inclusive");
+  assert(!inStartWindow("2026-02-01", winA, today), "A: Feb 1 out of 0–3");
+  assert(!inStartWindow(null, winA, today), "A: null start never in window");
+  // Order-insensitive (from/to swapped is the same band).
+  assert(inStartWindow("2026-05-01", { fromMonths: 3, toMonths: 0 }, today), "A: swapped edges same band");
+
+  // Cohort B = 4–6 months ago (Dec 24 .. Feb 24).
+  const winB = { fromMonths: 4, toMonths: 6 };
+  assert(inStartWindow("2026-01-15", winB, today), "B: Jan 15 in 4–6");
+  assert(!inStartWindow("2026-05-01", winB, today), "B: May 1 out of 4–6");
+
+  eq(startWindowLabel(winA), "0–3 mo ago", "label A");
+
+  const base: CohortJourneyInput = {
+    startDate: "2026-05-01", daysInSystem: 100, resolvedStatus: "active", currentTier: "4x", excluded: false, inSourceOfTruth: true,
+  };
+  const cohort: CohortJourneyInput[] = [
+    { ...base, resolvedStatus: "active", currentTier: "jumpstart", daysInSystem: 10 },
+    { ...base, resolvedStatus: "graduated", currentTier: "graduated", daysInSystem: 200 },
+    { ...base, resolvedStatus: "active", currentTier: "4x", daysInSystem: 90 },
+    { ...base, excluded: true, daysInSystem: 9999 }, // dropped (excluded)
+    { ...base, inSourceOfTruth: false, daysInSystem: 9999 }, // dropped (off-roster)
+    { ...base, resolvedStatus: "active", currentTier: null, daysInSystem: -5 }, // counted, but no tier + negative days skip the avg
+  ];
+  const s = summarizeCohort(cohort);
+  eq(s.total, 4, "summarize: 4 in-scope (excluded + off-roster dropped)");
+  eq(s.active, 3, "summarize: 3 active");
+  eq(s.graduated, 1, "summarize: 1 graduated");
+  assert(s.pctGraduated != null && Math.abs(s.pctGraduated - 0.25) < 1e-9, "summarize: 25% graduated");
+  eq(s.avgDaysInSystem, 100, "summarize: avg days = (10+200+90)/3 (negative skipped)");
+  eq(s.tierMix.jumpstart, 1, "tierMix jumpstart");
+  eq(s.tierMix["4x"], 1, "tierMix 4x");
+  eq(s.tierMix.graduated, 1, "tierMix graduated");
+  eq(s.tierMix["2x"], 0, "tierMix 2x empty");
+  eq(s.tierMix["1x"], 0, "tierMix 1x empty (null tier not counted)");
+
+  const empty = summarizeCohort([]);
+  eq(empty.total, 0, "empty cohort total 0");
+  assert(empty.pctGraduated === null, "empty cohort pctGraduated null");
+  assert(empty.avgDaysInSystem === null, "empty cohort avgDaysInSystem null");
 }
 
 console.log("");
