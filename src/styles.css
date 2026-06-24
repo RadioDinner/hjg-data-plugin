@@ -429,7 +429,18 @@ body {
 }
 .journey__notes { flex: 1; min-width: 180px; }
 .journey__notes input { width: 100%; }
-.journey__status-actions { display: flex; gap: 6px; }
+.journey__status-actions { display: flex; gap: 6px; margin-top: 14px; }
+
+/* Pipeline stage-date overrides in the graduation editor. */
+.grad-editor__dates { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.grad-editor__dates-head { font-size: 12px; margin-bottom: 10px; }
+.grad-editor__dates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.grad-editor__date-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.grad-editor__date-field input {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r-control); padding: 6px 10px; font-size: 14px;
+}
+.grad-editor__synced { font-size: 11px; }
 
 /* --- Company options tab --- */
 .options-grid { display: flex; flex-direction: column; gap: 18px; }

@@ -640,10 +640,22 @@ export interface MenteeMeeting {
   coachName: string;
 }
 
+// Six pipeline milestone dates (discovery + the five engagement tiers). Used to
+// carry both the synced (CoachAccountable) dates and the manual overrides so the
+// editor can prefill the override and show the synced value beside it.
+export interface StageDates6 {
+  discovery: string | null;
+  jumpstart: string | null;
+  "4x": string | null;
+  "2x": string | null;
+  "1x": string | null;
+  graduated: string | null;
+}
+
 export interface MenteeJourney {
   clientId: number;
   name: string;
-  discoveryDate: string | null; // earliest discovery call (signup date)
+  discoveryDate: string | null; // earliest discovery call (EFFECTIVE: override ?? synced)
   jyfPurchaseDate: string | null; // earliest supervised JumpStart purchase
   firstMeeting: string | null;
   lastMeeting: string | null;
@@ -652,8 +664,13 @@ export interface MenteeJourney {
   engagementIds: number[];
   // Pipeline stage entry dates from engagements (earliest start per tier), and
   // the highest tier reached. graduated date comes from an "After Graduation
-  // Care" engagement.
+  // Care" engagement. EFFECTIVE values: a manual stage-date override wins over
+  // the synced date (see stageSynced / stageOverrides below).
   stageDates: Record<PipelineTier, string | null>;
+  // The raw synced CA dates (before override) and the manual override values
+  // (mentee_outcomes), so the editor can prefill overrides + show the synced date.
+  stageSynced: StageDates6;
+  stageOverrides: StageDates6;
   currentTier: PipelineTier | null;
   // Latest JumpStart-engagement end date (when JumpStart Your Freedom completed),
   // used as the "Meetings to Freedom!" window start. Null if no ended JumpStart.
@@ -843,22 +860,48 @@ function buildClientStages(
   return out;
 }
 
+type OutcomeRow = {
+  id: string;
+  client_id: number;
+  status: MenteeStatus | null;
+  status_date: string | null;
+  notes: string | null;
+  discovery_date: string | null;
+  jumpstart_date: string | null;
+  tier_4x_date: string | null;
+  tier_2x_date: string | null;
+  tier_1x_date: string | null;
+  graduation_date: string | null;
+};
+
+// mentee_outcomes rows including the stage-date override columns (migration 9985).
+// Falls back to the base columns if those columns don't exist yet, so the Journeys
+// tab keeps working before 9985 is applied (the stage-date overrides just read as
+// absent until then).
+async function fetchMenteeOutcomeRows(): Promise<OutcomeRow[]> {
+  const FULL = "id,client_id,status,status_date,notes,discovery_date,jumpstart_date,tier_4x_date,tier_2x_date,tier_1x_date,graduation_date";
+  const full = await supabase.from("mentee_outcomes").select(FULL);
+  if (!full.error) return (full.data ?? []) as OutcomeRow[];
+  const base = await supabase.from("mentee_outcomes").select("id,client_id,status,status_date,notes");
+  if (base.error) throw new Error(base.error.message);
+  return (base.data ?? []) as OutcomeRow[];
+}
+
 // Assemble a journey per mentee (any client with a mentoring meeting or a
 // pipeline engagement), sorted by most-recent activity first. Excludes
 // placeholder/group "clients". Reads the full mirror once; the tab filters it.
 export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_start"): Promise<MenteeJourney[]> {
-  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomesRes, excludedSet] = await Promise.all([
+  const [mentoring, engagements, discoveryDates, clientsRes, coachesRes, outcomeRows, excludedSet] = await Promise.all([
     fetchAllMentoring(),
     fetchAllEngagements(),
     fetchDiscoveryDatesByClient(),
     supabase.from("ca_clients").select("id,name,is_excluded"),
     supabase.from("ca_coaches").select("id,name"),
-    supabase.from("mentee_outcomes").select("id,client_id,status,status_date,notes"),
+    fetchMenteeOutcomeRows(),
     fetchExcludedClientIds(),
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
-  if (outcomesRes.error) throw new Error(outcomesRes.error.message);
 
   const clientMap = new Map<number, { name: string | null; is_excluded: boolean }>();
   for (const c of (clientsRes.data ?? []) as { id: number; name: string | null; is_excluded: boolean }[]) {
@@ -867,8 +910,8 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
   const coachMap = new Map<number, string | null>();
   for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coachMap.set(c.id, c.name);
 
-  const overrideMap = new Map<number, { id: string; status: MenteeStatus; status_date: string | null; notes: string | null }>();
-  for (const o of (outcomesRes.data ?? []) as { id: string; client_id: number; status: MenteeStatus; status_date: string | null; notes: string | null }[]) {
+  const overrideMap = new Map<number, OutcomeRow>();
+  for (const o of outcomeRows) {
     overrideMap.set(o.client_id, o);
   }
 
@@ -905,17 +948,55 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
     const meetings = (byClient.get(clientId) ?? []).filter((m) => m.date).sort((a, b) => a.date.localeCompare(b.date));
     const st = stages.get(clientId);
     if (!meetings.length && !st) continue; // nothing to show
-    const stageDates = st?.stageDates ?? emptyStages();
-    const currentTier = st?.currentTier ?? null;
+    const o = overrideMap.get(clientId);
     const hasOpen = st?.hasOpen ?? false;
+
+    // Synced (CoachAccountable) stage dates, then the EFFECTIVE dates with any
+    // manual mentee_outcomes stage-date override applied (override ?? synced).
+    const syncedStages = st?.stageDates ?? emptyStages();
+    const stageSynced: StageDates6 = {
+      discovery: discoveryDates.get(clientId) ?? null,
+      jumpstart: syncedStages.jumpstart,
+      "4x": syncedStages["4x"],
+      "2x": syncedStages["2x"],
+      "1x": syncedStages["1x"],
+      graduated: syncedStages.graduated,
+    };
+    const stageOverrides: StageDates6 = {
+      discovery: o?.discovery_date ?? null,
+      jumpstart: o?.jumpstart_date ?? null,
+      "4x": o?.tier_4x_date ?? null,
+      "2x": o?.tier_2x_date ?? null,
+      "1x": o?.tier_1x_date ?? null,
+      graduated: o?.graduation_date ?? null,
+    };
+    const discoveryDate = stageOverrides.discovery ?? stageSynced.discovery;
+    const stageDates: Record<PipelineTier, string | null> = {
+      jumpstart: stageOverrides.jumpstart ?? stageSynced.jumpstart,
+      "4x": stageOverrides["4x"] ?? stageSynced["4x"],
+      "2x": stageOverrides["2x"] ?? stageSynced["2x"],
+      "1x": stageOverrides["1x"] ?? stageSynced["1x"],
+      graduated: stageOverrides.graduated ?? stageSynced.graduated,
+    };
+    // Highest tier reached, recomputed from the EFFECTIVE dates (graduated > 1x >
+    // 2x > 4x > jumpstart) so a manual date override moves the current tier too.
+    const currentTier: PipelineTier | null = stageDates.graduated
+      ? "graduated"
+      : stageDates["1x"]
+      ? "1x"
+      : stageDates["2x"]
+      ? "2x"
+      : stageDates["4x"]
+      ? "4x"
+      : stageDates.jumpstart
+      ? "jumpstart"
+      : null;
 
     const firstMeeting = meetings.length ? meetings[0].date : null;
     const lastMeeting = meetings.length ? meetings[meetings.length - 1].date : null;
-    const discoveryDate = discoveryDates.get(clientId) ?? null;
     const jyfPurchaseDate = purchasesByClient.get(clientId)?.[0] ?? null;
     const engagementIds = [...new Set(meetings.map((m) => m.engagementId).filter((x): x is number => x != null && x !== 0))];
 
-    const o = overrideMap.get(clientId);
     const override = o?.status ?? null;
     const overrideDate = o?.status_date ?? null;
 
@@ -950,6 +1031,8 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       meetings,
       engagementIds,
       stageDates,
+      stageSynced,
+      stageOverrides,
       currentTier,
       jumpstartEndDate: st?.jumpstartEnd ?? null,
       overrideId: o?.id ?? null,
@@ -992,22 +1075,44 @@ export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
   return computeJyfVsMentoring(inputs);
 }
 
-// Set (or update) a mentee's pipeline outcome override. One row per client.
+// Set (or update) a mentee's pipeline override. One row per client, holding the
+// outcome status (nullable — null = no status override) AND the six manual
+// stage-date overrides. The editor always passes the full current state, so the
+// upsert replaces every column deterministically.
 export async function setMenteeOutcome(
   createdBy: string,
   clientId: number,
-  values: { status: MenteeStatus; statusDate: string | null; notes: string | null }
+  values: {
+    status: MenteeStatus | null;
+    statusDate: string | null;
+    notes: string | null;
+    stageDates?: Partial<StageDates6>;
+  }
 ): Promise<void> {
-  const { error } = await supabase.from("mentee_outcomes").upsert(
-    {
-      client_id: clientId,
-      status: values.status,
-      status_date: values.statusDate,
-      notes: values.notes,
-      created_by: createdBy || null,
-    },
-    { onConflict: "client_id" }
-  );
+  const sd = values.stageDates ?? {};
+  const base = {
+    client_id: clientId,
+    status: values.status,
+    status_date: values.statusDate,
+    notes: values.notes,
+    created_by: createdBy || null,
+  };
+  const full = {
+    ...base,
+    discovery_date: sd.discovery ?? null,
+    jumpstart_date: sd.jumpstart ?? null,
+    tier_4x_date: sd["4x"] ?? null,
+    tier_2x_date: sd["2x"] ?? null,
+    tier_1x_date: sd["1x"] ?? null,
+    graduation_date: sd.graduated ?? null,
+  };
+  let { error } = await supabase.from("mentee_outcomes").upsert(full, { onConflict: "client_id" });
+  if (error) {
+    // The stage-date columns may not exist yet (migration 9985 not applied) —
+    // retry with the base columns so status/notes still save. Date overrides
+    // need 9985 applied to persist.
+    ({ error } = await supabase.from("mentee_outcomes").upsert(base, { onConflict: "client_id" }));
+  }
   if (error) throw new Error(error.message);
 }
 
