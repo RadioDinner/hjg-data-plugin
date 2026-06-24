@@ -364,6 +364,21 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     startMonthOverride: new Map([[70000, "2026-01"]]),
   });
   eq(ov.mentors[0].splitPct, 0.6, "override start (Jan) -> April is tenure month 4 -> 60%");
+
+  // ---- Late-month tier change: the new tier's end-of-month invoice credits the
+  //      NEW coach, not the outgoing majority-day coach (the Ty Miller bug). The
+  //      JumpStart coach held most of May, but the 4x subscription dated 5/30 (the
+  //      new engagement) must pay the 4x coach. ----
+  const handoffEng: PayEngagementInput[] = [
+    { clientId: 1, coachId: 111, startDate: "2026-05-01", endDate: "2026-05-29", isCanceled: false, name: "MN Subscription | (0x Month) JumpStart" },
+    { clientId: 1, coachId: 222, startDate: "2026-05-29", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+  ];
+  const handoffInv: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-05-30", billed: 425, collected: 425 }];
+  const hMay = computePayReport({ ym: "2026-05", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
+  eq(hMay.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0, 425, "day-30 4x invoice is billed to the NEW 4x coach (222), not the outgoing JumpStart coach");
+  const hJun = computePayReport({ ym: "2026-06", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
+  eq(round2(hJun.mentors.find((m) => m.coachId === 222)?.earned ?? 0), 425, "full day-30 rollover lands under the new 4x coach in June");
+  eq(hJun.mentors.find((m) => m.coachId === 111)?.earned ?? 0, 0, "the outgoing JumpStart coach gets none of the 4x invoice");
 }
 
 console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned, scoping)");

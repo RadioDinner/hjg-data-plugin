@@ -195,6 +195,25 @@ function coverInMonth(ym: string, engs: PayEngagementInput[]): { coachId: number
   return { coachId, tier };
 }
 
+// Which coach/tier covers a client ON a specific date (the invoice's date_of).
+// Among engagements spanning that date, the most-recently-STARTED one wins, so an
+// end-of-month tier change credits the NEW invoice to the NEW coach instead of the
+// outgoing one. Falls back to the month-majority coach (coverInMonth) only when no
+// engagement covers the exact date, so invoices on uncovered days keep prior behavior.
+function coverOnDate(dateYmd: string, engs: PayEngagementInput[]): { coachId: number | null; tier: string } {
+  const d = dateYmd.slice(0, 10);
+  let best: PayEngagementInput | null = null;
+  for (const e of engs) {
+    const s = (e.startDate ?? "0000-01-01").slice(0, 10);
+    const en = (e.endDate ?? "9999-12-31").slice(0, 10);
+    if (d >= s && d <= en && e.coachId != null) {
+      if (!best || s > (best.startDate ?? "0000-01-01").slice(0, 10)) best = e;
+    }
+  }
+  if (best) return { coachId: best.coachId, tier: engagementTier(best.name) };
+  return coverInMonth(d.slice(0, 7), engs);
+}
+
 // Per-(coach, client) accumulator for a payout month.
 interface LineAcc {
   coachId: number | null;
@@ -252,7 +271,7 @@ export function computePayReport(input: PayInputs): PayReport {
     const amt = inv.billed || 0;
     if (amt <= 0) continue;
     if (invYm === ym) {
-      const cov = coverInMonth(ym, engByClient.get(inv.clientId) ?? []);
+      const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
       const day = dayOf(inv.serviceDate);
       const recognized = amt * (1 - elapsedFraction(day));
       const a = ensure(cov.coachId, inv.clientId, cov.tier);
@@ -262,7 +281,7 @@ export function computePayReport(input: PayInputs): PayReport {
       a.invoiceDay = a.invoiceDay == null ? day : Math.min(a.invoiceDay, day);
       if (a.tier === "other") a.tier = cov.tier;
     } else if (invYm === prev) {
-      const cov = coverInMonth(prev, engByClient.get(inv.clientId) ?? []);
+      const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
       const rollover = amt * elapsedFraction(dayOf(inv.serviceDate));
       const a = ensure(cov.coachId, inv.clientId, cov.tier);
       a.rolloverPrev += rollover;

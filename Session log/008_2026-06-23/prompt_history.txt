@@ -51,3 +51,14 @@ Also, on the Journeys tab, where I select an individual mentee, in the grid belo
 
 --- 2026-06-24 ---
 When I select an individual mentee from the list in the journey tab, I want them to pop into the "edit graduation status".
+
+--- 2026-06-24 ---
+Also, when I am editing their graduation status, I want the option to also edit their discovery call date, jyf start, 4x start, etc
+
+--- 2026-06-24 ---
+I have discovered an error in the payout system. When I explore the month of June 2026, and select Caleb Otto as the coach, I only see Joash. There is someone else who is assigned to Caleb, I want you to find that person, and tell me what you fixed as to why that didn't work before.
+Also, I want to be able to see the data from the Notion Mentee Database and edit it like I would be able to in Notion. Make it a separate tab.
+Add a feature/rework item to the back log. I want to combine the "Pay staff" and "Build payout" screen. Build payout is something that should launch from the "Pay staff" tab.
+Add another feature to the backlog. I want to be able to search, sort and filter in the raw data tables.
+Then, write the handoff, commit everything to main and close the sesssion
+Also add this to the feature backlog, I want you to add a unique identifier to each card, popout modal, and screen. Any self contained section of data with a unique 3 digit number, so I can identify certain screens or functions by number. Do it comprehensively well.
