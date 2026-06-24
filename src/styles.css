@@ -372,6 +372,13 @@ body {
 .rawdata__colfilter { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
 .rawdata__colfilter input { font-size: 12px; padding: 4px 6px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-control); min-width: 120px; }
 
+/* Stable 3-digit section id badge (src/components/SectionId.tsx). Unobtrusive,
+   monospace, muted. Inline variant sits beside a heading; corner variant pins to
+   the top-right of a position:relative container (cards/modals). */
+.section-id { display: inline-flex; align-items: center; font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.5px; color: var(--muted); background: var(--neutral-bg, rgba(148,163,184,0.12)); border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px; vertical-align: middle; user-select: all; }
+.section-id--corner { position: absolute; top: 6px; right: 8px; z-index: 1; opacity: 0.7; }
+.section-id--corner:hover { opacity: 1; }
+
 .journeys__roster-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
 .journeys__roster-toggle input { cursor: pointer; }
 .journeys__rows { display: flex; flex-direction: column; gap: 4px; max-height: 620px; overflow-y: auto; }
