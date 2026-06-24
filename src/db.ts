@@ -632,6 +632,10 @@ export interface MenteeMeeting {
   date: string; // YYYY-MM-DD (scheduled)
   name: string;
   engagementId: number | null;
+  // Pipeline tier of this meeting's engagement (jumpstart/4x/2x/1x/graduated), or
+  // null when the engagement isn't a pipeline tier (group/mentor_training/other) or
+  // there's no engagement. Lets the Journeys rhythm chart color meetings by tier.
+  tier: PipelineTier | null;
   isGroup: boolean; // group session (In Depth / Tracking Together) vs 1-on-1
   coachName: string;
 }
@@ -771,16 +775,31 @@ interface ClientStages {
   hasOpen: boolean;
   jumpstartEnd: string | null; // latest JumpStart engagement end (completion) date
 }
+// Map each engagement id to its pipeline tier (jumpstart/4x/2x/1x/graduated),
+// skipping non-pipeline engagements (mentor_training/group/other). Shared by the
+// stage builder and by per-meeting tier-tagging so a meeting can be colored by tier.
+function engagementTierMap(engagements: EngagementRow[]): Map<number, PipelineTier> {
+  const pipeline = new Set<string>(PIPELINE_TIERS);
+  const m = new Map<number, PipelineTier>();
+  for (const e of engagements) {
+    if (e.id == null || e.client_id == null) continue; // mirror buildClientStages' guards exactly
+    const tier = engagementTier(e.name);
+    if (!pipeline.has(tier)) continue;
+    m.set(e.id, tier as PipelineTier);
+  }
+  return m;
+}
+
 // Build per-client stages for the chosen basis. Engagements give each tier's
-// start date + the engagement→tier map; meetings (tagged with their engagement's
-// tier) feed the "first meeting" basis. currentTier = highest tier with a date.
+// start date; meetings (tagged with their engagement's tier via `engTierById`)
+// feed the "first meeting" basis. currentTier = highest tier with a date.
 function buildClientStages(
   engagements: EngagementRow[],
   meetingsByClient: Map<number, MenteeMeeting[]>,
-  basis: StageBasis
+  basis: StageBasis,
+  engTierById: Map<number, PipelineTier>
 ): Map<number, ClientStages> {
   const pipeline = new Set<string>(PIPELINE_TIERS);
-  const engTierById = new Map<number, PipelineTier>();
   const engByClient = new Map<number, EngagementStageInput[]>();
   const hasOpen = new Map<number, boolean>();
   const jumpstartEnd = new Map<number, string>();
@@ -789,7 +808,6 @@ function buildClientStages(
     const tier = engagementTier(e.name);
     if (!pipeline.has(tier)) continue; // skip mentor_training/group/other
     const pt = tier as PipelineTier;
-    if (e.id != null) engTierById.set(e.id, pt);
     const arr = engByClient.get(e.client_id) ?? [];
     arr.push({ tier: pt, startDate: e.start_date });
     engByClient.set(e.client_id, arr);
@@ -856,6 +874,10 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
 
   const purchasesByClient = await fetchConversionPurchasesByClient([...clientMap.keys()]);
 
+  // Engagement → pipeline tier, used both to tag each meeting (for the rhythm
+  // chart's per-tier coloring) and to build the pipeline stages below.
+  const engTierById = engagementTierMap(engagements);
+
   // Group mentoring meetings by client.
   const byClient = new Map<number, MenteeMeeting[]>();
   for (const a of mentoring) {
@@ -866,13 +888,14 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
       date: a.start_date ?? "",
       name: a.name,
       engagementId: a.engagement_id,
+      tier: a.engagement_id != null ? engTierById.get(a.engagement_id) ?? null : null,
       isGroup: a.category === "group",
       coachName: (a.coach_id != null ? coachMap.get(a.coach_id) : null) ?? (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
     });
     byClient.set(a.client_id, arr);
   }
 
-  const stages = buildClientStages(engagements, byClient, stageBasis);
+  const stages = buildClientStages(engagements, byClient, stageBasis, engTierById);
   const today = todayYmd();
   const emptyStages = (): Record<PipelineTier, string | null> => ({ jumpstart: null, "4x": null, "2x": null, "1x": null, graduated: null });
   const clientIds = new Set<number>([...byClient.keys(), ...stages.keys()]);

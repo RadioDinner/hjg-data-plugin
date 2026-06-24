@@ -24,6 +24,16 @@ import { useChartTokens } from "../theme";
 
 const TIER_LABEL: Record<PipelineTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
 
+// Stage-palette index for each pipeline tier. The `colors` prop is in stage order:
+// 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation — so a meeting's tier
+// reuses the exact color its stage shows on the rail.
+const TIER_COLOR_INDEX: Record<PipelineTier, number> = { jumpstart: 1, "4x": 2, "2x": 3, "1x": 4, graduated: 5 };
+// Meeting-rhythm stack order, bottom→top: pipeline progression reads red→green
+// upward, matching the rail. "Other" (below) sits underneath as a neutral base.
+const RHYTHM_TIERS: PipelineTier[] = ["jumpstart", "4x", "2x", "1x", "graduated"];
+// Meetings with no resolvable pipeline tier (group sessions / untiered) — neutral grey.
+const OTHER_TIER_COLOR = "#94a3b8";
+
 // Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
 function spanDays(a: string | null, b: string | null): number | null {
   if (!a || !b) return null;
@@ -83,6 +93,36 @@ function StageNode({ label, date, gap, color }: { label: string; date: string | 
         </span>
         <span className="stage__date">{date ?? "—"}</span>
       </div>
+    </div>
+  );
+}
+
+// Tooltip for the per-tier meeting-rhythm chart: lists only the tiers present
+// that month (with their swatch) plus the month total.
+function RhythmTooltip({
+  active,
+  payload,
+  label,
+  tip,
+}: {
+  active?: boolean;
+  payload?: { name: string; dataKey: string; value: number; color: string; payload: { total: number } }[];
+  label?: string;
+  tip?: ChartStyle;
+}) {
+  if (!active || !payload || !payload.length) return null;
+  const rows = payload.filter((p) => p.value > 0);
+  const total = payload[0]?.payload?.total ?? rows.reduce((s, p) => s + p.value, 0);
+  return (
+    <div style={{ ...tip, padding: "6px 10px", fontSize: 13 }}>
+      <div style={{ marginBottom: 4 }}>{label}</div>
+      {rows.map((p) => (
+        <div key={p.dataKey} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 2, background: p.color, display: "inline-block" }} />
+          {p.name}: {p.value}
+        </div>
+      ))}
+      <div className="muted" style={{ marginTop: 2 }}>Total: {total}</div>
     </div>
   );
 }
@@ -155,18 +195,34 @@ function Timeline({
     }
   }
 
-  // Observed meeting rhythm: meetings per calendar month across the engagement.
+  // Observed meeting rhythm: meetings per calendar month, split by the pipeline
+  // tier of each meeting (its engagement's tier) so the column shows how a
+  // mentee's meetings distribute across stages over time. Untiered/group meetings
+  // fall into "other".
   const rhythm = useMemo(() => {
-    const m = new Map<string, number>();
+    type Row = Record<PipelineTier, number> & { other: number; total: number };
+    const m = new Map<string, Row>();
     for (const mt of journey.meetings) {
       const k = mt.date.slice(0, 7);
-      m.set(k, (m.get(k) ?? 0) + 1);
+      let row = m.get(k);
+      if (!row) {
+        row = { jumpstart: 0, "4x": 0, "2x": 0, "1x": 0, graduated: 0, other: 0, total: 0 };
+        m.set(k, row);
+      }
+      if (mt.tier) row[mt.tier] += 1;
+      else row.other += 1;
+      row.total += 1;
     }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, count]) => {
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, row]) => {
       const [y, mo] = k.split("-").map(Number);
-      return { month: `${SHORT[mo - 1]} ’${String(y).slice(2)}`, Meetings: count };
+      return { month: `${SHORT[mo - 1]} ’${String(y).slice(2)}`, ...row };
     });
   }, [journey.meetings]);
+
+  // Which tiers / "other" actually occur — drives the legend and table columns so
+  // empty buckets don't clutter the view.
+  const presentTiers = useMemo(() => RHYTHM_TIERS.filter((t) => rhythm.some((r) => r[t] > 0)), [rhythm]);
+  const hasOther = useMemo(() => rhythm.some((r) => r.other > 0), [rhythm]);
 
   return (
     <div className="journey">
@@ -229,18 +285,76 @@ function Timeline({
       <div className="journey__rhythm">
         <div className="journey__rhythm-head">
           <h3>Observed meeting rhythm</h3>
-          <span className="muted">Meetings per month — actual meeting cadence (the tier comes from the engagement, shown above).</span>
+          <span className="muted">
+            Meetings per month, colored by the pipeline tier of each meeting — see how a mentee’s meetings distribute
+            across stages over time (the tier comes from the engagement).
+          </span>
         </div>
-        <div style={{ width: "100%", height: 180 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rhythm}>
-              <CartesianGrid stroke={GRID} vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} interval="preserveStartEnd" />
-              <YAxis allowDecimals={false} width={24} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
-              <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-              <Bar dataKey="Meetings" fill="#a78bfa" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+
+        {(presentTiers.length > 0 || hasOther) && (
+          <div className="rhythm-legend">
+            {presentTiers.map((t) => (
+              <span key={t} className="rhythm-legend__item">
+                <span className="rhythm-legend__swatch" style={{ background: colors[TIER_COLOR_INDEX[t]] }} />
+                {TIER_LABEL[t]}
+              </span>
+            ))}
+            {hasOther && (
+              <span className="rhythm-legend__item">
+                <span className="rhythm-legend__swatch" style={{ background: OTHER_TIER_COLOR }} />
+                Other
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="chart-card__split chart-card__split--both">
+          <div style={{ width: "100%", height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={rhythm}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} interval="preserveStartEnd" />
+                <YAxis allowDecimals={false} width={24} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
+                <Tooltip content={<RhythmTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                <Bar dataKey="other" stackId="r" fill={OTHER_TIER_COLOR} name="Other" />
+                <Bar dataKey="jumpstart" stackId="r" fill={colors[1]} name="JumpStart" />
+                <Bar dataKey="4x" stackId="r" fill={colors[2]} name="4x" />
+                <Bar dataKey="2x" stackId="r" fill={colors[3]} name="2x" />
+                <Bar dataKey="1x" stackId="r" fill={colors[4]} name="1x" />
+                <Bar dataKey="graduated" stackId="r" fill={colors[5]} name="Graduated" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {rhythm.length > 0 && (
+            <div className="table-scroll" style={{ width: "100%" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    {presentTiers.map((t) => (
+                      <th key={t}>{TIER_LABEL[t]}</th>
+                    ))}
+                    {hasOther && <th>Other</th>}
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rhythm.map((r) => (
+                    <tr key={r.month}>
+                      <td>{r.month}</td>
+                      {presentTiers.map((t) => (
+                        <td key={t} className="num">
+                          {r[t] || "—"}
+                        </td>
+                      ))}
+                      {hasOther && <td className="num">{r.other || "—"}</td>}
+                      <td className="num">{r.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
