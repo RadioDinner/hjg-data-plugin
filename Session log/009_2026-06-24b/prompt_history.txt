@@ -15,3 +15,6 @@ I want two things changed. On the metrics, when tracking the trendline on conver
 
 --- 2026-06-24 (session 009b) ---
 Another feature / thing I want added, if I edit any element of the mentee in the journeys screen (106) I want a flag to be updated that says its hand reviewed. I also want to be able to just tick the flag if I didn't need to update it but just make it known to be hand/human reviewed.
+
+--- 2026-06-24 (session 009b) ---
+all migrations applied
