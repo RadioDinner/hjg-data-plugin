@@ -237,6 +237,7 @@ export interface CaAppointmentRow {
   // yet synced. The delivery signal behind "did the paid-for sessions happen?".
   counts_in_engagement: number | null;
   start_raw: string | null;
+  end_raw: string | null; // exact CA end datetime string (Appointment.endDate) — for durations
   start_date: string | null; // YYYY-MM-DD (account-local)
   start_year: number | null;
   start_month: number | null; // 1..12

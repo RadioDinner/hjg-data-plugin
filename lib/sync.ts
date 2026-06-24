@@ -164,6 +164,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         status: a.status,
         counts_in_engagement: a.countsInEngagement ?? null,
         start_raw: a.startDate ?? null,
+        end_raw: a.endDate ?? null,
         start_date: dp.date,
         start_year: dp.year,
         start_month: dp.month,

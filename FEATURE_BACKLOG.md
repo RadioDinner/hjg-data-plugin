@@ -182,10 +182,13 @@ outcome," so the table can't assume it:
 New top-nav **Margins** tab (`src/views/MarginsView.tsx`) with **JumpStart Your Freedom** +
 **Mentoring** sub-tabs. Each: a by-month **graph + table** (north star) comparing entered **staff
 hours** (new `program_hours` table, migration `9981`, save-on-blur) against **delivered meeting
-hours** (distinct coach+start-time sessions under the program's tiers × `PROGRAM_MEETING_HOURS`, a
-1 h stand-in until CA exposes durations) + a delivered÷staff ratio. Pure merge in `lib/margins.ts`
-(verify §17). **Dollars deferred** — bones only, per the request. Open follow-up: real per-meeting
-durations (CA mirror has start but no end), and the money layer (cost/revenue).
+hours** (distinct coach+start-time sessions under the program's tiers) + a delivered÷staff ratio.
+Pure merge in `lib/margins.ts` (verify §17). **Dollars deferred** — hours bones only, per request.
+
+Follow-up (done same session): **real per-meeting durations** — CA's `Appointment.endDate` is now
+synced to `ca_appointments.end_raw` (migration `9980`); delivered hours use the actual
+`end − start` per session, falling back to `PROGRAM_MEETING_HOURS` (1 h) only when no end is
+recorded. **Still open: the money layer** (staff cost + program revenue → real margins).
 
 ### Pipeline-timing card — mentee filters (Journeys) — ✅ SHIPPED session 009, 2026-06-24
 

@@ -9,9 +9,23 @@
 
 import type { PipelineTier } from "./config";
 
-// Assumed length of one delivered session, in hours. A single knob to retune once
-// real durations are available (CA Appointment has no end time in the mirror today).
+// Fallback length of one delivered session, in hours — used only when an
+// appointment has no recorded end time (pre-sync rows, or CA left endDate blank).
+// When start_raw + end_raw are both present, the REAL duration is used instead.
 export const PROGRAM_MEETING_HOURS = 1;
+
+// Hours between two CoachAccountable datetime strings ("YYYY-MM-DD HH:MM:SS",
+// account-local). The difference is timezone-agnostic as long as both parse the
+// same way, so we don't need the account's zone. Returns null when either side is
+// missing/unparseable or the span is non-positive, so callers fall back to the
+// per-session stand-in.
+export function meetingHours(startRaw: string | null | undefined, endRaw: string | null | undefined): number | null {
+  if (!startRaw || !endRaw) return null;
+  const s = Date.parse(startRaw.replace(" ", "T"));
+  const e = Date.parse(endRaw.replace(" ", "T"));
+  if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return null;
+  return (e - s) / 3_600_000;
+}
 
 export interface ProgramDef {
   key: string;

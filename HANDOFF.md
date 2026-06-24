@@ -21,14 +21,20 @@ manual exit-date SQL). **Still REQUIRED: a re-sync** (Admin → Sync now) so `ca
 **Also new: `9981_program_hours.sql`** — the Margins tab's staff-hours table (staff RLS). Apply it
 before staff-hours entry persists; delivered hours render without it (fetch is fail-open).
 
-**Next new migration is `9980_…`.**
+**Also new: `9980_ca_appointments_end.sql`** — adds `ca_appointments.end_raw` (CA `Appointment.endDate`)
+for real meeting durations. **Apply BEFORE the next sync** (the sync now writes `end_raw`; an
+unapplied column errors the appointment upsert), then **re-sync** to populate it.
+
+**Next new migration is `9979_…`.**
 
 **Shipped this session (009), newest first:**
+- **Margins — real meeting durations.** Synced CA `Appointment.endDate` → `ca_appointments.end_raw`
+  (`9980`); delivered hours = actual `end − start` per session (pure `meetingHours`, verify §17),
+  falling back to `PROGRAM_MEETING_HOURS` (1 h) only when no end is recorded. **Still open: money layer.**
 - **Margins tab (bones)** — new top-nav tab; **JumpStart Your Freedom** + **Mentoring** sub-tabs.
   By-month **graph + table**: entered **staff hours** (new `program_hours` table, `9981`, save-on-blur)
-  vs **delivered meeting hours** (distinct coach+start-time sessions × `PROGRAM_MEETING_HOURS` = 1 h
-  stand-in) + delivered÷staff ratio. `lib/margins.ts` (verify §17). **Dollars deferred** (per request).
-  Open: real per-meeting durations (CA mirror lacks an end time) + the money layer.
+  vs **delivered meeting hours** (distinct coach+start-time sessions) + delivered÷staff ratio.
+  `lib/margins.ts` (verify §17). **Dollars deferred** (per request).
 - **Pipeline-timing cohort filters** (Journeys card, from the backlog). Composable filter bar:
   **Active within** (3/6/12/24 mo by last activity), **Status** (active/graduated/exited), **Current
   tier**, **Owner**, **Overridden graduation date** checkbox. Filters the graph + table + tiles;
@@ -61,14 +67,16 @@ before staff-hours entry persists; delivered hours render without it (fetch is f
   meeting list); rewritten for the owner model; pay/capacity/journeys articles updated.
 
 **▶ Next-session checklist (session 009):**
-1. **RE-SYNC (Admin → Sync now)** — migrations are applied; the re-sync is what populates
-   `ca_clients.coach_id` (owner). Jonathan only flips to Caleb if the user **re-pairs him to Caleb
-   in CoachAccountable** first (the CSV still has him under Arthur on both engagements).
+1. **Apply `9980` + `9981` (Supabase SQL Editor), then RE-SYNC (Admin → Sync now).** `9980` must be
+   applied before the sync (it writes `end_raw`). The re-sync also (re)populates `ca_clients.coach_id`
+   (owner) and now `ca_appointments.end_raw` (real Margins durations). Jonathan only flips to Caleb if
+   the user **re-pairs him to Caleb in CoachAccountable** first (the CSV still has him under Arthur).
 2. **Browser-verify**: Journeys roster scoping (count ≈181, "Roster only" toggle, off-roster pill);
    "Owner: …" line + the red exit node (quit/fired/no-mentoring); Pay-staff payouts re-attributed
-   to owners; capacity grouped by owner (no cross-coach
-   double-count).
-3. Optional: surface the owner in the Journeys mentee LIST + the Mentee-record card too.
+   to owners; capacity grouped by owner; **Margins tab** (JYF + Mentoring sub-tabs, staff-hours
+   entry, delivered hours — flat 1 h before the re-sync, real durations after).
+3. **Margins money layer** (the remaining Margins follow-up): staff cost (hours × rate) + program
+   revenue → real margins. Optional: surface the owner in the Journeys mentee LIST + Mentee-record card.
 
 ---
 

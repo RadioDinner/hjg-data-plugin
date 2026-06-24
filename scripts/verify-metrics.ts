@@ -43,7 +43,7 @@ import {
   type BuildLineInput,
   type BuildLineState,
 } from "../lib/payBuild.js";
-import { mergeProgramMonths } from "../lib/margins.js";
+import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -733,6 +733,14 @@ console.log("[17] Margins — staff-hours vs delivered-hours month merge");
   const jun = rows.find((r) => r.month === "2026-06")!;
   eq(jun.deliveredHours, 0, "seeded current month has 0 delivered");
   eq(jun.staffHours, null, "seeded current month has no staff hours yet");
+
+  // meetingHours: real duration from CA datetime strings; null -> caller falls back.
+  eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 10:00:00"), 1, "1h meeting");
+  eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 09:30:00"), 0.5, "30-min meeting = 0.5h");
+  eq(meetingHours("2026-01-31 09:00:00", null), null, "missing end -> null (fall back)");
+  eq(meetingHours(null, "2026-01-31 10:00:00"), null, "missing start -> null");
+  eq(meetingHours("2026-01-31 10:00:00", "2026-01-31 09:00:00"), null, "end before start -> null");
+  eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 11:30:00"), 2.5, "2.5h meeting");
 }
 
 console.log("");

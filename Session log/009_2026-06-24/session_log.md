@@ -113,6 +113,20 @@ stand-in — CA mirror has a meeting start but no end/duration yet). Pure merge 
 ⚠ **Apply `9981_program_hours.sql`** before staff-hours entry persists (delivered hours render
 without it; the table fetch is fail-open).
 
+## Sixth batch (same session) — Margins: real meeting durations
+
+**10. Delivered hours now use actual meeting durations.** CA's `Appointment.getAll` returns
+`endDate` (confirmed in `docs/coachaccountable-api.md`). The sync now mirrors it to
+**`ca_appointments.end_raw`** (migration **`9980`**); `CaAppointmentRow` gained `end_raw`.
+`fetchDeliveredHoursByMonth` computes each session's hours as the real `end − start` (pure
+**`meetingHours`** in `lib/margins.ts`, **verify §17**), falling back to `PROGRAM_MEETING_HOURS`
+(now just a *fallback*, not the default) only when no end time is recorded. Group sessions still
+count once per (coach, start-time) slot. Margins blurb/help updated. typecheck/verify/build pass.
+
+⚠ **Apply `9980_ca_appointments_end.sql` before the next sync** (the sync writes `end_raw`; an
+unapplied column errors the appointment upsert) and **re-sync** to populate real durations — until
+then everything uses the 1 h/session fallback. **Still open: the money layer.**
+
 ## Open questions / next step
 1. **Apply `9984` then re-sync** (and `9983`). Verify Jonathan flips to Caleb *only if the user
    re-pairs him to Caleb in CA* — the data export still has him under Arthur on both engagements,

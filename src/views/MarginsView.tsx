@@ -165,8 +165,9 @@ export function MarginsView() {
               Margins <HelpButton id="margins.tab" label="Margins" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              {def.blurb} Delivered hours are an estimate: <strong>{PROGRAM_MEETING_HOURS} h per session</strong> (a
-              distinct coach + start-time slot, so a group meeting counts once). Dollar figures come later.
+              {def.blurb} Delivered hours use each meeting's <strong>actual duration</strong> (end − start) when recorded,
+              falling back to <strong>{PROGRAM_MEETING_HOURS} h/session</strong> otherwise. A session = a distinct coach +
+              start-time slot, so a group meeting counts once. Dollar figures come later.
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -266,7 +267,9 @@ export function MarginsView() {
             </div>
             <p className="view__hint" style={{ marginTop: 10 }}>
               Enter staff hours in the table (saves on blur). Needs migration <code>9981_program_hours.sql</code> applied to
-              persist. “Delivered ÷ staff” is delivered hours per staff hour for months where staff hours are entered.
+              persist, and a re-sync after <code>9980_ca_appointments_end.sql</code> for real meeting durations (until then
+              delivered hours use the {PROGRAM_MEETING_HOURS} h/session fallback). “Delivered ÷ staff” is delivered hours per
+              staff hour for months where staff hours are entered.
             </p>
           </>
         )}

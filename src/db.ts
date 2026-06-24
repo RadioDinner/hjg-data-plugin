@@ -41,8 +41,8 @@ export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
 export type { CapacityAppt } from "../lib/capacity";
 
 // Pure Margins helpers (program staff-hours vs delivered meeting-hours).
-import { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths } from "../lib/margins";
-export { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths };
+import { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths, meetingHours } from "../lib/margins";
+export { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths, meetingHours };
 export type { ProgramDef, ProgramMonthRow } from "../lib/margins";
 
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
@@ -1636,25 +1636,28 @@ export async function deletePayoutBuild(coachId: number, serviceMonth: string): 
 // Delivered meeting hours per month for a program (its pipeline tiers), and the
 // manually-entered staff hours. Pure comparison lives in lib/margins.ts.
 
-// Distinct delivered SESSIONS per month for the given tiers, × PROGRAM_MEETING_HOURS.
+// Distinct delivered SESSIONS per month for the given tiers, and their total HOURS.
 // A session = a distinct (coach, exact start time) slot, so a group meeting counts
 // once (not once per attendee); meetings with no start time fall back to their own id.
+// Each session's hours = its real duration (end − start) when both are recorded,
+// else the PROGRAM_MEETING_HOURS stand-in (e.g. before a re-sync populates end_raw).
 export async function fetchDeliveredHoursByMonth(
   tiers: PipelineTier[]
 ): Promise<Map<string, { sessions: number; hours: number }>> {
   const tierSet = new Set<string>(tiers);
   const engTier = engagementTierMap(await fetchAllEngagements());
-  const slotsByMonth = new Map<string, Set<string>>();
+  // month -> (slotKey -> session hours). A Map de-dupes group attendees to one slot.
+  const slotsByMonth = new Map<string, Map<string, number>>();
   const pageSize = 1000;
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
-      .select("id,coach_id,engagement_id,start_date,start_raw")
+      .select("id,coach_id,engagement_id,start_date,start_raw,end_raw")
       .in("category", ["mentoring", "group"])
       .eq("status", "A")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
-    const batch = (data ?? []) as { id: number; coach_id: number | null; engagement_id: number | null; start_date: string | null; start_raw: string | null }[];
+    const batch = (data ?? []) as { id: number; coach_id: number | null; engagement_id: number | null; start_date: string | null; start_raw: string | null; end_raw: string | null }[];
     for (const a of batch) {
       if (a.engagement_id == null) continue;
       const tier = engTier.get(a.engagement_id);
@@ -1662,17 +1665,21 @@ export async function fetchDeliveredHoursByMonth(
       const month = (a.start_date ?? "").slice(0, 7);
       if (!month) continue;
       const slot = a.start_raw ? `${a.coach_id ?? "?"}|${a.start_raw}` : `id|${a.id}`;
-      let set = slotsByMonth.get(month);
-      if (!set) {
-        set = new Set();
-        slotsByMonth.set(month, set);
+      let slots = slotsByMonth.get(month);
+      if (!slots) {
+        slots = new Map();
+        slotsByMonth.set(month, slots);
       }
-      set.add(slot);
+      if (!slots.has(slot)) slots.set(slot, meetingHours(a.start_raw, a.end_raw) ?? PROGRAM_MEETING_HOURS);
     }
     if (batch.length < pageSize) break;
   }
   const out = new Map<string, { sessions: number; hours: number }>();
-  for (const [month, set] of slotsByMonth) out.set(month, { sessions: set.size, hours: set.size * PROGRAM_MEETING_HOURS });
+  for (const [month, slots] of slotsByMonth) {
+    let hours = 0;
+    for (const h of slots.values()) hours += h;
+    out.set(month, { sessions: slots.size, hours: Math.round(hours * 100) / 100 });
+  }
   return out;
 }
 

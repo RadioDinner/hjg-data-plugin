@@ -35,3 +35,7 @@ build the feature on the feature backlog that adds filters to the journeys
 
 --- 2026-06-24 (session 009) ---
 keep working on the backlog
+
+--- 2026-06-24 (session 009) ---
+work on the "margins" feature now
+Continue from where you left off.

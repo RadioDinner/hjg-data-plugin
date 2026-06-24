@@ -289,7 +289,8 @@ Pure logic in \`lib/journey.ts\`.`,
 ### Delivered hours
 - Counted from CoachAccountable meetings whose engagement is in the program's tiers, grouped by month.
 - A **session** = a distinct **coach + exact start-time** slot, so a group meeting counts **once** (not once per attendee).
-- **Delivered hours = sessions × a standard per-session length** (currently **1 h**). This is a **stand-in** — CoachAccountable doesn't expose real per-appointment durations in the mirror yet, so retune the one knob (\`PROGRAM_MEETING_HOURS\`) once it does.
+- Each session's hours = its **actual duration** (\`endDate − startDate\`) when recorded. When a meeting has no end time (pre-sync rows, or CA left it blank) it falls back to a **1 h/session** stand-in (\`PROGRAM_MEETING_HOURS\`).
+- Real durations need migration \`9980_ca_appointments_end.sql\` applied **and a re-sync** (the sync now mirrors \`endDate\` to \`ca_appointments.end_raw\`); until then everything uses the fallback.
 
 ### Staff hours
 - **You enter these** per month, in the table (saves on blur). Stored in the \`program_hours\` table (migration \`9981\`).
