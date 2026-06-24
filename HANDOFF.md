@@ -100,6 +100,16 @@ for the bar + a CSS `linear-gradient` swatch in the table), not any single stage
   header is a disclosure button showing the selected mentee's name when collapsed).
 - UI-only — no migration, no verify change.
 
+**(7) §107 edits auto-stamp hand-reviewed.** Any persisted action on the "Edit graduation
+status" editor (Save/Update **or** Clear, incl. just confirming a synced date) now also
+writes `mentees.hand_reviewed = true` (+ `hand_reviewed_at`) via `saveMenteeRecord`
+(`markHandReviewed` in `MenteeStatusEditor`). The status/stage-date edits still live in
+`mentee_outcomes` (the override layer) — only the hand-reviewed flag is mirrored to the
+`mentees` source-of-truth table (user's choice: "stamp hand-reviewed only," no data
+duplication). `onSaved → load()` reloads records so §106 + the "Only hand reviewed" filter
+update. **Data-model note for future-me:** §106 → `mentees`; §107 → `mentee_outcomes`;
+§105 Meetings is read-only (kept that way — no save affordances). UI-only.
+
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
    HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.

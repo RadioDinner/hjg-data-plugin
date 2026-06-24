@@ -33,3 +33,10 @@ Also, on the "edit graduation status" (107) screen. I want that to be a drop dow
 
 --- 2026-06-24 (session 009b) ---
 Add an option in the "Journeys" (101) module in company options to "recalculate dates" and set that to be enabled if the calculation logic option is ever switched. [vision: board decides to switch basis -> toggle the logic, click button to update mentee journey statuses] Also, on the "Discovery > graduation" color, make it a cool gradient of all the other colors in the settings
+
+--- 2026-06-24 (session 009b) ---
+If I make changes to the 107 screen in the journeys, even just clicking the date from the "synced date" button, I want the system to automatically assume a hand review.
+
+--- 2026-06-24 (AskUserQuestion answers) ---
+Q: §107 edits → mentees table? A: Stamp hand-reviewed only (keep status/date edits in mentee_outcomes; on any §107 save, set mentees.hand_reviewed=true + timestamp).
+Q: §105 editing? A: It's fine as read-only, but don't make it look like I can save information there.

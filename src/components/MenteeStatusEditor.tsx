@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SectionId } from "./SectionId";
 import {
   clearMenteeOutcome,
+  saveMenteeRecord,
   setMenteeOutcome,
   type MenteeJourney,
   type MenteeStatus,
@@ -106,6 +107,17 @@ export function MenteeStatusEditor({
       datesDirty);
   const canSave = !!selected && dirty && !saving;
 
+  // Any deliberate edit on this card counts as a HUMAN review of the mentee, so it
+  // stamps the source-of-truth record (mentees.hand_reviewed) — even if the only
+  // change was confirming a synced date. Writes the mentees row (upsert by client).
+  async function markHandReviewed() {
+    if (!selected) return;
+    await saveMenteeRecord(userId, selected.clientId, selected.name, {
+      hand_reviewed: true,
+      hand_reviewed_at: new Date().toISOString(),
+    });
+  }
+
   async function save() {
     if (!selected) return;
     setSaving(true);
@@ -124,7 +136,8 @@ export function MenteeStatusEditor({
           graduated: dates.graduated || null,
         },
       });
-      setSavedMsg("Saved ✓ — overrides sync");
+      await markHandReviewed();
+      setSavedMsg("Saved ✓ — overrides sync · marked hand-reviewed");
       onSaved();
     } catch (e) {
       onError(String(e));
@@ -138,7 +151,8 @@ export function MenteeStatusEditor({
     setSavedMsg(null);
     try {
       await clearMenteeOutcome(selected.clientId);
-      setSavedMsg("Reverted to synced");
+      await markHandReviewed();
+      setSavedMsg("Reverted to synced · marked hand-reviewed");
       onSaved();
     } catch (e) {
       onError(String(e));
@@ -163,6 +177,7 @@ export function MenteeStatusEditor({
         Pick a mentee (or select one from the list below) and correct their outcome and/or pipeline dates. Overrides here{" "}
         <strong>always win over synced data</strong> and are never overwritten by a re-sync — the synced data still comes in,
         your override just takes precedence. <strong>Clear</strong> reverts everything to the automatic (synced) values.
+        Saving any change here (even just confirming a synced date) also marks this mentee <strong>hand-reviewed</strong>.
       </p>
       <div className="journey__status-row">
         <label>
