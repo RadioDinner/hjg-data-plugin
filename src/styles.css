@@ -373,6 +373,10 @@ body {
    color-coded by its pipeline stage (Company options → Journeys → stage colors). */
 .stage-rail { display: flex; align-items: flex-start; gap: 0; margin: 8px 0 24px; }
 .stage { display: flex; align-items: flex-start; flex: 1 1 0; min-width: 0; }
+/* The first stage (Discovery) has no leading connector, so don't reserve a full
+   1/6 cell for it — size it to its node. Otherwise its cell's empty right half
+   shows as a gap of white space before the first connector. */
+.stage:first-child { flex: 0 0 auto; }
 .stage__gap { flex: 1 1 auto; text-align: center; font-size: 10px; color: var(--muted); border-top: 1px dashed var(--line-strong); margin: 12px 3px 0; padding-top: 2px; min-width: 14px; white-space: nowrap; }
 .stage__node { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; flex: 0 0 auto; max-width: 100%; border-top: 3px solid transparent; padding: 4px 4px 0; }
 .stage__dot { width: 11px; height: 11px; border-radius: 999px; background: var(--accent); border: 2px solid var(--panel); }
