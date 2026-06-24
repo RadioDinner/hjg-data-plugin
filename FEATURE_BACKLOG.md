@@ -42,35 +42,6 @@ cost/revenue layers on top once the hours model is trusted.
 
 ---
 
-### Pipeline-timing card — mentee filters (Journeys) — requested session 009, 2026-06-24
-
-**What.** On the **"Pipeline timing — all mentees"** card (Journeys tab), add a small set of
-**filters that scope which mentees are evaluated** in that roll-up. Examples the user named:
-**only mentees with a manually-overridden graduation date** (i.e. staff edited it), **only mentees
-active in the last year**, and similar cohort cuts. Filters should recompute the leg-duration
-averages/medians + the stat tiles for just the selected cohort.
-
-**Why.** The board aggregate currently spans *every* mentee. Being able to slice it — recent
-cohorts, manually-corrected records, etc. — makes the timing numbers far more useful for
-decision-making (e.g. "how long is graduation taking for mentees who started in the last year?").
-
-**Where in code / approach.**
-- `src/views/JourneysView.tsx` `PipelineSummary` + `aggregateJourneyDurations` in `src/db.ts`.
-- Add a filter bar on the card; candidate predicates (compose-able):
-  - **Overridden graduation date** — `journey.stageOverrides.graduated != null` (manual edit; the
-    override fields already exist on `MenteeJourney`).
-  - **Last N months** — by `discoveryDate` / first activity within a window (reuse the range helpers).
-  - **Current tier**, **status** (active/graduated/exited), **owner (coach)**.
-- Pass the active filters into `aggregateJourneyDurations` (or pre-filter the journeys array) so the
-  graph, table, and tiles all reflect the cohort. Keep filters ephemeral local state (like the
-  Metrics range), or persist later.
-
-**Acceptance criteria.**
-- A filter control on the Pipeline-timing card; toggling a filter recomputes the legs + tiles live.
-- At minimum: "overridden graduation date" and a "last year" (date-window) filter work and compose.
-
----
-
 ### Unique 3-digit identifier on every card / modal / screen — requested session 008, 2026-06-24
 
 **What.** Give **every self-contained section of data** — each ChartCard, each tab/screen,
@@ -236,6 +207,15 @@ outcome," so the table can't assume it:
 ---
 
 ## Shipped
+
+### Pipeline-timing card — mentee filters (Journeys) — ✅ SHIPPED session 009, 2026-06-24
+
+A composable filter bar on the Journeys "Pipeline timing" card (`PipelineSummary` in
+`src/views/JourneysView.tsx`): **Active within** (last 3/6/12/24 months, by most-recent
+activity), **Status** (active/graduated/exited), **Current tier**, **Owner** (primary coach),
+and an **Overridden graduation date** checkbox. The cohort feeds the graph, table, and tiles;
+"Showing N of M" + Clear filters; filters are ephemeral local state. Roster/excluded scoping
+still applies on top.
 
 ### Maps tab — Data map + Payments visual — session 006c, 2026-06-22
 

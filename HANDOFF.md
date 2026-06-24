@@ -21,6 +21,10 @@ manual exit-date SQL). **Still REQUIRED: a re-sync** (Admin → Sync now) so `ca
 **Next new migration is `9981_…`.**
 
 **Shipped this session (009), newest first:**
+- **Pipeline-timing cohort filters** (Journeys card, from the backlog). Composable filter bar:
+  **Active within** (3/6/12/24 mo by last activity), **Status** (active/graduated/exited), **Current
+  tier**, **Owner**, **Overridden graduation date** checkbox. Filters the graph + table + tiles;
+  "Showing N of M" + Clear; ephemeral. `PipelineSummary` in `JourneysView.tsx`; `.journey-filters` CSS.
 - **Journeys scoped to the Mentees source-of-truth roster** (219 → ~181). A journey counts only if
   its mentee is in the `mentees` roster (matched by **client_id OR normalized name**;
   `fetchMenteeRosterKeys`, **fail-open** if the table's absent). `MenteeJourney.inSourceOfTruth`;

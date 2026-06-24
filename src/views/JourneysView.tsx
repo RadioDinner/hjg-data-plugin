@@ -67,6 +67,38 @@ function StatusPill({ status }: { status: ResolvedMenteeStatus }) {
   return <span className={`pill pill--mentee-${status}`}>{STATUS_LABEL[status]}</span>;
 }
 
+// --- Pipeline-timing cohort filters -------------------------------------------
+// Filters that scope WHICH mentees feed the board roll-up (graph + tiles + table).
+// Ephemeral local state on the card; they compose. The roster/excluded drop still
+// happens inside aggregateJourneyDurations + the counts, on top of these.
+
+type StatusFilter = "all" | "active" | "graduated" | "exited";
+type TierFilter = "all" | PipelineTier;
+const WINDOW_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "Any time" },
+  { value: "3", label: "Last 3 months" },
+  { value: "6", label: "Last 6 months" },
+  { value: "12", label: "Last 12 months" },
+  { value: "24", label: "Last 24 months" },
+];
+
+// YYYY-MM-DD for `n` months before today (local). Used as the activity-window cutoff.
+function ymdMonthsAgo(n: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// A mentee's most recent activity date: last meeting, else the latest stage date,
+// else discovery. Drives the "active within" window filter.
+function lastActivityOf(j: MenteeJourney): string | null {
+  let m: string | null = j.lastMeeting ?? null;
+  for (const d of [j.discoveryDate, ...Object.values(j.stageDates)]) {
+    if (d && (!m || d > m)) m = d;
+  }
+  return m;
+}
+
 // One node on the horizontal stage rail (a date marker), with the gap to the
 // previous node rendered on the connector. `color` is this stage's configured
 // color (Company options → Journeys → Pipeline stage colors); a reached stage
@@ -397,14 +429,57 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
   const AXIS = ct.axis;
   const GRID = ct.grid;
   const TOOLTIP: ChartStyle = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
-  const legs = useMemo(() => aggregateJourneyDurations(journeys), [journeys]);
+
+  // Cohort filters (ephemeral). They narrow which mentees feed the roll-up.
+  const [windowM, setWindowM] = useState<string>("all");
+  const [statusF, setStatusF] = useState<StatusFilter>("all");
+  const [tierF, setTierF] = useState<TierFilter>("all");
+  const [ownerF, setOwnerF] = useState<string>("all");
+  const [overriddenGradOnly, setOverriddenGradOnly] = useState(false);
+  const anyFilter = windowM !== "all" || statusF !== "all" || tierF !== "all" || ownerF !== "all" || overriddenGradOnly;
+  const clearFilters = () => {
+    setWindowM("all");
+    setStatusF("all");
+    setTierF("all");
+    setOwnerF("all");
+    setOverriddenGradOnly(false);
+  };
+
+  // Owner options = distinct owners among in-roster, non-excluded mentees.
+  const owners = useMemo(() => {
+    const s = new Set<string>();
+    for (const j of journeys) if (j.inSourceOfTruth && !j.excluded && j.ownerCoachName) s.add(j.ownerCoachName);
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [journeys]);
+
+  // Apply the cohort filters. Roster/excluded scoping still happens downstream.
+  const cohort = useMemo(() => {
+    const cutoff = windowM === "all" ? null : ymdMonthsAgo(Number(windowM));
+    return journeys.filter((j) => {
+      if (cutoff) {
+        const act = lastActivityOf(j);
+        if (!act || act < cutoff) return false;
+      }
+      if (statusF === "exited") {
+        if (!(EXIT_STATUSES as readonly string[]).includes(j.resolvedStatus)) return false;
+      } else if (statusF !== "all" && j.resolvedStatus !== statusF) {
+        return false;
+      }
+      if (tierF !== "all" && j.currentTier !== tierF) return false;
+      if (ownerF !== "all" && j.ownerCoachName !== ownerF) return false;
+      if (overriddenGradOnly && !j.stageOverrides.graduated) return false;
+      return true;
+    });
+  }, [journeys, windowM, statusF, tierF, ownerF, overriddenGradOnly]);
+
+  const legs = useMemo(() => aggregateJourneyDurations(cohort), [cohort]);
   const counts = useMemo(() => {
     let active = 0;
     let graduated = 0;
     let total = 0;
     let excluded = 0;
     let offRoster = 0;
-    for (const j of journeys) {
+    for (const j of cohort) {
       // Off-roster mentees (CA's other pipelines, not in the Mentees source of truth)
       // are dropped from the board roll-up — same treatment as excluded mentees.
       if (!j.inSourceOfTruth) {
@@ -420,14 +495,16 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
       if (j.resolvedStatus === "graduated") graduated++;
     }
     return { total, active, graduated, excluded, offRoster };
-  }, [journeys]);
+  }, [cohort]);
+  // Denominator for "showing N of M": all in-roster, non-excluded mentees (no filters).
+  const rosterTotal = useMemo(() => journeys.filter((j) => j.inSourceOfTruth && !j.excluded).length, [journeys]);
   const grad = legs.find((l) => l.key === "dc_grad");
   const chartData = legs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n }));
 
   return (
     <div className="card card--inset" style={{ marginBottom: 18 }}>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        Pipeline timing — all mentees <HelpButton id="journeys.aggregate" label="Pipeline timing" />
+        Pipeline timing — {anyFilter ? "filtered" : "all"} mentees <HelpButton id="journeys.aggregate" label="Pipeline timing" />
       </h2>
       <p className="view__hint">
         Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg).
@@ -440,6 +517,61 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
           <> · {counts.excluded} mentee{counts.excluded === 1 ? "" : "s"} manually excluded.</>
         )}
       </p>
+
+      <div className="journey-filters">
+        <label className="journey-filters__field">
+          <span>Active within</span>
+          <select value={windowM} onChange={(e) => setWindowM(e.target.value)}>
+            {WINDOW_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="journey-filters__field">
+          <span>Status</span>
+          <select value={statusF} onChange={(e) => setStatusF(e.target.value as StatusFilter)}>
+            <option value="all">Any</option>
+            <option value="active">Active</option>
+            <option value="graduated">Graduated</option>
+            <option value="exited">Exited (quit / fired / no mentoring)</option>
+          </select>
+        </label>
+        <label className="journey-filters__field">
+          <span>Current tier</span>
+          <select value={tierF} onChange={(e) => setTierF(e.target.value as TierFilter)}>
+            <option value="all">Any</option>
+            <option value="jumpstart">JumpStart</option>
+            <option value="4x">4x</option>
+            <option value="2x">2x</option>
+            <option value="1x">1x</option>
+            <option value="graduated">Graduated</option>
+          </select>
+        </label>
+        {owners.length > 0 && (
+          <label className="journey-filters__field">
+            <span>Owner</span>
+            <select value={ownerF} onChange={(e) => setOwnerF(e.target.value)}>
+              <option value="all">Any</option>
+              {owners.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="journey-filters__check" title="Only mentees whose graduation date was set manually (an override)">
+          <input type="checkbox" checked={overriddenGradOnly} onChange={(e) => setOverriddenGradOnly(e.target.checked)} />
+          <span>Overridden graduation date</span>
+        </label>
+        <span className="journey-filters__count muted">
+          Showing {counts.total} of {rosterTotal}
+          {anyFilter && (
+            <button className="btn btn--sm" style={{ marginLeft: 8 }} onClick={clearFilters}>
+              Clear filters
+            </button>
+          )}
+        </span>
+      </div>
+
       <div className="stat-row">
         <div className="stat">
           <span className="stat__value">{counts.total}</span>

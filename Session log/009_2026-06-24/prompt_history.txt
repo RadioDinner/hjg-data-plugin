@@ -29,3 +29,6 @@ add this to the feature backlog, On the "pipeline timing" card on the journeys t
 also, add a feature to the backlog. I want a margins tab created, with a few sub tabs. One called JumpStart Your Freedom. One called Mentoring. In the JumpStart Your Freedom sub tab, I want to enter all the staff hours for the month into the system and compare it to all the meeting hours for JYF for that month. We'll add money numbers later, but I want the bones there 
 
 In the journey's tab, there are 219 mentees, but the notion database shows 181. I believe that is because we use coach accountable for several different pipelines. I want the mentee journeys tab to reflect only mentees/clients in jumpstart your freedom, 4x, 2x or 1x mentoring. We have other offerings like independant IMN mentoring, after graduation care, mentor training, etc. For now, match the names from the "mentees source of truth" to the mentees listed in the journeys list. If the mentee exists in the journey's list but NOT in the Mentee source of truth, exclude them from the metrics.
+
+--- 2026-06-24 (session 009) ---
+build the feature on the feature backlog that adds filters to the journeys

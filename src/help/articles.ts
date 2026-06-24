@@ -158,6 +158,15 @@ Pure math lives in \`lib/compare.ts\`.`,
   - **Engagement start** — the CA engagement's start date for that tier.
   - **First meeting** — the first 1-on-1 mentoring meeting under that tier (group sessions excluded), falling back to the engagement start.
 
+### Filters (scope the cohort)
+- The filter bar narrows which mentees feed the graph, table, and tiles — they **compose**:
+  - **Active within** — mentees whose most recent activity (last meeting, else latest stage date) falls inside the window (e.g. last 12 months).
+  - **Status** — Active / Graduated / Exited (quit · fired · no mentoring).
+  - **Current tier** — JumpStart / 4x / 2x / 1x / Graduated.
+  - **Owner** — the mentee's primary coach.
+  - **Overridden graduation date** — only mentees whose graduation date was set manually (an override).
+- "Showing N of M" shows how many roster mentees pass the filters; **Clear filters** resets them. Filters are not saved — they reset on reload.
+
 ### Owner & alternative exits
 - Each mentee's **owner** is their CoachAccountable **primary coach** (\`ca_clients.coach_id\`), shown on the mentee's timeline. The per-meeting **Coach** column still shows whoever ran each meeting. See the **"How clients are matched to coaches"** help.
 - A mentee can take an **alternative exit at any stage** — **Quit**, **Fired**, or **No mentoring** — set in the "Edit graduation status" editor. The stage rail then ends in a red exit node *in place of* Graduation, at the point they left.

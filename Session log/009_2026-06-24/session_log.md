@@ -86,6 +86,17 @@ field drives it) — a per-exit-date editor could be a follow-up.
 JYF = enter staff hours vs delivered JYF meeting hours, money later) and **Pipeline-timing
 filters** (overridden-graduation-date, last-year, etc. cohort cuts on the Journeys aggregate).
 
+## Fourth batch (same session) — pipeline-timing filters (built from backlog)
+
+**8. Pipeline-timing cohort filters** (the backlog item, now shipped). A composable filter bar on
+the Journeys "Pipeline timing" card (`PipelineSummary`): **Active within** (last 3/6/12/24 months,
+by most-recent activity = lastMeeting/latest stage date), **Status** (active/graduated/exited),
+**Current tier**, **Owner** (primary coach), and an **Overridden graduation date** checkbox
+(`stageOverrides.graduated != null`). The filtered cohort feeds `aggregateJourneyDurations` (graph
++ table) and the stat tiles; header flips to "filtered mentees"; "Showing N of M" + Clear filters.
+Ephemeral local state. Roster/excluded scoping still applies underneath. New `.journey-filters`
+CSS; help article + FEATURE_BACKLOG (moved to Shipped) updated. typecheck/verify/build pass.
+
 ## Open questions / next step
 1. **Apply `9984` then re-sync** (and `9983`). Verify Jonathan flips to Caleb *only if the user
    re-pairs him to Caleb in CA* — the data export still has him under Arthur on both engagements,
