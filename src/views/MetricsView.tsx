@@ -16,15 +16,14 @@ import {
 import {
   COMPARE_PRESETS,
   MANUAL_METRICS,
-  computeMeetingsToFreedom,
   derivePeriodB,
   delta,
   fetchCoachesWithSettings,
   fetchPrimaryCoachByClient,
   fetchLastSyncedAt,
+  fetchFreedomReport,
   fetchJyfVsMentoring,
   fetchManualMetrics,
-  fetchMenteeJourneys,
   fetchMentorCoachIds,
   fetchRangeAppointments,
   fetchResolvedOutcomes,
@@ -41,7 +40,6 @@ import {
   type FreedomReport,
   type JyfVsMentoring,
   type ManualMetricRow,
-  type MenteeJourney,
   type RangeAppt,
   type ResolvedOutcome,
   type TrendCall,
@@ -402,9 +400,9 @@ export function MetricsView() {
   // clientId -> owner (CA primary coach). Capacity buckets each mentee under their
   // owner, not whoever ran each meeting. Empty until 9984 is applied + a re-sync.
   const [primaryCoach, setPrimaryCoach] = useState<Map<number, number>>(new Map());
-  // All-history mentee journeys, loaded once — backs the "Meetings to Freedom!"
-  // card (graduated-mentee lifetime metric, not scoped to the date range).
-  const [journeys, setJourneys] = useState<MenteeJourney[]>([]);
+  // "Meetings to Freedom!" report, loaded once (all-history, computed in db.ts off
+  // the new mentees table — not scoped to the date range).
+  const [freedomReport, setFreedomReport] = useState<FreedomReport | null>(null);
   const [jyfVsMentoring, setJyfVsMentoring] = useState<JyfVsMentoring | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -485,13 +483,13 @@ export function MetricsView() {
     };
   }, [from, to]);
 
-  // Mentee journeys load once (all-history) for the "Meetings to Freedom!" card.
-  // Not date-scoped, so it doesn't re-fetch as the range changes.
+  // "Meetings to Freedom!" loads once (all-history). Not date-scoped, so it doesn't
+  // re-fetch as the range changes.
   useEffect(() => {
     let cancelled = false;
-    fetchMenteeJourneys()
-      .then((js) => {
-        if (!cancelled) setJourneys(js);
+    fetchFreedomReport()
+      .then((r) => {
+        if (!cancelled) setFreedomReport(r);
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -939,32 +937,17 @@ export function MetricsView() {
   );
   const bConvTrend = useMemo(() => rollingConversionTrend(bConvCalls, bBuckets, trendWindow), [bConvCalls, bBuckets, trendWindow]);
 
-  // "Meetings to Freedom!" — 1-on-1 mentoring sessions from JumpStart completion
-  // (engagement end date) to graduation, per graduated mentee. All-history; not
-  // scoped to the date range. Excluded (test/placeholder) mentees are dropped.
-  const freedomReport = useMemo<FreedomReport>(() => {
-    const inputs = journeys
-      .filter((j) => !j.excluded)
-      .map((j) => ({
-        clientId: j.clientId,
-        name: j.name,
-        graduated: j.resolvedStatus === "graduated",
-        graduationDate: (j.override === "graduated" ? j.overrideDate : null) ?? j.stageDates.graduated,
-        jumpstartEnd: j.jumpstartEndDate,
-        firstOngoingStart:
-          [j.stageDates["4x"], j.stageDates["2x"], j.stageDates["1x"]].filter((d): d is string => !!d).sort()[0] ?? null,
-        meetings: j.meetings.map((m) => ({ date: m.date, isGroup: m.isGroup })),
-      }));
-    return computeMeetingsToFreedom(inputs);
-  }, [journeys]);
+  // "Meetings to Freedom!" — 1-on-1 mentoring sessions from JumpStart completion to
+  // graduation, per graduated mentee. Computed in db.ts off the new mentees table
+  // (all-history; test mentees dropped); loaded once into `freedomReport`.
   const freedomBars = useMemo(
-    () => freedomReport.rows.map((r) => ({ name: r.name, meetings: r.meetings })),
+    () => (freedomReport ? freedomReport.rows.map((r) => ({ name: r.name, meetings: r.meetings })) : []),
     [freedomReport]
   );
   const freedomTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Mentee", "JumpStart completed", "Graduated", "1-on-1 sessions"],
-      rows: freedomReport.rows.map((r) => [r.name, fmtDate(r.windowStart), fmtDate(r.graduationDate), r.meetings]),
+      rows: freedomReport ? freedomReport.rows.map((r) => [r.name, fmtDate(r.windowStart), fmtDate(r.graduationDate), r.meetings]) : [],
     }),
     [freedomReport]
   );
@@ -1678,27 +1661,27 @@ export function MetricsView() {
                   </p>
                   <div className="stat-row">
                     <div className="stat">
-                      <span className="stat__value">{freedomReport.avg ?? "—"}</span>
+                      <span className="stat__value">{freedomReport?.avg ?? "—"}</span>
                       <span className="stat__label">Avg to freedom</span>
                     </div>
                     <div className="stat">
-                      <span className="stat__value">{freedomReport.median ?? "—"}</span>
+                      <span className="stat__value">{freedomReport?.median ?? "—"}</span>
                       <span className="stat__label">Median</span>
                     </div>
                     <div className="stat">
-                      <span className="stat__value">{num(freedomReport.n)}</span>
+                      <span className="stat__value">{num(freedomReport?.n ?? 0)}</span>
                       <span className="stat__label">Graduates measured</span>
                     </div>
                     <div className="stat">
                       <span className="stat__value">
-                        {freedomReport.min ?? "—"}–{freedomReport.max ?? "—"}
+                        {freedomReport?.min ?? "—"}–{freedomReport?.max ?? "—"}
                       </span>
                       <span className="stat__label">Range</span>
                     </div>
                   </div>
-                  {freedomReport.unmeasured > 0 && (
+                  {(freedomReport?.unmeasured ?? 0) > 0 && (
                     <p className="view__hint" style={{ marginTop: 4 }}>
-                      {num(freedomReport.unmeasured)} graduated mentee{freedomReport.unmeasured === 1 ? "" : "s"} omitted
+                      {num(freedomReport?.unmeasured ?? 0)} graduated mentee{freedomReport?.unmeasured === 1 ? "" : "s"} omitted
                       (missing a JumpStart-completion or graduation date).
                     </p>
                   )}

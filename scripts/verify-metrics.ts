@@ -23,6 +23,7 @@ import {
   type CohortJourneyInput,
 } from "../lib/cohortCompare.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney.js";
+import { toEffectiveMentee, aggregateLegDurations, type MenteeRowLike } from "../lib/menteeView.js";
 import {
   gradientColors,
   resolveStageColors,
@@ -943,6 +944,73 @@ console.log("[20] Mentee management — CA-layer derivation (deriveMenteeCaRecor
   eq(row.ca_graduation_date, "2025-12-01", "upsert row ca_graduation_date");
   eq(row.ca_synced_at, "2026-06-24T00:00:00.000Z", "upsert row ca_synced_at");
   assert(!("status" in row) && !("is_test" in row), "upsert row has NO hand-layer columns");
+}
+
+console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg roll-up");
+{
+  const base = (o: Partial<MenteeRowLike>): MenteeRowLike => ({
+    id: "x", client_id: 1, ca_name: null, ca_owner_coach_id: null, ca_owner_coach_name: null,
+    ca_discovery_date: null, ca_jumpstart_date: null, ca_tier_4x_date: null, ca_tier_2x_date: null,
+    ca_tier_1x_date: null, ca_graduation_date: null, ca_first_meeting: null, ca_last_meeting: null,
+    ca_meeting_count: 0, ca_jumpstart_end: null, ca_jyf_purchase_date: null, ca_start_date: null,
+    ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
+    status_date: null, discovery_date_override: null, jumpstart_date_override: null,
+    tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
+    graduation_date_override: null, owner_coach_id_override: null, is_test: false, ...o,
+  });
+  const today = "2026-06-24";
+
+  // Hand layer wins over CA layer.
+  const e1 = toEffectiveMentee(
+    base({
+      id: "a", client_id: 1, ca_name: "CA Name", ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-01-15",
+      ca_status: "active", name_override: "Hand Name", discovery_date_override: "2026-02-01",
+      status: "quit", status_stage: "jumpstart", status_date: "2026-03-01",
+    }),
+    today
+  );
+  eq(e1.name, "Hand Name", "effective name = override");
+  eq(e1.discoveryDate, "2026-02-01", "effective discovery = override (hand wins)");
+  eq(e1.status, "quit", "hand status wins");
+  eq(e1.resolvedStatus, "quit", "resolved = hand quit");
+  eq(e1.statusLabel, "Quit", "status label");
+  eq(e1.currentStage, "jumpstart", "current stage jumpstart");
+  eq(e1.daysInSystem, 28, "days in system = override discovery -> status_date");
+
+  // CA-only row: effective = CA values; status derives from the CA guess.
+  const e2 = toEffectiveMentee(
+    base({
+      id: "b", client_id: 2, ca_name: "Grad", ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01",
+      ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-12-01", ca_status: "graduated", ca_owner_coach_name: "Arthur",
+    }),
+    today
+  );
+  eq(e2.discoveryDate, "2025-01-01", "CA-only discovery");
+  eq(e2.graduationDate, "2025-12-01", "CA-only graduation");
+  eq(e2.currentTier, "graduated", "CA-only current tier graduated");
+  assert(e2.status === null, "no hand status");
+  eq(e2.resolvedStatus, "graduated", "resolved graduated from CA");
+  eq(e2.statusLabel, "Graduated", "label graduated");
+  eq(e2.ownerCoachName, "Arthur", "owner from CA");
+  eq(e2.daysInSystem, 334, "days = discovery -> graduation");
+
+  // CA inactive + no hand status => Unclassified, sitting at discovery.
+  const e3 = toEffectiveMentee(base({ id: "c", client_id: 3, ca_name: "Stale", ca_discovery_date: "2025-01-01", ca_status: "inactive" }), today);
+  eq(e3.statusLabel, "Unclassified", "inactive + unclassified");
+  eq(e3.currentStage, "discovery", "discovery-only stage");
+  assert(e3.currentTier === null, "no tier");
+
+  // Leg durations off effective mentees; is_test dropped.
+  const m1 = base({ id: "m1", client_id: 11, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-01-11", ca_tier_4x_date: "2025-01-21", ca_graduation_date: "2025-02-01" });
+  const m2 = base({ id: "m2", client_id: 12, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-01-21" });
+  const mt = base({ id: "mt", client_id: 13, ca_discovery_date: "2020-01-01", ca_jumpstart_date: "2020-06-01", is_test: true });
+  const legs = aggregateLegDurations([m1, m2, mt].map((r) => toEffectiveMentee(r, today)));
+  const byKey = new Map(legs.map((l) => [l.key, l]));
+  eq(byKey.get("dc_js")!.n, 2, "dc_js n=2 (test dropped)");
+  eq(byKey.get("dc_js")!.avgDays, 15, "dc_js avg = (10+20)/2");
+  eq(byKey.get("dc_js")!.medianDays, 15, "dc_js median");
+  eq(byKey.get("js_4x")!.n, 1, "js_4x n=1");
+  eq(byKey.get("js_4x")!.avgDays, 10, "js_4x avg");
 }
 
 console.log("");

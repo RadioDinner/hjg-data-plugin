@@ -148,6 +148,24 @@ Pure math lives in \`lib/compare.ts\`.`,
 - This **never changes the engine's numbers** — overrides and exclusions live only in the review record (\`payout_builds\`). It's read-only toward CoachAccountable; the engine stays the source of truth.`,
   },
 
+  "mentees.screen": {
+    title: "Mentee management (source of truth)",
+    body: `HJG's **source of truth** for every mentee — one row per person, from their first discovery call through graduating, quitting, being fired, or being declined.
+
+### Two layers
+- **CA layer** — owner coach, pipeline stage dates, meeting counts, current tier, and a coarse status guess, all **derived from CoachAccountable** and **refreshed on every sync** (and by **Rebuild from CA**). The sync owns these.
+- **Hand layer** — **status** (active / graduated / quit / fired / paused / declined), the **stage** an exit/graduation happened at, **date corrections** (overrides), Notion info (email / phone / mentor), **notes**, and a **test** flag. These are **yours** and a sync **never** overwrites them.
+- The table and detail show the **effective** value: your hand edit wins over the CA value; your status wins over CA's guess. A mentee CA thinks is inactive but you haven't classified shows as **Unclassified**.
+
+### Using it
+- The **roster table** lists every mentee (status · stage · owner · key dates · meetings) with search, per-column sort, filters, and CSV. Click a name to open the detail.
+- In the **detail**, edit the hand layer (left) — blank a date override to fall back to the CA date — and review the **CA history** (engagements + meetings) on the right. **Save** writes only your hand layer.
+- **Rebuild from CA** recomputes the CA layer from the synced mirror (no CoachAccountable calls); **+ Add mentee** creates a hand-only prospect not yet in CA.
+- **Test / placeholder** mentees are excluded from the metrics (this replaces the old per-mentee exclusion list).
+
+Pure logic in \`lib/menteeJourney.ts\` (CA derivation) + \`lib/menteeView.ts\` (effective view-model).`,
+  },
+
   "journeys.aggregate": {
     title: "Pipeline leg durations",
     body: `Board-level view of how long mentees take to move through the pipeline: **Discovery → JumpStart → 4x → 2x → 1x → Graduation**.

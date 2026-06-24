@@ -25,8 +25,10 @@ export const UI_SECTIONS: Record<string, number> = {
   "metrics.mentors": 8,
   "metrics.capacity": 9,
   "metrics.resource": 10,
+  "metrics.pipelineTiming": 11, // §102 leg-timing moved here in the mentee-mgmt rework
 
-  // 1xx — Journeys
+  // 1xx — Journeys (RETIRED 2026-06-24 — the Journeys tab was removed in the mentee-
+  // management rework. Numbers kept reserved per the append-only rule; do not reuse.)
   "journeys.screen": 101,
   "journeys.pipelineTiming": 102,
   "journeys.timeline": 103,
@@ -52,8 +54,11 @@ export const UI_SECTIONS: Record<string, number> = {
   "admin.settings": 404,
   "options.screen": 451,
 
-  // 5xx — Mentees
+  // 5xx — Mentees (rebuilt mentee management, 2026-06-24)
   "mentees.screen": 501,
+  "mentees.roster": 502,
+  "mentees.detail": 503,
+  "mentees.funnel": 504,
 
   // 6xx — Margins
   "margins.screen": 601,

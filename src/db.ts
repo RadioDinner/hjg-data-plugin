@@ -99,8 +99,13 @@ export type { StageBasis };
 export { monthsAgoYmd, inStartWindow, summarizeCohort, startWindowLabel, COHORT_TIERS } from "../lib/cohortCompare";
 export type { CohortJourneyInput, CohortStats, CohortTier, StartWindow } from "../lib/cohortCompare";
 
-// Pure CA-layer derivation for the rebuilt Mentee management system (migration 9975).
+// Pure CA-layer derivation + effective view-model for the rebuilt Mentee management
+// system (migration 9975).
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney";
+import { toEffectiveMentee } from "../lib/menteeView";
+import { computeMeetingsToFreedom } from "../lib/freedom";
+export { toEffectiveMentee, aggregateLegDurations, MENTEE_STATUSES, MENTEE_EXIT_STATUSES, FUNNEL_STAGES } from "../lib/menteeView";
+export type { EffectiveMentee, FunnelStage } from "../lib/menteeView";
 
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
@@ -395,7 +400,7 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
   const [mentoring, discovery, excludedSet] = await Promise.all([
     pageAppts(["mentoring", "group"], "start_date", from, to),
     pageDiscovery(from, to),
-    fetchExcludedClientIds(),
+    fetchTestClientIds(),
   ]);
   const rows = [...mentoring, ...discovery];
 
@@ -1147,7 +1152,7 @@ export async function fetchMenteeJourneys(stageBasis: StageBasis = "engagement_s
 export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
   const [engagements, excludedSet, clientsRes] = await Promise.all([
     fetchAllEngagements(),
-    fetchExcludedClientIds(),
+    fetchTestClientIds(),
     supabase.from("ca_clients").select("id,is_excluded"),
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
@@ -1532,9 +1537,11 @@ export async function createMentee(userId: string, name: string, edits: MenteeHa
 // Client ids flagged is_test (replaces mentee_exclusions). Used by Metrics to drop
 // test/placeholder mentees from its ranges (wired in Phase 2).
 export async function fetchTestClientIds(): Promise<Set<number>> {
-  const { data, error } = await supabase.from("mentees").select("client_id").eq("is_test", true);
-  if (error) throw new Error(error.message);
   const set = new Set<number>();
+  // Fail-open: before migration 9975 the column doesn't exist — return empty so the
+  // rest of the dashboard (Metrics ranges, JYF cohort) keeps working until cutover.
+  const { data, error } = await supabase.from("mentees").select("client_id").eq("is_test", true);
+  if (error) return set;
   for (const r of (data ?? []) as { client_id: number | null }[]) if (r.client_id != null) set.add(r.client_id);
   return set;
 }
@@ -1600,6 +1607,119 @@ export async function rebuildMenteesFromCa(): Promise<number> {
     if (error) throw new Error(error.message);
   }
   return rows.length;
+}
+
+// One mentoring/group meeting for the per-mentee detail pane (Mentees tab).
+export interface MenteeMeetingLite {
+  date: string;
+  name: string;
+  tier: PipelineTier | null;
+  isGroup: boolean;
+  coachName: string | null;
+  engagementId: number | null;
+}
+
+// All mentoring/group meetings for ONE mentee, ascending by date, tagged with the
+// engagement's pipeline tier + the coach who ran it.
+export async function fetchMenteeMeetings(clientId: number): Promise<MenteeMeetingLite[]> {
+  const [apptRes, engRes, coachRes] = await Promise.all([
+    supabase
+      .from("ca_appointments")
+      .select("name,category,engagement_id,coach_id,start_date")
+      .eq("client_id", clientId)
+      .in("category", ["mentoring", "group"])
+      .eq("status", "A")
+      .order("start_date", { ascending: true }),
+    supabase.from("ca_engagements").select("id,name").eq("client_id", clientId),
+    supabase.from("ca_coaches").select("id,name"),
+  ]);
+  if (apptRes.error) throw new Error(apptRes.error.message);
+  if (engRes.error) throw new Error(engRes.error.message);
+  const tierByEng = new Map<number, PipelineTier>();
+  for (const e of (engRes.data ?? []) as { id: number | null; name: string | null }[]) {
+    if (e.id == null) continue;
+    const t = engagementTier(e.name);
+    if ((PIPELINE_TIERS as readonly string[]).includes(t)) tierByEng.set(e.id, t as PipelineTier);
+  }
+  const coachName = new Map<number, string | null>();
+  for (const c of (coachRes.data ?? []) as { id: number; name: string | null }[]) coachName.set(c.id, c.name);
+  return ((apptRes.data ?? []) as { name: string; category: string; engagement_id: number | null; coach_id: number | null; start_date: string | null }[])
+    .filter((a) => a.start_date)
+    .map((a) => ({
+      date: a.start_date as string,
+      name: a.name,
+      tier: a.engagement_id != null ? tierByEng.get(a.engagement_id) ?? null : null,
+      isGroup: a.category === "group",
+      coachName: a.coach_id != null ? coachName.get(a.coach_id) ?? `#${a.coach_id}` : null,
+      engagementId: a.engagement_id,
+    }));
+}
+
+// One engagement for the per-mentee detail pane.
+export interface MenteeEngagementLite {
+  id: number | null;
+  name: string | null;
+  tier: string;
+  startDate: string | null;
+  endDate: string | null;
+  isComplete: boolean;
+  isCanceled: boolean;
+}
+
+export async function fetchMenteeEngagements(clientId: number): Promise<MenteeEngagementLite[]> {
+  const { data, error } = await supabase
+    .from("ca_engagements")
+    .select("id,name,start_date,end_date,is_complete,is_canceled")
+    .eq("client_id", clientId)
+    .order("start_date", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as EngagementRow[]).map((e) => ({
+    id: e.id,
+    name: e.name,
+    tier: engagementTier(e.name),
+    startDate: e.start_date,
+    endDate: e.end_date,
+    isComplete: !!e.is_complete,
+    isCanceled: !!e.is_canceled,
+  }));
+}
+
+// "Meetings to Freedom!" report (Metrics card), rebuilt off the new mentees table:
+// graduated mentees (effective status), their effective grad date + JumpStart-end +
+// first ongoing tier, and their 1-on-1 meetings. Test mentees are dropped.
+export async function fetchFreedomReport() {
+  // Fail-open before migration 9975: an empty report instead of erroring the Metrics tab.
+  let mentees: MenteeRow[];
+  try {
+    mentees = await fetchMentees();
+  } catch {
+    return computeMeetingsToFreedom([]);
+  }
+  const today = todayYmd();
+  const grads = mentees
+    .map((m) => toEffectiveMentee(m, today))
+    .filter((m) => !m.isTest && m.clientId != null && m.resolvedStatus === "graduated");
+  const gradIds = new Set(grads.map((m) => m.clientId as number));
+  const meetingsByClient = new Map<number, { date: string; isGroup: boolean }[]>();
+  if (gradIds.size) {
+    const all = await fetchAllMentoring();
+    for (const a of all) {
+      if (a.client_id == null || !gradIds.has(a.client_id) || !a.start_date) continue;
+      const arr = meetingsByClient.get(a.client_id) ?? [];
+      arr.push({ date: a.start_date, isGroup: a.category === "group" });
+      meetingsByClient.set(a.client_id, arr);
+    }
+  }
+  const inputs = grads.map((m) => ({
+    clientId: m.clientId as number,
+    name: m.name,
+    graduated: true,
+    graduationDate: m.graduationDate,
+    jumpstartEnd: m.jumpstartEnd,
+    firstOngoingStart: [m.tier4xDate, m.tier2xDate, m.tier1xDate].filter((d): d is string => !!d).sort()[0] ?? null,
+    meetings: meetingsByClient.get(m.clientId as number) ?? [],
+  }));
+  return computeMeetingsToFreedom(inputs);
 }
 
 // --- Staff payment (Pay staff tab) ---
@@ -1966,8 +2086,6 @@ export const RAW_TABLES = [
   "coach_settings",
   "discovery_outcomes",
   "manual_metrics",
-  "mentee_exclusions",
-  "mentee_outcomes",
   "mentees",
   "payout_builds",
   "program_hours",

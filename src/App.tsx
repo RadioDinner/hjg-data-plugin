@@ -4,7 +4,6 @@ import { useTheme } from "./theme";
 import { Login } from "./components/Login";
 import { MetricsView } from "./views/MetricsView";
 import { DiscoveryView } from "./views/DiscoveryView";
-import { JourneysView } from "./views/JourneysView";
 import { MenteesView } from "./views/MenteesView";
 import { PayStaffView } from "./views/PayStaffView";
 import { RawDataView } from "./views/RawDataView";
@@ -14,12 +13,11 @@ import { AdminView } from "./views/AdminView";
 import { CompanyOptionsView } from "./views/CompanyOptionsView";
 import { SectionId } from "./components/SectionId";
 
-type Tab = "metrics" | "discovery" | "journeys" | "mentees" | "paystaff" | "margins" | "raw" | "maps" | "admin" | "options";
+type Tab = "metrics" | "discovery" | "mentees" | "paystaff" | "margins" | "raw" | "maps" | "admin" | "options";
 
 const TABS: { key: Tab; label: string; sectionId: string }[] = [
   { key: "metrics", label: "Metrics", sectionId: "metrics.screen" },
   { key: "discovery", label: "Discovery", sectionId: "discovery.screen" },
-  { key: "journeys", label: "Journeys", sectionId: "journeys.screen" },
   { key: "mentees", label: "Mentees", sectionId: "mentees.screen" },
   { key: "paystaff", label: "Pay staff", sectionId: "pay.screen" },
   { key: "margins", label: "Margins", sectionId: "margins.screen" },
@@ -75,7 +73,6 @@ export function App() {
       <div className="view">
         {tab === "metrics" && <MetricsView />}
         {tab === "discovery" && <DiscoveryView />}
-        {tab === "journeys" && <JourneysView />}
         {tab === "mentees" && <MenteesView />}
         {tab === "paystaff" && <PayStaffView />}
         {tab === "margins" && <MarginsView />}
