@@ -6,8 +6,8 @@ Working notes for resuming this project in a future session. Last updated
 ## Resume here (live state — 2026-06-24, session 009 — WRAPPED)
 
 Picking this up cold — start here. **Session 009 committed straight to `main`** (per the
-user). `typecheck` + `verify` (**16 sections**, §8 gained owner-override cases) + `build`
-all pass. **UI NOT browser-tested** (headless).
+user). `typecheck` + `verify` (**17 sections** — §17 added for Margins; §8 gained owner-override
+cases) + `build` all pass. **UI NOT browser-tested** (headless).
 
 **⚠ MIGRATIONS — the user reports applying ALL of them this session** (9982/9983/9984 + the
 manual exit-date SQL). **Still REQUIRED: a re-sync** (Admin → Sync now) so `ca_clients.coach_id`
@@ -81,10 +81,14 @@ unapplied column errors the appointment upsert), then **re-sync** to populate it
    applied before the sync (it writes `end_raw`). The re-sync also (re)populates `ca_clients.coach_id`
    (owner) and now `ca_appointments.end_raw` (real Margins durations). Jonathan only flips to Caleb if
    the user **re-pairs him to Caleb in CoachAccountable** first (the CSV still has him under Arthur).
-2. **Browser-verify**: Journeys roster scoping (count ≈181, "Roster only" toggle, off-roster pill);
-   "Owner: …" line + the red exit node (quit/fired/no-mentoring); Pay-staff payouts re-attributed
-   to owners; capacity grouped by owner; **Margins tab** (JYF + Mentoring sub-tabs, staff-hours
-   entry, delivered hours — flat 1 h before the re-sync, real durations after).
+2. **Browser-verify** (headless here, nothing eyeballed): Journeys roster scoping (count ≈181,
+   "Roster only" toggle, off-roster pill); "Owner: …" line + the red exit node (quit/fired/
+   no-mentoring); Pay-staff payouts re-attributed to owners; capacity grouped by owner; **Margins
+   tab** (JYF + Mentoring sub-tabs, staff-hours entry, delivered hours — flat 1 h before the re-sync,
+   real durations after — and the click-a-column drill-down modal). Also the 3 final backlog items:
+   the **3-digit id badges** (on every nav tab + card/editor/modal — see `UI_INDEX.md`), **Build
+   payout folded into Pay staff** (header button + per-row "Build →", Back returns), and **Raw-data
+   search / sort / per-column filters** (whole-table load, render cap note, view-aware CSV).
 3. **Margins money layer** (the remaining Margins follow-up): staff cost (hours × rate) + program
    revenue → real margins. Optional: surface the owner in the Journeys mentee LIST + Mentee-record card.
 

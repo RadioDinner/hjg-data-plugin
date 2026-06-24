@@ -49,15 +49,19 @@ AskUserQuestion: "Everywhere, incl. pay")
   replaces the rest of the path. `StageNode` gained an `exit` variant; CSS `.stage__node--exit` +
   `.pill--mentee-no_mentoring`.
 
-## ⚠ Migrations to apply (Supabase SQL Editor) — BOTH new this session
-- **`9984_ca_clients_primary_coach.sql`** — adds `ca_clients.coach_id`. **MUST be applied BEFORE
-  the next sync**, because the sync now writes `coach_id` (an unapplied column makes the client
-  upsert error). After applying, **re-sync (Admin → Sync now)** to populate owners — until then
-  every owner-driven surface falls back to the old engagement/appointment coach.
+## ⚠ Migrations to apply (Supabase SQL Editor) — FIVE new this session (9980–9984)
+Full list (newest = lowest). The user reports applying 9982/9983/9984 + the manual exit-date SQL;
+**9980 and 9981 still need applying, then a re-sync.** `9980` MUST be applied before any sync.
+- **`9984_ca_clients_primary_coach.sql`** — adds `ca_clients.coach_id` (CA primary coach = owner).
+  Applied before the next sync (the sync writes `coach_id`); re-sync populates owners.
 - **`9983_mentee_outcomes_no_mentoring.sql`** — widens the status CHECK to allow `no_mentoring`.
-  Until applied, saving a "No mentoring" outcome errors (quit/fired/graduated/active still work).
+- **`9982_mentee_outcomes_exit_dates.sql`** — `quit_date`/`no_mentoring_date`/`fired_date` (captures
+  the SQL the user ran by hand).
+- **`9981_program_hours.sql`** — Margins staff-hours table (staff RLS). Apply before staff-hours persist.
+- **`9980_ca_appointments_end.sql`** — `ca_appointments.end_raw` for real meeting durations. Apply
+  BEFORE the next sync, then re-sync.
 
-**Next new migration is `9982_…`.**
+**Next new migration is `9979_…`.**
 
 ## Directional decisions
 - **Owner = primary coach, everywhere incl. pay** (the user picked this over display-only or
