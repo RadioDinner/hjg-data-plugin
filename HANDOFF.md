@@ -124,6 +124,13 @@ as of" + compare range labels, Admin sync times, Build-payout "Last saved".
 values). If the user wants exports in MM-DD-YYYY too, change `csv.ts`/`xlsx.ts`/the `csv`
 column fns. UI-only — no migration, no verify change.
 
+**(9) Pipeline-timing (§102): drop the Discovery→graduation bar + day-count labels.**
+The dc_grad total leg is no longer charted or in the leg table (`displayLegs = legs.filter
+(key !== "dc_grad")`); it's still computed and surfaced via the **"Avg time to graduate"**
+tile. Each bar now has a **day-count `LabelList`** ("Nd", position right; chart right margin
+widened to fit). Removed the now-dead dc_grad gradient (`<defs>`/`TOTAL_GRAD_ID`/`gradStops`/
+`totalGradientCss`). `journeys.aggregate` help updated. UI-only.
+
 **▶ Next-session checklist (009b):**
 1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
    HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../auth";
 import {
   addMenteeExclusion,
@@ -35,8 +35,7 @@ const TIER_COLOR_INDEX: Record<PipelineTier, number> = { jumpstart: 1, "4x": 2, 
 // Pipeline-timing leg -> stage-palette index of the stage the leg leads INTO, so each
 // duration column matches the color of its destination node on the mentee rail.
 // (Stage order: 0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.) The
-// "dc_grad" total leg is intentionally NOT here — it spans the whole pipeline, so it's
-// painted with a gradient blending the other legs' colors (see PipelineSummary).
+// Discovery → graduation total leg isn't charted (summarized in the tile instead).
 const LEG_COLOR_INDEX: Record<string, number> = {
   dc_js: 1,
   js_4x: 2,
@@ -44,7 +43,6 @@ const LEG_COLOR_INDEX: Record<string, number> = {
   "2x_1x": 4,
   "1x_grad": 5,
 };
-const TOTAL_GRAD_ID = "pipeline-total-grad"; // SVG gradient id for the dc_grad bar
 
 // Whole days from a to b (YYYY-MM-DD), for stage-gap labels.
 function spanDays(a: string | null, b: string | null): number | null {
@@ -451,10 +449,7 @@ function PipelineSummary({
   handReviewedIds: Set<number>;
 }) {
   const ct = useChartTokens();
-  // The five non-total leg colors (JumpStart → Graduation), in order — also the
-  // stops for the Discovery → graduation total's blended gradient.
-  const gradStops = [1, 2, 3, 4, 5].map((i) => stageColors[i] ?? ct.accent);
-  const totalGradientCss = `linear-gradient(90deg, ${gradStops.join(", ")})`;
+  // Each leg's color = its destination stage's rail color (Company options → stage colors).
   const legColor = (key: string) => stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
   const AXIS = ct.axis;
   const GRID = ct.grid;
@@ -532,8 +527,11 @@ function PipelineSummary({
   }, [cohort]);
   // Denominator for "showing N of M": all in-roster, non-excluded mentees (no filters).
   const rosterTotal = useMemo(() => journeys.filter((j) => j.inSourceOfTruth && !j.excluded).length, [journeys]);
-  const grad = legs.find((l) => l.key === "dc_grad");
-  const chartData = legs.map((l) => ({ leg: l.label, key: l.key, avg: l.avgDays, median: l.medianDays, n: l.n, color: legColor(l.key) }));
+  const grad = legs.find((l) => l.key === "dc_grad"); // kept for the "Avg time to graduate" tile
+  // Per-leg display drops the Discovery → graduation total (it's summarized in the
+  // tile, not shown as its own bar/row).
+  const displayLegs = legs.filter((l) => l.key !== "dc_grad");
+  const chartData = displayLegs.map((l) => ({ leg: l.label, avg: l.avgDays, median: l.medianDays, n: l.n, color: legColor(l.key) }));
 
   return (
     <div className="card card--inset" style={{ marginBottom: 18 }}>
@@ -633,26 +631,21 @@ function PipelineSummary({
       <div className="chart-card__split chart-card__split--both">
         <div style={{ width: "100%", height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16 }}>
-              <defs>
-                <linearGradient id={TOTAL_GRAD_ID} x1="0" y1="0" x2="1" y2="0">
-                  {gradStops.map((c, i) => (
-                    <stop
-                      key={i}
-                      offset={`${gradStops.length === 1 ? 0 : (i / (gradStops.length - 1)) * 100}%`}
-                      stopColor={c}
-                    />
-                  ))}
-                </linearGradient>
-              </defs>
+            <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 48 }}>
               <CartesianGrid stroke={GRID} horizontal={false} />
               <XAxis type="number" tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} unit="d" />
               <YAxis type="category" dataKey="leg" width={150} tick={{ fill: AXIS, fontSize: 11 }} stroke={GRID} />
               <Tooltip content={<LegTooltip tip={TOOLTIP} />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
               <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
                 {chartData.map((d, i) => (
-                  <Cell key={i} fill={d.key === "dc_grad" ? `url(#${TOTAL_GRAD_ID})` : d.color} />
+                  <Cell key={i} fill={d.color} />
                 ))}
+                <LabelList
+                  dataKey="avg"
+                  position="right"
+                  style={{ fill: AXIS, fontSize: 11 }}
+                  formatter={(v) => (v == null ? "" : `${v}d`)}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -668,14 +661,13 @@ function PipelineSummary({
               </tr>
             </thead>
             <tbody>
-              {legs.map((l) => (
+              {displayLegs.map((l) => (
                 <tr key={l.key}>
                   <td>
                     <span
                       style={{
                         display: "inline-block", width: 10, height: 10, borderRadius: 2,
-                        background: l.key === "dc_grad" ? totalGradientCss : legColor(l.key),
-                        marginRight: 6, verticalAlign: "middle",
+                        background: legColor(l.key), marginRight: 6, verticalAlign: "middle",
                       }}
                     />
                     {l.label}
