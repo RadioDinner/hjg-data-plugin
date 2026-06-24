@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { getHelpArticle } from "../help/articles";
+import { SectionId } from "./SectionId";
 
 // A small "?" button that side-loads an explainer for a card/metric into a
 // right-side drawer (slide-in, not a navigation — chart state is preserved).
@@ -51,7 +52,7 @@ function HelpDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer__head">
-          <h2>{article?.title ?? "Help"}</h2>
+          <h2>{article?.title ?? "Help"} <SectionId id="drawer.help" /></h2>
           <button className="btn btn--sm" onClick={onClose} aria-label="Close help">
             Close
           </button>

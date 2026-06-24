@@ -12,20 +12,21 @@ import { MarginsView } from "./views/MarginsView";
 import { MapsView } from "./views/MapsView";
 import { AdminView } from "./views/AdminView";
 import { CompanyOptionsView } from "./views/CompanyOptionsView";
+import { SectionId } from "./components/SectionId";
 
 type Tab = "metrics" | "discovery" | "journeys" | "mentees" | "paystaff" | "margins" | "raw" | "maps" | "admin" | "options";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "metrics", label: "Metrics" },
-  { key: "discovery", label: "Discovery" },
-  { key: "journeys", label: "Journeys" },
-  { key: "mentees", label: "Mentees" },
-  { key: "paystaff", label: "Pay staff" },
-  { key: "margins", label: "Margins" },
-  { key: "raw", label: "Raw data" },
-  { key: "maps", label: "Maps" },
-  { key: "admin", label: "Admin" },
-  { key: "options", label: "Company options" },
+const TABS: { key: Tab; label: string; sectionId: string }[] = [
+  { key: "metrics", label: "Metrics", sectionId: "metrics.screen" },
+  { key: "discovery", label: "Discovery", sectionId: "discovery.screen" },
+  { key: "journeys", label: "Journeys", sectionId: "journeys.screen" },
+  { key: "mentees", label: "Mentees", sectionId: "mentees.screen" },
+  { key: "paystaff", label: "Pay staff", sectionId: "pay.screen" },
+  { key: "margins", label: "Margins", sectionId: "margins.screen" },
+  { key: "raw", label: "Raw data", sectionId: "raw.screen" },
+  { key: "maps", label: "Maps", sectionId: "maps.screen" },
+  { key: "admin", label: "Admin", sectionId: "admin.screen" },
+  { key: "options", label: "Company options", sectionId: "options.screen" },
 ];
 
 export function App() {
@@ -66,7 +67,7 @@ export function App() {
             className={`tab ${tab === t.key ? "tab--active" : ""}`}
             onClick={() => setTab(t.key)}
           >
-            {t.label}
+            {t.label} <SectionId id={t.sectionId} />
           </button>
         ))}
       </nav>

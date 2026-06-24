@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../auth";
 import { downloadCsv } from "../csv";
 import { HelpButton } from "../components/HelpDrawer";
+import { SectionId } from "../components/SectionId";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -288,6 +289,7 @@ export function BuildPayoutView({
           <div>
             <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Build payout <HelpButton id="pay.build" label="Build payout" />
+              <SectionId id="build.screen" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
               A deliberate human checkpoint over the automated engine: pick a mentor and a month, confirm or drop each
@@ -359,6 +361,7 @@ export function BuildPayoutView({
               <div>
                 <h2 style={{ fontSize: 15 }}>
                   {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)}
+                  <SectionId id="build.review" />
                   {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
                   {locked && <span className="pill pill--success" style={{ marginLeft: 8 }}>approved</span>}
                   {dirty && <span className="pill pill--running" style={{ marginLeft: 8 }}>unsaved</span>}

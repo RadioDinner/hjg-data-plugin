@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { SectionId } from "./SectionId";
 import {
   clearMenteeOutcome,
   setMenteeOutcome,
@@ -145,7 +146,7 @@ export function MenteeStatusEditor({
 
   return (
     <div className="card card--inset grad-editor">
-      <h3>Edit graduation status</h3>
+      <h3>Edit graduation status <SectionId id="journeys.statusEditor" /></h3>
       <p className="view__hint">
         Pick a mentee (or select one from the list below) and correct their outcome and/or pipeline dates. Overrides here{" "}
         <strong>always win over synced data</strong> and are never overwritten by a re-sync — the synced data still comes in,

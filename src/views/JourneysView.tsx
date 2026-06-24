@@ -21,6 +21,7 @@ import {
   type StageBasis,
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
+import { SectionId } from "../components/SectionId";
 import { MenteeStatusEditor } from "../components/MenteeStatusEditor";
 import { useChartTokens } from "../theme";
 
@@ -262,6 +263,7 @@ function Timeline({
           <h2>
             {journey.name}
             {journey.excluded && <span className="pill" style={{ marginLeft: 8 }}>excluded</span>}
+            <SectionId id="journeys.timeline" />
           </h2>
           <div className="journey__sub muted">
             {journey.ownerCoachName && (
@@ -328,7 +330,7 @@ function Timeline({
 
       <div className="journey__rhythm">
         <div className="journey__rhythm-head">
-          <h3>Time in each program stage</h3>
+          <h3>Time in each program stage <SectionId id="journeys.stageDays" /></h3>
           <span className="muted">
             Days spent in each category — from entering a stage to entering the next (the current stage runs to today).
             Bars match the stage-rail colors above.
@@ -359,6 +361,7 @@ function Timeline({
         <div className="journey__rhythm-head">
           <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
             Meetings ({meetingList.length}) <HelpButton id="general.coachAttribution" label="How coaches are matched" />
+            <SectionId id="journeys.meetings" />
           </h3>
           <span className="muted">Every recorded meeting for this mentee, earliest first.</span>
         </div>
@@ -505,6 +508,7 @@ function PipelineSummary({ journeys }: { journeys: MenteeJourney[] }) {
     <div className="card card--inset" style={{ marginBottom: 18 }}>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
         Pipeline timing — {anyFilter ? "filtered" : "all"} mentees <HelpButton id="journeys.aggregate" label="Pipeline timing" />
+        <SectionId id="journeys.pipelineTiming" />
       </h2>
       <p className="view__hint">
         Average time each leg of the journey takes, across every mentee where both ends are known (n shown per leg).
@@ -735,6 +739,7 @@ function MenteeRecordCard({
       <div className="mentee-record__head">
         <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
           Mentee record — source of truth <HelpButton id="journeys.menteeRecord" label="Mentee record" />
+          <SectionId id="journeys.menteeRecord" />
         </h3>
         <span className="muted" style={{ fontSize: 12 }}>
           {record ? "Mirrored from Notion; edits here are saved to the dashboard." : "No saved record yet — fill in and save to create one."}

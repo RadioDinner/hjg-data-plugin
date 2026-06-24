@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { triggerSync } from "../api";
 import { useAuth } from "../auth";
+import { SectionId } from "../components/SectionId";
 import {
   MANUAL_METRICS,
   fetchCoachesWithSettings,
@@ -246,7 +247,7 @@ export function AdminView() {
   return (
     <section>
       <div className="card">
-        <h2>Sync</h2>
+        <h2>Sync <SectionId id="admin.sync" /></h2>
         <p className="view__hint">
           Pull the latest data from CoachAccountable into the dashboard. Read-only toward CoachAccountable; capped
           at the daily call budget below.
@@ -296,7 +297,7 @@ export function AdminView() {
       </div>
 
       <div className="card" style={{ marginTop: 18 }}>
-        <h2>Manual metrics</h2>
+        <h2>Manual metrics <SectionId id="admin.manualMetrics" /></h2>
         <p className="view__hint">
           Board numbers that don&apos;t come from CoachAccountable. Pick a month and enter the count for each; the
           Metrics tab sums them over its date range. Saving overwrites that month&apos;s value. Leave a field blank to
@@ -366,7 +367,7 @@ export function AdminView() {
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card__head">
-          <h2>Mentor capacity</h2>
+          <h2>Mentor capacity <SectionId id="admin.capacity" /></h2>
           <div className="seg">
             <button
               className={`seg__btn ${mcShowOnly === "all" ? "seg__btn--active" : ""}`}
@@ -494,7 +495,7 @@ export function AdminView() {
       </div>
 
       <div className="card" style={{ marginTop: 18 }}>
-        <h2>Settings</h2>
+        <h2>Settings <SectionId id="admin.settings" /></h2>
         <p className="view__hint">
           The daily CoachAccountable call cap is{" "}
           <strong>{cap === null ? "—" : `${cap} calls/day`}</strong> (plan limit × cap %). Leave the sync interval

@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { useAuth } from "../auth";
 import { useChartTokens } from "../theme";
 import { HelpButton } from "../components/HelpDrawer";
+import { SectionId } from "../components/SectionId";
 import { downloadCsv } from "../csv";
 import {
   PROGRAMS,
@@ -316,7 +317,7 @@ export function MarginsView() {
           <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal__head">
               <h2>
-                {def.label} — meetings in {monthLabel(drillMonth)}
+                {def.label} — meetings in {monthLabel(drillMonth)} <SectionId id="modal.marginsDrill" />
               </h2>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn--sm" onClick={exportDrillCsv} disabled={drillSessions.length === 0}>

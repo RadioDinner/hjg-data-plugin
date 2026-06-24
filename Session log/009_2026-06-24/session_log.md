@@ -138,6 +138,26 @@ chart totals via **`programMonthTotals`**. `ProgramSession` type in `lib/margins
 `onClick` reads `activePayload` (matches the Metrics conversion drill-down pattern). typecheck/
 verify/build pass.
 
+## Eighth batch (same session) — cleared the backlog (3 features)
+
+**12. Combine Pay staff + Build payout** (`aea6da8`). Build payout folded into Pay staff (removed
+the top-nav tab); launches full-screen from the header (unscoped) or a per-mentor "Build →"
+(pre-scoped via new `initialCoachId`/`initialYm`), Back returns to the overview.
+
+**13. Raw-data search / sort / filter** (`7a17397`). `RawDataView` loads the whole table (paged),
+free-text + toggleable per-column filters, click-to-sort via reused `SortableTable` (+ new
+`maxRows` render cap; sort/CSV cover the full set, "showing first N" note). View-aware CSV;
+Export-all `.xlsx` unchanged.
+
+**14. Unique 3-digit UI ids** (final commit this batch). Registry `src/uiRegistry.ts`
+(`UI_SECTIONS`, append-only, dev dup-check) + `<SectionId>` badge + `UI_INDEX.md` (36 sections).
+Screens badged on nav tabs; ChartCards via a `sectionId` prop; every other card/editor/modal/
+drawer inline. **Built with ultracode workflows**: a 6-agent parallel **inventory** of every UI
+section, then a 2-lens adversarial **review** (completeness + correctness) — exact 36/36
+registry↔placement cross-check, no missed sections, one cosmetic indent nit fixed.
+
+**FEATURE_BACKLOG planned list is now EMPTY** — all session-008/009 items shipped.
+
 ## Open questions / next step
 1. **Apply `9984` then re-sync** (and `9983`). Verify Jonathan flips to Caleb *only if the user
    re-pairs him to Caleb in CA* — the data export still has him under Arthur on both engagements,

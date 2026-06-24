@@ -42,6 +42,7 @@ import {
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
+import { SectionId } from "../components/SectionId";
 import { useChartTokens } from "../theme";
 import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp } from "../format";
@@ -255,6 +256,7 @@ function ChartCard({
   table,
   onExplore,
   helpId,
+  sectionId,
 }: {
   title: string;
   children: ReactElement;
@@ -262,6 +264,7 @@ function ChartCard({
   table?: ChartCardTable;
   onExplore?: () => void;
   helpId?: string;
+  sectionId?: string;
 }) {
   const storageKey = `hjg.chartcard.view:${title}`;
   const [view, setView] = useState<ChartCardView>(() => {
@@ -280,7 +283,10 @@ function ChartCard({
   return (
     <section className="card">
       <div className="card__head">
-        <h2>{title}</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {title}
+          {sectionId && <SectionId id={sectionId} />}
+        </h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {helpId && <HelpButton id={helpId} label={title} />}
           {table && (
@@ -1447,6 +1453,7 @@ export function MetricsView() {
               <ChartCard
                 title="Compare: Period A vs Period B"
                 helpId="metrics.compare"
+                sectionId="metrics.compare"
                 table={scoreTable}
                 extra={
                   <p className="view__hint" style={{ marginTop: 0 }}>
@@ -1474,6 +1481,7 @@ export function MetricsView() {
             <ChartCard
               title="Discovery calls → conversion"
               helpId="metrics.conversion"
+              sectionId="metrics.conversion"
               extra={
                 <>
                   <p className="view__hint">
@@ -1603,6 +1611,7 @@ export function MetricsView() {
             <ChartCard
               title="Meetings to Freedom!"
               helpId="metrics.freedom"
+              sectionId="metrics.freedom"
               table={freedomTable}
               extra={
                 <>
@@ -1654,6 +1663,7 @@ export function MetricsView() {
             <ChartCard
               title="JYF vs Active Mentoring"
               helpId="metrics.jyfVsMentoring"
+              sectionId="metrics.jyfVsMentoring"
               table={jyfTable}
               extra={
                 <>
@@ -1708,6 +1718,7 @@ export function MetricsView() {
             <ChartCard
               title="Mentee meetings"
               helpId="metrics.meetings"
+              sectionId="metrics.meetings"
               extra={meetingsExtra}
               table={compareMode ? meetingsCompareTable : meetingsTable}
               onExplore={exploreMeetingsRaw}
@@ -1720,6 +1731,7 @@ export function MetricsView() {
             <ChartCard
               title="Active mentees"
               helpId="metrics.mentees"
+              sectionId="metrics.mentees"
               table={compareMode ? menteesCompareTable : menteesTable}
               onExplore={exploreMenteesRaw}
             >
@@ -1747,6 +1759,7 @@ export function MetricsView() {
             <ChartCard
               title="Mentors"
               helpId="metrics.mentors"
+              sectionId="metrics.mentors"
               table={compareMode ? mentorsCompareTable : mentorsTable}
               onExplore={exploreMentorsRaw}
             >
@@ -1766,6 +1779,7 @@ export function MetricsView() {
             <div className="card__head">
               <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 Mentor capacity utilization <HelpButton id="metrics.capacity" label="Mentor capacity utilization" />
+                <SectionId id="metrics.capacity" />
               </h2>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -1857,6 +1871,7 @@ export function MetricsView() {
             <ChartCard
               title="Resource engagement"
               helpId="metrics.resource"
+              sectionId="metrics.resource"
               table={manualTable}
               onExplore={exploreManualRaw}
               extra={

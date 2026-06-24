@@ -28,6 +28,13 @@ unapplied column errors the appointment upsert), then **re-sync** to populate it
 **Next new migration is `9979_…`.**
 
 **Shipped this session (009), newest first:**
+- **Backlog CLEARED — last 3 items shipped.** (a) **3-digit UI ids**: `src/uiRegistry.ts`
+  (`UI_SECTIONS`, append-only) + `<SectionId>` badge + `UI_INDEX.md` (36 sections) — screens on nav
+  tabs, ChartCards via a `sectionId` prop, all other cards/editors/modals/drawers inline; built via
+  an inventory workflow + adversarial review (36/36 cross-check clean). (b) **Raw-data
+  search/sort/filter**: whole-table load, free-text + per-column filters, click-to-sort, `maxRows`
+  render cap. (c) **Combine Pay staff + Build payout**: Build payout is now a sub-mode of Pay staff
+  (no separate tab), launchable pre-scoped. **`FEATURE_BACKLOG.md` planned list is now empty.**
 - **Margins — drill-down.** Click a month's chart bar (or table row) → a modal lists the delivered
   meetings behind that month (date/time/coach/name/attendees/hours + CSV). `fetchDeliveredHoursByMonth`
   → `fetchProgramSessionsByMonth` (per-session detail) + `programMonthTotals`; `ProgramSession` type.

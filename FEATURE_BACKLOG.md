@@ -11,91 +11,6 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
-### Unique 3-digit identifier on every card / modal / screen — requested session 008, 2026-06-24
-
-**What.** Give **every self-contained section of data** — each ChartCard, each tab/screen,
-each pop-out modal, each editor card, each table panel — a **stable, unique 3-digit number**
-(e.g. `042`) shown unobtrusively (a small muted badge in the corner/header). So the user can
-say "fix screen 118" or "the number on card 207 is wrong" and we both know exactly which
-element. Do it **comprehensively** — every identifiable UI unit gets one.
-
-**Why.** The dashboard has grown to many cards/tabs/modals; referring to them in conversation
-is ambiguous ("the conversion card", "that pay table"). A durable numeric ID per element makes
-support, bug reports, and design discussion precise and fast.
-
-**Where in code / approach.**
-- Build a **central registry** (e.g. `src/uiRegistry.ts`) mapping a stable string key →
-  3-digit number, so numbers are assigned once and never shift. A tiny **`<SectionId id="042" />`**
-  badge component renders the number (absolute-positioned, muted, `title="Section 042"`); add it
-  to a shared wrapper so it's consistent.
-- Wrap the existing shells: `ChartCard` (Metrics), `card`/`card--inset` panels, the top-nav tab
-  screens (`App.tsx` tab views), `modal`/`HelpDrawer`/`PayExploreModal`/`Explore` pop-outs, the
-  editor cards (Mentee record, graduation editor), the Raw-data table panels, etc.
-- **Numbering scheme:** allocate by area so ranges are mnemonic — e.g. 0xx Metrics, 1xx Journeys,
-  2xx Pay/Build, 3xx Raw data, 4xx Company options/Admin, 9xx modals/drawers. Keep an index
-  (a table in this file or a `UI_INDEX.md`) listing number → element so the map is browsable.
-- **Stability rule:** numbers are append-only; never renumber an existing element (retire a number
-  if an element is deleted, don't reuse it). A dev-only check could warn on duplicate/missing ids.
-
-**Acceptance criteria.**
-- Every card, modal, drawer, table panel, and screen shows a unique, stable 3-digit id.
-- A single registry is the source of truth; a printed/committed index lists them all.
-- Adding a new section is a one-liner (register a key, drop in the badge) and never disturbs
-  existing numbers. Badges are unobtrusive (toggleable/devtools-style is acceptable if the user
-  prefers them hidden by default).
-
----
-
-### Search / sort / filter in the Raw-data tables — requested session 008, 2026-06-24
-
-**What.** Make the **Raw data** tab tables searchable, sortable, and filterable — like the Pay
-"Explore" window already is. Each `ca_*`/HJG table view should support: a **free-text search**
-across columns, **click-to-sort** any column (tri-state), and **per-column filters** (at least
-text contains / equals; ideally typed filters for dates and numbers).
-
-**Why.** Raw-data tables can have thousands of rows (`ca_appointments` ~3.9k, `ca_invoices`
-~1.3k). Today they're static dumps with CSV export only; finding a specific client/invoice means
-exporting to Excel. In-app search/sort/filter makes the Raw-data tab actually usable for lookups.
-
-**Where in code.** `src/views/RawDataView.tsx` renders each table. The reusable
-**`src/components/SortableTable.tsx`** (built session 005b — tri-state header sort + CSV of the
-sorted view) and the **`PayExploreModal`** filter pattern (month/coach/tier/text filters) are the
-templates — `RawDataView` should adopt `SortableTable` and add a filter bar. Keep the existing
-per-table CSV export and the **Export-all `.xlsx`** untouched.
-
-**Acceptance criteria.**
-- Every Raw-data table: free-text search, click-to-sort columns, and at least text column filters.
-- CSV export reflects the current filtered + sorted view (as `SortableTable` already does).
-- Performant on the largest tables (virtualize or cap+paginate if needed; note any cap per the
-  "no silent truncation" rule).
-
----
-
-### Combine "Pay staff" + "Build payout" into one screen — requested session 008, 2026-06-24
-
-**What / rework.** Fold **Build payout** into the **Pay staff** tab instead of a separate top-nav
-tab. Build payout should **launch from within Pay staff** (e.g. a "Build payout →" action on a
-mentor/month, opening the builder inline or as a panel/modal), since it's a workflow *on top of*
-the pay numbers, not a parallel destination.
-
-**Why.** The two tabs share the same engine and data (`lib/pay.ts`, `lib/payBuild.ts`) and the
-same mental model (per-mentor, per-month payout). Two separate top-nav tabs split a single flow.
-A cross-link already exists ("Build payout →" button on Pay staff, added session 006) — this
-finishes the consolidation so Build payout is a sub-mode of Pay staff, freeing a top-nav slot.
-
-**Where in code.** `src/App.tsx` (remove the standalone "Build payout" tab), `src/views/
-PayStaffView.tsx` + the Build-payout view/component — host the builder inside Pay staff (a
-month/mentor → "Build payout" opens it scoped to that selection). Engine and `payout_builds`
-persistence (migration 9989) are unchanged; this is UI/navigation only.
-
-**Acceptance criteria.**
-- No separate "Build payout" top-nav tab; it launches from Pay staff scoped to the chosen
-  mentor/month.
-- All current Build-payout capability preserved (draft/approve/reopen/discard, overrides, CSV).
-- Pay staff remains the single home for everything payout.
-
----
-
 ### "Mentees" table — internal source-of-truth for each person — ✅ SHIPPED session 008 (2026-06-24) — requested session 008, 2026-06-24
 
 **What.** A single **`Mentees`** table that is HJG's internal *source of truth* for
@@ -176,6 +91,33 @@ outcome," so the table can't assume it:
 ---
 
 ## Shipped
+
+### Unique 3-digit identifier on every card / modal / screen — ✅ SHIPPED session 009, 2026-06-24
+
+Every addressable UI section now shows a stable 3-digit id badge. Central registry
+**`src/uiRegistry.ts`** (`UI_SECTIONS` key→number, append-only, dev duplicate check); badge
+**`src/components/SectionId.tsx`** (`<SectionId id="key" />`, inline + corner variants);
+browsable **`UI_INDEX.md`** (36 sections). Screens are badged on their nav tab (`App.tsx`),
+ChartCards via a new `sectionId` prop, and every other card/editor/modal/drawer inline in its
+heading. Numbering by area (0xx Metrics, 1xx Journeys, 2xx Pay/Build, 3xx Raw, 4xx Admin/45x
+Options, 5xx Mentees, 6xx Margins, 7xx Discovery, 8xx Maps, 9xx modals). Inventory + review ran
+as multi-agent workflows; registry↔placement cross-check is exact (36/36) and an adversarial
+review found no missed sections.
+
+### Search / sort / filter in the Raw-data tables — ✅ SHIPPED session 009, 2026-06-24
+
+`RawDataView` now loads the whole table (paged) and offers free-text search across all columns,
+a toggleable per-column "contains" filter bar, and click-to-sort via the reused `SortableTable`
+(which gained a `maxRows` render cap — sort + CSV still cover the full set; "showing first N" so
+truncation is never silent). The view-aware Export CSV reflects the current filtered+sorted view;
+Export-all `.xlsx` unchanged.
+
+### Combine "Pay staff" + "Build payout" into one screen — ✅ SHIPPED session 009, 2026-06-24
+
+Build payout is folded into the Pay staff tab (no separate top-nav tab). It launches full-screen
+from Pay staff — the header "Build payout →" (unscoped) or a per-mentor "Build →" in a month's
+breakdown (pre-scoped to that mentor+month, via new `initialCoachId`/`initialYm` props), with a
+Back to the overview. Engine + `payout_builds` persistence unchanged.
 
 ### "Margins" tab — staff-hours vs delivered-hours, by program — ✅ SHIPPED (bones) session 009, 2026-06-24
 

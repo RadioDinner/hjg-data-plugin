@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { engagementTier, type PayLedgerRow, type PayInvoiceInput, type PayEngagementInput } from "../db";
 import { SortableTable, type Row, type SortColumn } from "./SortableTable";
+import { SectionId } from "./SectionId";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -234,7 +235,7 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
           <div>
-            <h2>Explore source data</h2>
+            <h2>Explore source data <SectionId id="modal.payExplore" /></h2>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
               The compiled payout ledger and the raw invoice/engagement inputs behind it. Click a column to sort.
             </div>

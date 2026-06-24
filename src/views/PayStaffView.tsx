@@ -5,6 +5,7 @@ import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
 import { BuildPayoutView } from "./BuildPayoutView";
 import { HelpButton } from "../components/HelpDrawer";
+import { SectionId } from "../components/SectionId";
 import { useChartTokens } from "../theme";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -262,7 +263,7 @@ export function PayStaffView() {
 
           <section className="card">
             <div className="card__head">
-              <h2>Payout by month</h2>
+              <h2>Payout by month <SectionId id="pay.payoutByMonth" /></h2>
               <button className="btn btn--sm" onClick={monthlyCsv} disabled={timeline.months.length === 0}>
                 Export CSV
               </button>
