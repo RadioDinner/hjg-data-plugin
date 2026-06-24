@@ -9,15 +9,18 @@
 //   - "stageColors": the Journeys per-stage color editor (gradient / custom). Its
 //                    stored value is a JSON string (see lib/stageColors.ts); the
 //                    registry just declares the key + a JSON-string default.
+//   - "duration":   a number + unit (weeks / months) input. Its stored value is a
+//                   JSON string {n, unit} (see lib/conversionTrend.ts).
 
 import { serializeStageColorConfig, DEFAULT_STAGE_COLOR_CONFIG } from "../lib/stageColors";
+import { serializeTrendWindow, DEFAULT_TREND_WINDOW } from "../lib/conversionTrend";
 
 export interface CompanyOptionChoice {
   value: string;
   label: string;
 }
 
-export type CompanyOptionType = "select" | "stageColors";
+export type CompanyOptionType = "select" | "stageColors" | "duration";
 
 export interface CompanyOption {
   key: string; // app_settings key
@@ -56,6 +59,20 @@ export const COMPANY_OPTIONS: CompanyOption[] = [
       "stages (e.g. bright red → dark green), or “Custom” to set each stage color individually.",
     default: serializeStageColorConfig(DEFAULT_STAGE_COLOR_CONFIG),
     type: "stageColors",
+    choices: [],
+  },
+  {
+    key: "metrics_conversion_trend_window",
+    section: "Metrics",
+    label: "Conversion-rate trend window",
+    help:
+      "The trailing window the conversion-rate trend line uses on the Metrics " +
+      "“Discovery calls → conversion” card. Each point shows the conversion rate over " +
+      "this many weeks or months ending there, instead of that single month alone — a " +
+      "longer window means a smoother trend. The card's table still lists the exact " +
+      "per-month rates. Set it to whatever span your organization watches (e.g. 3 or 6 months).",
+    default: serializeTrendWindow(DEFAULT_TREND_WINDOW),
+    type: "duration",
     choices: [],
   },
 ];

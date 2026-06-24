@@ -7,3 +7,11 @@ A: Drop the columns too (delete the 9 columns from the mentees table via a new m
 
 --- 2026-06-24 (session 009b) ---
 merge this to main and commit to main for the remainder of this session
+
+--- 2026-06-24 (session 009b) ---
+All migrations are applied and we're working with fresh data.
+
+I want two things changed. On the metrics, when tracking the trendline on conversion rate for discovery calls, I want an option added to that module in company options to set how long of a range I want to have the trend affected by. Should it span 3 months? 6? That is dependant on every organizations own choice. I want to be able to set it by x number of weeks or x number of months
+
+--- 2026-06-24 (session 009b) ---
+Another feature / thing I want added, if I edit any element of the mentee in the journeys screen (106) I want a flag to be updated that says its hand reviewed. I also want to be able to just tick the flag if I didn't need to update it but just make it known to be hand/human reviewed.

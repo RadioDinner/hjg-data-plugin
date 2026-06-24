@@ -74,6 +74,16 @@ export {
 } from "../lib/stageColors";
 export type { StageKey, StageColorMode, StageColorConfig } from "../lib/stageColors";
 
+// Pure conversion-rate trend-window logic (Metrics conversion card + its Company option).
+export {
+  DEFAULT_TREND_WINDOW,
+  parseTrendWindow,
+  serializeTrendWindow,
+  trendWindowLabel,
+  rollingConversionTrend,
+} from "../lib/conversionTrend";
+export type { TrendWindow, TrendUnit, TrendCall, TrendPoint } from "../lib/conversionTrend";
+
 // Pure pipeline stage-date logic (engagement-start vs first-meeting basis).
 import {
   computeStageDates,
@@ -1239,6 +1249,8 @@ export interface MenteeRecord {
   dc_date: string | null;
   email: string | null;
   phone: string | null;
+  hand_reviewed: boolean; // human/hand-reviewed flag (migration 9977)
+  hand_reviewed_at: string | null; // when last marked reviewed
   created_at?: string;
   updated_at?: string;
 }
@@ -1249,7 +1261,7 @@ export type MenteeRecordEdit = Partial<
 >;
 
 const MENTEE_SELECT =
-  "id,client_id,notion_key,name,mentor_1,status,projected_start,associated_tasks,mentor,offering_signup,dc_date,email,phone,created_at,updated_at";
+  "id,client_id,notion_key,name,mentor_1,status,projected_start,associated_tasks,mentor,offering_signup,dc_date,email,phone,hand_reviewed,hand_reviewed_at,created_at,updated_at";
 
 // PostgREST returns numeric(12,2) columns as strings to preserve precision; coerce
 // them back to numbers so MenteeRecord's `number | null` contract actually holds.

@@ -26,6 +26,8 @@ create table if not exists mentees (
   dc_date           date,
   email             text,
   phone             text,
+  hand_reviewed     boolean not null default false, -- human/hand-reviewed flag (9977)
+  hand_reviewed_at  timestamptz,                    -- when last marked reviewed
   created_by    uuid references auth.users (id),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()

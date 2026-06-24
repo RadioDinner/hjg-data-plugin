@@ -703,7 +703,13 @@ function MenteeRecordCard({
     setJustSaved(false);
   }
 
-  async function save() {
+  const reviewed = record?.hand_reviewed ?? false;
+  const reviewedAt = record?.hand_reviewed_at ?? null;
+
+  // Persist the form fields plus the hand-reviewed flag. Saving an edit always
+  // marks the record reviewed; the checkbox can set it directly (and saves any
+  // in-progress field edits along with it, so nothing is lost).
+  async function doSave(reviewedValue: boolean) {
     setSaving(true);
     try {
       const edits: MenteeRecordEdit = {};
@@ -718,6 +724,8 @@ function MenteeRecordCard({
       }
       const name = (edits.name as string | null) || defaultName;
       edits.name = name;
+      edits.hand_reviewed = reviewedValue;
+      edits.hand_reviewed_at = reviewedValue ? new Date().toISOString() : null;
       const rec = await saveMenteeRecord(userId, clientId, name, edits);
       onSaved(rec);
       setJustSaved(true);
@@ -727,6 +735,8 @@ function MenteeRecordCard({
       setSaving(false);
     }
   }
+  // Save button: editing the record marks it hand-reviewed.
+  const save = () => doSave(true);
 
   return (
     <div className="card card--inset mentee-record">
@@ -760,6 +770,26 @@ function MenteeRecordCard({
         <button className="btn btn--primary btn--sm" onClick={save} disabled={!dirty || saving}>
           {saving ? "Saving…" : record ? "Save changes" : "Create record"}
         </button>
+        <label
+          className="mentee-record__review"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}
+          title="Mark this record as human/hand reviewed. Saving an edit also sets this automatically."
+        >
+          <input
+            type="checkbox"
+            checked={reviewed}
+            disabled={saving}
+            onChange={(e) => doSave(e.target.checked)}
+          />
+          <span>Hand reviewed</span>
+        </label>
+        {reviewed ? (
+          <span className="pill pill--mentee-graduated" title={reviewedAt ? `Reviewed ${reviewedAt}` : undefined}>
+            ✓ Hand reviewed{reviewedAt ? ` · ${reviewedAt.slice(0, 10)}` : ""}
+          </span>
+        ) : (
+          <span className="muted" style={{ fontSize: 12 }}>Not yet hand-reviewed</span>
+        )}
         {justSaved && !dirty && <span className="muted" style={{ fontSize: 12 }}>Saved ✓</span>}
       </div>
     </div>

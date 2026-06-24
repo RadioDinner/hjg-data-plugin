@@ -28,7 +28,12 @@ import {
   fetchMentorCoachIds,
   fetchRangeAppointments,
   fetchResolvedOutcomes,
+  fetchCompanyOptions,
   oneOnOneMenteesByCoach,
+  parseTrendWindow,
+  rollingConversionTrend,
+  trendWindowLabel,
+  DEFAULT_TREND_WINDOW,
   type CapacityAppt,
   type CompareKey,
   type CoachWithSettings,
@@ -39,6 +44,8 @@ import {
   type MenteeJourney,
   type RangeAppt,
   type ResolvedOutcome,
+  type TrendCall,
+  type TrendWindow,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
@@ -386,6 +393,9 @@ export function MetricsView() {
   // turned off independently — see the bar-builder near the chart render.
   const [convColorByOutcome, setConvColorByOutcome] = useState(true);
   const [convSplitByChannel, setConvSplitByChannel] = useState(true);
+  // Trailing window for the conversion-rate trend line (Company option
+  // `metrics_conversion_trend_window`). Org-wide; loaded once on mount.
+  const [trendWindow, setTrendWindow] = useState<TrendWindow>(DEFAULT_TREND_WINDOW);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [mentorIds, setMentorIds] = useState<Set<number>>(new Set());
   const [coachSettings, setCoachSettings] = useState<CoachWithSettings[]>([]);
@@ -556,6 +566,20 @@ export function MetricsView() {
       cancelled = true;
     };
   }, [compareMode, periodB.from, periodB.to]);
+
+  // Load the org-wide conversion-rate trend window (Company option). Fail-soft:
+  // keep the default if app_settings / the key isn't there yet.
+  useEffect(() => {
+    let cancelled = false;
+    fetchCompanyOptions()
+      .then((opts) => {
+        if (!cancelled) setTrendWindow(parseTrendWindow(opts["metrics_conversion_trend_window"]));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -894,6 +918,27 @@ export function MetricsView() {
     [convData]
   );
 
+  // Conversion-rate TREND line: a trailing-window rate (org-configured weeks/months)
+  // instead of each month's raw rate. The table above keeps the exact per-month
+  // rates; only the charted line is the windowed trend. Computed from the calls
+  // loaded for the range, so the earliest buckets warm up over a shorter window.
+  const trendLabel = useMemo(() => trendWindowLabel(trendWindow), [trendWindow]);
+  const convCalls = useMemo<TrendCall[]>(
+    () => discovery.filter((a) => a.date).map((a) => ({ date: a.date!, converted: outcomes.get(a.id)?.outcome === "converted" })),
+    [discovery, outcomes]
+  );
+  const convTrend = useMemo(() => rollingConversionTrend(convCalls, buckets, trendWindow), [convCalls, buckets, trendWindow]);
+  const convChartData = useMemo(
+    () => convData.map((d, i) => ({ ...d, RateTrend: convTrend[i]?.rate ?? null })),
+    [convData, convTrend]
+  );
+  // Period B's trend (compare mode), same window.
+  const bConvCalls = useMemo<TrendCall[]>(
+    () => bDiscovery.filter((a) => a.date).map((a) => ({ date: a.date!, converted: outcomesB.get(a.id)?.outcome === "converted" })),
+    [bDiscovery, outcomesB]
+  );
+  const bConvTrend = useMemo(() => rollingConversionTrend(bConvCalls, bBuckets, trendWindow), [bConvCalls, bBuckets, trendWindow]);
+
   // "Meetings to Freedom!" — 1-on-1 mentoring sessions from JumpStart completion
   // (engagement end date) to graduation, per graduated mentee. All-history; not
   // scoped to the date range. Excluded (test/placeholder) mentees are dropped.
@@ -989,7 +1034,15 @@ export function MetricsView() {
   // for the same metric at the same month index (presets keep spans equal).
   const cmpMentees = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentees ?? 0 })), [data, bData]);
   const cmpMentors = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentors ?? 0 })), [data, bData]);
-  const cmpConv = useMemo(() => convData.map((d, i) => ({ ...d, cmp: bConvRate[i]?.Rate ?? 0 })), [convData, bConvRate]);
+  const cmpConv = useMemo(
+    () =>
+      convChartData.map((d, i) => ({
+        ...d,
+        cmp: bConvRate[i]?.Rate ?? 0,
+        cmpTrend: bConvTrend[i]?.rate ?? null,
+      })),
+    [convChartData, bConvRate, bConvTrend]
+  );
 
   // The conversion bars adapt to the two card toggles:
   //   • outcome coloring  → stack by converted/pending/not-converted/no-show (one color each)
@@ -1494,6 +1547,7 @@ export function MetricsView() {
                       <> · <span style={{ whiteSpace: "nowrap" }}>bars: solid = Zoom, grid = Phone</span></>
                     )}
                     {!compareMode && <> · <em>click a bar to see that month's calls</em></>}
+                    <> · <span style={{ whiteSpace: "nowrap" }}>line = {trendLabel} trailing trend (set in Company options)</span></>
                   </p>
                   <div className="type-filter__head" style={{ marginBottom: 10 }}>
                     <span className="muted">Bar coding:</span>
@@ -1540,7 +1594,7 @@ export function MetricsView() {
               onExplore={exploreDiscoveryRaw}
             >
               <ComposedChart
-                data={compareMode ? cmpConv : convData}
+                data={compareMode ? cmpConv : convChartData}
                 onClick={
                   compareMode
                     ? undefined
@@ -1583,24 +1637,26 @@ export function MetricsView() {
                 <Line
                   yAxisId="right"
                   type="monotone"
-                  dataKey="Rate"
-                  name="Rate %"
+                  dataKey="RateTrend"
+                  name={`Conversion rate (${trendLabel} trend)`}
                   unit="%"
                   stroke={C.rate}
                   strokeWidth={2}
                   dot={{ r: 3 }}
+                  connectNulls
                 />
                 {compareMode && (
                   <Line
                     yAxisId="right"
                     type="monotone"
-                    dataKey="cmp"
-                    name="Period B rate %"
+                    dataKey="cmpTrend"
+                    name={`Period B (${trendLabel} trend)`}
                     unit="%"
                     stroke={CMP}
                     strokeWidth={2}
                     strokeDasharray="5 4"
                     dot={{ r: 2 }}
+                    connectNulls
                   />
                 )}
               </ComposedChart>

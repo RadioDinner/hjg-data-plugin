@@ -44,6 +44,14 @@ import {
   type BuildLineState,
 } from "../lib/payBuild.js";
 import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
+import {
+  parseTrendWindow,
+  serializeTrendWindow,
+  trendWindowLabel,
+  rollingConversionTrend,
+  DEFAULT_TREND_WINDOW,
+  type TrendCall,
+} from "../lib/conversionTrend.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -741,6 +749,65 @@ console.log("[17] Margins — staff-hours vs delivered-hours month merge");
   eq(meetingHours(null, "2026-01-31 10:00:00"), null, "missing start -> null");
   eq(meetingHours("2026-01-31 10:00:00", "2026-01-31 09:00:00"), null, "end before start -> null");
   eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 11:30:00"), 2.5, "2.5h meeting");
+}
+
+console.log("[18] Conversion-rate trend window (parse + rolling trailing rate)");
+{
+  // Parse / serialize / label.
+  eq(parseTrendWindow(null).n, DEFAULT_TREND_WINDOW.n, "null -> default n");
+  eq(parseTrendWindow(null).unit, DEFAULT_TREND_WINDOW.unit, "null -> default unit");
+  eq(parseTrendWindow("garbage").unit, "months", "junk -> default");
+  eq(parseTrendWindow('{"n":6,"unit":"weeks"}').n, 6, "parse n=6");
+  eq(parseTrendWindow('{"n":6,"unit":"weeks"}').unit, "weeks", "parse unit=weeks");
+  eq(parseTrendWindow('{"n":0,"unit":"months"}').n, 3, "n<1 clamps to default");
+  eq(parseTrendWindow('{"n":999,"unit":"months"}').n, 60, "n clamps to 60 max");
+  eq(parseTrendWindow(serializeTrendWindow({ n: 6, unit: "weeks" })).n, 6, "round-trip n");
+  eq(trendWindowLabel({ n: 3, unit: "months" }), "3-month", "label months");
+  eq(trendWindowLabel({ n: 6, unit: "weeks" }), "6-week", "label weeks");
+
+  const buckets = [
+    { key: "2026-01", label: "Jan" },
+    { key: "2026-02", label: "Feb" },
+    { key: "2026-03", label: "Mar" },
+    { key: "2026-04", label: "Apr" },
+  ];
+  // Jan 1/2, Feb 2/2, Mar 1/4, Apr 0 calls.
+  const calls: TrendCall[] = [
+    { date: "2026-01-10", converted: true },
+    { date: "2026-01-20", converted: false },
+    { date: "2026-02-15", converted: true },
+    { date: "2026-02-16", converted: true },
+    { date: "2026-03-10", converted: false },
+    { date: "2026-03-12", converted: false },
+    { date: "2026-03-14", converted: false },
+    { date: "2026-03-30", converted: true },
+  ];
+
+  // months, n=1 = each month's raw rate; Apr has no calls -> null.
+  const m1 = rollingConversionTrend(calls, buckets, { n: 1, unit: "months" });
+  eq(m1[0].rate, 50, "months n=1 Jan = 50");
+  eq(m1[1].rate, 100, "months n=1 Feb = 100");
+  eq(m1[2].rate, 25, "months n=1 Mar = 25");
+  eq(m1[3].rate, null, "months n=1 Apr (no calls) = null");
+
+  // months, n=2 trailing (this + prior bucket).
+  const m2 = rollingConversionTrend(calls, buckets, { n: 2, unit: "months" });
+  eq(m2[1].rate, 75, "months n=2 Feb = (1+2)/(2+2) = 75");
+  eq(m2[2].rate, 50, "months n=2 Mar = (2+1)/(2+4) = 50");
+  eq(m2[3].rate, 25, "months n=2 Apr = (1+0)/(4+0) = 25");
+
+  // months, n=3 trailing.
+  const m3 = rollingConversionTrend(calls, buckets, { n: 3, unit: "months" });
+  eq(m3[2].rate, 50, "months n=3 Mar = (1+2+1)/(2+2+4) = 50");
+
+  // weeks: exact trailing N*7 days ending at the bucket's month end (Mar 31).
+  const w1 = rollingConversionTrend(calls, buckets, { n: 1, unit: "weeks" });
+  eq(w1[2].rate, 100, "weeks n=1 Mar (only 3/30) = 100");
+  const w4 = rollingConversionTrend(calls, buckets, { n: 4, unit: "weeks" });
+  eq(w4[2].rate, 25, "weeks n=4 Mar (3/3..3/31: 1 of 4) = 25");
+  const w8 = rollingConversionTrend(calls, buckets, { n: 8, unit: "weeks" });
+  eq(w8[2].total, 6, "weeks n=8 Mar includes Feb 15-16 + all March = 6 calls");
+  eq(w8[2].rate, 50, "weeks n=8 Mar = 3 of 6 = 50");
 }
 
 console.log("");

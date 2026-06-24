@@ -8,7 +8,10 @@ import {
   resolveStageColors,
   STAGE_KEYS,
   STAGE_LABELS,
+  parseTrendWindow,
+  serializeTrendWindow,
   type StageColorConfig,
+  type TrendUnit,
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
 
@@ -98,6 +101,8 @@ export function CompanyOptionsView() {
                   <div className="option-row__control">
                     {o.type === "stageColors" ? (
                       <StageColorsControl value={valueOf(o)} onSave={(v) => change(o, v)} />
+                    ) : o.type === "duration" ? (
+                      <DurationControl value={valueOf(o)} onSave={(v) => change(o, v)} disabled={savingKey === o.key} />
                     ) : (
                       <select
                         id={`opt-${o.key}`}
@@ -123,6 +128,48 @@ export function CompanyOptionsView() {
         ))
       )}
     </section>
+  );
+}
+
+// A number + unit (weeks / months) editor for "duration" options (e.g. the
+// conversion-rate trend window). Stores a JSON string {n, unit}; saves on change.
+function DurationControl({
+  value,
+  onSave,
+  disabled,
+}: {
+  value: string;
+  onSave: (serialized: string) => void;
+  disabled?: boolean;
+}) {
+  const w = parseTrendWindow(value);
+  function update(n: number, unit: TrendUnit) {
+    const safe = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+    onSave(serializeTrendWindow({ n: safe, unit }));
+  }
+  return (
+    <div className="duration-control" style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+      <input
+        type="number"
+        min={1}
+        max={60}
+        step={1}
+        value={w.n}
+        disabled={disabled}
+        onChange={(e) => update(Number(e.target.value), w.unit)}
+        style={{ width: 72 }}
+        aria-label="Trend window length"
+      />
+      <select
+        value={w.unit}
+        disabled={disabled}
+        onChange={(e) => update(w.n, e.target.value as TrendUnit)}
+        aria-label="Trend window unit"
+      >
+        <option value="weeks">weeks</option>
+        <option value="months">months</option>
+      </select>
+    </div>
   );
 }
 

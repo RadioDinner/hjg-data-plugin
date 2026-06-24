@@ -8,21 +8,27 @@ Working notes for resuming this project in a future session. Last updated
 Picking this up cold — start here. **Session 009b first committed on branch
 `claude/jolly-cannon-rd1s1z`, then merged to `main` (fast-forward) at the user's
 request — `main` is the live branch and the rest of the session commits straight to
-`main`.** `typecheck` + `verify` (**17 sections**) + `build` all pass. **UI NOT
+`main`.** `typecheck` + `verify` (**18 sections**) + `build` all pass. **UI NOT
 browser-tested** (headless).
 
-**⚠ ONE NEW MIGRATION — `9979_mentees_drop_fields.sql` — MUST be applied** (Supabase
-SQL Editor) on the existing database. It **drops 9 columns** from the `mentees`
-source-of-truth table (this destroys their data, per the user's explicit choice):
-`ff_amount`, `freedom_fight_paid`, `wants_pp`, `date_ff_paid`,
-`current_invoice_amount`, `js_lesson`, `mn_equivalency`, `dd_w_a`,
-`mt_prayer_partner` (Notion labels: FF amount / Freedom Fight paid? / Wants PP? /
-Date FF paid / Current invoice amount / JS lesson / MN equivalency / dd w a / Prayer
-partner). Re-runnable (`drop column if exists`). **Next new migration is `9978_…`.**
+**⚠ THREE NEW MIGRATIONS this session — all MUST be applied** (Supabase SQL Editor,
+re-runnable):
+- **`9979_mentees_drop_fields.sql`** — **drops 9 columns** from `mentees` (destroys
+  their data, per the user's explicit choice): `ff_amount`, `freedom_fight_paid`,
+  `wants_pp`, `date_ff_paid`, `current_invoice_amount`, `js_lesson`, `mn_equivalency`,
+  `dd_w_a`, `mt_prayer_partner`.
+- **`9978_metrics_trend_window.sql`** — seeds the `metrics_conversion_trend_window`
+  Company option (conversion-rate trend window). Until applied, the option works
+  in-session but won't persist (staff can UPDATE app_settings but not INSERT).
+- **`9977_mentees_hand_reviewed.sql`** — adds `hand_reviewed` (bool) + `hand_reviewed_at`
+  to `mentees`. The Journeys card writes these; an unapplied column errors the save.
 
-**What shipped this session (009b):** the user asked to remove those 9 fields from
-the **Mentee record — source of truth** *data and screens* (they may re-add some
-later). Done end-to-end:
+**Next new migration is `9976_…`.** No re-sync needed (all three touch HJG-owned tables).
+
+**What shipped this session (009b):**
+
+**(1) Removed 9 fields** from the **Mentee record — source of truth** *data and
+screens* (the user may re-add some later). Done end-to-end:
 - **Data layer** (`src/db.ts`): dropped the 9 fields from the `MenteeRecord`
   interface, from `MENTEE_SELECT`, and emptied `MENTEE_NUM_FIELDS` (all 4 numeric
   mentee cols were among the 9 — `normalizeMenteeRecord` is now a no-op but kept as
@@ -40,16 +46,41 @@ later). Done end-to-end:
 - **Raw data tab**: `mentees` is in `RAW_TABLES`; after `9979` is applied the 9
   columns no longer appear there either.
 
+**(2) Conversion-rate trend window** (new Company option). The Metrics "Discovery
+calls → conversion" card's rate line is now a **trailing-window** conversion rate
+(replacing the raw per-month line; the table still lists exact per-month rates). The
+window is org-configurable as **N weeks or N months** under **Company options →
+Metrics** (default 3 months). New **`"duration"`** Company-option control type
+(number + unit). Pure math in **`lib/conversionTrend.ts`** (`rollingConversionTrend`
+— months = trailing N buckets, weeks = trailing N×7 days by exact date;
+`parse/serializeTrendWindow`, `trendWindowLabel`), re-exported via `db.ts`, locked by
+**verify §18**. `MetricsView` fetches the option and applies the trend to Period A and
+(in compare mode) Period B. Computed from in-range calls, so the earliest points warm
+up. `metrics.conversion` help article updated.
+
+**(3) Hand-reviewed flag** on the Journeys **Mentee record** card (§106). Saving an
+edit marks the record **hand reviewed** (`hand_reviewed` + `hand_reviewed_at`, set in
+`doSave`); a **"Hand reviewed" checkbox** sets/clears it directly (saves immediately,
+along with any unsaved edits), and a green badge shows the reviewed date. Columns added
+in `9977` (+ `9986` DDL for fresh installs); `MenteeRecord` + `MENTEE_SELECT` updated;
+`journeys.menteeRecord` help article updated. (Not surfaced on the Mentees grid — scope
+was the Journeys card per the request.)
+
 **▶ Next-session checklist (009b):**
-1. **Apply `9979_mentees_drop_fields.sql`** (Supabase SQL Editor). No re-sync needed
-   (the `mentees` table is HJG-owned, not sync-written).
-2. **Browser-verify** (headless here): the **Mentees** tab grid and the Journeys
-   **Mentee record** card no longer show the 9 fields; existing edits to the kept
-   fields still save; Raw data → `mentees` no longer lists the dropped columns.
-3. If/when the user wants any field back: re-add it to `MenteeRecord` + `MENTEE_SELECT`
-   (+ `MENTEE_NUM_FIELDS` if numeric), the relevant `COLS`/`RECORD_FIELDS`, and a new
-   migration `add column if not exists`. Data dropped by `9979` is gone — seed values
-   for it still live in git history (the pre-009b `9986`).
+1. **Apply `9979` + `9978` + `9977`** (Supabase SQL Editor). No re-sync needed (all
+   HJG-owned tables). `9978`/`9977` gate the trend-window persistence + the flag save.
+2. **Browser-verify** (headless here): (a) Mentees grid + Journeys Mentee-record card
+   no longer show the 9 removed fields; Raw data → `mentees` drops them. (b) Company
+   options → Metrics → set the conversion trend window (weeks/months) and watch the
+   Metrics conversion line smooth/lengthen; the table keeps per-month rates. (c) Journeys
+   card: edit a field + Save → "✓ Hand reviewed" badge appears; tick/untick the checkbox
+   directly persists.
+3. If/when the user wants a removed field back: re-add it to `MenteeRecord` +
+   `MENTEE_SELECT` (+ `MENTEE_NUM_FIELDS` if numeric), the relevant `COLS`/`RECORD_FIELDS`,
+   and a new `add column if not exists` migration. Data dropped by `9979` is gone — seed
+   values for it still live in git history (the pre-009b `9986`).
+4. Possible follow-ups: surface `hand_reviewed` on the Mentees grid too; let the trend
+   window optionally look back BEFORE the selected range (currently warms up in-range).
 
 ---
 

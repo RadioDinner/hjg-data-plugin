@@ -54,6 +54,33 @@ pass. Not browser-tested (headless container).
   `add column if not exists` migration. Dropped data is gone; old seed values remain
   in git history.
 
+## Feature: conversion-rate trend window (Company option)
+
+The Metrics "Discovery calls → conversion" card's rate line is now a **trailing
+rolling-window** conversion rate, replacing the raw per-month line (the table still
+lists exact per-month rates). Window is org-configurable as **N weeks or N months**
+(Company options → Metrics; default 3 months).
+
+- Design confirmed via AskUserQuestion: **rolling window rate** (not regression) +
+  **replace** the per-month line.
+- New `lib/conversionTrend.ts`: `TrendWindow`, parse/serialize, `trendWindowLabel`,
+  `rollingConversionTrend` (months = trailing N buckets; weeks = trailing N×7 days by
+  exact call date). Re-exported via `db.ts`; verify §18.
+- New `"duration"` Company-option control type (number + unit) in `companyOptions.ts`
+  + `CompanyOptionsView.tsx`. Migration `9978` seeds `metrics_conversion_trend_window`.
+- `MetricsView` fetches the option, applies the trend to Period A + (compare) Period B,
+  swaps the chart line to the trend. `metrics.conversion` help updated.
+- Known limitation: window computed from in-range calls → earliest points warm up.
+
+## Feature: hand-reviewed flag (Journeys mentee card, §106)
+
+- Saving an edit on the Journeys "Mentee record" card sets `hand_reviewed = true` +
+  `hand_reviewed_at` (in `doSave`). A "Hand reviewed" checkbox sets/clears it directly
+  (immediate save, preserving unsaved edits). Green badge shows the reviewed date.
+- Migration `9977` adds `hand_reviewed` + `hand_reviewed_at` (+ `9986` DDL for fresh
+  installs). `MenteeRecord` + `MENTEE_SELECT` updated. `journeys.menteeRecord` help
+  updated. Scoped to the Journeys card per the request (not the Mentees grid).
+
 ## Notes for future-me
 - The `mentees` seed (`9986`) is a one-shot Notion import, `on conflict (notion_key)
   do nothing` — re-running never clobbers dashboard edits.

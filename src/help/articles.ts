@@ -70,8 +70,13 @@ export const HELP_ARTICLES: Record<string, HelpArticle> = {
     body: `Every discovery call in the range and how it resolved — this single card combines the call counts (total, plus the Phone / Zoom split) with the conversion outcomes.
 
 ### Reading the bars
-- Each column's **height** is that month's total calls, **colored by outcome** (converted / pending / not converted / no show); the **line** is the conversion rate.
+- Each column's **height** is that month's total calls, **colored by outcome** (converted / pending / not converted / no show); the **line** is the conversion-rate **trend** (see below).
 - **Channel:** **solid** segments are **Zoom** calls, **grid-patterned** segments are **Phone** calls.
+
+### The trend line
+- The line is a **trailing-window** conversion rate, not each month in isolation: each point is the rate over the window ending there, so it's smoother than the raw monthly rate. The **table** still lists the exact per-month rates.
+- The window length — **N weeks or N months** — is an org-wide setting under **Company options → Metrics → "Conversion-rate trend window"** (default 3 months). A longer window = a smoother, slower-moving trend.
+- It's computed from the calls in the selected range, so the **earliest points** reflect a shorter (warming-up) window.
 
 ### When a call converts
 - A call **converts** when the prospect purchases **JumpStart Your Freedom (Waiting List)** (offering \`42840\`) on or after the call date.
@@ -186,8 +191,12 @@ Pure logic in \`lib/journey.ts\`.`,
 - Notion **Status**, **Mentor**, **Discovery-call** / **Projected-start** / **Offering-signup** dates, contact info, and free notes.
 - This is separate from the **pipeline status** editor above (which drives the auto/active/graduated logic) — that one feeds the metrics; this record is the management roster.
 
+### Hand-reviewed flag
+- **Saving an edit** here marks the record **hand reviewed** automatically (with the date).
+- You can also **tick "Hand reviewed"** directly — without changing anything — to acknowledge you've checked the record. Ticking saves immediately (along with any unsaved edits); unticking clears the flag.
+
 ### Source
-- \`mentees\` table (HJG-owned, staff-RLS, migration \`9986\`). Prospects not yet in CoachAccountable are seeded too, but only those linked to a CA client appear on this tab.`,
+- \`mentees\` table (HJG-owned, staff-RLS, migrations \`9986\` + \`9977\` for the \`hand_reviewed\` / \`hand_reviewed_at\` columns). Prospects not yet in CoachAccountable are seeded too, but only those linked to a CA client appear on this tab.`,
   },
 
   "metrics.capacity": {
