@@ -73,3 +73,6 @@ continue with all phases. Don't stop. You can run agents and use usage. Whatever
 
 --- 2026-06-25 ---
 In screen 005, can you make the "active mentoring" into 3 columns showing 4x, 2x and 1x, then put a "master" column display BEHIND the 3 divisions of 4x 2x and 1x?
+
+--- 2026-06-25 ---
+The layout isn't working. There are just 4 columns next to each other

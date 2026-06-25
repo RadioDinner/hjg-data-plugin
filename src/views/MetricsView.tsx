@@ -8,7 +8,6 @@ import {
   Legend,
   Line,
   LineChart,
-  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -956,17 +955,23 @@ export function MetricsView() {
 
   // "JYF vs Active Mentoring" — two bars (distinct people per phase). The table
   // adds the per-tier mentoring breakdown + the de-duplicated pipeline total.
-  // JYF + the three Active-Mentoring tiers as their own columns. The Active
-  // Mentoring TOTAL (distinct people) is drawn as a "master" backdrop behind the
-  // 4x/2x/1x trio (a ReferenceArea), so the divisions read against their whole.
+  // Two categories: JumpStart, then Active Mentoring. `back` is the backdrop layer
+  // (the JYF column itself, and the Active-Mentoring TOTAL "master"); t4/t2/t1 are
+  // the three tier divisions, drawn IN FRONT of the master. Rendered via a hidden
+  // second x-axis so the master and the trio overlap in the same band instead of
+  // grouping side-by-side.
   const jyfBars = useMemo(
     () =>
       jyfVsMentoring
         ? [
-            { phase: "JumpStart (JYF)", people: jyfVsMentoring.jyf },
-            { phase: "4x", people: jyfVsMentoring.byTier["4x"] },
-            { phase: "2x", people: jyfVsMentoring.byTier["2x"] },
-            { phase: "1x", people: jyfVsMentoring.byTier["1x"] },
+            { phase: "JumpStart (JYF)", back: jyfVsMentoring.jyf, t4: null, t2: null, t1: null },
+            {
+              phase: "Active Mentoring",
+              back: jyfVsMentoring.mentoring,
+              t4: jyfVsMentoring.byTier["4x"],
+              t2: jyfVsMentoring.byTier["2x"],
+              t1: jyfVsMentoring.byTier["1x"],
+            },
           ]
         : [],
     [jyfVsMentoring]
@@ -1753,32 +1758,23 @@ export function MetricsView() {
                 </>
               }
             >
-              <BarChart data={jyfBars} margin={{ top: 22, right: 12, bottom: 8, left: 8 }}>
+              <BarChart data={jyfBars} margin={{ top: 12, right: 12, bottom: 8, left: 8 }} barGap={2}>
                 <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="phase" {...axisProps} />
+                <XAxis dataKey="phase" xAxisId={0} {...axisProps} />
+                {/* hidden twin axis so the master/JYF backdrop overlaps the trio */}
+                <XAxis dataKey="phase" xAxisId={1} hide />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
-                {/* "Master" backdrop = total distinct Active Mentoring, behind the 4x/2x/1x trio. */}
-                {jyfVsMentoring && (
-                  <ReferenceArea
-                    x1="4x"
-                    x2="1x"
-                    y1={0}
-                    y2={jyfVsMentoring.mentoring}
-                    fill={C.meetings}
-                    fillOpacity={0.16}
-                    stroke={C.meetings}
-                    strokeOpacity={0.45}
-                    strokeDasharray="3 3"
-                    label={{ value: `Active Mentoring · ${jyfVsMentoring.mentoring}`, position: "insideTop", fill: AXIS, fontSize: 11 }}
-                  />
-                )}
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                <Bar dataKey="people" name="People" radius={[4, 4, 0, 0]}>
+                {/* Backdrop: the JYF column (solid) + the Active-Mentoring "master" total
+                    (faint), drawn BEHIND the trio via the hidden axis. */}
+                <Bar dataKey="back" name="Total" xAxisId={1} barSize={132} radius={[4, 4, 0, 0]} isAnimationActive={false}>
                   <Cell fill={C.mentees} />
-                  <Cell fill="#7c3aed" />
-                  <Cell fill="#a78bfa" />
-                  <Cell fill="#c4b5fd" />
+                  <Cell fill={C.meetings} fillOpacity={0.18} stroke={C.meetings} strokeOpacity={0.55} strokeDasharray="4 3" />
                 </Bar>
+                {/* The three tier divisions, grouped IN FRONT of the master. */}
+                <Bar dataKey="t4" name="4x" xAxisId={0} barSize={34} fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="t2" name="2x" xAxisId={0} barSize={34} fill="#a78bfa" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="t1" name="1x" xAxisId={0} barSize={34} fill="#c4b5fd" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartCard>
           </div>
