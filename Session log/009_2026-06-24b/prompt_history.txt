@@ -70,3 +70,6 @@ Q: Status model? A: Active / Graduated / Quit / Fired / Paused / Declined (each 
 
 --- 2026-06-24 (mid-build interjection) ---
 continue with all phases. Don't stop. You can run agents and use usage. Whatever it takes, just don't stop. I'm leaving for the night
+
+--- 2026-06-25 ---
+In screen 005, can you make the "active mentoring" into 3 columns showing 4x, 2x and 1x, then put a "master" column display BEHIND the 3 divisions of 4x 2x and 1x?

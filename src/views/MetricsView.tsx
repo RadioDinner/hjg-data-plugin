@@ -8,6 +8,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -955,12 +956,17 @@ export function MetricsView() {
 
   // "JYF vs Active Mentoring" — two bars (distinct people per phase). The table
   // adds the per-tier mentoring breakdown + the de-duplicated pipeline total.
+  // JYF + the three Active-Mentoring tiers as their own columns. The Active
+  // Mentoring TOTAL (distinct people) is drawn as a "master" backdrop behind the
+  // 4x/2x/1x trio (a ReferenceArea), so the divisions read against their whole.
   const jyfBars = useMemo(
     () =>
       jyfVsMentoring
         ? [
             { phase: "JumpStart (JYF)", people: jyfVsMentoring.jyf },
-            { phase: "Active Mentoring", people: jyfVsMentoring.mentoring },
+            { phase: "4x", people: jyfVsMentoring.byTier["4x"] },
+            { phase: "2x", people: jyfVsMentoring.byTier["2x"] },
+            { phase: "1x", people: jyfVsMentoring.byTier["1x"] },
           ]
         : [],
     [jyfVsMentoring]
@@ -1712,8 +1718,10 @@ export function MetricsView() {
               extra={
                 <>
                   <p className="view__hint">
-                    People currently in an <strong>open JumpStart Your Freedom</strong> engagement vs. people in{" "}
-                    <strong>open ongoing mentoring</strong> (4x / 2x / 1x). Counts distinct people; completed or canceled
+                    People currently in an <strong>open JumpStart Your Freedom</strong> engagement, then{" "}
+                    <strong>Active Mentoring</strong> split into its <strong>4x / 2x / 1x</strong> tiers. The shaded
+                    <strong> master block behind the three tiers</strong> is the <em>distinct</em> Active-Mentoring total — smaller
+                    than 4x+2x+1x added up when someone is in more than one tier. Counts distinct people; completed or canceled
                     engagements drop out. <em>All-time snapshot — not affected by the date range above.</em>
                   </p>
                   <div className="stat-row">
@@ -1745,14 +1753,31 @@ export function MetricsView() {
                 </>
               }
             >
-              <BarChart data={jyfBars} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+              <BarChart data={jyfBars} margin={{ top: 22, right: 12, bottom: 8, left: 8 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="phase" {...axisProps} />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
+                {/* "Master" backdrop = total distinct Active Mentoring, behind the 4x/2x/1x trio. */}
+                {jyfVsMentoring && (
+                  <ReferenceArea
+                    x1="4x"
+                    x2="1x"
+                    y1={0}
+                    y2={jyfVsMentoring.mentoring}
+                    fill={C.meetings}
+                    fillOpacity={0.16}
+                    stroke={C.meetings}
+                    strokeOpacity={0.45}
+                    strokeDasharray="3 3"
+                    label={{ value: `Active Mentoring · ${jyfVsMentoring.mentoring}`, position: "insideTop", fill: AXIS, fontSize: 11 }}
+                  />
+                )}
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Bar dataKey="people" name="People" radius={[4, 4, 0, 0]}>
                   <Cell fill={C.mentees} />
-                  <Cell fill={C.meetings} />
+                  <Cell fill="#7c3aed" />
+                  <Cell fill="#a78bfa" />
+                  <Cell fill="#c4b5fd" />
                 </Bar>
               </BarChart>
             </ChartCard>

@@ -343,6 +343,9 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 - **In Active Mentoring** — distinct people with an **open** 4x, 2x, or 1x engagement (the union — each person counted once).
 - An engagement is **open** when it is **neither complete nor canceled**. Completed JumpStarts and graduated/ended mentees drop out automatically.
 
+### Chart
+- The bars are **JumpStart (JYF)** then the three Active-Mentoring tiers as their own columns — **4x · 2x · 1x**. The shaded **master block behind the trio** is the **distinct** Active-Mentoring total; because a person in two tiers is counted in each tier but only once in the total, the three columns can add up to more than the master block.
+
 ### Notes
 - Counts **people, not engagements** — someone with two open engagements is counted once per side. The **4x / 2x / 1x** tiles break down the mentoring side; in the rare case a person has open engagements in two tiers they show under both, so the tiles can total slightly more than "In Active Mentoring".
 - Test/placeholder mentees you've excluded (and group/placeholder clients) are left out.
