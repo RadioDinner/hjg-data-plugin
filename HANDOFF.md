@@ -1,7 +1,42 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-24 (session 009b — mentee-management rework underway).
+2026-06-25 (session 009b — mentee-management rework shipped + §005 chart tweak).
+
+## ▶ START HERE (2026-06-25)
+
+**Everything is on `main` and green** (`typecheck` + `verify` (22) + `build`). Newest
+commits: `6feb4e2` (§005 chart fix), `090d0aa` (§005 chart), then the 4 rework phases.
+
+**⚠ THE ONE PENDING ACTION — the mentee-management CUTOVER has NOT been confirmed done.**
+The new Mentees tab + the Metrics pipeline/freedom cards need migration **`9975`** applied:
+1. Apply **`9975_mentees_rebuild.sql`** in the Supabase SQL Editor (drops old
+   `mentees`/`mentee_outcomes`/`mentee_exclusions`, creates the new two-layer `mentees`;
+   destructive + re-runnable). **Next new migration is `9974_…`.**
+2. **Re-sync** (Admin → Sync now) — the sync now materializes the CA layer — or click
+   **Rebuild from CA** on the Mentees tab.
+3. **Re-enter the Notion data by hand** on the Mentees tab.
+   Pre-cutover the app degrades gracefully (test-exclusion + Freedom report fail open; the
+   Mentees tab errors because its new columns don't exist yet). Full detail in the rework
+   section below.
+
+**Last thing shipped — Metrics §005 "JYF vs Active Mentoring" chart** (`src/views/MetricsView.tsx`):
+the single "Active Mentoring" bar is now **three columns (4x · 2x · 1x)** with the **distinct
+Active-Mentoring total as a faint dashed "master" backdrop BEHIND the trio**; JumpStart stays
+its own column. Help (`metrics.jyfVsMentoring`) + hint updated.
+
+> **recharts is v3.8.1 — note for future chart work.** `ReferenceArea` is unreliable here:
+> it's **discarded** when its value exceeds the bar max and doesn't span a category band
+> cleanly (that was the first failed attempt at the master backdrop). The working pattern for
+> **overlapping bars** (one behind another, not grouped side-by-side) is a **hidden twin
+> `<XAxis xAxisId={1} hide/>`** with the backdrop bar on that axis and the foreground bars on
+> axis 0 — they then center in the same band and overlap. Verified via a **headless render
+> harness**: serve a tiny `main.tsx`+`index.html` from a temp dir INSIDE the repo (so vite
+> resolves `node_modules`) with `npx vite <dir>`, screenshot with the **global** Playwright
+> (`/opt/node22/lib/node_modules/playwright`, CommonJS → `import pw from "...";const {chromium}=pw`),
+> launch `args:["--no-proxy-server"]`, hit `http://127.0.0.1:<port>/`. (Harness was temporary; deleted.)
+
+---
 
 ## ✅ MENTEE MANAGEMENT REWORK (2026-06-24, session 009b) — ALL 4 PHASES SHIPPED
 

@@ -1,4 +1,16 @@
-# Session 009b — 2026-06-24
+# Session 009b — 2026-06-24 (continued into 2026-06-25)
+
+## Metrics §005 "JYF vs Active Mentoring" chart (2026-06-25)
+- Split the single "Active Mentoring" bar into **three columns (4x · 2x · 1x)** and put
+  the **distinct Active-Mentoring total as a faint dashed "master" backdrop BEHIND the trio**;
+  JumpStart stays its own column. `src/views/MetricsView.tsx`; help + hint updated.
+- First attempt used a recharts `ReferenceArea` — **didn't render** (recharts is **v3.8.1**;
+  ReferenceArea is discarded when its top exceeds the bar max + unreliable on a category axis).
+  Fixed with a **hidden twin `<XAxis xAxisId={1} hide/>`** so a real "back" bar overlaps the
+  same band (backdrop on axis 1, the 4x/2x/1x trio on axis 0). Commits `090d0aa` then `6feb4e2`.
+- **Verified with a headless render harness** (temp vite app inside the repo + global Playwright,
+  `--no-proxy-server`, 127.0.0.1) — screenshot confirmed the master sits behind the trio. Harness
+  deleted. See HANDOFF "recharts v3" note for the reusable technique.
 
 ## What shipped
 Removed 9 fields from the **Mentee record — source of truth** *data and screens*,
