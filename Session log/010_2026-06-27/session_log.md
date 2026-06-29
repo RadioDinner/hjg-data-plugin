@@ -46,7 +46,13 @@ Mentee management **complete re-write** to a three-zone model, committed straigh
   Status filter, and the Metrics funnel in a real browser.
 - Deferred: a manual "merge/link orphan to existing mentee" action (match-by-name is the only key
   Notion gives us); optional inline-edit grid (current editing is roster + rich detail panel).
-- An adversarial code-review workflow was run post-merge; fixes (if any) are a follow-up commit.
+- An adversarial code-review workflow (23 agents) found **15 verified defects**, **all fixed**
+  in commit `dbe09b5`: funnel attribution made consistent (currentStage = furthest reached;
+  exits never land on un-entered stages or on graduated; pre_waiting conversion null);
+  importer hardened (non-ASCII / transliterated names, bare-CR CSV, dated-with-time parsing);
+  **`planClientIdClaims`** merges a Notion-only row onto its CA identity by name on sync/rebuild
+  (kills the prospect-before-CA duplicate-row + re-import-ambiguity bugs); UI guards (coach-filter
+  reset, "X of Y" denominator). verify §23/§24 extended; typecheck + verify + build green.
 
 ## For future-me
 - `main` is the trunk. The Notion export lives at the uploads path (PII — not committed); the
