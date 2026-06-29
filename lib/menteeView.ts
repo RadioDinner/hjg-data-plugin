@@ -242,9 +242,15 @@ export function toEffectiveMentee(r: MenteeRowLike, today: string): EffectiveMen
   const handStage = (r.status_stage as FunnelStage | null) ?? null;
   const mappedStage: FunnelStage | null = handStage ?? notionDerived?.stage ?? null;
 
-  // Date-derived furthest stage, then fall back to the status-mapped stage.
+  // Current stage = the FURTHEST of the date-derived stage and the status-mapped
+  // stage (by funnel order). Taking the max keeps currentStage consistent with
+  // reachedStage so exit/active attribution lands where the mentee actually is —
+  // e.g. Notion says "1x" but CA only has a jumpstart date.
   const dateStage: FunnelStage | null = currentTier ?? (discoveryDate ? "discovery" : preWaitingDate ? "pre_waiting" : null);
-  const currentStage: FunnelStage | null = dateStage ?? mappedStage;
+  let currentStage: FunnelStage | null = dateStage;
+  if (mappedStage && (currentStage == null || FUNNEL_STAGES.indexOf(mappedStage) > FUNNEL_STAGES.indexOf(currentStage))) {
+    currentStage = mappedStage;
+  }
 
   const resolvedStatus = effectiveStatus ?? (caStatus === "graduated" ? "graduated" : caStatus === "active" ? "active" : "inactive");
   const statusLabel = effectiveStatus

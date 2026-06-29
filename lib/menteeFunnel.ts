@@ -13,7 +13,7 @@
 // reached. IMN ("Independent Mentor") mentees are kept on the roster but
 // EXCLUDED from the funnel and reported separately. No I/O, no React — verify §22.
 
-import { FUNNEL_STAGES, MENTEE_EXIT_STATUSES, reachedStage, type FunnelStage, type EffectiveMentee, type MenteeMgmtStatus } from "./menteeView.js";
+import { FUNNEL_STAGES, MENTEE_EXIT_STATUSES, reachedStage, type FunnelStage, type EffectiveMentee } from "./menteeView.js";
 
 const STAGE_LABEL: Record<FunnelStage, string> = {
   pre_waiting: "Pre-Waiting",
@@ -52,6 +52,14 @@ function emptyExits(): FunnelExits {
   return { quit: 0, fired: 0, no_mentoring: 0, declined: 0 };
 }
 
+// The furthest reached stage that isn't "graduated" (exits never attribute to
+// graduation — a terminal success).
+function furthestNonGraduated(reached: Set<FunnelStage>): FunnelStage | null {
+  let r: FunnelStage | null = null;
+  for (const s of FUNNEL_STAGES) if (s !== "graduated" && reached.has(s)) r = s;
+  return r;
+}
+
 export function computeFunnel(mentees: EffectiveMentee[]): FunnelReport {
   const live = mentees.filter((m) => !m.isTest);
   const imnCount = live.filter((m) => m.effectiveStatus === "imn" || m.resolvedStatus === "imn").length;
@@ -70,24 +78,34 @@ export function computeFunnel(mentees: EffectiveMentee[]): FunnelReport {
   const activeHere: Record<FunnelStage, number> = { pre_waiting: 0, discovery: 0, jumpstart: 0, "4x": 0, "2x": 0, "1x": 0, graduated: 0 };
 
   for (const m of items) {
-    for (const s of FUNNEL_STAGES) if (reachedStage(m, s)) entered[s]++;
+    // Stages the mentee reached (dates + status-implied).
+    const reached = new Set<FunnelStage>();
+    for (const s of FUNNEL_STAGES) if (reachedStage(m, s)) reached.add(s);
 
-    // Exit attribution. The stage is the hand status_stage if set, else the
-    // furthest stage reached (currentStage), else discovery (a declined-after-
-    // discovery mentee with no stage dates).
     const st = m.effectiveStatus;
     if (st != null && MENTEE_EXIT_STATUSES.includes(st)) {
-      const stage = (m.statusStage ?? m.currentStage ?? "discovery") as FunnelStage;
-      exits[stage][st as Exclude<MenteeMgmtStatus, "active" | "graduated" | "imn">]++;
+      // Attribute the exit to the hand status_stage, else the furthest reached
+      // non-graduated stage, else discovery (the funnel's decision point). An
+      // exit implies the mentee entered that stage, so add it to `reached`.
+      let stage = (m.statusStage as FunnelStage | null) ?? null;
+      if (!stage || stage === "graduated") stage = furthestNonGraduated(reached) ?? "discovery";
+      reached.add(stage);
+      exits[stage][st as keyof FunnelExits]++;
     } else if (m.currentStage && m.resolvedStatus !== "graduated" && st !== "graduated") {
       // Not exited, not graduated => still active at their current stage.
       activeHere[m.currentStage]++;
     }
+
+    for (const s of reached) entered[s]++;
   }
 
   const stages: FunnelStageStat[] = FUNNEL_STAGES.map((s, i) => {
     const next = FUNNEL_STAGES[i + 1];
     const e = exits[s];
+    // pre_waiting is an opt-in side stage (not a step everyone passes), so a
+    // "conversion to discovery" over the whole discovery population is meaningless
+    // (it would exceed 100%). Report it as null.
+    const conversionToNext = s === "pre_waiting" ? null : next ? (entered[s] ? entered[next] / entered[s] : null) : null;
     return {
       stage: s,
       label: STAGE_LABEL[s],
@@ -95,7 +113,7 @@ export function computeFunnel(mentees: EffectiveMentee[]): FunnelReport {
       activeHere: activeHere[s],
       exits: e,
       exitedHere: e.quit + e.fired + e.no_mentoring + e.declined,
-      conversionToNext: next ? (entered[s] ? entered[next] / entered[s] : null) : null,
+      conversionToNext,
     };
   });
 

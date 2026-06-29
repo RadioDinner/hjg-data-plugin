@@ -97,7 +97,7 @@ export type { CohortJourneyInput, CohortStats, CohortTier, StartWindow } from ".
 // management system (migration 9974 — three write zones: ca_* / notion_* / hand).
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney";
 import { toEffectiveMentee, type MenteeMgmtStatus } from "../lib/menteeView";
-import { planNotionUpsert, type NotionImportRow, type ExistingMentee } from "../lib/notionCsv";
+import { planNotionUpsert, planClientIdClaims, type NotionImportRow, type ExistingMentee } from "../lib/notionCsv";
 import { computeMeetingsToFreedom } from "../lib/freedom";
 export {
   toEffectiveMentee,
@@ -124,9 +124,10 @@ export {
   reconcileCoach,
   parseNotionDate,
   planNotionUpsert,
+  planClientIdClaims,
   DEFAULT_NOTION_MAP,
 } from "../lib/notionCsv";
-export type { NotionImportRow, NotionColumnMap, NotionUpsertPlan, ExistingMentee } from "../lib/notionCsv";
+export type { NotionImportRow, NotionColumnMap, NotionUpsertPlan, ExistingMentee, CaIdentity } from "../lib/notionCsv";
 
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
@@ -932,6 +933,20 @@ export async function fetchTestClientIds(): Promise<Set<number>> {
   return set;
 }
 
+// Before a CA upsert, claim any Notion-only row (client_id NULL) whose name now
+// matches a CA record by setting its client_id, so the upsert MERGES the CA zone
+// onto the existing Notion row instead of inserting a duplicate. Best-effort.
+async function claimNotionOnlyRows(caRecords: { clientId: number; name: string | null }[]): Promise<void> {
+  const { data, error } = await supabase.from("mentees").select("id,client_id,ca_name,notion_name,name_override");
+  if (error) return;
+  const existing: ExistingMentee[] = ((data ?? []) as { id: string; client_id: number | null; ca_name: string | null; notion_name: string | null; name_override: string | null }[]).map(
+    (r) => ({ id: r.id, clientId: r.client_id, name: r.name_override ?? r.notion_name ?? r.ca_name })
+  );
+  for (const c of planClientIdClaims(existing, caRecords)) {
+    await supabase.from("mentees").update({ client_id: c.clientId }).eq("id", c.id);
+  }
+}
+
 // Manual "Rebuild from CA": recompute the CA layer for every mentee from the synced
 // mirror (no CoachAccountable calls) and upsert ONLY the ca_* columns — the hand
 // layer is untouched. Mirrors the sync's materialize step (lib/sync.ts). Returns
@@ -985,6 +1000,8 @@ export async function rebuildMenteesFromCa(): Promise<number> {
     today: todayYmd(),
     basis: "first_meeting",
   });
+  // Merge any name-matching Notion-only rows onto their CA identity first.
+  await claimNotionOnlyRows(caRecords.map((r) => ({ clientId: r.clientId, name: r.name })));
   const syncedAt = new Date().toISOString();
   const rows = caRecords.map((r) => toMenteeCaUpsertRow(r, syncedAt));
   for (let i = 0; i < rows.length; i += 500) {

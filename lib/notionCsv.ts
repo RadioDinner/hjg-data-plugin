@@ -83,7 +83,13 @@ export function parseCsv(text: string): string[][] {
       continue;
     }
     if (c === "\r") {
-      i++;
+      // End the row on CR. For CRLF, swallow the following LF so it isn't a 2nd
+      // row break; a lone CR (classic-Mac / some exports) still terminates here.
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i += s[i + 1] === "\n" ? 2 : 1;
       continue;
     }
     if (c === "\n") {
@@ -120,13 +126,28 @@ export function stripNotionLink(cell: string | null | undefined): string {
 }
 
 export function normalizeName(s: string | null | undefined): string {
-  return (s ?? "")
+  const raw = (s ?? "").trim();
+  const ascii = raw
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "") // strip diacritics
+    .replace(/[̀-ͯ]/g, "") // strip combining diacritics
+    // Letters with no NFKD canonical decomposition — transliterate so e.g.
+    // "Søren" matches "Soren" instead of splitting into "s ren".
+    .replace(/ø/gi, "o")
+    .replace(/æ/gi, "ae")
+    .replace(/œ/gi, "oe")
+    .replace(/ß/g, "ss")
+    .replace(/ł/gi, "l")
+    .replace(/đ/gi, "d")
+    .replace(/þ/gi, "th")
     .toLowerCase()
     .replace(/[^a-z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  if (ascii) return ascii;
+  // All-non-ASCII name (CJK / Arabic / Cyrillic / emoji): stripping would collapse
+  // it to "", so it could never match itself across re-imports. Fall back to a
+  // casefolded raw key so it stays distinct and re-importable.
+  return raw.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 // Reconcile the two Notion mentor columns. If both are present and normalize
@@ -155,21 +176,26 @@ function isNonePlaceholder(s: string): boolean {
 const MONTHS: Record<string, string> = {
   january: "01", february: "02", march: "03", april: "04", may: "05", june: "06",
   july: "07", august: "08", september: "09", october: "10", november: "11", december: "12",
+  jan: "01", feb: "02", mar: "03", apr: "04", jun: "06", jul: "07", aug: "08",
+  sep: "09", sept: "09", oct: "10", nov: "11", dec: "12",
 };
 
-// Parse a Notion date cell. Handles "Month DD, YYYY" (Notion's default), already-
-// ISO yyyy-mm-dd, and M/D/YYYY. Returns ISO yyyy-mm-dd or null.
+// Parse a Notion date cell. Handles "Month DD, YYYY" (Notion's default, with or
+// without a trailing time when "Include time" is on, and abbreviated months),
+// already-ISO yyyy-mm-dd, and M/D/YYYY. Returns ISO yyyy-mm-dd or null. For a
+// date RANGE ("April 1, 2024 → April 5, 2024") the leading date is taken.
 export function parseNotionDate(cell: string | null | undefined): string | null {
   const v = (cell ?? "").trim();
   if (!v) return null;
   let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/.exec(v);
+  // No `$`: tolerate a trailing time / range tail after the year.
+  m = /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\b/.exec(v);
   if (m) {
     const mo = MONTHS[m[1].toLowerCase()];
     if (mo) return `${m[3]}-${mo}-${m[2].padStart(2, "0")}`;
   }
-  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v);
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\b/.exec(v);
   if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
   return null;
 }
@@ -270,4 +296,45 @@ export function planNotionUpsert(existing: ExistingMentee[], rows: NotionImportR
     else plan.ambiguous.push({ name: row.name, candidateIds: matches });
   }
   return plan;
+}
+
+// One CoachAccountable record's identity, for the claim step.
+export interface CaIdentity {
+  clientId: number | null;
+  name: string | null;
+}
+
+// Before the CA sync upserts on client_id, claim any Notion-only row (client_id
+// NULL) whose name matches a CA record by setting that row's client_id — so the
+// upsert MERGES the CA zone onto the existing Notion row instead of inserting a
+// SECOND row for the same person (the prospect-imported-before-they-exist-in-CA
+// lifecycle). Only claims a UNIQUE 1:1 name match against an as-yet-unclaimed
+// client id; ambiguous names are left for manual handling. Pure — verify §23.
+export function planClientIdClaims(existing: ExistingMentee[], caRecords: CaIdentity[]): { id: string; clientId: number }[] {
+  const takenClientIds = new Set<number>();
+  const nullByName = new Map<string, string[]>();
+  for (const e of existing) {
+    if (e.clientId != null) {
+      takenClientIds.add(e.clientId);
+      continue;
+    }
+    const k = normalizeName(e.name);
+    if (!k) continue;
+    const arr = nullByName.get(k) ?? [];
+    arr.push(e.id);
+    nullByName.set(k, arr);
+  }
+  const claims: { id: string; clientId: number }[] = [];
+  const usedRowIds = new Set<string>();
+  for (const r of caRecords) {
+    if (r.clientId == null || takenClientIds.has(r.clientId)) continue;
+    const k = normalizeName(r.name);
+    const ids = k ? nullByName.get(k) : undefined;
+    if (ids && ids.length === 1 && !usedRowIds.has(ids[0])) {
+      claims.push({ id: ids[0], clientId: r.clientId });
+      usedRowIds.add(ids[0]);
+      takenClientIds.add(r.clientId);
+    }
+  }
+  return claims;
 }

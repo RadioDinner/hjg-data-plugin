@@ -49,6 +49,11 @@ export function MenteeFunnelCard() {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [mentees]);
 
+  // A reload can drop the selected coach; reset so the funnel doesn't show zeros.
+  useEffect(() => {
+    if (ownerF !== "all" && !owners.includes(ownerF)) setOwnerF("all");
+  }, [owners, ownerF]);
+
   const scoped = useMemo(() => (ownerF === "all" ? mentees : mentees.filter((m) => m.ownerCoachName === ownerF)), [mentees, ownerF]);
   const funnel = useMemo(() => computeFunnel(scoped), [scoped]);
   // FUNNEL_STAGES[0] = pre_waiting (no palette slot — neutral); 1..6 map to the

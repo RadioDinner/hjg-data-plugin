@@ -176,6 +176,12 @@ export function MenteesView() {
 
   const conflictCount = useMemo(() => effective.filter((m) => !m.isTest && (m.conflicts.length > 0 || m.coarseExit)).length, [effective]);
 
+  // A reload (re-import / Rebuild from CA) can drop the selected coach from the
+  // roster; reset the filter so the table doesn't silently show 0 rows.
+  useEffect(() => {
+    if (ownerF !== "all" && !owners.includes(ownerF)) setOwnerF("all");
+  }, [owners, ownerF]);
+
   // Apply filters.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -420,7 +426,7 @@ export function MenteesView() {
             <span>Hide test mentees</span>
           </label>
           <span className="journey-filters__count muted">
-            {filtered.length} of {effective.filter((m) => !m.isTest).length}
+            {filtered.length} of {effective.filter((m) => !hideTest || !m.isTest).length}
           </span>
         </div>
 

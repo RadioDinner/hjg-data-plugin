@@ -8,6 +8,7 @@ import { makeTracker, BudgetExhaustedError, type BudgetTracker } from "./budget.
 import { categorizeAppointmentName, isExcludedClientName, CONVERSION_OFFERING_IDS } from "./config.js";
 import { caDateParts } from "./metrics.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "./menteeJourney.js";
+import { planClientIdClaims } from "./notionCsv.js";
 import type {
   SyncTrigger,
   CaCoachRow,
@@ -345,6 +346,15 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         today,
         basis: "first_meeting",
       });
+      // Claim Notion-only rows (client_id NULL) by name so the upsert MERGES the
+      // CA zone onto them instead of inserting a duplicate row for the same person.
+      const { data: exRows } = await admin.from("mentees").select("id,client_id,ca_name,notion_name,name_override");
+      const existing = ((exRows ?? []) as { id: string; client_id: number | null; ca_name: string | null; notion_name: string | null; name_override: string | null }[]).map(
+        (r) => ({ id: r.id, clientId: r.client_id, name: r.name_override ?? r.notion_name ?? r.ca_name })
+      );
+      for (const c of planClientIdClaims(existing, caRecords.map((r) => ({ clientId: r.clientId, name: r.name })))) {
+        await admin.from("mentees").update({ client_id: c.clientId }).eq("id", c.id);
+      }
       const syncedAt = new Date().toISOString();
       const caRows = caRecords.map((r) => toMenteeCaUpsertRow(r, syncedAt));
       for (let i = 0; i < caRows.length; i += 500) {

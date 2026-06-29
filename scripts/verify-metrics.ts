@@ -33,6 +33,7 @@ import {
   reconcileCoach,
   parseNotionDate,
   planNotionUpsert,
+  planClientIdClaims,
   type NotionImportRow,
 } from "../lib/notionCsv.js";
 import {
@@ -1125,6 +1126,31 @@ console.log("[23] Mentee management — Notion CSV importer (notionCsv)");
   eq(plan.inserts.length, 1, "1 unmatched → insert");
   eq(plan.ambiguous.length, 1, "1 homonym → ambiguous");
   eq(plan.ambiguous[0].candidateIds.length, 2, "ambiguous has 2 candidates");
+
+  // Non-ASCII names must not collapse to "" (else they never match on re-import).
+  eq(normalizeName("李明"), "李明", "non-ASCII name kept (no empty-key collapse)");
+  eq(normalizeName("Søren"), "soren", "ø transliterated → soren (no token split)");
+  // Dates with a trailing time / abbreviated month still parse.
+  eq(parseNotionDate("April 1, 2024 9:00 AM"), "2024-04-01", "date tolerates trailing time");
+  eq(parseNotionDate("Apr 1, 2024"), "2024-04-01", "abbreviated month parses");
+  // Bare-CR (classic-Mac) line endings still split rows.
+  {
+    const g = parseCsv("a,b\rc,d");
+    eq(g.length, 2, "bare-CR splits rows");
+    eq(g[1][0], "c", "bare-CR row 2 starts cleanly");
+  }
+  // A Notion-only row (client_id NULL) is claimed by name when its CA client appears,
+  // so the CA upsert merges instead of duplicating.
+  {
+    const ex = [
+      { id: "n1", clientId: null, name: "Sam Twin" },
+      { id: "c1", clientId: 7, name: "Other Person" },
+    ];
+    const claims = planClientIdClaims(ex, [{ clientId: 5, name: "sam  twin" }, { clientId: 7, name: "Other Person" }]);
+    eq(claims.length, 1, "one client-id claim");
+    eq(claims[0].id, "n1", "claim merges the Notion-only row by name");
+    eq(claims[0].clientId, 5, "claim sets the CA client id");
+  }
 }
 
 console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)");
@@ -1171,6 +1197,30 @@ console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)
   eq(byStage.get("jumpstart")!.exits.quit, 1, "coarse quit attributed to jumpstart");
   eq(byStage.get("jumpstart")!.exits.declined, 1, "Done (Other) → declined at jumpstart");
   eq(byStage.get("4x")!.activeHere, 1, "active@4x (A4)");
+  assert(byStage.get("pre_waiting")!.conversionToNext === null, "pre_waiting conversion is null (opt-in side stage)");
+
+  // currentStage = furthest of date- and status-derived stage; exit lands there.
+  const ahead = toEffectiveMentee(b2({ id: "AH", client_id: 9, ca_jumpstart_date: "2026-02-01", notion_status: "1x Mentoring", status: "quit" }), t);
+  eq(ahead.currentStage, "1x", "currentStage = furthest (Notion 1x beats a CA jumpstart date)");
+  const sAhead = new Map(computeFunnel([ahead]).stages.map((s) => [s.stage, s]));
+  eq(sAhead.get("1x")!.exits.quit, 1, "exit attributed to 1x (furthest reached)");
+  eq(sAhead.get("jumpstart")!.exits.quit, 0, "no phantom exit at jumpstart");
+  assert(sAhead.get("1x")!.entered >= sAhead.get("1x")!.exitedHere, "entered >= exited at 1x");
+
+  // Dateless coarse decline: exit lands at discovery AND is counted entered there.
+  const dl = toEffectiveMentee(b2({ id: "DL", client_id: 10, notion_status: "Done (Other)" }), t);
+  const sDl = new Map(computeFunnel([dl]).stages.map((s) => [s.stage, s]));
+  eq(sDl.get("discovery")!.exits.declined, 1, "dateless decline attributed to discovery");
+  eq(sDl.get("discovery")!.entered, 1, "...and counted entered there (entered >= exited)");
+
+  // An exit never lands on the graduated stage, even with a graduation date.
+  const ge = toEffectiveMentee(
+    b2({ id: "GE", client_id: 11, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01", ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-09-01", status: "quit" }),
+    t
+  );
+  const sGe = new Map(computeFunnel([ge]).stages.map((s) => [s.stage, s]));
+  eq(sGe.get("graduated")!.exitedHere, 0, "no exit attributed to graduated");
+  eq(sGe.get("4x")!.exits.quit, 1, "exit capped to furthest non-grad stage (4x)");
 }
 
 console.log("");
