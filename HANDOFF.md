@@ -1,9 +1,51 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-25 (session 009b — mentee-management rework shipped + §005 chart tweak).
+2026-06-27 (session 010 — mentee management **re-written** to a three-zone model).
 
-## ▶ START HERE (2026-06-25)
+## ▶ START HERE (2026-06-27, session 010)
+
+**A full mentee-management RE-WRITE shipped on `main` and is green** (`typecheck` +
+`verify` (**24 sections**) + `build`). Commit `f8de071`. **UI NOT browser-tested** (headless).
+Plan doc: `Session log/010_2026-06-27/rewrite_plan.md`. `main` is the trunk (the
+stale session-002 main was merged forward in `9af20f4`).
+
+**The model now has THREE write zones on one `mentees` row, none ever writing another's columns:**
+- **`ca_*`** — CoachAccountable facts; written only by the sync materialize step + `rebuildMenteesFromCa`.
+- **`notion_*`** — the human record imported from a Notion CSV; written only by `upsertMenteeNotion` (in-app Import).
+- **hand** (`*_override` / `status` / `status_stage` / `notes` / `is_test`) — staff edits; never touched by sync/import.
+- App reads **effective = hand ?? notion ?? ca**; the detail panel shows all three + flags conflicts (accept-into-hand).
+
+**New status taxonomy:** active / graduated / quit / fired / **no_mentoring** / declined / **imn** (drops `paused`).
+**Funnel stages:** **pre_waiting** → discovery → jumpstart → 4x → 2x → 1x → graduated. **IMN** kept on the
+roster but **excluded from the funnel**. The **funnel + exit card MOVED from Mentees → Metrics**
+(`src/components/MenteeFunnelCard.tsx`, section `metrics.funnel`=12). The Mentees roster got a
+**first-class Status filter** + a **Conflicts-only** toggle + an **Import Notion CSV** button.
+
+**⚠⚠ CUTOVER — DO THIS (the new code needs it):**
+1. **Apply `supabase/migrations/9974_mentees_three_zone.sql`** in the Supabase SQL Editor.
+   DESTRUCTIVE: drops the old `mentees` (whether it was 9975's two-layer table or older) and
+   creates the three-zone table. Re-runnable (drops only if no `notion_name` column). **Supersedes
+   `9975` — apply `9974` whether or not `9975` was ever applied. Next new migration is `9973_…`.**
+2. **Sync** (Admin → Sync now) or **Rebuild from CA** on the Mentees tab → fills `ca_*`.
+3. **Import the Notion CSV** via the new **Import Notion CSV** button on the Mentees tab → fills
+   `notion_*` (matched to existing mentees by name; ~31 Notion-only prospects insert as new rows;
+   homonyms/ambiguous are skipped and reported). Re-import any time to refresh.
+4. Spot-check: the 3-source detail panel, the Status filter, the funnel on **Metrics**, and
+   **hand-refine the coarse Notion exits** (Notion lumps "Quit OR No Mentoring" and "Other" — split
+   them to quit/no_mentoring/fired/declined on each mentee's detail).
+
+**Carried Notion columns (7):** name, Status, coach (Mentor 1 + Mentor, reconciled; conflict flagged),
+email, phone, DC Date, Offering Signup. Dropped: Associated Tasks, dd w a, MN Equivalency, Projected
+Start Date, JS Lesson?, Wants PP?, MT Prayer Partner, and all 4 financial fields.
+
+**Open / deferred:** match-by-name is the only key Notion gives us (renames orphan a row; homonyms go
+to "ambiguous"); a manual "merge/link to existing mentee" action is deferred. An adversarial
+code-review workflow was run post-merge — see the session 010 log for any fixes applied.
+
+---
+
+## ▶ Prior session START HERE (2026-06-25, session 009b)
 
 **Everything is on `main` and green** (`typecheck` + `verify` (22) + `build`). Newest
 commits: `6feb4e2` (§005 chart fix), `090d0aa` (§005 chart), then the 4 rework phases.
