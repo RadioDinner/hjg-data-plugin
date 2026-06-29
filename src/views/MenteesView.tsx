@@ -135,6 +135,10 @@ export function MenteesView() {
   const [engagements, setEngagements] = useState<MenteeEngagementLite[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // Inline roster editing: an uncontrolled-ish buffer for the free-text Coach
+  // cells, keyed by row id and committed on blur (selects/dates commit on change).
+  const [coachBuffer, setCoachBuffer] = useState<Record<string, string>>({});
+
   const today = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -201,7 +205,12 @@ export function MenteesView() {
       key: "name",
       label: "Mentee",
       format: (r: Row) => (
-        <button className="linkbtn" onClick={() => setSelectedId(String(r._id))} title="Open mentee">
+        <button
+          className="linkbtn"
+          onClick={() => setSelectedId(String(r._id))}
+          title="Open to edit details on the right"
+          style={selectedId === r._id ? { fontWeight: 700 } : undefined}
+        >
           {String(r.name)}
           {r.conflict ? (
             <span className="pill" style={{ marginLeft: 6 }} title="CA / Notion / hand disagree, or a coarse Notion exit to classify">
@@ -216,11 +225,71 @@ export function MenteesView() {
         </button>
       ),
     },
-    { key: "status", label: "Status" },
+    {
+      key: "status",
+      label: "Status",
+      // Inline-editable: sets the hand-zone status (overrides Notion/CA).
+      format: (r: Row) => {
+        const m = effById.get(String(r._id));
+        if (!m) return String(r.status ?? "—");
+        return (
+          <select
+            className="cell-edit"
+            value={m.status ?? ""}
+            onChange={(e) => inlineSave(m.id, { status: (e.target.value || null) as MenteeMgmtStatus | null })}
+            title="Hand-zone status (wins over Notion/CA). Blank = use the auto-derived value."
+          >
+            <option value="">{m.status == null ? `— ${m.statusLabel} (auto) —` : "— Unclassified —"}</option>
+            {MENTEE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
     { key: "stage", label: "Stage" },
-    { key: "coach", label: "Coach" },
+    {
+      key: "coach",
+      label: "Coach",
+      // Inline-editable free text: writes coach_override on blur when changed.
+      format: (r: Row) => {
+        const m = effById.get(String(r._id));
+        if (!m) return String(r.coach ?? "—");
+        const eff = m.ownerCoachName ?? "";
+        const val = coachBuffer[m.id] ?? eff;
+        return (
+          <input
+            className="cell-edit"
+            value={val}
+            placeholder="—"
+            onChange={(e) => setCoachBuffer((b) => ({ ...b, [m.id]: e.target.value }))}
+            onBlur={() => commitCoach(m.id, eff)}
+            title="Coach override (hand zone). Blank reverts to Notion/CA."
+          />
+        );
+      },
+    },
     { key: "notionStatus", label: "Notion status" },
-    { key: "discovery", label: "Discovery" },
+    {
+      key: "discovery",
+      label: "Discovery",
+      // Inline-editable date: writes discovery_date_override on change.
+      format: (r: Row) => {
+        const m = effById.get(String(r._id));
+        if (!m) return String(r.discovery ?? "—");
+        return (
+          <input
+            type="date"
+            className="cell-edit"
+            value={m.discoveryDate ?? ""}
+            onChange={(e) => inlineSave(m.id, { discovery_date_override: e.target.value || null })}
+            title="Discovery-date override (hand zone). Blank reverts to Notion/CA."
+          />
+        );
+      },
+    },
     { key: "lastMeeting", label: "Last meeting" },
     { key: "meetings", label: "Meetings", numeric: true },
   ];
@@ -294,6 +363,39 @@ export function MenteesView() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Persist a single hand-zone edit from an inline roster cell. Optimistically
+  // patches local state (so the effective view updates instantly), mirrors into
+  // the open detail draft if it's the same mentee, then saves in the background.
+  function inlineSave(id: string, patch: MenteeHandEdit) {
+    const norm: MenteeHandEdit = { ...patch };
+    for (const k of Object.keys(norm) as (keyof MenteeHandEdit)[]) {
+      if ((norm[k] as unknown) === "") (norm[k] as unknown) = null;
+    }
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...norm } : r)));
+    if (id === selectedId) setDraft((d) => ({ ...d, ...norm }));
+    saveMenteeHand(id, norm)
+      .then(() => {
+        setNote("Saved ✓");
+        setTimeout(() => setNote(null), 1500);
+      })
+      .catch((e) => {
+        setError(String(e));
+        load(); // resync from the server on failure
+      });
+  }
+
+  // Commit a Coach cell on blur: only write coach_override when it actually
+  // changed from the effective value (blank reverts to Notion/CA).
+  function commitCoach(id: string, effCoach: string) {
+    const v = (coachBuffer[id] ?? effCoach).trim();
+    setCoachBuffer((b) => {
+      const n = { ...b };
+      delete n[id];
+      return n;
+    });
+    if (v !== effCoach.trim()) inlineSave(id, { coach_override: v || null });
   }
 
   async function rebuild() {
@@ -372,12 +474,15 @@ export function MenteesView() {
       <p className="view__hint">
         HJG's <strong>source of truth</strong> for every mentee. Each row blends three zones — a <strong>CA zone</strong> (refreshed from
         CoachAccountable every sync), a <strong>Notion zone</strong> (imported from your Notion export), and a <strong>hand zone</strong>
-        (your edits, never overwritten). The table shows the <strong>effective</strong> value (hand wins, then Notion, then CA). Funnel &amp;
-        exits now live on the <strong>Metrics</strong> tab.
+        (your edits, never overwritten). The table shows the <strong>effective</strong> value (hand wins, then Notion, then CA). Edit{" "}
+        <strong>Status</strong>, <strong>Coach</strong> and <strong>Discovery</strong> right in the grid, or click a name to open the full editor
+        on the right. Funnel &amp; exits now live on the <strong>Metrics</strong> tab.
       </p>
 
       {error && <div className="error">{error}</div>}
 
+      <div className="mentee-layout">
+        <div className="mentee-layout__main">
       <div className="card card--inset" style={{ marginBottom: 16 }}>
         <div className="journey-filters">
           <label className="journey-filters__field">
@@ -439,8 +544,10 @@ export function MenteesView() {
           </>
         )}
       </div>
+        </div>
 
-      {selectedRow && selectedEff && (
+        {selectedRow && selectedEff && (
+          <aside className="mentee-panel">
         <div className="card" style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <h2 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
@@ -692,7 +799,9 @@ export function MenteesView() {
             </div>
           </div>
         </div>
-      )}
+        </aside>
+        )}
+      </div>
 
       {importing && <NotionImportModal userId={user?.id} onClose={() => setImporting(false)} onImported={onImported} />}
     </div>
