@@ -23,8 +23,18 @@ import {
   type CohortJourneyInput,
 } from "../lib/cohortCompare.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney.js";
-import { toEffectiveMentee, aggregateLegDurations, type MenteeRowLike } from "../lib/menteeView.js";
+import { toEffectiveMentee, aggregateLegDurations, reachedStage, type MenteeRowLike } from "../lib/menteeView.js";
 import { computeFunnel } from "../lib/menteeFunnel.js";
+import {
+  parseCsv,
+  parseNotionCsv,
+  stripNotionLink,
+  normalizeName,
+  reconcileCoach,
+  parseNotionDate,
+  planNotionUpsert,
+  type NotionImportRow,
+} from "../lib/notionCsv.js";
 import {
   gradientColors,
   resolveStageColors,
@@ -957,7 +967,11 @@ console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg 
     ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
     status_date: null, discovery_date_override: null, jumpstart_date_override: null,
     tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
-    graduation_date_override: null, owner_coach_id_override: null, is_test: false, ...o,
+    graduation_date_override: null, owner_coach_id_override: null,
+    notion_name: null, notion_status: null, notion_coach: null, notion_coach_conflict: false,
+    notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null,
+    notion_imported_at: null, pre_waiting_date_override: null, email_override: null,
+    phone_override: null, coach_override: null, is_test: false, ...o,
   });
   const today = "2026-06-24";
 
@@ -1024,7 +1038,11 @@ console.log("[22] Mentee management — funnel + exits (computeFunnel)");
     ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
     status_date: null, discovery_date_override: null, jumpstart_date_override: null,
     tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
-    graduation_date_override: null, owner_coach_id_override: null, is_test: false, ...o,
+    graduation_date_override: null, owner_coach_id_override: null,
+    notion_name: null, notion_status: null, notion_coach: null, notion_coach_conflict: false,
+    notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null,
+    notion_imported_at: null, pre_waiting_date_override: null, email_override: null,
+    phone_override: null, coach_override: null, is_test: false, ...o,
   });
   const t = "2026-06-24";
   const mentees = [
@@ -1048,6 +1066,111 @@ console.log("[22] Mentee management — funnel + exits (computeFunnel)");
   eq(byStage.get("graduated")!.activeHere, 0, "graduated not counted active");
   assert(Math.abs((byStage.get("discovery")!.conversionToNext ?? -1) - 0.75) < 1e-9, "discovery->jumpstart conversion 75%");
   assert(byStage.get("graduated")!.conversionToNext === null, "graduated has no next");
+}
+
+console.log("[23] Mentee management — Notion CSV importer (notionCsv)");
+{
+  // RFC4180: quoted comma, embedded newline, escaped "" quote.
+  const grid = parseCsv('Name,Note\n"Doe, John","li\nne"\nJane,"say ""hi"""\n');
+  eq(grid.length, 3, "parseCsv row count (header + 2)");
+  eq(grid[1][0], "Doe, John", "quoted comma preserved");
+  eq(grid[1][1], "li\nne", "embedded newline preserved");
+  eq(grid[2][1], 'say "hi"', "escaped quote unescaped");
+
+  // Notion page-link stripping.
+  eq(stripNotionLink("Arthur Nisly (https://app.notion.com/p/Arthur-Nisly-1a4?pvs=21)"), "Arthur Nisly", "strip notion link");
+  eq(stripNotionLink("Plain Name"), "Plain Name", "plain name untouched");
+
+  // Coach reconciliation (Mentor 1 + Mentor). Notion exports render person cells
+  // as `Name (https://app.notion.com/p/…)`; stripNotionLink removes that.
+  const c1 = reconcileCoach("Arthur Nisly (https://app.notion.com/p/x?pvs=21)", "Arthur Nisly (https://app.notion.com/p/y?pvs=21)");
+  assert(c1.value === "Arthur Nisly" && c1.conflict === false, "coach agree → no conflict");
+  const c2 = reconcileCoach("Arthur Nisly (https://app.notion.com/p/a?pvs=21)", "Bill Moser (https://app.notion.com/p/b?pvs=21)");
+  assert(c2.value === "Arthur Nisly" && c2.conflict === true, "coach disagree → conflict, prefer Mentor 1");
+  const c3 = reconcileCoach("“None Available” (Placeholder) (https://app.notion.com/p/n?pvs=21)", "");
+  assert(c3.value === null && c3.conflict === false, "none-placeholder → null coach");
+
+  // Name normalization + date parsing.
+  eq(normalizeName("  Dr.  Laverne   Miller "), "dr laverne miller", "normalize name");
+  eq(parseNotionDate("April 1, 2024"), "2024-04-01", "parse 'Month D, YYYY'");
+  eq(parseNotionDate("2024-04-01"), "2024-04-01", "parse ISO date");
+  assert(parseNotionDate("") === null, "blank date → null");
+
+  // End-to-end parse with the default HJG mapping.
+  const csv =
+    "Mentees Paired,Status,Mentor 1,Mentor,Email Address,Phone,DC Date,Offering Signup\n" +
+    'Daniel Strite,Done (Graduated),Arthur Nisly (https://app.notion.com/p/x?pvs=21),Arthur Nisly (https://app.notion.com/p/y?pvs=21),d@e.com,,"April 1, 2024",Arthur Nisly (https://app.notion.com/p/z?pvs=21)\n';
+  const { rows } = parseNotionCsv(csv);
+  eq(rows.length, 1, "parseNotionCsv row count");
+  eq(rows[0].name, "Daniel Strite", "mapped name");
+  eq(rows[0].notion_status, "Done (Graduated)", "mapped status");
+  eq(rows[0].notion_coach, "Arthur Nisly", "mapped+reconciled coach");
+  eq(rows[0].notion_coach_conflict, false, "no coach conflict");
+  eq(rows[0].notion_dc_date, "2024-04-01", "mapped dc date");
+
+  // Match planning: 1 match → update, 0 → insert, >1 → ambiguous.
+  const existing = [
+    { id: "e1", clientId: 1, name: "Daniel Strite" },
+    { id: "e2", clientId: 2, name: "Bryce Miller" },
+    { id: "e3", clientId: null, name: "Bryce Miller" },
+  ];
+  const importRows: NotionImportRow[] = [
+    { name: "daniel  strite", notion_status: null, notion_coach: null, notion_coach_conflict: false, notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null },
+    { name: "New Prospect", notion_status: null, notion_coach: null, notion_coach_conflict: false, notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null },
+    { name: "Bryce Miller", notion_status: null, notion_coach: null, notion_coach_conflict: false, notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null },
+  ];
+  const plan = planNotionUpsert(existing, importRows);
+  eq(plan.updates.length, 1, "1 matched → update");
+  eq(plan.updates[0].id, "e1", "matched the right id (normalized name)");
+  eq(plan.inserts.length, 1, "1 unmatched → insert");
+  eq(plan.ambiguous.length, 1, "1 homonym → ambiguous");
+  eq(plan.ambiguous[0].candidateIds.length, 2, "ambiguous has 2 candidates");
+}
+
+console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)");
+{
+  const b2 = (o: Partial<MenteeRowLike>): MenteeRowLike => ({
+    id: "x", client_id: 1, ca_name: null, ca_owner_coach_id: null, ca_owner_coach_name: null,
+    ca_discovery_date: null, ca_jumpstart_date: null, ca_tier_4x_date: null, ca_tier_2x_date: null,
+    ca_tier_1x_date: null, ca_graduation_date: null, ca_first_meeting: null, ca_last_meeting: null,
+    ca_meeting_count: 0, ca_jumpstart_end: null, ca_jyf_purchase_date: null, ca_start_date: null,
+    ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
+    status_date: null, discovery_date_override: null, jumpstart_date_override: null,
+    tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
+    graduation_date_override: null, owner_coach_id_override: null,
+    notion_name: null, notion_status: null, notion_coach: null, notion_coach_conflict: false,
+    notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null,
+    notion_imported_at: null, pre_waiting_date_override: null, email_override: null,
+    phone_override: null, coach_override: null, is_test: false, ...o,
+  });
+  const t = "2026-06-27";
+
+  // Notion status drives the effective status when there's no hand classification.
+  const pw = toEffectiveMentee(b2({ id: "PW", client_id: 1, notion_status: "Pre-Waiting List" }), t);
+  eq(pw.effectiveStatus, "active", "Pre-Waiting List → active");
+  eq(pw.mappedStage, "pre_waiting", "mapped stage pre_waiting");
+  assert(reachedStage(pw, "pre_waiting") && !reachedStage(pw, "discovery"), "reached pre_waiting only");
+
+  const coarse = toEffectiveMentee(b2({ id: "Q", client_id: 2, ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-02-01", notion_status: "Done (Quit OR No Mentoring)" }), t);
+  eq(coarse.effectiveStatus, "quit", "Done (Quit OR No Mentoring) → quit");
+  assert(coarse.coarseExit === true, "coarse exit flagged for hand refinement");
+
+  const imn = toEffectiveMentee(b2({ id: "I", client_id: 3, ca_discovery_date: "2026-01-01", notion_status: "IMN" }), t);
+  eq(imn.effectiveStatus, "imn", "IMN status");
+
+  const grad = toEffectiveMentee(b2({ id: "G", client_id: 4, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01", ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-09-01", notion_status: "Done (Graduated)" }), t);
+  const active4x = toEffectiveMentee(b2({ id: "A4", client_id: 5, ca_discovery_date: "2026-02-01", ca_jumpstart_date: "2026-03-01", ca_tier_4x_date: "2026-05-01", notion_status: "4x Mentoring" }), t);
+  const other = toEffectiveMentee(b2({ id: "O", client_id: 6, ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-02-01", notion_status: "Done (Other)" }), t);
+
+  const f = computeFunnel([pw, coarse, imn, grad, active4x, other]);
+  eq(f.imnCount, 1, "IMN excluded from funnel, counted separately");
+  eq(f.total, 5, "funnel total excludes IMN (6 - 1)");
+  const byStage = new Map(f.stages.map((s) => [s.stage, s]));
+  eq(byStage.get("pre_waiting")!.entered, 1, "1 entered pre_waiting (PW)");
+  eq(byStage.get("graduated")!.entered, 1, "1 graduated (G)");
+  eq(byStage.get("jumpstart")!.exits.quit, 1, "coarse quit attributed to jumpstart");
+  eq(byStage.get("jumpstart")!.exits.declined, 1, "Done (Other) → declined at jumpstart");
+  eq(byStage.get("4x")!.activeHere, 1, "active@4x (A4)");
 }
 
 console.log("");

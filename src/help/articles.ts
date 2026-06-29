@@ -150,37 +150,37 @@ Pure math lives in \`lib/compare.ts\`.`,
 
   "mentees.screen": {
     title: "Mentee management (source of truth)",
-    body: `HJG's **source of truth** for every mentee — one row per person, from their first discovery call through graduating, quitting, being fired, or being declined.
+    body: `HJG's **source of truth** for every mentee — one row per person, from the Pre-Waiting List / discovery call through graduating, quitting, being fired, declining, or going to no mentoring.
 
-### Two layers
-- **CA layer** — owner coach, pipeline stage dates, meeting counts, current tier, and a coarse status guess, all **derived from CoachAccountable** and **refreshed on every sync** (and by **Rebuild from CA**). The sync owns these.
-- **Hand layer** — **status** (active / graduated / quit / fired / paused / declined), the **stage** an exit/graduation happened at, **date corrections** (overrides), Notion info (email / phone / mentor), **notes**, and a **test** flag. These are **yours** and a sync **never** overwrites them.
-- The table and detail show the **effective** value: your hand edit wins over the CA value; your status wins over CA's guess. A mentee CA thinks is inactive but you haven't classified shows as **Unclassified**.
+### Three zones (none ever overwrites another)
+- **CA zone** — owner coach, pipeline stage dates, meeting counts, current tier, and a coarse status guess, all **derived from CoachAccountable** and **refreshed on every sync** (and by **Rebuild from CA**).
+- **Notion zone** — the human record **imported from your Notion export**: name, the Notion **Status**, the assigned **coach** (Mentor 1 / Mentor, which should agree), email, phone, the discovery (DC) date, and the offering signup. Refreshed each time you **Import Notion CSV**.
+- **Hand zone** — your **status** (active / graduated / quit / fired / no mentoring / declined / imn), the exit/grad **stage**, **date corrections** (overrides incl. Pre-Waiting), name/coach/email/phone **overrides**, **notes**, and a **test** flag. A sync and an import **never** touch these.
+- The table and detail show the **effective** value: **hand wins, then Notion, then CA**. A mentee nobody has classified shows as **Unclassified** (CA's guess).
 
 ### Using it
-- The **roster table** lists every mentee (status · stage · owner · key dates · meetings) with search, per-column sort, filters, and CSV. Click a name to open the detail.
-- In the **detail**, edit the hand layer (left) — blank a date override to fall back to the CA date — and review the **CA history** (engagements + meetings) on the right. **Save** writes only your hand layer.
-- **Rebuild from CA** recomputes the CA layer from the synced mirror (no CoachAccountable calls); **+ Add mentee** creates a hand-only prospect not yet in CA.
-- **Test / placeholder** mentees are excluded from the metrics (this replaces the old per-mentee exclusion list).
+- The **roster** lists every mentee (status · stage · coach · Notion status · key dates · meetings) with search, sort, a **first-class Status filter**, a Coach filter, a **Conflicts-only** toggle, and CSV. A **⚠** marks rows where the zones disagree or a coarse Notion exit needs classifying. Click a name to open the detail.
+- The detail's **Data sources** table shows CoachAccountable · Notion · Effective side-by-side; **→ hand** copies a value into your edit. Below, edit the hand zone and **Save** (writes only your hand zone).
+- **Import Notion CSV** loads/refreshes the Notion zone (matched to existing mentees by name; never clobbers CA or your edits). **Rebuild from CA** recomputes the CA zone. **+ Add mentee** creates a hand-only prospect.
+- **Funnel & exits** now live on the **Metrics** tab.
 
-Pure logic in \`lib/menteeJourney.ts\` (CA derivation) + \`lib/menteeView.ts\` (effective view-model).`,
+Pure logic in \`lib/menteeJourney.ts\` (CA) + \`lib/notionCsv.ts\` (import) + \`lib/menteeView.ts\` (effective view-model + conflicts).`,
   },
 
-  "mentees.funnel": {
-    title: "Funnel & exits",
-    body: `Where mentees are in HJG's branching funnel and where they leak out: **Discovery → JumpStart → 4x → 2x → 1x → Graduated**.
+  "metrics.funnel": {
+    title: "Mentee funnel & exits",
+    body: `Where mentees are in HJG's branching funnel and where they leak out: **Pre-Waiting → Discovery → JumpStart → 4x → 2x → 1x → Graduated**. Built off the **effective** mentee data (CA + Notion + your edits); lives on Metrics, sourced from the Mentees source of truth.
 
 ### What each column means
-- **Entered** — how many mentees reached that stage (its effective date is set). A mentee who **graduates directly from 4x or 2x** is counted at the stages they actually entered, not the ones they skipped.
-- **Active here** — mentees currently sitting at that stage (not yet exited or graduated).
-- **Exited** — terminal exits attributed to that stage, shown as **declined / quit / fired**: *declined* (didn't continue after a discovery call), *quit* (e.g. financial), *fired* (staff ended it). The exit is placed at the hand-set exit stage, else the furthest stage the mentee reached. (*Paused* mentees aren't counted as exited.)
+- **Entered** — how many reached that stage. Mentoring stages use the stage's effective date; the rare **Pre-Waiting** stage and a Notion-only mentee's stage come from their status. A mentee who **graduates directly from 4x or 2x** is counted only at stages they actually entered.
+- **Active here** — mentees currently sitting at that stage (not exited or graduated).
+- **Exited** — terminal exits at that stage, shown **declined / quit / fired / no mentoring**, placed at the hand-set exit stage, else the furthest stage reached. Notion lumps *quit/no-mentoring* and *other* together — classify them precisely on the mentee's detail card.
 - **→ Next** — conversion to the next stage = entered(next) ÷ entered(this).
 
 ### Notes
-- Counts cover **all non-test mentees** and use the **effective** dates/status (your hand edits win over CA). Mark a mentee **test** on its detail card to drop it.
-- Classify exits on a mentee's detail card (status + exit/grad stage) so they land at the right stage here.
+- Covers **all non-test mentees**; **IMN** (Independent Mentor) mentees are kept on the roster but **excluded** from the funnel and counted separately. Optionally filter by **coach**.
 
-Pure logic in \`lib/menteeFunnel.ts\`.`,
+Pure logic in \`lib/menteeFunnel.ts\` + \`lib/menteeView.ts\`.`,
   },
 
   "metrics.pipelineTiming": {

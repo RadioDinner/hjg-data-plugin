@@ -93,15 +93,40 @@ export type { StageBasis };
 export { monthsAgoYmd, inStartWindow, summarizeCohort, startWindowLabel, COHORT_TIERS } from "../lib/cohortCompare";
 export type { CohortJourneyInput, CohortStats, CohortTier, StartWindow } from "../lib/cohortCompare";
 
-// Pure CA-layer derivation + effective view-model for the rebuilt Mentee management
-// system (migration 9975).
+// Pure CA-layer derivation + effective view-model for the rewritten Mentee
+// management system (migration 9974 — three write zones: ca_* / notion_* / hand).
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney";
-import { toEffectiveMentee } from "../lib/menteeView";
+import { toEffectiveMentee, type MenteeMgmtStatus } from "../lib/menteeView";
+import { planNotionUpsert, type NotionImportRow, type ExistingMentee } from "../lib/notionCsv";
 import { computeMeetingsToFreedom } from "../lib/freedom";
-export { toEffectiveMentee, aggregateLegDurations, MENTEE_STATUSES, MENTEE_EXIT_STATUSES, FUNNEL_STAGES } from "../lib/menteeView";
-export type { EffectiveMentee, FunnelStage } from "../lib/menteeView";
+export {
+  toEffectiveMentee,
+  reachedStage,
+  aggregateLegDurations,
+  mapNotionStatus,
+  NOTION_STATUS_MAP,
+  MENTEE_STATUSES,
+  MENTEE_EXIT_STATUSES,
+  OUT_OF_FUNNEL_STATUSES,
+  FUNNEL_STAGES,
+} from "../lib/menteeView";
+export type { EffectiveMentee, FunnelStage, MenteeMgmtStatus, MenteeConflict, NotionStatusMapping } from "../lib/menteeView";
 export { computeFunnel } from "../lib/menteeFunnel";
-export type { FunnelReport, FunnelStageStat } from "../lib/menteeFunnel";
+export type { FunnelReport, FunnelStageStat, FunnelExits } from "../lib/menteeFunnel";
+// Notion CSV ingestion (pure parse/match; the upsert lives in upsertMenteeNotion).
+export {
+  parseCsv,
+  parseNotionCsv,
+  buildHeaderIndex,
+  mapRowToNotion,
+  stripNotionLink,
+  normalizeName,
+  reconcileCoach,
+  parseNotionDate,
+  planNotionUpsert,
+  DEFAULT_NOTION_MAP,
+} from "../lib/notionCsv";
+export type { NotionImportRow, NotionColumnMap, NotionUpsertPlan, ExistingMentee } from "../lib/notionCsv";
 
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
@@ -738,13 +763,11 @@ export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
 // in Phase 2.)
 // ============================================================================
 
-export type MenteeMgmtStatus = "active" | "graduated" | "quit" | "fired" | "paused" | "declined";
-
-// The raw `mentees` row (both layers). Effective values are derived in the view.
+// The raw `mentees` row (all three zones). Effective values are derived in the view.
 export interface MenteeRow {
   id: string;
   client_id: number | null;
-  // CA layer (sync-owned, refreshed each sync)
+  // CA zone (sync-owned, refreshed each sync)
   ca_name: string | null;
   ca_owner_coach_id: number | null;
   ca_owner_coach_name: string | null;
@@ -764,11 +787,22 @@ export interface MenteeRow {
   ca_has_open: boolean;
   ca_status: string | null;
   ca_synced_at: string | null;
-  // hand layer (staff-owned, source of truth)
+  // Notion zone (importer-owned, refreshed each re-import)
+  notion_name: string | null;
+  notion_status: string | null;
+  notion_coach: string | null;
+  notion_coach_conflict: boolean;
+  notion_email: string | null;
+  notion_phone: string | null;
+  notion_dc_date: string | null;
+  notion_offering_signup: string | null;
+  notion_imported_at: string | null;
+  // hand zone (staff-owned, source of truth)
   name_override: string | null;
   status: MenteeMgmtStatus | null;
   status_stage: string | null;
   status_date: string | null;
+  pre_waiting_date_override: string | null;
   discovery_date_override: string | null;
   jumpstart_date_override: string | null;
   tier_4x_date_override: string | null;
@@ -776,17 +810,16 @@ export interface MenteeRow {
   tier_1x_date_override: string | null;
   graduation_date_override: string | null;
   owner_coach_id_override: number | null;
-  email: string | null;
-  phone: string | null;
-  mentor: string | null;
-  notion_status: string | null;
+  email_override: string | null;
+  phone_override: string | null;
+  coach_override: string | null;
   notes: string | null;
   is_test: boolean;
   created_at: string;
   updated_at: string;
 }
 
-// The hand-layer fields a staff member can edit (everything except ca_* + meta).
+// The hand-zone fields a staff member can edit (never ca_* or notion_* or meta).
 export type MenteeHandEdit = Partial<
   Pick<
     MenteeRow,
@@ -794,6 +827,7 @@ export type MenteeHandEdit = Partial<
     | "status"
     | "status_stage"
     | "status_date"
+    | "pre_waiting_date_override"
     | "discovery_date_override"
     | "jumpstart_date_override"
     | "tier_4x_date_override"
@@ -801,25 +835,72 @@ export type MenteeHandEdit = Partial<
     | "tier_1x_date_override"
     | "graduation_date_override"
     | "owner_coach_id_override"
-    | "email"
-    | "phone"
-    | "mentor"
-    | "notion_status"
+    | "email_override"
+    | "phone_override"
+    | "coach_override"
     | "notes"
     | "is_test"
   >
 >;
 
 const MENTEE_MGMT_SELECT =
-  "id,client_id,ca_name,ca_owner_coach_id,ca_owner_coach_name,ca_discovery_date,ca_jumpstart_date,ca_tier_4x_date,ca_tier_2x_date,ca_tier_1x_date,ca_graduation_date,ca_first_meeting,ca_last_meeting,ca_meeting_count,ca_current_tier,ca_jumpstart_end,ca_jyf_purchase_date,ca_start_date,ca_has_open,ca_status,ca_synced_at,name_override,status,status_stage,status_date,discovery_date_override,jumpstart_date_override,tier_4x_date_override,tier_2x_date_override,tier_1x_date_override,graduation_date_override,owner_coach_id_override,email,phone,mentor,notion_status,notes,is_test,created_at,updated_at";
+  "id,client_id,ca_name,ca_owner_coach_id,ca_owner_coach_name,ca_discovery_date,ca_jumpstart_date,ca_tier_4x_date,ca_tier_2x_date,ca_tier_1x_date,ca_graduation_date,ca_first_meeting,ca_last_meeting,ca_meeting_count,ca_current_tier,ca_jumpstart_end,ca_jyf_purchase_date,ca_start_date,ca_has_open,ca_status,ca_synced_at,notion_name,notion_status,notion_coach,notion_coach_conflict,notion_email,notion_phone,notion_dc_date,notion_offering_signup,notion_imported_at,name_override,status,status_stage,status_date,pre_waiting_date_override,discovery_date_override,jumpstart_date_override,tier_4x_date_override,tier_2x_date_override,tier_1x_date_override,graduation_date_override,owner_coach_id_override,email_override,phone_override,coach_override,notes,is_test,created_at,updated_at";
 
 // All mentees (both layers), ordered by effective name.
 export async function fetchMentees(): Promise<MenteeRow[]> {
   const { data, error } = await supabase.from("mentees").select(MENTEE_MGMT_SELECT);
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as MenteeRow[];
-  rows.sort((a, b) => (a.name_override ?? a.ca_name ?? "").localeCompare(b.name_override ?? b.ca_name ?? ""));
+  const eff = (r: MenteeRow) => r.name_override ?? r.notion_name ?? r.ca_name ?? "";
+  rows.sort((a, b) => eff(a).localeCompare(eff(b)));
   return rows;
+}
+
+// Import a parsed Notion export into the NOTION zone. Matches each row to an
+// existing mentee by normalized name (planNotionUpsert), then writes ONLY the
+// notion_* columns + notion_imported_at — never ca_* or hand fields — so a
+// re-import refreshes the Notion zone without clobbering anything. Unmatched
+// rows insert a new Notion-only mentee (client_id null); rows that match >1
+// existing mentee are skipped and returned as `ambiguous` for manual handling.
+export interface NotionImportResult {
+  updated: number;
+  inserted: number;
+  ambiguous: { name: string; candidateIds: string[] }[];
+}
+export async function upsertMenteeNotion(rows: NotionImportRow[], userId?: string): Promise<NotionImportResult> {
+  const { data, error } = await supabase.from("mentees").select("id,client_id,ca_name,notion_name,name_override");
+  if (error) throw new Error(error.message);
+  const existing: ExistingMentee[] = ((data ?? []) as { id: string; client_id: number | null; ca_name: string | null; notion_name: string | null; name_override: string | null }[]).map(
+    (r) => ({ id: r.id, clientId: r.client_id, name: r.name_override ?? r.notion_name ?? r.ca_name })
+  );
+  const plan = planNotionUpsert(existing, rows);
+  const importedAt = new Date().toISOString();
+  const toNotionCols = (row: NotionImportRow) => ({
+    notion_name: row.name || null,
+    notion_status: row.notion_status,
+    notion_coach: row.notion_coach,
+    notion_coach_conflict: row.notion_coach_conflict,
+    notion_email: row.notion_email,
+    notion_phone: row.notion_phone,
+    notion_dc_date: row.notion_dc_date,
+    notion_offering_signup: row.notion_offering_signup,
+    notion_imported_at: importedAt,
+  });
+
+  // Updates: write only notion_* on the matched id.
+  for (const u of plan.updates) {
+    const { error: uErr } = await supabase.from("mentees").update(toNotionCols(u.row)).eq("id", u.id);
+    if (uErr) throw new Error(uErr.message);
+  }
+  // Inserts: new Notion-only rows (client_id stays null).
+  if (plan.inserts.length) {
+    const payload = plan.inserts.map((row) => ({ ...toNotionCols(row), created_by: userId || null }));
+    for (let i = 0; i < payload.length; i += 500) {
+      const { error: iErr } = await supabase.from("mentees").insert(payload.slice(i, i + 500));
+      if (iErr) throw new Error(iErr.message);
+    }
+  }
+  return { updated: plan.updates.length, inserted: plan.inserts.length, ambiguous: plan.ambiguous };
 }
 
 // Persist hand-layer edits for one mentee (by uuid PK). Never writes ca_* columns.

@@ -26,6 +26,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "metrics.capacity": 9,
   "metrics.resource": 10,
   "metrics.pipelineTiming": 11, // §102 leg-timing moved here in the mentee-mgmt rework
+  "metrics.funnel": 12, // mentee funnel + exits, moved from Mentees → Metrics (2026-06-27)
 
   // 1xx — Journeys (RETIRED 2026-06-24 — the Journeys tab was removed in the mentee-
   // management rework. Numbers kept reserved per the append-only rule; do not reuse.)
@@ -57,8 +58,8 @@ export const UI_SECTIONS: Record<string, number> = {
   // 5xx — Mentees (rebuilt mentee management, 2026-06-24)
   "mentees.screen": 501,
   "mentees.roster": 502,
-  "mentees.detail": 503,
-  "mentees.funnel": 504,
+  "mentees.detail": 503, // per-mentee detail incl. the 3-source (CA/Notion/hand) panel
+  "mentees.funnel": 504, // RETIRED 2026-06-27 — funnel moved to Metrics (metrics.funnel=12). Reserved.
 
   // 6xx — Margins
   "margins.screen": 601,

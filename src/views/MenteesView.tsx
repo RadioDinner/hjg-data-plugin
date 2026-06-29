@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuth } from "../auth";
 import {
   fetchMentees,
@@ -11,7 +10,7 @@ import {
   fetchCompanyOptions,
   stageColorsFromRaw,
   toEffectiveMentee,
-  computeFunnel,
+  mapNotionStatus,
   DEFAULT_STAGE_COLORS,
   MENTEE_STATUSES,
   type MenteeRow,
@@ -20,15 +19,17 @@ import {
   type EffectiveMentee,
   type MenteeMeetingLite,
   type MenteeEngagementLite,
+  type NotionImportResult,
 } from "../db";
 import { SortableTable, type SortColumn, type Row } from "../components/SortableTable";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
-import { fmtDate, pct } from "../format";
-import { useChartTokens } from "../theme";
+import { NotionImportModal } from "../components/NotionImportModal";
+import { fmtDate } from "../format";
 
-// The funnel stages, in order, with display labels + the stage-palette index used
-// for the rail colors (0 Discovery … 5 Graduation — matches journeys_stage_colors).
+// The per-mentee rail: the 6 canonical pipeline stages (Discovery … Graduation),
+// matched to the 6-color journeys_stage_colors palette. (pre_waiting is a rare
+// holding stage shown on the funnel, not the individual rail.)
 const STAGES: { key: string; label: string; colorIndex: number; reached: (m: EffectiveMentee) => string | null }[] = [
   { key: "discovery", label: "Discovery", colorIndex: 0, reached: (m) => m.discoveryDate },
   { key: "jumpstart", label: "JumpStart", colorIndex: 1, reached: (m) => m.jumpstartDate },
@@ -38,20 +39,46 @@ const STAGES: { key: string; label: string; colorIndex: number; reached: (m: Eff
   { key: "graduated", label: "Graduated", colorIndex: 5, reached: (m) => m.graduationDate },
 ];
 
+const STATUS_LABELS: Record<MenteeMgmtStatus, string> = {
+  active: "Active", graduated: "Graduated", quit: "Quit", fired: "Fired", no_mentoring: "No mentoring", declined: "Declined", imn: "IMN",
+};
 const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "— Unclassified (use CA guess) —" },
-  ...MENTEE_STATUSES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })),
+  { value: "", label: "— Unclassified (use Notion / CA) —" },
+  ...MENTEE_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] })),
 ];
-const STATUS_STAGE_OPTIONS = ["", "discovery", "jumpstart", "4x", "2x", "1x"];
+const STATUS_STAGE_OPTIONS = ["", "pre_waiting", "discovery", "jumpstart", "4x", "2x", "1x"];
 
-// Pill class per effective status (reuses the mentee-status pill palette).
+// First-class roster status filter (on the effective resolved status).
+const STATUS_FILTERS: { value: string; label: string }[] = [
+  { value: "all", label: "Any" },
+  { value: "active", label: "Active" },
+  { value: "graduated", label: "Graduated" },
+  { value: "declined", label: "Declined" },
+  { value: "quit", label: "Quit" },
+  { value: "fired", label: "Fired" },
+  { value: "no_mentoring", label: "No mentoring" },
+  { value: "imn", label: "IMN" },
+  { value: "inactive", label: "Unclassified" },
+];
+const STAGE_FILTERS: { value: string; label: string }[] = [
+  { value: "all", label: "Any" },
+  { value: "pre_waiting", label: "Pre-Waiting" },
+  { value: "discovery", label: "Discovery" },
+  { value: "jumpstart", label: "JumpStart" },
+  { value: "4x", label: "4x" },
+  { value: "2x", label: "2x" },
+  { value: "1x", label: "1x" },
+  { value: "graduated", label: "Graduated" },
+];
+
 function pillClass(m: EffectiveMentee): string {
-  const s = m.status ?? (m.caStatus === "graduated" ? "graduated" : m.caStatus === "active" ? "active" : "inactive");
+  const s = m.effectiveStatus ?? (m.caStatus === "graduated" ? "graduated" : m.caStatus === "active" ? "active" : "inactive");
   return `pill pill--mentee-${s}`;
 }
 
-// The six effective stage-date override fields, paired with their CA value for the hint.
-const DATE_FIELDS: { key: keyof MenteeHandEdit; label: string; ca: keyof MenteeRow }[] = [
+// The stage-date override fields, paired with their CA value for the hint.
+const DATE_FIELDS: { key: keyof MenteeHandEdit; label: string; ca?: keyof MenteeRow }[] = [
+  { key: "pre_waiting_date_override", label: "Pre-Waiting" },
   { key: "discovery_date_override", label: "Discovery", ca: "ca_discovery_date" },
   { key: "jumpstart_date_override", label: "JumpStart", ca: "ca_jumpstart_date" },
   { key: "tier_4x_date_override", label: "4x", ca: "ca_tier_4x_date" },
@@ -60,23 +87,23 @@ const DATE_FIELDS: { key: keyof MenteeHandEdit; label: string; ca: keyof MenteeR
   { key: "graduation_date_override", label: "Graduation", ca: "ca_graduation_date" },
 ];
 
-// Build the hand-layer draft from a row (only the editable fields).
+// Build the hand-zone draft from a row (only the editable fields).
 function draftFromRow(r: MenteeRow): MenteeHandEdit {
   return {
     name_override: r.name_override ?? "",
     status: r.status,
     status_stage: r.status_stage,
     status_date: r.status_date,
+    pre_waiting_date_override: r.pre_waiting_date_override,
     discovery_date_override: r.discovery_date_override,
     jumpstart_date_override: r.jumpstart_date_override,
     tier_4x_date_override: r.tier_4x_date_override,
     tier_2x_date_override: r.tier_2x_date_override,
     tier_1x_date_override: r.tier_1x_date_override,
     graduation_date_override: r.graduation_date_override,
-    email: r.email ?? "",
-    phone: r.phone ?? "",
-    mentor: r.mentor ?? "",
-    notion_status: r.notion_status ?? "",
+    email_override: r.email_override ?? "",
+    phone_override: r.phone_override ?? "",
+    coach_override: r.coach_override ?? "",
     notes: r.notes ?? "",
     is_test: r.is_test,
   };
@@ -84,13 +111,13 @@ function draftFromRow(r: MenteeRow): MenteeHandEdit {
 
 export function MenteesView() {
   const { user } = useAuth();
-  const ct = useChartTokens();
   const [rows, setRows] = useState<MenteeRow[]>([]);
   const [stageColors, setStageColors] = useState<string[]>(DEFAULT_STAGE_COLORS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rebuilding, setRebuilding] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -98,6 +125,7 @@ export function MenteesView() {
   const [stageF, setStageF] = useState<string>("all");
   const [ownerF, setOwnerF] = useState<string>("all");
   const [hideTest, setHideTest] = useState(true);
+  const [conflictsOnly, setConflictsOnly] = useState(false);
 
   // Selection + detail
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -140,18 +168,13 @@ export function MenteesView() {
   }, [rows, today]);
   const effective = useMemo(() => [...effById.values()], [effById]);
 
-  // Funnel over ALL non-test mentees (board view, independent of the roster filters).
-  const funnel = useMemo(() => computeFunnel(effective), [effective]);
-  const funnelChart = useMemo(
-    () => funnel.stages.map((s, i) => ({ stage: s.label, entered: s.entered, color: stageColors[i] ?? ct.accent })),
-    [funnel, stageColors, ct.accent]
-  );
-
   const owners = useMemo(() => {
     const s = new Set<string>();
     for (const m of effective) if (!m.isTest && m.ownerCoachName) s.add(m.ownerCoachName);
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [effective]);
+
+  const conflictCount = useMemo(() => effective.filter((m) => !m.isTest && (m.conflicts.length > 0 || m.coarseExit)).length, [effective]);
 
   // Apply filters.
   const filtered = useMemo(() => {
@@ -159,12 +182,13 @@ export function MenteesView() {
     return effective.filter((m) => {
       if (hideTest && m.isTest) return false;
       if (statusF !== "all" && m.resolvedStatus !== statusF) return false;
-      if (stageF !== "all" && (m.currentStage ?? "discovery") !== stageF) return false;
+      if (stageF !== "all" && m.currentStage !== stageF) return false;
       if (ownerF !== "all" && m.ownerCoachName !== ownerF) return false;
+      if (conflictsOnly && m.conflicts.length === 0 && !m.coarseExit) return false;
       if (q && !m.name.toLowerCase().includes(q) && !(m.ownerCoachName ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [effective, search, statusF, stageF, ownerF, hideTest]);
+  }, [effective, search, statusF, stageF, ownerF, hideTest, conflictsOnly]);
 
   const columns: SortColumn[] = [
     {
@@ -173,6 +197,11 @@ export function MenteesView() {
       format: (r: Row) => (
         <button className="linkbtn" onClick={() => setSelectedId(String(r._id))} title="Open mentee">
           {String(r.name)}
+          {r.conflict ? (
+            <span className="pill" style={{ marginLeft: 6 }} title="CA / Notion / hand disagree, or a coarse Notion exit to classify">
+              ⚠
+            </span>
+          ) : null}
           {r.test ? (
             <span className="pill" style={{ marginLeft: 6 }}>
               test
@@ -183,9 +212,9 @@ export function MenteesView() {
     },
     { key: "status", label: "Status" },
     { key: "stage", label: "Stage" },
-    { key: "owner", label: "Owner" },
+    { key: "coach", label: "Coach" },
+    { key: "notionStatus", label: "Notion status" },
     { key: "discovery", label: "Discovery" },
-    { key: "started", label: "Started" },
     { key: "lastMeeting", label: "Last meeting" },
     { key: "meetings", label: "Meetings", numeric: true },
   ];
@@ -194,11 +223,12 @@ export function MenteesView() {
     _id: m.id,
     name: m.name,
     test: m.isTest,
+    conflict: m.conflicts.length > 0 || m.coarseExit,
     status: m.statusLabel,
-    stage: m.currentStage ? STAGES.find((s) => s.key === m.currentStage)?.label ?? m.currentStage : "—",
-    owner: m.ownerCoachName ?? "—",
+    stage: m.currentStage ? STAGE_FILTERS.find((s) => s.value === m.currentStage)?.label ?? m.currentStage : "—",
+    coach: m.ownerCoachName ?? "—",
+    notionStatus: m.notionStatus ?? "—",
     discovery: m.discoveryDate ?? "",
-    started: m.startDate ?? "",
     lastMeeting: m.lastMeeting ?? "",
     meetings: m.meetingCount,
   }));
@@ -286,6 +316,28 @@ export function MenteesView() {
     }
   }
 
+  function onImported(r: NotionImportResult) {
+    setImporting(false);
+    load();
+    const amb = r.ambiguous.length ? ` · ${r.ambiguous.length} ambiguous (skipped: ${r.ambiguous.map((a) => a.name).join(", ")})` : "";
+    setNote(`Imported Notion — ${r.updated} updated, ${r.inserted} added${amb}`);
+    setTimeout(() => setNote(null), 6000);
+  }
+
+  // Three-source rows for the selected mentee's detail panel.
+  const conflictFields = useMemo(() => new Set((selectedEff?.conflicts ?? []).map((c) => c.field)), [selectedEff]);
+  type SourceRow = { field: string; label: string; ca: string | null; notion: string | null; eff: string | null; acceptCa?: () => void; acceptNotion?: () => void };
+  const sources: SourceRow[] = selectedRow && selectedEff
+    ? [
+        { field: "name", label: "Name", ca: selectedRow.ca_name, notion: selectedRow.notion_name, eff: selectedEff.name, acceptCa: () => setDraftField("name_override", selectedRow.ca_name ?? ""), acceptNotion: () => setDraftField("name_override", selectedRow.notion_name ?? "") },
+        { field: "coach", label: "Coach", ca: selectedRow.ca_owner_coach_name, notion: selectedRow.notion_coach, eff: selectedEff.ownerCoachName, acceptCa: () => setDraftField("coach_override", selectedRow.ca_owner_coach_name ?? ""), acceptNotion: () => setDraftField("coach_override", selectedRow.notion_coach ?? "") },
+        { field: "email", label: "Email", ca: null, notion: selectedRow.notion_email, eff: selectedEff.email, acceptNotion: () => setDraftField("email_override", selectedRow.notion_email ?? "") },
+        { field: "phone", label: "Phone", ca: null, notion: selectedRow.notion_phone, eff: selectedEff.phone, acceptNotion: () => setDraftField("phone_override", selectedRow.notion_phone ?? "") },
+        { field: "discoveryDate", label: "Discovery date", ca: fmtDate(selectedRow.ca_discovery_date) || null, notion: fmtDate(selectedRow.notion_dc_date) || null, eff: fmtDate(selectedEff.discoveryDate) || null, acceptCa: () => setDraftField("discovery_date_override", selectedRow.ca_discovery_date), acceptNotion: () => setDraftField("discovery_date_override", selectedRow.notion_dc_date) },
+        { field: "status", label: "Status", ca: selectedRow.ca_status, notion: selectedRow.notion_status, eff: selectedEff.statusLabel, acceptNotion: () => { const m = mapNotionStatus(selectedRow.notion_status); if (m) setDraftField("status", m.status); } },
+      ]
+    : [];
+
   return (
     <div className="view">
       <div className="view__header">
@@ -295,6 +347,9 @@ export function MenteesView() {
         </h1>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {note && <span className="pill pill--success">{note}</span>}
+          <button className="btn btn--sm" onClick={() => setImporting(true)} title="Import a Notion Mentees Database CSV into the Notion zone (matched by name; never clobbers CA or your edits)">
+            Import Notion CSV
+          </button>
           <button className="btn btn--sm" onClick={addMentee}>
             + Add mentee
           </button>
@@ -302,80 +357,20 @@ export function MenteesView() {
             className="btn btn--sm"
             onClick={rebuild}
             disabled={rebuilding}
-            title="Recompute the CA layer from the synced mirror (no CoachAccountable calls). Your hand edits are untouched."
+            title="Recompute the CA zone from the synced mirror (no CoachAccountable calls). Your hand edits + Notion data are untouched."
           >
             {rebuilding ? "Rebuilding…" : "Rebuild from CA"}
           </button>
         </div>
       </div>
       <p className="view__hint">
-        HJG's <strong>source of truth</strong> for every mentee. Each row has a <strong>CA layer</strong> (refreshed from
-        CoachAccountable on every sync) and a <strong>hand layer</strong> (status, corrections, notes — yours, never
-        overwritten by a sync). The table shows the <strong>effective</strong> value (your edit wins over CA).
+        HJG's <strong>source of truth</strong> for every mentee. Each row blends three zones — a <strong>CA zone</strong> (refreshed from
+        CoachAccountable every sync), a <strong>Notion zone</strong> (imported from your Notion export), and a <strong>hand zone</strong>
+        (your edits, never overwritten). The table shows the <strong>effective</strong> value (hand wins, then Notion, then CA). Funnel &amp;
+        exits now live on the <strong>Metrics</strong> tab.
       </p>
 
       {error && <div className="error">{error}</div>}
-
-      {/* Funnel + exits */}
-      <div className="card card--inset" style={{ marginBottom: 16 }}>
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          Funnel &amp; exits <HelpButton id="mentees.funnel" label="Funnel & exits" />
-          <SectionId id="mentees.funnel" />
-        </h2>
-        <p className="view__hint">
-          How many mentees <strong>entered</strong> each stage, who's still <strong>active</strong> there, who <strong>exited</strong>
-          {" "}there (declined / quit / fired), and the <strong>conversion</strong> to the next stage. Graduation can happen directly
-          from 4x or 2x. All non-test mentees ({funnel.total}); not affected by the filters below.
-        </p>
-        <div className="chart-card__split chart-card__split--both">
-          <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={funnelChart} layout="vertical" margin={{ left: 8, right: 40 }}>
-                <CartesianGrid stroke={ct.grid} horizontal={false} />
-                <XAxis type="number" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} allowDecimals={false} />
-                <YAxis type="category" dataKey="stage" width={80} tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
-                <Tooltip
-                  contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText }}
-                  cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                />
-                <Bar dataKey="entered" radius={[0, 3, 3, 0]}>
-                  {funnelChart.map((d, i) => (
-                    <Cell key={i} fill={d.color} />
-                  ))}
-                  <LabelList dataKey="entered" position="right" style={{ fill: ct.axis, fontSize: 11 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="table-scroll" style={{ width: "100%" }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Stage</th>
-                  <th>Entered</th>
-                  <th>Active here</th>
-                  <th>Exited (declined / quit / fired)</th>
-                  <th>→ Next</th>
-                </tr>
-              </thead>
-              <tbody>
-                {funnel.stages.map((s) => (
-                  <tr key={s.stage}>
-                    <td>{s.label}</td>
-                    <td className="num">{s.entered}</td>
-                    <td className="num">{s.activeHere}</td>
-                    <td className="num">
-                      {s.exitedHere}
-                      {s.exitedHere > 0 ? ` (${s.exits.declined}/${s.exits.quit}/${s.exits.fired})` : ""}
-                    </td>
-                    <td className="num">{s.conversionToNext == null ? "—" : pct(s.conversionToNext)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
 
       <div className="card card--inset" style={{ marginBottom: 16 }}>
         <div className="journey-filters">
@@ -386,22 +381,18 @@ export function MenteesView() {
           <label className="journey-filters__field">
             <span>Status</span>
             <select value={statusF} onChange={(e) => setStatusF(e.target.value)}>
-              <option value="all">Any</option>
-              <option value="active">Active</option>
-              <option value="graduated">Graduated</option>
-              <option value="quit">Quit</option>
-              <option value="fired">Fired</option>
-              <option value="paused">Paused</option>
-              <option value="declined">Declined</option>
-              <option value="inactive">Inactive (unclassified)</option>
+              {STATUS_FILTERS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="journey-filters__field">
             <span>Stage</span>
             <select value={stageF} onChange={(e) => setStageF(e.target.value)}>
-              <option value="all">Any</option>
-              {STAGES.map((s) => (
-                <option key={s.key} value={s.key}>
+              {STAGE_FILTERS.map((s) => (
+                <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
               ))}
@@ -409,7 +400,7 @@ export function MenteesView() {
           </label>
           {owners.length > 0 && (
             <label className="journey-filters__field">
-              <span>Owner</span>
+              <span>Coach</span>
               <select value={ownerF} onChange={(e) => setOwnerF(e.target.value)}>
                 <option value="all">Any</option>
                 {owners.map((o) => (
@@ -420,6 +411,10 @@ export function MenteesView() {
               </select>
             </label>
           )}
+          <label className="journey-filters__check" title="Only mentees where CA / Notion / hand disagree, or a coarse Notion exit needs classifying">
+            <input type="checkbox" checked={conflictsOnly} onChange={(e) => setConflictsOnly(e.target.checked)} />
+            <span>Conflicts only ({conflictCount})</span>
+          </label>
           <label className="journey-filters__check">
             <input type="checkbox" checked={hideTest} onChange={(e) => setHideTest(e.target.checked)} />
             <span>Hide test mentees</span>
@@ -451,10 +446,23 @@ export function MenteesView() {
             </button>
           </div>
           <p className="view__hint" style={{ marginTop: 4 }}>
-            Owner: <strong>{selectedEff.ownerCoachName ?? "—"}</strong> · {selectedEff.meetingCount} meetings ·{" "}
-            {selectedRow.client_id != null ? `CA client #${selectedRow.client_id}` : "hand-added (no CA client)"} · CA synced:{" "}
-            {selectedRow.ca_synced_at ? fmtDate(selectedRow.ca_synced_at) : "—"}
+            Coach: <strong>{selectedEff.ownerCoachName ?? "—"}</strong> · {selectedEff.meetingCount} meetings ·{" "}
+            {selectedRow.client_id != null ? `CA client #${selectedRow.client_id}` : "Notion-only (no CA client)"} · CA synced:{" "}
+            {selectedRow.ca_synced_at ? fmtDate(selectedRow.ca_synced_at) : "—"} · Notion imported:{" "}
+            {selectedRow.notion_imported_at ? fmtDate(selectedRow.notion_imported_at) : "—"}
           </p>
+
+          {selectedEff.coarseExit && (
+            <div className="notice notice--warn" style={{ marginBottom: 8 }}>
+              Notion records this exit coarsely (<strong>{selectedEff.notionStatus}</strong>). Classify it precisely below — set the real
+              status (quit / no mentoring / fired / declined) and the exit stage.
+            </div>
+          )}
+          {selectedEff.notionCoachConflict && (
+            <div className="notice notice--warn" style={{ marginBottom: 8 }}>
+              Notion's <strong>Mentor 1</strong> and <strong>Mentor</strong> disagree for this mentee — they should match. Set the coach by hand below.
+            </div>
+          )}
 
           {/* Stage rail (effective dates) */}
           <div className="mentee-rail">
@@ -471,25 +479,73 @@ export function MenteesView() {
             })}
           </div>
 
+          {/* Three-source provenance + accept-into-hand */}
+          <h3 style={{ marginBottom: 6 }}>Data sources — CoachAccountable · Notion · your edits</h3>
+          <div className="table-scroll" style={{ marginBottom: 14 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>CoachAccountable</th>
+                  <th>Notion</th>
+                  <th>Effective</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sources.map((s) => {
+                  const conflict = conflictFields.has(s.field);
+                  return (
+                    <tr key={s.field} style={conflict ? { background: "rgba(245,158,11,0.10)" } : undefined}>
+                      <td>
+                        {s.label}
+                        {conflict ? (
+                          <span className="pill" style={{ marginLeft: 6 }}>
+                            conflict
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        {s.ca ?? "—"}
+                        {s.ca && s.acceptCa ? (
+                          <button className="linkbtn" style={{ marginLeft: 6 }} onClick={s.acceptCa} title="Copy into your hand edit">
+                            → hand
+                          </button>
+                        ) : null}
+                      </td>
+                      <td>
+                        {s.notion ?? "—"}
+                        {s.notion && s.acceptNotion ? (
+                          <button className="linkbtn" style={{ marginLeft: 6 }} onClick={s.acceptNotion} title="Copy into your hand edit">
+                            → hand
+                          </button>
+                        ) : null}
+                      </td>
+                      <td>
+                        <strong>{s.eff ?? "—"}</strong>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
           <div className="mentee-detail__grid">
-            {/* Hand-layer editor */}
+            {/* Hand-zone editor */}
             <div>
-              <h3 style={{ marginTop: 0 }}>Status &amp; info (your edits — the source of truth)</h3>
+              <h3 style={{ marginTop: 0 }}>Your edits (the source of truth — wins over Notion + CA)</h3>
               <div className="form-grid">
                 <label className="form-field">
                   <span>Name (override)</span>
                   <input
                     value={(draft.name_override as string) ?? ""}
-                    placeholder={selectedRow.ca_name ?? ""}
+                    placeholder={selectedEff.name}
                     onChange={(e) => setDraftField("name_override", e.target.value)}
                   />
                 </label>
                 <label className="form-field">
                   <span>Status</span>
-                  <select
-                    value={draft.status ?? ""}
-                    onChange={(e) => setDraftField("status", (e.target.value || null) as MenteeMgmtStatus | null)}
-                  >
+                  <select value={draft.status ?? ""} onChange={(e) => setDraftField("status", (e.target.value || null) as MenteeMgmtStatus | null)}>
                     {STATUS_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -514,7 +570,7 @@ export function MenteesView() {
                 {DATE_FIELDS.map((f) => (
                   <label key={f.key as string} className="form-field">
                     <span>
-                      {f.label} <span className="muted">(CA: {fmtDate(selectedRow[f.ca] as string | null) || "—"})</span>
+                      {f.label} {f.ca ? <span className="muted">(CA: {fmtDate(selectedRow[f.ca] as string | null) || "—"})</span> : null}
                     </span>
                     <input
                       type="date"
@@ -524,20 +580,16 @@ export function MenteesView() {
                   </label>
                 ))}
                 <label className="form-field">
-                  <span>Email</span>
-                  <input value={(draft.email as string) ?? ""} onChange={(e) => setDraftField("email", e.target.value)} />
+                  <span>Coach (override)</span>
+                  <input value={(draft.coach_override as string) ?? ""} placeholder={selectedEff.ownerCoachName ?? ""} onChange={(e) => setDraftField("coach_override", e.target.value)} />
                 </label>
                 <label className="form-field">
-                  <span>Phone</span>
-                  <input value={(draft.phone as string) ?? ""} onChange={(e) => setDraftField("phone", e.target.value)} />
+                  <span>Email (override)</span>
+                  <input value={(draft.email_override as string) ?? ""} onChange={(e) => setDraftField("email_override", e.target.value)} />
                 </label>
                 <label className="form-field">
-                  <span>Mentor (Notion)</span>
-                  <input value={(draft.mentor as string) ?? ""} onChange={(e) => setDraftField("mentor", e.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Notion status</span>
-                  <input value={(draft.notion_status as string) ?? ""} onChange={(e) => setDraftField("notion_status", e.target.value)} />
+                  <span>Phone (override)</span>
+                  <input value={(draft.phone_override as string) ?? ""} onChange={(e) => setDraftField("phone_override", e.target.value)} />
                 </label>
                 <label className="form-field form-field--wide">
                   <span>Notes</span>
@@ -546,10 +598,15 @@ export function MenteesView() {
                 <label className="form-field">
                   <span>Test / placeholder</span>
                   <span>
-                    <input type="checkbox" checked={!!draft.is_test} onChange={(e) => setDraftField("is_test", e.target.checked)} /> Exclude from
-                    metrics
+                    <input type="checkbox" checked={!!draft.is_test} onChange={(e) => setDraftField("is_test", e.target.checked)} /> Exclude from metrics
                   </span>
                 </label>
+                {selectedEff.offeringSignup ? (
+                  <label className="form-field">
+                    <span>Offering signup (Notion)</span>
+                    <span className="muted">{selectedEff.offeringSignup}</span>
+                  </label>
+                ) : null}
               </div>
               <div style={{ marginTop: 10 }}>
                 <button className="btn" onClick={save} disabled={saving}>
@@ -630,6 +687,8 @@ export function MenteesView() {
           </div>
         </div>
       )}
+
+      {importing && <NotionImportModal userId={user?.id} onClose={() => setImporting(false)} onImported={onImported} />}
     </div>
   );
 }

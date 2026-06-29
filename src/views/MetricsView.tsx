@@ -49,6 +49,7 @@ import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 import { PipelineTimingCard } from "../components/PipelineTimingCard";
+import { MenteeFunnelCard } from "../components/MenteeFunnelCard";
 import { useChartTokens } from "../theme";
 import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp, fmtDate, fmtDateTime } from "../format";
@@ -1713,6 +1714,8 @@ export function MetricsView() {
           <div style={{ marginTop: 18 }}>
             <PipelineTimingCard />
           </div>
+
+          <MenteeFunnelCard />
 
           <div style={{ marginTop: 18 }}>
             <ChartCard

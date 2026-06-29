@@ -25,7 +25,7 @@ import { pct, signed, signedPp } from "../format";
 // (0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.)
 const LEG_COLOR_INDEX: Record<string, number> = { dc_js: 1, js_4x: 2, "4x_2x": 3, "2x_1x": 4, "1x_grad": 5 };
 const TIER_LABEL: Record<CohortTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
-const EXIT_STATUSES = ["quit", "fired", "declined"];
+const EXIT_STATUSES = ["quit", "fired", "no_mentoring", "declined"];
 
 function humanizeDays(n: number | null): string {
   if (n == null || n < 0) return "—";
@@ -163,8 +163,8 @@ export function PipelineTimingCard() {
             <option value="all">Any</option>
             <option value="active">Active</option>
             <option value="graduated">Graduated</option>
-            <option value="exited">Exited (declined / quit / fired)</option>
-            <option value="paused">Paused</option>
+            <option value="exited">Exited (declined / quit / fired / no mentoring)</option>
+            <option value="imn">IMN</option>
           </select>
         </label>
         <label className="journey-filters__field">
