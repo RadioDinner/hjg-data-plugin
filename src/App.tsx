@@ -36,7 +36,7 @@ export function App() {
   if (!user) return <Login />;
 
   return (
-    <div className="app">
+    <div className={tab === "mentees" ? "app app--wide" : "app"}>
       <header className="topbar">
         <div className="topbar__title">
           <h1>Data Hub</h1>

@@ -3,3 +3,6 @@ Let's kick off another session. What is this session number? And what are the op
 
 --- 2026-06-29 (session 011) ---
 I want to be able to see the whole grid still when I click up a mentee. Keep the side bar loaded into the gui regardless of if I have a mentee selected or not
+
+--- 2026-06-29 (session 011) ---
+The grid is getting cut off. I can only see half of the discovery call column. I want it to take the whole width of the screen so that the grid displays entirely next to the editor.

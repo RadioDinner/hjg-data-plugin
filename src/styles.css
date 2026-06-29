@@ -79,6 +79,11 @@ body {
   margin: 0 auto;
   padding: 22px 22px 56px;
 }
+/* Data-heavy screens (Mentees roster + docked editor) use the full screen width
+   so the grid displays entirely beside the editor instead of being clipped. */
+.app--wide {
+  max-width: none;
+}
 
 .topbar {
   display: flex;
@@ -550,7 +555,7 @@ body {
    never reflows or shrinks the grid. Width is responsive so the grid keeps as
    much room as possible. */
 .mentee-panel {
-  flex: 0 0 clamp(360px, 30vw, 460px); align-self: stretch;
+  flex: 0 0 clamp(360px, 26vw, 440px); align-self: stretch;
   position: sticky; top: 12px;
   max-height: calc(100vh - 24px); overflow: auto;
 }
