@@ -5,3 +5,6 @@ Kickoff a new session. I have a problem. I am going to need another complete re-
 @".../bc76071d-Mentees_Database_..._all.csv" merge and commit to main for the remainder of the session, not to a branch. On question #5, I want all the mentee data to stay in the same place, but I want to be able to set filters by status. On question #6, I'm willing to nuke the whole thing if necessary. This is important.
 
 Attached is the current status of our Notion database
+
+--- 2026-06-27 (session 010) ---
+Drop Current Invoice Amount, FF Amount, Freedome Fight Paid?, Date FF Paid. Leave them off
