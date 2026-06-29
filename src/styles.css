@@ -546,12 +546,19 @@ body {
    stacks below the roster. */
 .mentee-layout { display: flex; gap: 16px; align-items: flex-start; }
 .mentee-layout__main { flex: 1 1 0; min-width: 0; }
+/* The editor panel is ALWAYS docked (reserves its space) so selecting a mentee
+   never reflows or shrinks the grid. Width is responsive so the grid keeps as
+   much room as possible. */
 .mentee-panel {
-  flex: 0 0 480px; align-self: stretch;
+  flex: 0 0 clamp(360px, 30vw, 460px); align-self: stretch;
   position: sticky; top: 12px;
   max-height: calc(100vh - 24px); overflow: auto;
 }
 .mentee-panel > .card { margin-bottom: 0; }
+.mentee-panel__empty {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 140px; text-align: center; color: var(--muted);
+}
 /* In the narrower docked panel, stack the form + CA-history columns. */
 .mentee-panel .mentee-detail__grid { grid-template-columns: 1fr; }
 @media (max-width: 1180px) {

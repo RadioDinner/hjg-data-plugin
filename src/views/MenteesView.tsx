@@ -546,8 +546,8 @@ export function MenteesView() {
       </div>
         </div>
 
-        {selectedRow && selectedEff && (
-          <aside className="mentee-panel">
+        <aside className="mentee-panel">
+        {selectedRow && selectedEff ? (
         <div className="card" style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <h2 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
@@ -799,8 +799,14 @@ export function MenteesView() {
             </div>
           </div>
         </div>
-        </aside>
+        ) : (
+          <div className="card mentee-panel__empty">
+            <p className="muted" style={{ margin: 0 }}>
+              Select a mentee from the grid to view and edit their details here.
+            </p>
+          </div>
         )}
+        </aside>
       </div>
 
       {importing && <NotionImportModal userId={user?.id} onClose={() => setImporting(false)} onImported={onImported} />}
