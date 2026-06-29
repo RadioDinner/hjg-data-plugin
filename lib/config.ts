@@ -5,7 +5,8 @@
 import type { AppointmentCategory } from "./types.js";
 
 // --- Appointment categorization (case-insensitive substring match) ---
-// Precedence: excluded -> discoveryPhone -> discoveryZoom -> mentoring -> other.
+// Precedence: excluded -> discoveryPhone -> discoveryZoom -> group -> mentoring
+// -> other.
 export const EXCLUDE_CONTAINS = [
   "mentor training extra teaching",
   "get-acquainted zoom visit",
@@ -26,10 +27,23 @@ export const DISCOVERY_GENERIC_CONTAINS = ["discovery call appointment"];
 
 export const MENTORING_CONTAINS = [
   "mentoring call",
-  "in depth mentoring session",
-  "tracking together",
   "single men",
   "married men",
+];
+
+// --- Group mentoring sessions (multi-mentee formats) ---
+// "In Depth Mentoring Session" and "Tracking Together" are GROUP formats where
+// several distinct mentees attend the same slot. They're real mentoring (so they
+// still count toward meetings / active-mentee metrics), but they must NOT inflate
+// a mentor's 1-on-1 CAPACITY utilization — each group attendee otherwise counts
+// as a mentee filling an individual slot (the "Arthur Nisly" inflation). Given
+// their own category so the capacity calc can drop them while everything else
+// keeps treating them as mentoring. Checked BEFORE MENTORING_CONTAINS.
+// NOTE: categorization runs at sync time, so a re-sync is needed to reclassify
+// existing rows before the capacity fix takes effect.
+export const GROUP_SESSION_CONTAINS = [
+  "in depth mentoring session",
+  "tracking together",
 ];
 
 export function categorizeAppointmentName(rawName: string): AppointmentCategory {
@@ -38,6 +52,7 @@ export function categorizeAppointmentName(rawName: string): AppointmentCategory 
   if (DISCOVERY_PHONE_CONTAINS.some((s) => name.includes(s))) return "discoveryPhone";
   if (DISCOVERY_ZOOM_CONTAINS.some((s) => name.includes(s))) return "discoveryZoom";
   if (DISCOVERY_GENERIC_CONTAINS.some((s) => name.includes(s))) return "discoveryZoom";
+  if (GROUP_SESSION_CONTAINS.some((s) => name.includes(s))) return "group";
   if (MENTORING_CONTAINS.some((s) => name.includes(s))) return "mentoring";
   return "other";
 }
@@ -60,10 +75,6 @@ export function isExcludedClientName(
   const targets = new Set(EXCLUDE_CLIENT_NAMES.map(norm));
   return targets.has(norm(full)) || targets.has(norm(first)) || targets.has(norm(last));
 }
-
-// --- Optional mentor whitelist ---
-// If non-empty, only these CoachIDs count toward activeMentors. Empty = all.
-export const MENTOR_COACH_ID_WHITELIST: number[] = [];
 
 // --- Graduation ---
 // CoachAccountable has no "graduated" field; HJG's 4x->2x->1x->Graduated cadence
@@ -140,4 +151,6 @@ export const CA_FN = {
   offeringGetAll: "Offering.getAll",
   offeringGetSubmissions: "Offering.getSubmissions", // UNCONFIRMED name
   engagementGetAll: "Engagement.getAll",
+  invoiceGetAll: "Invoice.getAll",
+  invoiceGetPayments: "Invoice.getPayments",
 };

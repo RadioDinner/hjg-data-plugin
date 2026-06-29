@@ -5,8 +5,9 @@
 import { getAdminClient } from "./supabase-admin.js";
 import { CAClient } from "./ca.js";
 import { makeTracker, BudgetExhaustedError, type BudgetTracker } from "./budget.js";
-import { categorizeAppointmentName, isExcludedClientName } from "./config.js";
+import { categorizeAppointmentName, isExcludedClientName, CONVERSION_OFFERING_IDS } from "./config.js";
 import { caDateParts } from "./metrics.js";
+import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "./menteeJourney.js";
 import type {
   SyncTrigger,
   CaCoachRow,
@@ -15,6 +16,7 @@ import type {
   CaOfferingRow,
   CaOfferingSubmissionRow,
   CaEngagementRow,
+  CaInvoiceRow,
 } from "./types.js";
 
 export class SyncInProgressError extends Error {
@@ -140,6 +142,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       const full = fullName(c.firstName, c.lastName, c.name);
       return {
         id: c.ID,
+        coach_id: c.CoachID ?? null, // CA primary coach = the mentee's owner
         name: full || null,
         first_name: c.firstName ?? null,
         last_name: c.lastName ?? null,
@@ -160,7 +163,9 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         name: a.name ?? "",
         category: categorizeAppointmentName(a.name),
         status: a.status,
+        counts_in_engagement: a.countsInEngagement ?? null,
         start_raw: a.startDate ?? null,
+        end_raw: a.endDate ?? null,
         start_date: dp.date,
         start_year: dp.year,
         start_month: dp.month,
@@ -252,6 +257,104 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
     } catch (e) {
       if (e instanceof BudgetExhaustedError) throw e;
       warnings.push(`Engagements skipped: ${sanitizeError(e)}`);
+    }
+
+    // Invoices feed the staff/mentor payment tool (a coach earns a % of a
+    // mentee's monthly revenue). READ-ONLY: only Invoice.getAll is called.
+    // `dateOf` is the service month the revenue belongs to. Best-effort like
+    // engagements — a failure here leaves the core sync intact and is reported
+    // as a warning. Budget exhaustion still hard-stops.
+    try {
+      const invoices = await ca.getInvoices({ dateFrom: from, dateTo: to });
+      const invoiceRows: CaInvoiceRow[] = invoices.map((inv) => {
+        const dof = dateParts(inv.dateOf);
+        const dad = dateParts(inv.dateAdded);
+        const ddu = dateParts(inv.dateDue);
+        return {
+          id: inv.ID,
+          invoice_number: inv.invoiceNumber ?? null,
+          client_id: inv.ClientID ?? null,
+          company_id: inv.CompanyID ?? null,
+          first_name: inv.firstName ?? null,
+          last_name: inv.lastName ?? null,
+          client_name: fullName(inv.firstName, inv.lastName) || null,
+          email: inv.email ?? null,
+          company_name: inv.companyName ?? null,
+          currency: inv.currency ?? null,
+          amount: inv.amount ?? null,
+          amount_paid: inv.amountPaid ?? null,
+          tax_rate: inv.taxRate ?? null,
+          date_added_raw: inv.dateAdded ?? null,
+          date_added: dad.date,
+          date_of_raw: inv.dateOf ?? null,
+          date_of: dof.date,
+          date_of_year: dof.year,
+          date_of_month: dof.month,
+          date_due_raw: inv.dateDue ?? null,
+          date_due: ddu.date,
+          line_items: inv.lineItemSet ?? null,
+          payments: inv.paymentSet ?? null,
+        };
+      });
+      records += await chunkedUpsert(admin, "ca_invoices", invoiceRows);
+    } catch (e) {
+      if (e instanceof BudgetExhaustedError) throw e;
+      warnings.push(`Invoices skipped: ${sanitizeError(e)}`);
+    }
+
+    // Materialize the Mentee-management CA layer from the freshly-synced mirror.
+    // Writes ONLY the ca_* columns of `mentees` (onConflict client_id), so a sync
+    // refreshes the objective history without ever touching the hand layer (status,
+    // *_override, notes, is_test). Best-effort: a failure (e.g. `mentees` not yet
+    // migrated to the 9975 schema) is a warning, not a hard sync failure. Budget
+    // exhaustion still hard-stops.
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const [cl, en, ap, co, sub] = await Promise.all([
+        admin.from("ca_clients").select("id,name,coach_id,is_excluded"),
+        admin.from("ca_engagements").select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
+        admin.from("ca_appointments").select("client_id,coach_id,engagement_id,category,start_date"),
+        admin.from("ca_coaches").select("id,name"),
+        admin.from("ca_offering_submissions").select("client_id,offering_id,date_added"),
+      ]);
+      const firstErr = cl.error || en.error || ap.error || co.error || sub.error;
+      if (firstErr) throw new Error(firstErr.message);
+      const purchases = (sub.data ?? [])
+        .filter((s) => s.offering_id != null && CONVERSION_OFFERING_IDS.includes(s.offering_id) && s.client_id != null && s.date_added)
+        .map((s) => ({ clientId: s.client_id as number, date: s.date_added as string }));
+      const caRecords = deriveMenteeCaRecords({
+        clients: (cl.data ?? []).map((c) => ({ id: c.id, name: c.name, coachId: c.coach_id ?? null, isExcluded: !!c.is_excluded })),
+        engagements: (en.data ?? []).map((e) => ({
+          id: e.id,
+          clientId: e.client_id ?? null,
+          name: e.name,
+          startDate: e.start_date,
+          endDate: e.end_date,
+          isComplete: !!e.is_complete,
+          isCanceled: !!e.is_canceled,
+        })),
+        appointments: (ap.data ?? []).map((a) => ({
+          clientId: a.client_id ?? null,
+          coachId: a.coach_id ?? null,
+          engagementId: a.engagement_id ?? null,
+          category: a.category ?? "other",
+          date: a.start_date,
+        })),
+        coaches: (co.data ?? []).map((c) => ({ id: c.id, name: c.name })),
+        purchases,
+        today,
+        basis: "first_meeting",
+      });
+      const syncedAt = new Date().toISOString();
+      const caRows = caRecords.map((r) => toMenteeCaUpsertRow(r, syncedAt));
+      for (let i = 0; i < caRows.length; i += 500) {
+        const batch = caRows.slice(i, i + 500);
+        const { error } = await admin.from("mentees").upsert(batch, { onConflict: "client_id" });
+        if (error) throw new Error(error.message);
+      }
+    } catch (e) {
+      if (e instanceof BudgetExhaustedError) throw e;
+      warnings.push(`Mentee materialize skipped: ${sanitizeError(e)}`);
     }
 
     await admin

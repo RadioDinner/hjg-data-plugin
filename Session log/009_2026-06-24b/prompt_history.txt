@@ -1,0 +1,78 @@
+--- 2026-06-24 (session 009b) ---
+Let's kick off another session. In the Mentee record - source of truth data and screens, I want the "FF amount","Freedom Fight paid?","Wants PP?","Date FF paid","Current invoice amount","JS lesson","MN equivalency","dd w a","Prayer partner" removed. I'll add some of these back later but I want them removed as of now.
+
+--- 2026-06-24 (AskUserQuestion answer) ---
+Q: How should I handle the underlying `mentees` table columns for these 9 fields?
+A: Drop the columns too (delete the 9 columns from the mentees table via a new migration; update the 9986 seed so it stays re-runnable).
+
+--- 2026-06-24 (session 009b) ---
+merge this to main and commit to main for the remainder of this session
+
+--- 2026-06-24 (session 009b) ---
+All migrations are applied and we're working with fresh data.
+
+I want two things changed. On the metrics, when tracking the trendline on conversion rate for discovery calls, I want an option added to that module in company options to set how long of a range I want to have the trend affected by. Should it span 3 months? 6? That is dependant on every organizations own choice. I want to be able to set it by x number of weeks or x number of months
+
+--- 2026-06-24 (session 009b) ---
+Another feature / thing I want added, if I edit any element of the mentee in the journeys screen (106) I want a flag to be updated that says its hand reviewed. I also want to be able to just tick the flag if I didn't need to update it but just make it known to be hand/human reviewed.
+
+--- 2026-06-24 (session 009b) ---
+all migrations applied
+
+--- 2026-06-24 (session 009b) ---
+On screen 107 I want the "synced: yyyy-mm-dd" to become a button that I can click to confirm the date, rather than re-entering it it.
+
+--- 2026-06-24 (session 009b) ---
+I also want a filter option for screen 102 with a checkbox of "Only hand reviewed" so that when I check it, it only loads and calculates the data from the hand reviewed mentees. Also, I want the colors in the pipeline timing columns to match teh color options set in the individual mentee rail display
+
+--- 2026-06-24 (session 009b) ---
+[Attached hjgrawdata20260624.xlsx — near-live sync] In the journeys I'm seeing a start date of 01-27-2026 for Roscoe Horst, but CA shows 01/17/2026 for the 2x engagement. Why different? Same for Jeffrey Horst (sync 2026-05-07 vs CA 04/24/2026) and Harold Hostetter (sync 2026-06-19 vs CA 06/06/2026).
+
+--- 2026-06-24 (session 009b) ---
+Also, on the "edit graduation status" (107) screen. I want that to be a drop down able card... Let's flip all the logic to "First 1 on 1 meeting" for the Journeys (101) system for now... Let's remove the option to toggle between engagement start and first 1 on 1 meeting. Keep the option in Company Options for now, but disable it until I can build the feature out more fully.
+
+--- 2026-06-24 (session 009b) ---
+Add an option in the "Journeys" (101) module in company options to "recalculate dates" and set that to be enabled if the calculation logic option is ever switched. [vision: board decides to switch basis -> toggle the logic, click button to update mentee journey statuses] Also, on the "Discovery > graduation" color, make it a cool gradient of all the other colors in the settings
+
+--- 2026-06-24 (session 009b) ---
+If I make changes to the 107 screen in the journeys, even just clicking the date from the "synced date" button, I want the system to automatically assume a hand review.
+
+--- 2026-06-24 (AskUserQuestion answers) ---
+Q: §107 edits → mentees table? A: Stamp hand-reviewed only (keep status/date edits in mentee_outcomes; on any §107 save, set mentees.hand_reviewed=true + timestamp).
+Q: §105 editing? A: It's fine as read-only, but don't make it look like I can save information there.
+
+--- 2026-06-24 (session 009b) ---
+ok, now I want you to look at the data that came from the notion export. Where the status of the mentee in that table is "Done (Graduated)" I want you to set the graduation date to 7 days after their last 1x meeting. And I want it to be saved in the "Mentees table" in supabase.
+
+--- 2026-06-24 (AskUserQuestion answers — confirm) ---
+Q: 29 graduates with no 1x meeting? A: Leave the 29 blank (only the 12 with a 1x meeting).
+Q: Where to save? A: mentees + Journeys pipeline (both mentees.graduation_date AND mentee_outcomes.graduation_date).
+-> Confirms migration 9976 as already built/pushed (d50380d). No change needed.
+
+--- 2026-06-24 (new feature request) ---
+I want to build a compare tool in the Journey's pipeline timing. I want to be able to compare how long a mentee is in the system according to start date. Like I want to compare how well our mentees are doing that have started in the last 3 months, vs ones that started between 4 and 6 months ago
+
+--- 2026-06-24 (AskUserQuestion answers — compare tool) ---
+Q: Start-date basis? A: System start (discovery -> jumpstart -> JYF -> first meeting; same as days-in-system).
+Q: Cohort controls? A: Two editable month windows (default 0-3 vs 4-6).
+Q: Compare metrics (besides leg durations)? A: ALL four — Avg days in system, Avg time to graduate, % graduated, Current-tier mix.
+
+--- 2026-06-24 (MAJOR rework — mentee management overhaul) ---
+I have a problem, in our funnel, all clients/mentees start with a discovery call. Then they either choose to join JumpStart Your Freedom or they decide not to do our program, so that is exit 1 if they don't continue, same thing goes for if they go from JYF to 4x, sometimes they drop out for financial reasons, or our staff "fire" them because we feel as though it unfair to keep charging them if they're not making progress, or they sometimes graduate from 4x or 2x directly, rather than following cleanly through the 4x to 2x to 1x funnel. I think we need to overhaul the mentee journey pipeline / system to both visually display this data and keep it up to date? I think we need to trash the mentee management system and start from scratch. I want a "Mentees" page that saves and holds all the data on our mentees, current status, current coach, engagement, everything about a mentee from the time they hit our system to the time they quit, graduate or get fired. So build a "Mentee management" system and "Journey's" pipeline timing graph/card (102) to become a metric display card in the metrics. This is a major major rework and I want to start from scratch.
+The first layer of Mentee data, I want to be built from Coach Accountable data history. I will hand enter data from our Notion database, then we will consider OUR mentee management system to be the "Mentee status / information" "source of truth". Any sync from CA would over ride changes we made BY HAND to the mentee management system.
+THROW OUT EVERYTHING that we have on the Journey's pipeline and Mentee data so far. We're starting over
+
+--- 2026-06-24 (AskUserQuestion answers — mentee management rebuild) ---
+Q: Sync vs hand precedence? A: Per-field split (CA owns objective history & refreshes it; hand-entered status/info is source of truth, never overwritten).
+Q: Tab layout? A: Mentees replaces both (new Mentees mgmt tab = table + detail + funnel viz; Journeys tab removed; §102 leg-timing -> Metrics card).
+Q: DB cleanup? A: Drop all three (mentees, mentee_outcomes, mentee_exclusions); fold excluded/test into new mentee status; rewire Metrics exclusion to new table.
+Q: Status model? A: Active / Graduated / Quit / Fired / Paused / Declined (each exit/grad records stage + date).
+
+--- 2026-06-24 (mid-build interjection) ---
+continue with all phases. Don't stop. You can run agents and use usage. Whatever it takes, just don't stop. I'm leaving for the night
+
+--- 2026-06-25 ---
+In screen 005, can you make the "active mentoring" into 3 columns showing 4x, 2x and 1x, then put a "master" column display BEHIND the 3 divisions of 4x 2x and 1x?
+
+--- 2026-06-25 ---
+The layout isn't working. There are just 4 columns next to each other

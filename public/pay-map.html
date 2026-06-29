@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HJG — How Mentor Pay Is Calculated</title>
+<script>
+  // Match the dashboard's theme: ?theme=light|dark, else the OS preference.
+  (function () {
+    try {
+      var p = new URLSearchParams(location.search).get("theme");
+      var t = p === "light" || p === "dark"
+        ? p
+        : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = t;
+    } catch (e) { /* ignore */ }
+  })();
+</script>
+<style>
+  :root {
+    /* light (default) */
+    --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f1f3f6; --line: #e3e7ee;
+    --text: #1e293b; --muted: #64748b;
+    --this: #2563eb;   /* paid in the invoice's own month */
+    --roll: #d97706;   /* rolls into the next month */
+    --good: #059669;
+    --on-bar: #ffffff; /* text on colored bars */
+    --alex: #2563eb; --bob: #7c3aed; --chase: #059669;
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a; --panel: #1a2335; --panel-2: #0b1324; --line: #2c3a52;
+    --text: #e2e8f0; --muted: #94a3b8;
+    --this: #38bdf8; --roll: #f59e0b; --good: #34d399;
+    --on-bar: #06121f;
+    --alex: #38bdf8; --bob: #a78bfa; --chase: #34d399;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 64px; }
+  h1 { font-size: 23px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; }
+  h3 { font-size: 14px; margin: 18px 0 8px; color: var(--text); }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 8px; line-height: 1.55; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; margin-top: 14px; }
+  .muted { color: var(--muted); }
+  p { line-height: 1.6; font-size: 14px; }
+  code { background: rgba(127,127,127,.16); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; margin: 4px 0 10px; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg button { background: var(--panel-2); color: var(--muted); border: none; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--this); color: #ffffff; font-weight: 700; }
+  .ratebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+
+  /* mentee editor */
+  .mentee { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; background: var(--panel-2); }
+  .mentee .top { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 7px; vertical-align: 0px; }
+  .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+  .field input[type=text] { width: 170px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 4px; padding: 7px 9px; font-size: 14px; font-weight: 600; }
+  .field input[type=number] { width: 110px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 4px; padding: 7px 9px; font-size: 14px; }
+  .field input[type=range] { width: 190px; accent-color: var(--this); }
+  .bar { display: flex; height: 38px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); margin: 12px 0 6px; background: var(--panel); }
+  .bar > div { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--on-bar); white-space: nowrap; overflow: hidden; transition: width .15s ease; }
+  .seg-this { background: var(--this); } .seg-roll { background: var(--roll); }
+  .mnums { display: flex; gap: 22px; flex-wrap: wrap; font-size: 12px; }
+  .mnums b { display: block; font-size: 15px; }
+
+  /* monthly paycheck */
+  .months { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: end; margin-top: 6px; }
+  .mcol { text-align: center; }
+  .stack { height: 200px; display: flex; flex-direction: column; justify-content: flex-end; border-bottom: 1px solid var(--line); }
+  .stack > div { transition: height .18s ease; }
+  .mtotal { font-weight: 700; font-size: 15px; margin-top: 6px; color: var(--good); }
+  .mlabel { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  .foot td { border-top: 2px solid var(--line); font-weight: 700; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.55; }
+  .share { background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--this); border-radius: 0 6px 6px 0; padding: 10px 14px; font-size: 13px; color: var(--muted); margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>How your mentor pay is calculated</h1>
+  <p class="sub">You earn a share of what each of your mentees pays each month. The one twist: every invoice is split across <strong>two calendar months</strong>. Change the names, amounts, and invoice days below to match your own mentees and see what you'd be paid.</p>
+
+  <div class="card">
+    <h2 style="margin-top:4px">The rule, in one breath</h2>
+    <p>
+      Your rate is <strong>35% → 50% → 60%</strong> over your first three months mentoring, then 60%.
+      Each mentee's invoice is split by the <strong>day it falls on</strong> (using a fixed 30-day month):
+      the part of the month <span style="color:var(--this)"><strong>still to come</strong></span> is paid that month,
+      and the part <span style="color:var(--roll)"><strong>already elapsed</strong></span> rolls into the next month.
+    </p>
+    <p style="margin-bottom:0">
+      <code>elapsed = day ÷ 30</code> ·
+      <code>paid this month = amount × (1 − elapsed) × rate</code> ·
+      <code>rolls to next month = amount × elapsed × rate</code>
+    </p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:4px">Your mentees</h2>
+    <div class="ratebar">
+      <span>Your rate (your tenure):</span>
+      <div class="seg" id="rate">
+        <button data-r="0.35">35%</button>
+        <button data-r="0.5">50%</button>
+        <button data-r="0.6" class="on">60%</button>
+      </div>
+      <span class="muted">applies to all of your mentees</span>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--this)"></span>Paid in the invoice's month</span>
+      <span><span class="swatch" style="background:var(--roll)"></span>Rolls into the next month</span>
+    </div>
+    <div id="mentees"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:4px">Your monthly paycheck (all mentees combined)</h2>
+    <p class="sub">Each calendar month you're paid every mentee's "this month" slice plus last month's roll-in. Colored by mentee:</p>
+    <div class="legend" id="payLegend"></div>
+    <div class="months" id="months"></div>
+    <table>
+      <thead><tr><th>Month</th><th id="thAlex">Alex</th><th id="thBob">Bob</th><th id="thChase">Chase</th><th>Your payout</th></tr></thead>
+      <tbody id="payBody"></tbody>
+    </table>
+    <p class="note" id="payNote"></p>
+  </div>
+
+  <div class="share">
+    📤 <strong>Share this page:</strong> it lives at <code>/pay-map.html</code> on the dashboard and needs no login — send mentors that link, or just save this page (File → Save) and email the file; it works on its own.
+  </div>
+
+  <p class="note">
+    The month length is a <strong>fixed 30 days</strong> (so the 12th = 40% elapsed; a day past the 30th counts as fully elapsed).
+    Pay is figured on the amount <strong>billed</strong>. Tier prices shown are examples — your real amount comes from each mentee's invoice. This mirrors the dashboard's engine.
+  </p>
+</div>
+
+<script>
+  var money = function (n) { return "$" + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var pct1 = function (n) { return (Math.round(n * 1000) / 10) + "%"; };
+  function calc(amount, day, rate) {
+    var elapsed = Math.min(Math.max(day, 0), 30) / 30;
+    var remaining = 1 - elapsed;
+    return { elapsed: elapsed, remaining: remaining, thisMonth: amount * remaining * rate, nextMonth: amount * elapsed * rate, full: amount * rate };
+  }
+
+  // CSS-var colors so the chart matches whichever theme is active.
+  var HEX = ["var(--alex)", "var(--bob)", "var(--chase)"];
+  var mentees = [
+    { name: "Alex Arnold", amount: 425, day: 12 },   // 4x
+    { name: "Bob Boyd", amount: 265, day: 5 },        // 2x
+    { name: "Chase Chester", amount: 145, day: 22 }   // 1x
+  ];
+  var rate = 0.6;
+
+  // Build the editable mentee rows.
+  var wrap = document.getElementById("mentees");
+  wrap.innerHTML = mentees.map(function (m, i) {
+    return (
+      '<div class="mentee" data-i="' + i + '">' +
+        '<div class="top">' +
+          '<label class="field"><span><span class="dot" style="background:' + HEX[i] + '"></span>Mentee name</span>' +
+            '<input type="text" class="m-name" value="' + m.name + '" /></label>' +
+          '<label class="field">Monthly amount ($)<input type="number" class="m-amt" min="0" step="5" value="' + m.amount + '" /></label>' +
+          '<label class="field">Invoice day (<span class="m-dayval">' + m.day + '</span>)<input type="range" class="m-day" min="1" max="31" value="' + m.day + '" /></label>' +
+        "</div>" +
+        '<div class="bar"><div class="seg-this m-this"></div><div class="seg-roll m-roll"></div></div>' +
+        '<div class="mnums">' +
+          '<span style="color:var(--this)">Paid this month<b class="m-thisN"></b></span>' +
+          '<span style="color:var(--roll)">Rolls to next<b class="m-rollN"></b></span>' +
+          '<span style="color:var(--good)">Full share<b class="m-fullN"></b></span>' +
+        "</div>" +
+      "</div>"
+    );
+  }).join("");
+
+  function readMentees() {
+    return Array.prototype.map.call(wrap.querySelectorAll(".mentee"), function (row) {
+      return {
+        name: row.querySelector(".m-name").value || "Mentee",
+        amount: parseFloat(row.querySelector(".m-amt").value) || 0,
+        day: parseInt(row.querySelector(".m-day").value, 10) || 1,
+        row: row
+      };
+    });
+  }
+
+  function render() {
+    var ms = readMentees();
+    // Per-mentee split bars.
+    ms.forEach(function (m) {
+      var c = calc(m.amount, m.day, rate);
+      var rp = Math.round(c.remaining * 100);
+      m.row.querySelector(".m-dayval").textContent = m.day;
+      var bThis = m.row.querySelector(".m-this"), bRoll = m.row.querySelector(".m-roll");
+      bThis.style.width = rp + "%"; bRoll.style.width = (100 - rp) + "%";
+      bThis.textContent = rp >= 16 ? money(c.thisMonth) : "";
+      bRoll.textContent = 100 - rp >= 16 ? money(c.nextMonth) : "";
+      m.row.querySelector(".m-thisN").textContent = money(c.thisMonth);
+      m.row.querySelector(".m-rollN").textContent = money(c.nextMonth);
+      m.row.querySelector(".m-fullN").textContent = money(c.full);
+      m.calc = c;
+    });
+
+    // Combined monthly paycheck across 4 months: first (partial), two steady (full),
+    // and the tail (the month after the last invoice). Per mentee per month:
+    //   M1 = this slice ; M2,M3 = full share ; M4 = roll (tail).
+    var monthDefs = [
+      { key: "first", label: "1st month<br>(first invoices)", pick: function (c) { return c.thisMonth; } },
+      { key: "s2", label: "2nd month", pick: function (c) { return c.full; } },
+      { key: "s3", label: "Steady month", pick: function (c) { return c.full; } },
+      { key: "tail", label: "Final month<br>(after last invoice)", pick: function (c) { return c.nextMonth; } }
+    ];
+    var steady = ms.reduce(function (s, m) { return s + m.calc.full; }, 0) || 1; // scale reference
+
+    // Legend (mentee names).
+    document.getElementById("payLegend").innerHTML = ms.map(function (m, i) {
+      return '<span><span class="swatch" style="background:' + HEX[i] + '"></span>' + m.name + "</span>";
+    }).join("");
+    document.getElementById("thAlex").textContent = ms[0].name;
+    document.getElementById("thBob").textContent = ms[1].name;
+    document.getElementById("thChase").textContent = ms[2].name;
+
+    // Stacked bars.
+    document.getElementById("months").innerHTML = monthDefs.map(function (md) {
+      var total = 0;
+      var segs = ms.map(function (m, i) {
+        var v = md.pick(m.calc); total += v;
+        var h = Math.round((v / steady) * 200);
+        return v > 0 ? '<div title="' + m.name + ': ' + money(v) + '" style="height:' + h + "px;background:" + HEX[i] + '"></div>' : "";
+      }).join("");
+      return '<div class="mcol"><div class="stack">' + segs + "</div>" +
+             '<div class="mtotal">' + money(total) + '</div><div class="mlabel">' + md.label + "</div></div>";
+    }).join("");
+
+    // Table.
+    var grand = 0;
+    document.getElementById("payBody").innerHTML = monthDefs.map(function (md) {
+      var cells = ms.map(function (m) { return md.pick(m.calc); });
+      var total = cells.reduce(function (s, v) { return s + v; }, 0); grand += total;
+      var lab = md.label.replace("<br>", " ");
+      return "<tr><td>" + lab + "</td>" + cells.map(function (v) { return "<td>" + money(v) + "</td>"; }).join("") +
+             "<td><strong>" + money(total) + "</strong></td></tr>";
+    }).join("");
+
+    var first = ms.reduce(function (s, m) { return s + m.calc.thisMonth; }, 0);
+    var tail = ms.reduce(function (s, m) { return s + m.calc.nextMonth; }, 0);
+    document.getElementById("payNote").innerHTML =
+      "Your <strong>steady</strong> paycheck is " + money(steady) +
+      " — the full share of everyone's bill, every month. The invoice day only matters at the edges: your <strong>first</strong> month is partial (" +
+      money(first) + ") and there's a matching <strong>tail</strong> the month after a mentee's last invoice (" + money(tail) +
+      "). First + tail = " + money(first + tail) + " = one full month.";
+  }
+
+  document.getElementById("rate").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    rate = parseFloat(b.getAttribute("data-r"));
+    Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle("on", x === b); });
+    render();
+  });
+  wrap.addEventListener("input", render);
+  render();
+</script>
+</body>
+</html>

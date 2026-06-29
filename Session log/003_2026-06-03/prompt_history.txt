@@ -1,0 +1,16 @@
+--- 2026-06-03 (session start) ---
+Ok, lets review the handoff from last session and kick off a new one
+
+--- 2026-06-03 (AskUserQuestion answer) ---
+Q: What should session 003 focus on?
+A: Fix mentor-capacity bug
+
+--- 2026-06-03 ---
+I want to answer the mentor-capacity inflation fix question now
+
+--- 2026-06-03 (AskUserQuestion answer) ---
+Q: Approach to detect/remove group sessions from capacity? A: Re-categorize at sync
+Q: How wide should the fix reach? A: Capacity only
+
+--- 2026-06-03 ---
+write a handoff and wrap

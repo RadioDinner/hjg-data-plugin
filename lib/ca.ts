@@ -9,6 +9,7 @@ import type {
   CAClient as CAClientEntity,
   CACoach,
   CAEngagement,
+  CAInvoice,
   CAOffering,
   CAOfferingSubmission,
   CAAppointmentType,
@@ -170,6 +171,24 @@ export class CAClient {
         ClientID: opts.clientId,
         CoachID: opts.coachId,
         includeAppointments: opts.includeAppointments ?? false,
+      })
+    );
+  }
+
+  // READ-ONLY: Invoice.getAll only. Each invoice already carries its nested
+  // paymentSet + lineItemSet, so a single call yields the billed amount, the
+  // amount paid, the service date (dateOf), and the payment history. The optional
+  // CoachID filter is the client's *primary* coach (per the CA docs), not
+  // necessarily who ran each appointment — attribution is decided downstream.
+  async getInvoices(
+    opts: { dateFrom?: string; dateTo?: string; clientId?: number; coachId?: number } = {}
+  ): Promise<CAInvoice[]> {
+    return asArray<CAInvoice>(
+      await this.call(CA_FN.invoiceGetAll, {
+        dateFrom: opts.dateFrom,
+        dateTo: opts.dateTo,
+        ClientID: opts.clientId,
+        CoachID: opts.coachId,
       })
     );
   }

@@ -1,0 +1,48 @@
+--- 2026-06-19 19:41 ---
+lets kick off another session. I want to re-evalute our pay system. I want to see a breakdown by month and I want to be able to explore the raw  data you've used to compile our numbers in a window in there or something. I also want to be able to sort and filter the data by date, coach, etc.
+
+--- 2026-06-19 19:46 (AskUserQuestion answers) ---
+Explore window: Compiled ledger + raw source toggle
+Month layout: All-months expandable table
+
+--- 2026-06-19 20:33 ---
+commit to main
+
+--- 2026-06-19 20:33 ---
+direct to main
+
+--- 2026-06-19 20:33 ---
+in Invoices tab of the "explore source data" I don't see the coach column, I want that addee
+
+--- 2026-06-19 20:45 ---
+[attached: Calculator_for_Harry_Shenks_Mentees.xlsx] Man, I'm super super confused. This is such a weird system. Here is the old administrative assistants sheet. Can you make sense of it?
+
+--- 2026-06-19 21:01 (AskUserQuestion answer — next step for legacy sheet) ---
+Match the dashboard payment calculator logic to match claytons. BUT, the ramp logic on his spreadsheet is wrong. The ramp goes by month. Otherwise match all the logic to the uploaded xlsx. And then write a plain english, very descriptive legacy logic doc
+
+--- 2026-06-19 21:01 ---
+can you explain the difference between the decoded xlsx that I gave you and my system?
+
+--- 2026-06-19 21:01 ---
+is there any way to tell in our data, whether or not the mentee had a confirmed appointment, that actually happened? The issue i am running into is that lets say a mentee finishes JYF and starts 4x mentoring 4/12/26. They pay $425 at a random time, lets say 4/17/26. I'm struggling with being able to verify that the 4 appointments that the mentee paid for, were had by the same coach. Does that predicament make sense?
+
+--- 2026-06-19 21:01 ---
+wire it up, and then I want a comprehensive explaination on how it works. commit it to main when you have it completed
+
+--- 2026-06-19 22:15 ---
+I applied the migration. I think it makes the most sense to calculate it as billed because that is when, in a perfect world, that they would pay. So I'm good with keeping the "as billed" date to calculate totals.
+
+--- 2026-06-19 22:17 ---
+I want to build a "compare" tool, into the metrics page. I want to be able to switch into and out of comparison mode. For example, I want to be able to compare this month against last month, or this quarter against last quarter.  Put this on a feature build out list to build sometime in the future
+
+Also, a second feature to build out, is a feature so that when I open "Explore this month" on the "Pay staff" page, I want only the coaches with more than zero rows to be in the drop down. Add this to the feature list as well.
+
+--- 2026-06-19 22:27 ---
+9993 is applied. All migrations are applied actually.
+
+On the ramp payment basis, Clayton did it wrong. The ramp is built on the MENTOR start. NOT mentee timeline.
+
+So the mentors first month of work is paid at 35% of total revenue for his assigned mentees, then 50% the following month, then 60%
+
+--- 2026-06-19 22:27 ---
+Do the ramp rework and then write the legacy pay caluclator doc.

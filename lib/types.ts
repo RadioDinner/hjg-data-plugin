@@ -13,6 +13,7 @@ export interface CACoach {
 
 export interface CAClient {
   ID: number;
+  CoachID?: number; // the client's PRIMARY coach (CA's "managed by" pairing)
   firstName?: string;
   lastName?: string;
   name?: string;
@@ -32,6 +33,13 @@ export interface CAAppointment {
   endDate?: string;
   dateAdded?: string; // when the appointment was booked (signup date)
   status: CAAppointmentStatus;
+  // Whether CA has credited this appointment against its Engagement's allocation:
+  //   1  = DOES count (a delivered session toward what the mentee paid for)
+  //  -1  = does NOT count
+  //   0  = no judgement applied yet
+  // This is CA's closest signal to "the session actually happened." See docs/
+  // coachaccountable-api.md (Appointment.getAll return values).
+  countsInEngagement?: number;
 }
 
 export interface CAAppointmentType {
@@ -72,6 +80,42 @@ export interface CAEngagement {
   dateAdded?: string;
 }
 
+// Invoice line item and payment, as nested in Invoice.getAll / Invoice.get.
+export interface CAInvoiceLineItem {
+  item?: string;
+  amount?: number;
+}
+export interface CAInvoicePayment {
+  datePaid?: string;
+  amount?: number;
+  method?: string;
+  checkNumber?: string;
+}
+
+// A CoachAccountable Invoice (Invoice.getAll). For HJG this is typically one per
+// mentee per month for their subscription tier. `dateOf` is the service date
+// (which month the revenue belongs to); `amount` is billed, `amountPaid` is
+// collected so far.
+export interface CAInvoice {
+  ID: number;
+  invoiceNumber?: string;
+  dateAdded?: string;
+  dateOf?: string;
+  dateDue?: string;
+  currency?: string;
+  amount?: number;
+  amountPaid?: number;
+  taxRate?: number;
+  ClientID?: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  CompanyID?: number;
+  companyName?: string;
+  lineItemSet?: CAInvoiceLineItem[];
+  paymentSet?: CAInvoicePayment[];
+}
+
 // "Submissions" = signups and/or purchases for an Offering.
 export interface CAOfferingSubmission {
   ID: number;
@@ -90,6 +134,7 @@ export interface CAOfferingSubmission {
 
 export type AppointmentCategory =
   | "mentoring"
+  | "group"
   | "discoveryPhone"
   | "discoveryZoom"
   | "excluded"
@@ -169,6 +214,7 @@ export interface CaCoachRow {
 
 export interface CaClientRow {
   id: number;
+  coach_id: number | null; // CA Client.CoachID = primary coach (the mentee's owner)
   name: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -186,7 +232,12 @@ export interface CaAppointmentRow {
   name: string;
   category: AppointmentCategory;
   status: string;
+  // CA Appointment.countsInEngagement: 1 = credited toward the engagement
+  // (delivered), -1 = explicitly not counted, 0 = no judgement yet, null = not
+  // yet synced. The delivery signal behind "did the paid-for sessions happen?".
+  counts_in_engagement: number | null;
   start_raw: string | null;
+  end_raw: string | null; // exact CA end datetime string (Appointment.endDate) — for durations
   start_date: string | null; // YYYY-MM-DD (account-local)
   start_year: number | null;
   start_month: number | null; // 1..12
@@ -244,6 +295,33 @@ export interface CaEngagementRow {
   date_closed: string | null;
   date_added_raw: string | null;
   date_added: string | null;
+  synced_at?: string;
+}
+
+export interface CaInvoiceRow {
+  id: number;
+  invoice_number: string | null;
+  client_id: number | null;
+  company_id: number | null;
+  first_name: string | null;
+  last_name: string | null;
+  client_name: string | null;
+  email: string | null;
+  company_name: string | null;
+  currency: string | null;
+  amount: number | null;
+  amount_paid: number | null;
+  tax_rate: number | null;
+  date_added_raw: string | null;
+  date_added: string | null;
+  date_of_raw: string | null;
+  date_of: string | null;
+  date_of_year: number | null;
+  date_of_month: number | null;
+  date_due_raw: string | null;
+  date_due: string | null;
+  line_items: CAInvoiceLineItem[] | null;
+  payments: CAInvoicePayment[] | null;
   synced_at?: string;
 }
 

@@ -1,0 +1,63 @@
+--- 2026-06-22 13:23 ---
+I am evaluating some features to add to this project. Open a new session and make all your commits/merges to main. Tell me what items are open, what items on on the feature list, and then I have a question about the CoachAccountable API from the "source of truth"
+
+--- 2026-06-22 13:30 ---
+all migrations are applied.
+
+On the API question, is there an option to give a client access to their account, even after deactivation? I want this answered with strict adherenance to the guidance given in the API source of truth. TRIPLE check you answer
+
+--- 2026-06-22 13:40 ---
+give me the url in the documentation where this exists
+
+--- 2026-06-22 13:45 ---
+write the first feature on the list
+
+--- 2026-06-22 13:50 (AskUserQuestion answers) ---
+Q: How should Compare mode present period-vs-period on the Metrics page?
+A: Both (board scorecard + per-chart overlays)
+Q: Which comparison presets should the period picker offer in v1?
+A: MoM + QoQ + YoY + custom
+
+--- 2026-06-22 15:38 ---
+hello
+
+--- 2026-06-22 15:39 ---
+Build and commit the next feature
+
+--- 2026-06-22 15:47 ---
+are there open bugs
+
+--- 2026-06-22 15:55 ---
+Fix those two open bugs and leave 3, 4 and 5. Do the cleanup as well
+
+--- 2026-06-22 16:02 ---
+I want to add a feature to the feature backlog. On every card/function/feature of the dashboard, I want a little question mark, that I can click and it would side load an article on how that function works, the logic behind it and what numbers are used to calculate the values there.
+
+Add another feature to the backlog, in the Journey's tab, I want the ability to remove a mentee from the list of people to search. For example, Arthur Nisly is in there, but that is a test account and it muddies the data. I want a way to remove people from the data used to build our metrics of the "time in the system"
+
+Add another feature to the backlog. In the discovery > conversion chart, when I click a column, I want it to open a popout of a way to explore the data that built the column. Maybe a list of the discovery calls that happened in that columns data, along with the outcome.
+
+Add another feature to the backlog, I want the "This month" "Last month" this quarter, etc toggles, to "freeze" to the top of the page, so that when you scroll down, you don't need to scroll all the way back up to change the time periods or the mode.
+
+Then, work on the following:
+On the "Journeys" tab, evaluating Seth Lehman. Where does the Journey's system get the date for the stage__date 2026-07-02 element? In CoachAccountable his engagement is scheduled to start 7/7 but the stage__date shows 7/2. (44 days time in system; 6 days Discovery→JumpStart; 4x current tier; 29 days mentoring span. Discovery 2026-05-09; JumpStart 2026-05-15; 4x mentoring 2026-07-02.)
+
+--- 2026-06-22 16:07 ---
+[Uploaded hjgrawdata20260622.xlsx — full raw-data export] So, here is all the raw data for you to review, review the data before we start on a fix
+
+--- 2026-06-22 16:25 ---
+I want another item on the feature backlog, on the "Raw data" tab, the button opens a whole different page. I want that changed to it's own tab, rather than being a button on the raw data tab
+
+On the answer to #4, I want a toggle in the "Journeys" tab to set the metrics to be evaluated by first meeting or by the engagement start date. Then I can go in and flip it on or off and back and forth. I want you to build a "Company options" tab, in which you'll give EACH SECTION OF THE DASHBOARD a drop down with options like this. Then I can go in and edit the settings myself, rather than prompt you to change the logic.
+
+--- 2026-06-22 16:35 (AskUserQuestion answers) ---
+Q: How should the "Company options" tab store and scope settings?
+A: Registry-driven, org-wide (app_settings, jsonb; quick toggle also on Journeys)
+Q: When the basis is "first meeting", how should a stage's date be defined?
+A: First 1-on-1 mentoring meeting under that tier's engagement (group sessions excluded), fallback to engagement start when no meeting
+
+--- 2026-06-22 16:55 ---
+Another feature for the back log. I want to build a "Build payout" button that I can click and enter into a process in which I can load a specific mentor/coach and then pull up the data from that month, and "Build" a payout. Meaning that I could select or deselect certain engagements and it would have a running total on the side, etc. I want this because I need to review all payments to mentors for awhile so that I don't mess this up again.
+
+--- 2026-06-22 17:05 ---
+Let's wrap this session, write the handoff, merge it to main and then close the session down

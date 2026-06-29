@@ -1,4 +1,6 @@
 import { downloadCsv } from "../csv";
+import { SectionId } from "./SectionId";
+import { formatMaybeDate } from "../format";
 
 interface Props {
   title: string;
@@ -12,7 +14,7 @@ export function ExploreModal({ title, columns, rows, onClose }: Props) {
     <div className="modal" onClick={onClose}>
       <div className="modal__card" onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
-          <h2>{title}</h2>
+          <h2>{title} <SectionId id="modal.explore" /></h2>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               className="btn btn--sm"
@@ -41,7 +43,7 @@ export function ExploreModal({ title, columns, rows, onClose }: Props) {
                 <tr key={i}>
                   {row.map((cell, j) => (
                     <td key={j} className={typeof cell === "number" ? "num" : ""}>
-                      {cell}
+                      {typeof cell === "number" ? cell : formatMaybeDate(cell)}
                     </td>
                   ))}
                 </tr>

@@ -1,0 +1,50 @@
+--- 2026-06-24 (session 009 start) ---
+Lets kick off a new session, commit to main  for the entirety of this session. 
+
+I applied all migrations. You found Ty, but I was looking for you to find Jonathan Heinzman. I checked Caleb Ottos clients and he has more than Ty, Joash and Jonathan but for some reason the "managed by" of some of Calebs clients is still Arthur. Is your system set to find clients primary coach? Or how does it work? I want you to do a few things.  First, tell me how the clients are assumed to coaches. Give me your logic. Second, add that explaination to the "?" card on the appropriate cards/pages on the dashboard.
+
+--- 2026-06-24 (session 009) ---
+@"/root/.claude/uploads/6508d2f2-6072-515b-ade4-f889e5e6cb2d/77b70067-caengagements20260624.csv" I want an "alternative" ending added to the "graduation" status in the journeys of "quit","no mentoring" and "fired" as an alternative exit to the journey path at any time
+
+here is the ca_engagements data so you can look at Jonathan Heinzmans engagements
+
+--- 2026-06-24 (session 009) ---
+I want the "owner" of the mentee to be decided by primary coach
+
+--- 2026-06-24 (session 009 — AskUserQuestion answer) ---
+Q: How far should "owner = primary coach" reach?
+A: Everywhere, incl. pay (primary coach drives Journeys owner display, Mentor-capacity grouping, AND Pay-staff payout attribution).
+
+--- 2026-06-24 (session 009) ---
+Here is what I committed to the supabase sql independantly, then I ran all the migrations
+
+alter table mentee_outcomes alter column status drop not null;
+
+alter table mentee_outcomes add column if not exists quit_date  date;
+alter table mentee_outcomes add column if not exists no_mentoring_date  date;
+alter table mentee_outcomes add column if not exists fired_date    date;
+
+add this to the feature backlog, On the "pipeline timing" card on the journeys tab, I want to be able to set a few filters on what mentees are evaluate in that screen, like if they have a over ridden graduation date, meaning I updated it manually, or mentees from the last year, or stuff like that. 
+
+also, add a feature to the backlog. I want a margins tab created, with a few sub tabs. One called JumpStart Your Freedom. One called Mentoring. In the JumpStart Your Freedom sub tab, I want to enter all the staff hours for the month into the system and compare it to all the meeting hours for JYF for that month. We'll add money numbers later, but I want the bones there 
+
+In the journey's tab, there are 219 mentees, but the notion database shows 181. I believe that is because we use coach accountable for several different pipelines. I want the mentee journeys tab to reflect only mentees/clients in jumpstart your freedom, 4x, 2x or 1x mentoring. We have other offerings like independant IMN mentoring, after graduation care, mentor training, etc. For now, match the names from the "mentees source of truth" to the mentees listed in the journeys list. If the mentee exists in the journey's list but NOT in the Mentee source of truth, exclude them from the metrics.
+
+--- 2026-06-24 (session 009) ---
+build the feature on the feature backlog that adds filters to the journeys
+
+--- 2026-06-24 (session 009) ---
+keep working on the backlog
+
+--- 2026-06-24 (session 009) ---
+work on the "margins" feature now
+Continue from where you left off.
+
+--- 2026-06-24 (session 009) ---
+For the "margins" feature, I want to be able to click on a column and it would load the list of meetings that occured that built the data for that column.
+
+--- 2026-06-24 (session 009) ---
+keep working on the backlog features
+
+--- 2026-06-24 (session 009) ---
+write the handoff, commit to main and end the session

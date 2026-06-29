@@ -1,0 +1,41 @@
+--- 2026-06-22 17:50 ---
+I applied both migrations, build the next feature
+
+--- 2026-06-22 18:00 ---
+wait, so you finished the entire feature backlog?
+
+--- 2026-06-22 18:10 ---
+Ok, well then I want a new metric card added called "Meetings to Freedom!" and I want it to count how many 1 on 1 mentoring sessions, whether 4x, 2x or 1x, between the completion of JumpStart Your Freedom and the Graduation
+
+--- 2026-06-22 18:12 (AskUserQuestion answers) ---
+Q: Where should the "Meetings to Freedom!" card live?  A: Metrics tab
+Q: What marks 'completion of JumpStart'?  A: JumpStart engagement end date
+
+--- 2026-06-22 18:30 ---
+Ok, so I had a very long discussion with Clayton, the former administrative assistant, who explained how the payment system worked. I will do several things now.
+First, I will tell you how it works according to him.
+Second, I want you to compare YOUR existing logic to the new logic from him
+Third, I want you to MATCH CLAYTONS logic by re-writing your own.
+Then, I want you to wire it into the "Pay Staff" feature.
+[Clayton's model — Alex Arnold example: starts 4x on Mar 12 2026, pays $425 immediately; Apr 12 invoice paid; April not routine, a meeting moved a week out so admin pushes next invoice to May 19; May 19 invoice paid. Mentor gets 60% of revenue per mentee per month. Mar 12 = 38.7% through the month, 61.3% remaining -> mentor gets 60% of 61.3% of $425 = $156.315 (paid in March). Remainder applied to following month: (1-.613)=.387; $425*.387=$164.475; *60% = $98.685 (paid in April). Check: 98.685+156.315=$255. May: 19th = 63.3% elapsed; May payout first part = ($425*(1-.633))*.6 = $93.585, plus April's remainder. June: May's remainder = $425*.633*.6 = $161.415; check 93.585+161.415=$255. Boiled down: INVOICE DATE amount * % of month remaining * mentor% paid that month; remainder next month = PRIOR INVOICE DATE amount * (1 - % of prior month remaining) * mentor%.]
+
+--- 2026-06-22 18:55 ---
+Give me a comprehensive explanation that I can use to put into a prompt in Claude Chat so that I can have a visual way of explaining how payments are calculated.
+
+--- 2026-06-22 19:05 ---
+generate it as part of the dashboard. Move the data map and this map to a tab called "Maps"
+
+--- 2026-06-22 19:20 ---
+I LOVE the PAY MAP. Can I somehow set it up so I could send it to the mentors so they can play around with the calculator? I want you to expand the calculator so they could see how it would work with 3 mentees, all with varying invoice dates. Make the 3 example mentess, Alex Arnold, Bob Boyd and Chase Chester
+
+--- 2026-06-22 19:35 ---
+Combine the "Discovery Calls" with "Discovery > Conversion", as it's redundant data, then move the "Discovery > Conversion" card on the metrics tab to the top of the page. Then put the "Meetings to Freedom!" card under that.
+
+--- 2026-06-22 19:45 ---
+On the new discovery calls > conversion, I want the columns color coded again
+
+--- 2026-06-22 19:55 ---
+Make the colors more asthetically pleasing, like a range of colors, not these stark mixes. Also, I meant when I said that I want the columns color coded, that I want to be able to see the dcifference between phone ones and zoom ones. Make phone ones with a grid pattern and zoom ones solid. Keep the coloring of conversion, pending etc
+
+--- 2026-06-22 20:10 ---
+Ok, I want you to do a comprehensive re-design over the whole platform. I want it to look professional with 2 color modes, light and dark that I can toggle for the entire site. But I don't want the big rounded corners and everything smooth. I want it clean, and crisp, with a professional, business looking feel. Then, write the handoff, merge everything to main and wrap the session.
