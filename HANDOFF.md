@@ -1,9 +1,46 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-27 (session 010 — mentee management **re-written** to a three-zone model).
+2026-06-29 (session 011 — Mentees screen: right-docked editor + inline-edit grid).
 
-## ▶ START HERE (2026-06-27, session 010)
+## ▶ START HERE (2026-06-29, session 011)
+
+**Mentees (§501) editing UX shipped on `main` and is green** (`typecheck` + `verify` +
+`build`). Commit: `f935e9f`. **UI NOT browser-tested** (headless container — the app needs
+live Supabase creds + an auth session to boot, which aren't available here). The user
+confirmed **all migrations are applied** to Supabase and the session-010 cutover is done.
+
+**Open issues check:** GitHub has **0 open issues** and **0 open PRs**. The only tracked
+"open" items were the project's own deferred list (HANDOFF / FEATURE_BACKLOG). This session
+closed the **"inline-edit grid"** deferred item. **Still deferred (offered, not yet built):**
+a manual **"merge/link to an existing mentee"** action for ambiguous homonyms / renamed
+Notion orphans (the one remaining deferred item; needs a UX decision on target-picking + how
+the three zones reconcile on merge).
+
+**What shipped (session 011) — `src/views/MenteesView.tsx` + `src/styles.css`:**
+1. **Right-docked editor.** Clicking a mentee name opens the detail/edit panel as a
+   **right-hand column** (`.mentee-panel` — sticky, scrolls independently) beside the roster
+   (`.mentee-layout` / `.mentee-layout__main`), replacing the old full-width card *below* the
+   table. Stacks below the roster under 1180px; the panel's `mentee-detail__grid` collapses to
+   one column in the narrower dock. The selected row's name is bolded.
+2. **Inline-editable roster grid.** The hand-zone fields are now editable directly in the
+   grid via the `SortableTable` `format` hook (no change to SortableTable itself):
+   **Status** (`<select>`, commits on change), **Coach** (free text → `coach_override`,
+   commits on blur only when changed; blank reverts to Notion/CA), **Discovery** (`<input
+   type=date>` → `discovery_date_override`, commits on change). New `inlineSave()` does an
+   **optimistic** local patch + mirrors into the open detail draft if it's the same mentee +
+   background `saveMenteeHand` (reloads on error). CA/Notion-derived columns (Stage, Notion
+   status, Last meeting, Meetings) stay read-only; **Name** stays a button that opens the panel.
+   New `.cell-edit` compact control styling. Coach uses a per-id `coachBuffer` so typing is
+   controlled and focus-stable.
+
+**Next session:** browser-verify on a Vercel/live preview (the right-dock layout in light+dark,
+inline Status/Coach/Discovery edits persisting + surviving reload, panel stacking on mobile).
+Then decide whether to build the deferred **merge/link mentee** action.
+
+---
+
+## ▶ Prior session START HERE (2026-06-27, session 010)
 
 **A full mentee-management RE-WRITE shipped on `main` and is green** (`typecheck` +
 `verify` (**24 sections, 35+ new checks**) + `build`). Commits: `f8de071` (rewrite) +
