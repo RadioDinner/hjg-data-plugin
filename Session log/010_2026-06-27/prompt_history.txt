@@ -11,3 +11,6 @@ Drop Current Invoice Amount, FF Amount, Freedome Fight Paid?, Date FF Paid. Leav
 
 --- 2026-06-27 (session 010) ---
 Merge all your changes to main and build everything
+
+--- 2026-06-27 (session 010) ---
+write the handoff, commit it to main and wrap the session

@@ -6,9 +6,10 @@ Working notes for resuming this project in a future session. Last updated
 ## ▶ START HERE (2026-06-27, session 010)
 
 **A full mentee-management RE-WRITE shipped on `main` and is green** (`typecheck` +
-`verify` (**24 sections**) + `build`). Commit `f8de071`. **UI NOT browser-tested** (headless).
-Plan doc: `Session log/010_2026-06-27/rewrite_plan.md`. `main` is the trunk (the
-stale session-002 main was merged forward in `9af20f4`).
+`verify` (**24 sections, 35+ new checks**) + `build`). Commits: `f8de071` (rewrite) +
+`dbe09b5` (15 review fixes). **UI NOT browser-tested** (headless). Plan doc:
+`Session log/010_2026-06-27/rewrite_plan.md`. `main` is the trunk (the stale session-002
+main was merged forward in `9af20f4`). Working tree clean, all pushed.
 
 **The model now has THREE write zones on one `mentees` row, none ever writing another's columns:**
 - **`ca_*`** — CoachAccountable facts; written only by the sync materialize step + `rebuildMenteesFromCa`.
@@ -39,9 +40,23 @@ roster but **excluded from the funnel**. The **funnel + exit card MOVED from Men
 email, phone, DC Date, Offering Signup. Dropped: Associated Tasks, dd w a, MN Equivalency, Projected
 Start Date, JS Lesson?, Wants PP?, MT Prayer Partner, and all 4 financial fields.
 
-**Open / deferred:** match-by-name is the only key Notion gives us (renames orphan a row; homonyms go
-to "ambiguous"); a manual "merge/link to existing mentee" action is deferred. An adversarial
-code-review workflow was run post-merge — see the session 010 log for any fixes applied.
+**Post-merge review — DONE.** An adversarial workflow (23 agents) found **15 verified defects, all
+fixed** in `dbe09b5`: funnel attribution made consistent (`currentStage` = furthest reached; exits
+never land on un-entered stages or on graduated; `pre_waiting` conversion null); importer hardened
+(non-ASCII/transliterated names, bare-CR CSV, dated-with-time parsing); **`planClientIdClaims`** now
+merges a Notion-only row onto its CA identity by name on sync/Rebuild (kills the prospect-before-CA
+duplicate-row + re-import-ambiguity bugs); UI guards (coach-filter reset, "X of Y" count). Full list
+in the session 010 log.
+
+**Open / deferred:** match-by-name is the only key Notion gives us — `planClientIdClaims` auto-merges
+a *unique* name match on sync, but a **manual "merge/link to existing mentee" action** for ambiguous
+homonyms / renamed orphans is still deferred. Optional: an inline-edit grid (today editing is the
+roster + the rich 3-source detail panel). The Notion "Mentor 1" vs "Mentor" columns are reconciled as
+one coach and flagged when they disagree — if "Mentor" turns out to mean prayer-partner (not coach),
+revisit `reconcileCoach` / `DEFAULT_NOTION_MAP` in `lib/notionCsv.ts`.
+
+**Next session:** browser-verify the live UI after cutover (importer round-trip, 3-source panel,
+Status filter, Metrics funnel); then pick up the deferred merge action if wanted.
 
 ---
 
