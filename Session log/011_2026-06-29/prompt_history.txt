@@ -1,2 +1,5 @@
 --- 2026-06-29 (session 011 start) ---
 Let's kick off another session. What is this session number? And what are the open issues? I want to revisit all the open issues and fix them. All migrations are applied to Supabase. Once everything is up to date, I want to edit the "Mentees" 501 screen so that when I click a mentee name, it opens on the right hand side so I can edit the details. Also, the grid doesn't allow me to edit the fields. Commit all these changes to main and continue committing to main for this session. Don't create a seprate branch
+
+--- 2026-06-29 (session 011) ---
+I want to be able to see the whole grid still when I click up a mentee. Keep the side bar loaded into the gui regardless of if I have a mentee selected or not

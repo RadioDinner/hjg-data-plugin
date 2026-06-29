@@ -34,6 +34,11 @@
     controlled + focus-stable. Read-only columns (Stage, Notion status, Last meeting,
     Meetings) unchanged; Name stays the open-panel button.
   - `typecheck` + `verify` (all checks) + `build` green.
+- **`46d2cd3` — Mentees (§501): editor panel always docked (user follow-up).**
+  The right panel is now **always rendered** (reserves its space; shows a "Select a mentee…"
+  empty state when nothing is selected) so clicking a mentee no longer reflows/shrinks the
+  roster grid — the grid stays put and fully visible. Panel width made responsive
+  (`clamp(360px, 30vw, 460px)`). typecheck + verify + build green.
 
 ## Directional decisions
 - Name cell = **open the right panel** (not inline-editable) to resolve the tension

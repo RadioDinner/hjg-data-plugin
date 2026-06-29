@@ -6,7 +6,8 @@ Working notes for resuming this project in a future session. Last updated
 ## ▶ START HERE (2026-06-29, session 011)
 
 **Mentees (§501) editing UX shipped on `main` and is green** (`typecheck` + `verify` +
-`build`). Commit: `f935e9f`. **UI NOT browser-tested** (headless container — the app needs
+`build`). Commits: `f935e9f` (right-dock + inline-edit) → `46d2cd3` (panel **always docked**).
+**UI NOT browser-tested** (headless container — the app needs
 live Supabase creds + an auth session to boot, which aren't available here). The user
 confirmed **all migrations are applied** to Supabase and the session-010 cutover is done.
 
@@ -18,11 +19,14 @@ Notion orphans (the one remaining deferred item; needs a UX decision on target-p
 the three zones reconcile on merge).
 
 **What shipped (session 011) — `src/views/MenteesView.tsx` + `src/styles.css`:**
-1. **Right-docked editor.** Clicking a mentee name opens the detail/edit panel as a
-   **right-hand column** (`.mentee-panel` — sticky, scrolls independently) beside the roster
-   (`.mentee-layout` / `.mentee-layout__main`), replacing the old full-width card *below* the
-   table. Stacks below the roster under 1180px; the panel's `mentee-detail__grid` collapses to
-   one column in the narrower dock. The selected row's name is bolded.
+1. **Right-docked editor (always present).** The detail/edit panel is a **right-hand column**
+   (`.mentee-panel` — sticky, scrolls independently) beside the roster (`.mentee-layout` /
+   `.mentee-layout__main`), replacing the old full-width card *below* the table. Per the user's
+   follow-up it is **always rendered** (reserves its space; shows a "Select a mentee…" empty
+   state when nothing is selected) so **clicking a mentee never reflows/shrinks the grid** — the
+   grid stays put and fully visible. Panel width is responsive (`clamp(360px, 30vw, 460px)`) to
+   give the grid as much room as possible. Stacks below the roster under 1180px; the panel's
+   `mentee-detail__grid` collapses to one column in the narrower dock. Selected row name bolded.
 2. **Inline-editable roster grid.** The hand-zone fields are now editable directly in the
    grid via the `SortableTable` `format` hook (no change to SortableTable itself):
    **Status** (`<select>`, commits on change), **Coach** (free text → `coach_override`,
