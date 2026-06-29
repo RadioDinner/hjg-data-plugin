@@ -1,2 +1,7 @@
 --- 2026-06-27 (session 010 kickoff) ---
 Kickoff a new session. I have a problem. I am going to need another complete re-write of the mentee management system. I have a notion database that is up to date and accurate but is missing data that I want to have in my system. Some of the missing data needs to come from CoachAccoutnable syncs. The CA syncs will bring in data to my system that Notion didn't ever have and is also bringing automated changes that are a a result of staff assigning courses and engagements, etc. So how do I make a mentee mangement system that I can keep up to date by hand copying data from Notion (for now, eventually this system will replace Notion) and mix in the coachaccountable sync data. I also want my software to really make a lot of sense for editing my mnetee management system. Then I want the Mentee funnel and exit card to be moved to the metrics, but still be built off my mix of data sources. Interview me and help me decide what I need
+
+--- 2026-06-27 (session 010) ---
+@".../bc76071d-Mentees_Database_..._all.csv" merge and commit to main for the remainder of the session, not to a branch. On question #5, I want all the mentee data to stay in the same place, but I want to be able to set filters by status. On question #6, I'm willing to nuke the whole thing if necessary. This is important.
+
+Attached is the current status of our Notion database
