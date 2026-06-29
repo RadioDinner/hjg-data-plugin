@@ -8,3 +8,6 @@ Attached is the current status of our Notion database
 
 --- 2026-06-27 (session 010) ---
 Drop Current Invoice Amount, FF Amount, Freedome Fight Paid?, Date FF Paid. Leave them off
+
+--- 2026-06-27 (session 010) ---
+Merge all your changes to main and build everything
