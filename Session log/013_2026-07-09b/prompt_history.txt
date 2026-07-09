@@ -1,0 +1,7 @@
+--- 2026-07-09 (session 013) ---
+[attached: payoutbuildcalebotto20260620260709.csv — the exported June 2026 Build payout for Caleb Otto]
+Why is Caleb's payout saying he has $430.83 in earned income for Ty Miller? How did it calculate that? I want the "export CSV" button to export the DATA USED to build the payout, not just the data on the screen.
+
+I want you to make the following changes after you diagnose the problems with the payout engine.
+1) Make the Export CSV buttons, accross the board, export the data used to calculate the data presented on that screen. So for this instance on screen 204, I want you to export the invoices and the times they were paid, etc, that were used to build the payout
+2) I want you to make so I can click on the name of the mentee in screen 204 and see the invoices that he paid for the month it's calculating, as well as the dates he paid. Rather too much information than too little

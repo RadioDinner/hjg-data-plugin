@@ -145,6 +145,13 @@ Pure math lives in \`lib/compare.ts\`.`,
 - **Include / exclude** each line with the checkbox, or **override** a line's payout and add a **note** explaining why.
 - The side panel shows the **built (signed-off) total** vs the **engine total**, the **delta**, and how many lines were dropped / overridden.
 
+### See the invoices behind a number
+- **Click a mentee's name** to open the invoice/payment drill-down: every invoice whose slice built that payout, the **date(s) it was paid**, the method, and the line items — plus the **this-month slice + rolled-in slice = earned → payout** math spelled out.
+- A payout blends **two months** (each invoice pays its remaining fraction in its own month and rolls its elapsed fraction — invoice day ÷ 30 — into the next), so a mentee's **earned amount can differ from a single month's billed total**. The drill-down shows exactly which invoices produced it.
+
+### Export
+- **Export CSV** downloads the **data used to build the payout** — one row per contributing invoice (this-month + rolled-in slices), with the dates each was paid — not just the on-screen per-mentee summary.
+
 ### Saving
 - **Save draft** to come back later; **Approve** to sign the month off; **Reopen** to edit an approved month again. **Discard** removes the saved review.
 

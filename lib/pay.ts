@@ -126,11 +126,57 @@ function dayOf(dateYmd: string): number {
 
 // --- engine inputs ---
 
+// A recorded payment against an invoice (CA Invoice.paymentSet). Carried through
+// for the reviewer/CSV/drill-down so "when did the mentee pay" is auditable.
+export interface PayInvoicePayment {
+  datePaid: string | null; // 'YYYY-MM-DD' or datetime — when the payment was recorded
+  amount: number;
+  method: string | null; // e.g. "Credit Card", "Check"
+  checkNumber: string | null;
+}
+
+// A billed line item on an invoice (CA Invoice.lineItemSet).
+export interface PayInvoiceLineItem {
+  item: string | null;
+  amount: number;
+}
+
 export interface PayInvoiceInput {
   clientId: number;
   serviceDate: string; // 'YYYY-MM-DD' from the invoice date_of (the DAY drives proration)
   billed: number; // invoice `amount` — what was billed; the PAY BASIS
   collected: number; // amount_paid (collected so far) — reference only
+  // OPTIONAL invoice metadata. The engine's math ignores these entirely; they
+  // ride along so the UI can show exactly WHICH invoices (and the dates they were
+  // paid) built a payout line — the "data used to build the payout." Absent for
+  // synthetic/test inputs, which is why every field is optional.
+  invoiceId?: number | null;
+  invoiceNumber?: string | null;
+  payments?: PayInvoicePayment[];
+  lineItems?: PayInvoiceLineItem[];
+}
+
+// One invoice's contribution to a single payout month for one mentee. A payout
+// line is built entirely from these: this month's invoices contribute their
+// REMAINING slice (billed × (1−e)); the prior month's invoices contribute their
+// ELAPSED slice (billed × e) rolled forward. `recognized` is the exact dollar
+// amount THIS invoice fed into THIS payout month. Summing the sources reproduces
+// the line's recognizedThis + rolloverPrev = earned — so the drill-down and CSV
+// are a faithful audit, not a re-derivation.
+export interface PayLineSource {
+  invoiceId: number | null;
+  invoiceNumber: string | null;
+  serviceDate: string; // 'YYYY-MM-DD' (invoice date_of)
+  serviceMonth: string; // 'YYYY-MM'
+  invoiceDay: number; // day-of-month driving the proration split
+  slice: "this-month" | "rollover"; // which half of the two-month split this is
+  billed: number; // full invoice amount
+  collected: number; // amount paid so far on this invoice
+  elapsedFraction: number; // e = min(day, 30) / 30
+  recognized: number; // this-month: billed×(1−e); rollover: billed×e — UNROUNDED (sum, then round)
+  tier: string; // tier from the invoice's mentoring coverage
+  payments: PayInvoicePayment[]; // when + how the mentee paid (may be empty)
+  lineItems: PayInvoiceLineItem[]; // what was billed (may be empty)
 }
 
 export interface PayEngagementInput {
@@ -179,6 +225,10 @@ export interface PayMenteeLine {
   splitPct: number;
   payout: number; // earned × splitPct
   tier: string;
+  // The individual invoices (with payment dates) whose slices built this line —
+  // ordered oldest service date first (prior-month rollover slices, then this
+  // month's). Powers the "data used to build the payout" CSV + mentee drill-down.
+  sources: PayLineSource[];
 }
 
 export interface PayMentorSummary {
@@ -257,6 +307,7 @@ interface LineAcc {
   invoiceDay: number | null;
   recognizedThis: number;
   rolloverPrev: number;
+  sources: PayLineSource[];
 }
 
 export function computePayReport(input: PayInputs): PayReport {
@@ -294,7 +345,7 @@ export function computePayReport(input: PayInputs): PayReport {
     const k = keyOf(coachId, clientId);
     let a = acc.get(k);
     if (!a) {
-      a = { coachId, clientId, tier, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0 };
+      a = { coachId, clientId, tier, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0, sources: [] };
       acc.set(k, a);
     }
     return a;
@@ -322,14 +373,35 @@ export function computePayReport(input: PayInputs): PayReport {
       continue;
     }
     const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
-    if (invYm === ym) {
-      const day = dayOf(inv.serviceDate);
+    const day = dayOf(inv.serviceDate);
+    const e = elapsedFraction(day);
+    const collected = inv.collected || 0;
+    const thisMonth = invYm === ym;
+    // Unrounded slice (billed × remaining/elapsed); the line rounds the SUM, so
+    // keeping sources unrounded lets the drill-down foot to the engine's penny.
+    const recognized = amt * (thisMonth ? 1 - e : e);
+    a.sources.push({
+      invoiceId: inv.invoiceId ?? null,
+      invoiceNumber: inv.invoiceNumber ?? null,
+      serviceDate: inv.serviceDate.slice(0, 10),
+      serviceMonth: invYm,
+      invoiceDay: day,
+      slice: thisMonth ? "this-month" : "rollover",
+      billed: amt,
+      collected,
+      elapsedFraction: e,
+      recognized,
+      tier: cov.tier,
+      payments: (inv.payments ?? []).map((p) => ({ ...p })),
+      lineItems: (inv.lineItems ?? []).map((li) => ({ ...li })),
+    });
+    if (thisMonth) {
       a.billed += amt;
-      a.collected += inv.collected || 0;
-      a.recognizedThis += amt * (1 - elapsedFraction(day));
+      a.collected += collected;
+      a.recognizedThis += recognized;
       a.invoiceDay = a.invoiceDay == null ? day : Math.min(a.invoiceDay, day);
     } else {
-      a.rolloverPrev += amt * elapsedFraction(dayOf(inv.serviceDate));
+      a.rolloverPrev += recognized;
     }
   }
 
@@ -341,6 +413,9 @@ export function computePayReport(input: PayInputs): PayReport {
     const billed = round2(a.billed);
     if (earned <= 0 && billed <= 0) continue;
     const collected = round2(a.collected);
+    // Oldest service date first: prior-month rollover slices lead, then this
+    // month's — the order the two-month split reads in.
+    const sources = [...a.sources].sort((x, y) => x.serviceDate.localeCompare(y.serviceDate));
     const base: Omit<PayMenteeLine, "splitPct" | "payout"> = {
       clientId: a.clientId,
       clientName: input.clientName(a.clientId),
@@ -352,6 +427,7 @@ export function computePayReport(input: PayInputs): PayReport {
       rolloverPrev: round2(a.rolloverPrev),
       earned,
       tier: a.tier,
+      sources,
     };
 
     if (a.coachId == null) {
@@ -428,6 +504,7 @@ export interface PayLedgerRow {
   splitPct: number;
   payout: number;
   assigned: boolean; // false = billed revenue with no coach overlapping that month
+  sources: PayLineSource[]; // the invoices (with payment dates) whose slices built this row
 }
 
 export interface PayMonth {
@@ -510,6 +587,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
           splitPct: l.splitPct,
           payout: l.payout,
           assigned: true,
+          sources: l.sources,
         });
       }
     }
@@ -530,6 +608,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
         splitPct: u.splitPct,
         payout: u.payout,
         assigned: false,
+        sources: u.sources,
       });
     }
   }

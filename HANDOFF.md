@@ -1,9 +1,55 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-07-09 (session 012 — mentor-pay verification: per-mentor ramps + JYF exclusion + reconciliation panel).
+2026-07-09 (session 013 — payout transparency: invoice-source drill-down + "data used to build the payout" CSV).
 
-## ▶ START HERE (2026-07-09, session 012)
+## ▶ START HERE (2026-07-09, session 013)
+
+**Payout transparency shipped on `claude/payout-calculation-csv-export-mez3a9`.** `typecheck` +
+`verify` + `build` all green. **UI NOT browser-tested** (headless container — no live Supabase
+creds). **No migration** (the data was already synced). Full detail in
+`Session log/013_2026-07-09b/session_log.md`.
+
+**The question answered — "why is Ty Miller's June earned $430.83?"** The §204 payout uses
+Clayton's **two-month split**: each invoice pays its *remaining* fraction `billed × (1 − e)` in its
+own month and rolls its *elapsed* fraction `billed × e` (`e = invoiceDay ÷ 30`) into the next.
+Ty's **June invoice is $425 dated the 30th** → `e = 1` → this-month slice **$0**; his whole June
+number is **May's rolled-in slice = $430.83**, × Caleb's 60% = **$258.50**. It exceeds $425 because
+`rolloverPrev` **sums all of May's mentoring invoices** — so May had >1 4× invoice (likely a
+proration around Ty's ~5/29 JumpStart→4× switch + his regular $425). The engine math was faithful;
+the old screen/CSV just **hid the invoices**. (June's $425 rolls into July — not lost.) A verify
+assertion now reproduces the exact **$430.83 → $258.50** from a two-May-invoice replica.
+
+**What shipped:**
+- **Engine (`lib/pay.ts`)** — additive, math unchanged: `PayMenteeLine`/`PayLedgerRow` now carry
+  `sources: PayLineSource[]` (the invoices — with payment dates + line items — whose slices built
+  the line). `PayInvoiceInput` gained optional `invoiceId/invoiceNumber/payments/lineItems`.
+- **Data (`src/db.ts`)** — `fetchAllPayInvoices` now selects `id, invoice_number, line_items,
+  payments` and normalizes the jsonb (`asArray`/`normInvoicePayments`/`normInvoiceLineItems`). The
+  data was already in `ca_invoices` (9993) — just dropped before the engine.
+- **CSV (`lib/payBuild.ts`)** — new `payoutDetailCsvRows()` + `PAYOUT_DETAIL_CSV_COLUMNS`: **one
+  row per contributing invoice** (this-month + rolled-in slices) with payment dates; mentee-level
+  payout columns filled only on each mentee's FIRST invoice row (no double-count).
+- **§204 `BuildPayoutView`** — Export CSV now exports that invoice-level detail; the **mentee name
+  is a button** → new **`PayoutLineDetailModal` (§905)** showing the mentee's invoices, every
+  payment date/amount/method, line items, and the `this-month + rolled-in = earned → payout` math.
+- **Pay Explore Invoices (§901)** — added Invoice #, Payment dates, Payment methods, Line items.
+- **Registry/help** — `modal.payoutLineDetail = 905` (uiRegistry + UI_INDEX); `pay.build` article
+  updated. **verify-metrics** §8/§13 gained the Ty replica + `sources`/CSV invariants.
+
+**Review:** adversarial review run via parallel subagents — DB-normalization dimension came back
+**clean**; engine/CSV + UI dimensions were also reviewed (fold any surviving findings into a
+follow-up commit).
+
+**Next session:** browser-verify §204 (click a mentee → drill-down shows invoices + payment dates;
+Export CSV downloads per-invoice detail; Pay Explore → Invoices shows the new columns). With live
+data, open Ty Miller's June drill-down to see the actual May invoices behind $430.83 and decide if
+any is a duplicate to exclude/override. Optional: extend the clickable-name drill-down to the
+reconcile (§205) + Explore ledger tables (this session scoped it to §204 per the request).
+
+**Next new migration is `9972_…`** (unchanged — no migration this session).
+
+## ▶ Prior session START HERE (2026-07-09, session 012)
 
 **Mentor-payment correctness pass + a new reconciliation feature — MERGED TO `main` (session
 WRAPPED 2026-07-09).** Developed on `claude/mentor-payment-verification-3asxd8`, fast-forwarded to

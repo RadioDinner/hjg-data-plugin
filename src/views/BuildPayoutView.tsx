@@ -6,6 +6,8 @@ import {
   summarizeBuild,
   effectiveLinePayout,
   DEFAULT_LINE_STATE,
+  payoutDetailCsvRows,
+  PAYOUT_DETAIL_CSV_COLUMNS,
   fetchPayoutBuilds,
   savePayoutBuild,
   deletePayoutBuild,
@@ -21,6 +23,7 @@ import { downloadCsv } from "../csv";
 import { fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { PayoutLineDetailModal } from "../components/PayoutLineDetailModal";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -70,6 +73,8 @@ export function BuildPayoutView({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  // The mentee line whose invoice/payment drill-down is open (click a name).
+  const [detail, setDetail] = useState<PayMenteeLine | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -253,29 +258,23 @@ export function BuildPayoutView({
     }
   }
 
+  // Export the DATA USED to build the payout — one row per contributing invoice
+  // (this month's slice + the prior month's rolled-in slice), with the dates each
+  // invoice was paid — not just the on-screen per-mentee summary. The TOTAL row's
+  // "Engine payout"/"Effective payout" columns sum cleanly because those fields
+  // are written only on each mentee's first invoice row (see payoutDetailCsvRows).
   function exportCsv() {
     if (coach == null || !ym) return;
-    const rows = lines.map((l) => {
-      const s = stateFor(l.clientId);
-      return [
-        l.clientName,
-        l.tier,
-        l.billed,
-        l.invoiceDay ?? "",
-        l.recognizedThis,
-        l.rolloverPrev,
-        fmtPct(l.splitPct),
-        l.payout,
-        s.included ? "yes" : "no",
-        s.override != null ? s.override : "",
-        effectiveLinePayout(l.payout, s),
-        s.note ?? "",
-      ];
-    });
-    rows.push(["TOTAL", "", "", "", "", "", "", summary.computedTotal, "", "", summary.builtTotal, ""]);
+    const rows = payoutDetailCsvRows(lines, stateMap);
+    // TOTAL row aligned to the "Engine payout" + "Effective payout" columns of
+    // PAYOUT_DETAIL_CSV_COLUMNS (found by label so it survives column reordering).
+    const total: (string | number)[] = PAYOUT_DETAIL_CSV_COLUMNS.map((c) =>
+      c === "Mentee" ? "TOTAL" : c === "Engine payout" ? summary.computedTotal : c === "Effective payout" ? summary.builtTotal : ""
+    );
+    rows.push(total);
     downloadCsv(
       `payout-build-${data?.coachName(coach).replace(/\s+/g, "-").toLowerCase() ?? coach}-${ym}`,
-      ["Mentee", "Tier", "Billed (this mo)", "Inv. day", "This-mo slice", "Rolled-in", "Split", "Engine payout", "Included", "Override", "Effective payout", "Note"],
+      [...PAYOUT_DETAIL_CSV_COLUMNS],
       rows
     );
   }
@@ -375,7 +374,7 @@ export function BuildPayoutView({
                   {mentor ? (
                     <>
                       Tenure month {mentor.tenureMonth ?? "—"} · split {fmtPct(mentor.splitPct)} · {lines.length} line
-                      {lines.length === 1 ? "" : "s"}
+                      {lines.length === 1 ? "" : "s"} · <em>click a mentee to see the invoices + payment dates behind their number</em>
                     </>
                   ) : (
                     "No engine-computed lines for this coach in this month."
@@ -423,7 +422,16 @@ export function BuildPayoutView({
                               aria-label={`Include ${l.clientName}`}
                             />
                           </td>
-                          <td style={{ textAlign: "left" }}>{l.clientName}</td>
+                          <td style={{ textAlign: "left" }}>
+                            <button
+                              className="linkbtn"
+                              style={{ fontSize: "inherit", fontWeight: 500, textAlign: "left" }}
+                              onClick={() => setDetail(l)}
+                              title={`See the invoices + payment dates behind ${l.clientName}'s payout`}
+                            >
+                              {l.clientName}
+                            </button>
+                          </td>
                           <td>{l.tier}</td>
                           <td className="num" title={l.invoiceDay != null ? `invoice day ${l.invoiceDay}` : "rollover only"}>
                             {fmtUsd(l.billed)}
@@ -565,6 +573,16 @@ export function BuildPayoutView({
             </div>
           </aside>
         </div>
+      )}
+
+      {detail && coach != null && (
+        <PayoutLineDetailModal
+          line={detail}
+          coachName={mentor?.coachName ?? data?.coachName(coach) ?? ""}
+          ym={ym}
+          state={stateFor(detail.clientId)}
+          onClose={() => setDetail(null)}
+        />
       )}
     </div>
   );

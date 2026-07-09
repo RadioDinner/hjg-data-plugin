@@ -20,16 +20,16 @@ export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
 import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec } from "../lib/pay";
-import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine } from "../lib/pay";
+import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine, PayLineSource, PayInvoicePayment, PayInvoiceLineItem } from "../lib/pay";
 export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec };
-export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine };
+export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine, PayLineSource, PayInvoicePayment, PayInvoiceLineItem };
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
 // re-exported so the frontend imports lib through db.ts — same pattern as above.
-import { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE } from "../lib/payBuild";
-import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus } from "../lib/payBuild";
-export { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE };
-export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus };
+import { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS } from "../lib/payBuild";
+import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine } from "../lib/payBuild";
+export { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
+export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
 // Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
 // frontend imports lib through db.ts — same pattern as the pay engine above.
@@ -1183,23 +1183,70 @@ async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
   return out;
 }
 
+// CA stores the payment + line-item sets as jsonb. PostgREST hands them back as
+// already-parsed arrays, but be defensive: tolerate a JSON string, a null, or a
+// single object, and coerce each field to the engine's shape. Unknown/garbage
+// entries collapse to safe defaults rather than throwing mid-fetch.
+function asArray(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : parsed != null ? [parsed] : [];
+    } catch {
+      return [];
+    }
+  }
+  if (v && typeof v === "object") return [v];
+  return [];
+}
+
+function normInvoicePayments(v: unknown): PayInvoicePayment[] {
+  return asArray(v).map((p) => {
+    const o = (p ?? {}) as Record<string, unknown>;
+    return {
+      datePaid: o.datePaid != null ? String(o.datePaid) : null,
+      amount: Number(o.amount) || 0,
+      method: o.method != null ? String(o.method) : null,
+      checkNumber: o.checkNumber != null ? String(o.checkNumber) : null,
+    };
+  });
+}
+
+function normInvoiceLineItems(v: unknown): PayInvoiceLineItem[] {
+  return asArray(v).map((li) => {
+    const o = (li ?? {}) as Record<string, unknown>;
+    return {
+      item: o.item != null ? String(o.item) : null,
+      amount: Number(o.amount) || 0,
+    };
+  });
+}
+
 async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
   const pageSize = 1000;
   const out: PayInvoiceInput[] = [];
   for (let f = 0; ; f += pageSize) {
     // date_of is the full service date — its DAY drives Clayton's proration split.
+    // invoice_number / line_items / payments ride along so the Build-payout CSV +
+    // mentee drill-down can show exactly which invoices (and when they were paid)
+    // built each payout line. The engine's math ignores them.
     const { data, error } = await supabase
       .from("ca_invoices")
-      .select("client_id,date_of,date_of_year,date_of_month,amount,amount_paid")
+      .select("id,invoice_number,client_id,date_of,date_of_year,date_of_month,amount,amount_paid,line_items,payments")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as {
+      id: number | null;
+      invoice_number: string | null;
       client_id: number | null;
       date_of: string | null;
       date_of_year: number | null;
       date_of_month: number | null;
       amount: number | null;
       amount_paid: number | null;
+      line_items: unknown;
+      payments: unknown;
     }[];
     for (const inv of batch) {
       if (inv.client_id == null) continue;
@@ -1216,6 +1263,10 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
         serviceDate,
         billed: Number(inv.amount) || 0,
         collected: Number(inv.amount_paid) || 0,
+        invoiceId: inv.id,
+        invoiceNumber: inv.invoice_number,
+        lineItems: normInvoiceLineItems(inv.line_items),
+        payments: normInvoicePayments(inv.payments),
       });
     }
     if (batch.length < pageSize) break;

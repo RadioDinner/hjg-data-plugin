@@ -63,6 +63,8 @@ import {
   effectiveLinePayout,
   isDefaultLineState,
   DEFAULT_LINE_STATE,
+  payoutDetailCsvRows,
+  PAYOUT_DETAIL_CSV_COLUMNS,
   type BuildLineInput,
   type BuildLineState,
 } from "../lib/payBuild.js";
@@ -564,6 +566,48 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   eq(running, 1147.5, "running total through June = May $382.50 + June $765.00");
   eq(remaining, 382.5, "remaining tail = the June invoices' July rollover at 60%");
   eq(round2(running + remaining), 1530, "running + remaining = full 4x value billed through June (6 x $425 x 60%)");
+
+  // ---- Ty Miller replica: the real "$430.83 earned / $258.50 payout" number.
+  //      June's own $425 invoice is dated the 30th (fully elapsed) so recognizes $0
+  //      in June; June's payout is ENTIRELY May's rolled-in slices. May had TWO 4x
+  //      invoices ($425 on the 29th + $20 on the 30th), so the rolled-in total
+  //      ($410.83 + $20.00 = $430.83) EXCEEDS the $425 tier price. The new `sources`
+  //      expose exactly which invoices (and payment dates) built the number. ----
+  const tyEng: PayEngagementInput[] = [
+    { clientId: 1, coachId: CALEB, startDate: "2026-03-31", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+  ];
+  const tyInv: PayInvoiceInput[] = [
+    { clientId: 1, serviceDate: "2026-05-29", billed: 425, collected: 425, invoiceId: 101, invoiceNumber: "A101", payments: [{ datePaid: "2026-05-29", amount: 425, method: "Credit Card", checkNumber: null }], lineItems: [{ item: "4x Month", amount: 425 }] },
+    { clientId: 1, serviceDate: "2026-05-30", billed: 20, collected: 20, invoiceId: 102, invoiceNumber: "A102", payments: [{ datePaid: "2026-06-01", amount: 20, method: "Check", checkNumber: "555" }], lineItems: [] },
+    { clientId: 1, serviceDate: "2026-06-30", billed: 425, collected: 0, invoiceId: 103, invoiceNumber: "A103", payments: [], lineItems: [{ item: "4x Month", amount: 425 }] },
+  ];
+  const tyArgs = {
+    invoices: tyInv,
+    engagements: tyEng,
+    coachName: (id: number) => (id === CALEB ? "Caleb Otto" : `#${id}`),
+    clientName: (id: number) => (id === 1 ? "Ty Miller" : `Mentee ${id}`),
+    startMonthOverride: new Map([[CALEB, "2026-03"]]),
+    rampOverride: new Map([[CALEB, [0.5, 0.6, 0.6]]]),
+    primaryCoachOf: () => CALEB,
+  };
+  const tyJun = computePayReport({ ym: "2026-06", ...tyArgs });
+  const tyLine = tyJun.mentors[0].lines[0];
+  eq(tyLine.recognizedThis, 0, "Ty's June invoice (day 30) recognizes $0 in June — all of it rolls to July");
+  eq(tyLine.rolloverPrev, 430.83, "May's two 4x invoices roll $430.83 into June (410.83 + 20.00)");
+  eq(tyLine.earned, 430.83, "Ty's June earned = $430.83 (the exact reported number, > the $425 tier)");
+  eq(tyJun.mentors[0].payout, 258.5, "Ty's June payout = $430.83 x 60% = $258.50 (the exact reported number)");
+  // The sources ARE the audit: 2 rolled-in (May) + 1 this-month (June), oldest first.
+  eq(tyLine.sources.length, 3, "three contributing invoices behind the June line");
+  eq(tyLine.sources.filter((s) => s.slice === "rollover").length, 2, "two May invoices rolled in");
+  eq(tyLine.sources.filter((s) => s.slice === "this-month").length, 1, "one June invoice this month");
+  eq(round2(tyLine.sources.filter((s) => s.slice === "rollover").reduce((t, s) => t + s.recognized, 0)), 430.83, "rolled-in slices sum to $430.83");
+  eq(tyLine.sources.find((s) => s.slice === "this-month")?.recognized ?? -1, 0, "the June (day-30) source recognizes $0 this month");
+  eq(tyLine.sources[0].serviceDate, "2026-05-29", "sources ordered oldest service date first");
+  // Payment dates thread through untouched (the answer to 'when did he pay?').
+  eq(tyLine.sources[0].payments[0]?.datePaid ?? "", "2026-05-29", "invoice A101's payment date carried onto the source");
+  eq(tyLine.sources[1].payments[0]?.method ?? "", "Check", "invoice A102's payment method carried onto the source");
+  // Nothing double-counts: summing every source's recognized == the line's earned.
+  eq(round2(tyLine.sources.reduce((t, s) => t + s.recognized, 0)), tyLine.earned, "Σ source.recognized == line earned (audit foots)");
 }
 
 console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned, scoping)");
@@ -735,6 +779,49 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   eq(isDefaultLineState({ included: false, override: null, note: null }), false, "excluded is not default");
   eq(isDefaultLineState({ included: true, override: 0, note: null }), false, "override (even 0) is not default");
   eq(isDefaultLineState({ included: true, override: null, note: "checked" }), false, "noted line is not default");
+
+  // ---- payoutDetailCsvRows: the "data used to build the payout" export. One row
+  //      per contributing invoice; mentee-level payout columns only on the FIRST
+  //      row of each mentee so a column sum never double-counts. ----
+  const mkSource = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => ({
+    invoiceId: 1,
+    invoiceNumber: "N1",
+    serviceDate: "2026-05-29",
+    serviceMonth: "2026-05",
+    invoiceDay: 29,
+    slice: "rollover",
+    billed: 425,
+    collected: 425,
+    elapsedFraction: 29 / 30,
+    recognized: 410.8333,
+    tier: "4x",
+    payments: [{ datePaid: "2026-05-29", amount: 425, method: "Credit Card", checkNumber: null }],
+    lineItems: [{ item: "4x Month", amount: 425 }],
+    ...over,
+  });
+  const detailLines = [
+    {
+      clientId: 1,
+      clientName: "Ty Miller",
+      tier: "4x",
+      splitPct: 0.6,
+      payout: 258.5,
+      sources: [mkSource({}), mkSource({ invoiceNumber: "N2", serviceDate: "2026-06-30", serviceMonth: "2026-06", invoiceDay: 30, slice: "this-month", recognized: 0, payments: [] })],
+    },
+    { clientId: 2, clientName: "Joash", tier: "4x", splitPct: 0.6, payout: 255, sources: [mkSource({ invoiceNumber: "N3" })] },
+  ];
+  const detailStates = new Map<number, BuildLineState>([[2, { included: false, override: null, note: "drop" }]]);
+  const detailRows = payoutDetailCsvRows(detailLines, detailStates);
+  const cols = PAYOUT_DETAIL_CSV_COLUMNS;
+  const col = (row: (string | number)[], label: string) => row[cols.indexOf(label as (typeof cols)[number])];
+  eq(detailRows.length, 3, "one CSV row per contributing invoice (2 + 1)");
+  eq(col(detailRows[0], "Payment dates"), "2026-05-29", "payment date exported (ISO, machine-sortable)");
+  eq(col(detailRows[0], "Engine payout"), 258.5, "mentee payout on the FIRST invoice row");
+  eq(col(detailRows[1], "Engine payout"), "", "blank on the SECOND invoice row (no double-count)");
+  eq(col(detailRows[0], "Effective payout"), 258.5, "included line: effective == engine");
+  eq(col(detailRows[2], "Included"), "no", "excluded line marked not included");
+  eq(col(detailRows[2], "Effective payout"), 0, "excluded line contributes $0 effective");
+  eq(col(detailRows[1], "Recognized into month"), 0, "the June (day-30) slice recognizes $0");
 }
 
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");

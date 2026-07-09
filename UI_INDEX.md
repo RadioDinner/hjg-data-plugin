@@ -50,3 +50,4 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 902 | `modal.explore` | Explore (generic source-data modal) | `ExploreModal` |
 | 903 | `modal.marginsDrill` | Margins month drill-down | `MarginsView` modal |
 | 904 | `drawer.help` | Help drawer (contextual explainer) | `HelpDrawer` |
+| 905 | `modal.payoutLineDetail` | Build payout — per-mentee invoice/payment drill-down | `PayoutLineDetailModal` |

@@ -15,6 +15,18 @@ function monthLabel(ym: string): string {
 const ymOf = (d: string) => d.slice(0, 7);
 const dayOf = (d: string) => Number(d.slice(8, 10)) || 1;
 
+// Join an invoice's payment dates for display (MM-DD-YYYY) — the ISO form is kept
+// separately for the CSV export so machine-sorted dates stay unambiguous.
+const isoDate = (s: string | null) => (s ? s.slice(0, 10) : "");
+const displayDatesJoined = (isoJoined: string) =>
+  isoJoined
+    ? isoJoined
+        .split("; ")
+        .filter(Boolean)
+        .map((d) => fmtDate(d))
+        .join("; ")
+    : "";
+
 type ViewKey = "ledger" | "invoices" | "engagements";
 
 interface Props {
@@ -172,6 +184,8 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       .map<Row>((inv) => {
         const invYm = ymOf(inv.serviceDate);
         const c = coachByClientMonth.get(`${invYm}|${inv.clientId}`);
+        const payments = inv.payments ?? [];
+        const lineItems = inv.lineItems ?? [];
         return {
           serviceYm: invYm,
           serviceDay: dayOf(inv.serviceDate),
@@ -179,20 +193,32 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
           coachName: c?.coachName ?? "—",
           coachId: c?.coachId ?? null,
           clientId: inv.clientId,
+          invoiceNumber: inv.invoiceNumber ?? "",
           billed: inv.billed,
           collected: inv.collected,
+          // ISO for CSV/sort; the column's `format` renders MM-DD-YYYY.
+          paymentDatesIso: payments.map((p) => isoDate(p.datePaid)).filter(Boolean).join("; "),
+          paymentMethods: payments
+            .map((p) => [p.method ?? "", p.checkNumber ? `#${p.checkNumber}` : ""].filter(Boolean).join(" "))
+            .filter(Boolean)
+            .join("; "),
+          lineItems: lineItems.map((li) => `${li.item ?? "—"} ($${li.amount})`).join("; "),
         };
       })
       .filter((r) => coachId == null || r.coachId === coachId)
-      .filter((r) => !q || `${r.clientName} ${r.coachName}`.toLowerCase().includes(q));
+      .filter((r) => !q || `${r.clientName} ${r.coachName} ${r.invoiceNumber}`.toLowerCase().includes(q));
     const columns: SortColumn[] = [
       { key: "serviceYm", label: "Service month", format: (r) => monthLabel(String(r.serviceYm)) },
       { key: "serviceDay", label: "Inv. day", numeric: true },
       { key: "clientName", label: "Mentee" },
       { key: "coachName", label: "Coach" },
+      { key: "invoiceNumber", label: "Invoice #" },
       { key: "clientId", label: "Client ID", numeric: true },
       { key: "billed", label: "Billed", numeric: true, format: (r) => fmtUsd(r.billed) },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
+      { key: "paymentDatesIso", label: "Payment dates", format: (r) => displayDatesJoined(String(r.paymentDatesIso ?? "")) || "—" },
+      { key: "paymentMethods", label: "Payment methods" },
+      { key: "lineItems", label: "Line items" },
     ];
     return { columns, rows };
     // eslint-disable-next-line react-hooks/exhaustive-deps

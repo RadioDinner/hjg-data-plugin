@@ -76,6 +76,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "modal.explore": 902,
   "modal.marginsDrill": 903,
   "drawer.help": 904,
+  "modal.payoutLineDetail": 905, // per-mentee invoice/payment drill-down on Build payout (2026-07-09)
 };
 
 // 3-digit, zero-padded string for a key (e.g. "104"); "" if the key is unknown.
