@@ -3,3 +3,18 @@
 I want to comprehensively ensure that the mentor payment system that we have put in place is correct. I'll attach the entire export from coach accountable and I want you to grill me on how the payment for Caleb Otto should be calculated for the month of June. He should get 60% of the income that his mentees brought in, in the month of June.
 
 Once we have this figured out, I want you to make a spot in the dashboard where I can calculate previous months. Along with a running total to ensure the accuracy. For instance, if a Mentee is in our system, and started 4x mentoring in March on the 15th, and now he gets billed every 15th for $425. I want to make sure that the total so far (3 full months, April, May, and June + 1 partial month, March, total up across all the months he's been paying). So the total to pay out to the mentor across his payments would be $892.50. With $127.5 remaining
+
+--- 2026-07-09 (AskUserQuestion answers — the four grilling forks) ---
+Q1 Jonathan: "Caleb should get 60% of the engagment income $425 for Jonathan Heinzman. So, $255"
+Q2 JumpStart fees: "Only mentoring tiers (4x/2x/1x)"
+Q3 History scope: "Full invoice history for 4x,2x,1x. JYF shouldn't be counted towards mentor payouts"
+Q4 Ramp: "Normally you'd apply the ramp. Caleb was fast tracked and his ramp was 50,60,60 and now 60% ongoing. Otherwise the normal ramp is 35/50/60"
+
+--- 2026-07-09 ---
+that migration is run. Merge everything to main
+
+--- 2026-07-09 ---
+merge it straight to main
+
+--- 2026-07-09 ---
+I committed all the migrations, write the hand off, commit that and everything else to main and wrap the session

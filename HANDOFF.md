@@ -5,10 +5,13 @@ Working notes for resuming this project in a future session. Last updated
 
 ## ▶ START HERE (2026-07-09, session 012)
 
-**Mentor-payment correctness pass + a new reconciliation feature — MERGED TO `main`**
-(developed on `claude/mentor-payment-verification-3asxd8`, fast-forwarded to `main` 2026-07-09).
-`typecheck` + `build` + `verify` all green. **UI NOT browser-tested** (headless). Full detail in
-`Session log/012_2026-07-09/session_log.md`. **Migration `9973` is APPLIED** (user confirmed).
+**Mentor-payment correctness pass + a new reconciliation feature — MERGED TO `main` (session
+WRAPPED 2026-07-09).** Developed on `claude/mentor-payment-verification-3asxd8`, fast-forwarded to
+`main`; both refs at the same commit. `typecheck` + `build` + `verify` all green. **UI NOT
+browser-tested** (headless). Full detail in `Session log/012_2026-07-09/session_log.md`.
+**ALL migrations are applied** (user confirmed 2026-07-09) — including `9973` and every prior
+pending one (9974–9986 etc. listed further down are historical and now moot). **No migrations
+pending. Next new migration is `9972_…`.**
 
 **The user's rules (locked via AskUserQuestion 2026-07-09):** (1) mentee pay follows the
 **owner** (`ca_clients.coach_id`), so Jonathan Heinzman → Caleb even though his 4× is cut under

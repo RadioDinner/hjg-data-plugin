@@ -86,13 +86,18 @@ Not changed (accepted): the `unassigned` bucket + its UI (banner/row) are now un
 as harmless dead paths; per-mentee "excluded" detail is a possible follow-up (only the aggregate
 "Excluded from pay" $ is surfaced today). Re-ran `typecheck` + `build` + `verify` — all still green.
 
-## ⚠ Cutover / next steps
-1. **Apply `9973_coach_pay_ramp.sql`** in the Supabase SQL Editor (HJG-owned table; no re-sync
-   needed). Until applied, `pay_ramp` reads as null everywhere → everyone uses the default
-   35/50/60 (Caleb would show 35/50/60 instead of 50/60/60).
-2. **Browser-verify** the new Pay-staff reconciliation panel (mentor/month pickers, the four
+## Merge + wrap (2026-07-09)
+- Landed on **`main`** via fast-forward (commits `36e9504` engine+panel, `8a16b98` review fixes,
+  `7cffb61` handoff). Local `main` and `origin/main` in sync. No PR — user asked to merge straight
+  to main.
+- **User confirmed ALL migrations are applied** (incl. `9973`), so `pay_ramp` is live and Caleb
+  resolves to 50/60/60. No migrations pending; next new one is `9972_…`.
+- Session **wrapped**. Only open item is a browser spot-check (below) — not blocking.
+
+## ⚠ Next steps (next session)
+1. **Browser-verify** the new Pay-staff reconciliation panel (mentor/month pickers, the four
    tiles reconciling, the graph, per-mentee table, CSV) and the Admin "Pay ramp" column.
-3. Note: excluding JYF + per-mentor ramps changes **every** mentor's historical numbers, not
+2. Note: excluding JYF + per-mentor ramps changes **every** mentor's historical numbers, not
    just Caleb's — spot-check a couple of others and any signed-off Build-payout months.
-4. Consider surfacing WHICH invoices were excluded (today only the aggregate $ is shown; the
+3. Consider surfacing WHICH invoices were excluded (today only the aggregate $ is shown; the
    old `unassigned` ledger rows no longer carry them).
