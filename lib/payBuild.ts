@@ -125,7 +125,9 @@ function joinLineItems(src: PayLineSource): string {
 // Effective payout, Included, Override, Note) are written only on that mentee's
 // FIRST invoice row and left blank on the rest, so summing a payout column never
 // double-counts a mentee across their several invoices. The per-invoice
-// "Recognized into month" column DOES sum (per mentee) to that line's earned.
+// "Recognized into month" column sums (per mentee) to that line's earned — up to
+// per-cell rounding: each cell is rounded to the cent, so a spreadsheet summing
+// them can drift a cent from the engine's earned (which rounds the raw sum once).
 export function payoutDetailCsvRows(
   lines: BuildDetailLine[],
   states: Map<number, BuildLineState>
