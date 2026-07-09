@@ -2,6 +2,12 @@
 
 Payout transparency: diagnose Ty Miller's $430.83, then make Export CSV export the
 *data used to build the payout* and add a click-the-mentee invoice/payment drill-down.
+Then a configurable **Payment-groups** grid (which engagement templates count per staff group).
+
+**WRAP STATE:** both features **merged to `main`** (fast-forward). Commits: `5b37c31` (drill-down +
+CSV) → `505d38f` (doc tweak) → `30d0723` (Payment groups) → this handoff commit. `typecheck` +
+`verify` + `build` green. UI not browser-tested. **Pending: apply `9972` + configure the Mentors
+group** (cutover below). Next new migration is `9971_…`.
 
 ## The question — why does Caleb's June payout show $430.83 "earned" for Ty Miller?
 

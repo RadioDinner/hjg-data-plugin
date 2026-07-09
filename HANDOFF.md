@@ -3,13 +3,17 @@
 Working notes for resuming this project in a future session. Last updated
 2026-07-09 (session 013 — payout invoice-drilldown/CSV **and** a configurable Payment-groups grid).
 
-## ▶ START HERE (2026-07-09, session 013)
+## ▶ START HERE (2026-07-09, session 013 — WRAPPED, MERGED TO `main`)
 
-**Two things shipped on `claude/payout-calculation-csv-export-mez3a9`:** (A) payout invoice
-transparency (drill-down + "data used to build the payout" CSV) — **already merged to `main`** —
-and (B) a **Payment-groups** feature: an admin grid picking which engagement templates count for
-which staff group. `typecheck` + `verify` + `build` all green. **UI NOT browser-tested** (headless).
-Full detail in `Session log/013_2026-07-09b/session_log.md`.
+**Session WRAPPED.** Two things shipped and are **both MERGED TO `main`** (fast-forwarded from
+`claude/payout-calculation-csv-export-mez3a9`; `main` = branch = `30d0723` at wrap, then this
+handoff commit on top): (A) payout invoice transparency (drill-down + "data used to build the
+payout" CSV), and (B) a **Payment-groups** feature — an admin grid picking which engagement
+templates count for which staff group. `typecheck` + `verify` + `build` all green.
+**UI NOT browser-tested** (headless container — no live Supabase creds). Full detail in
+`Session log/013_2026-07-09b/session_log.md`.
+
+**▶ THE ONE PENDING ACTION — cutover for (B) (see next paragraph).** Everything else is done.
 
 **⚠ CUTOVER for (B): apply `9972_pay_engagement_groups.sql`** in the Supabase SQL Editor, then click
 **Company options → Payment groups → Refresh templates** (or run Admin → Sync) to populate
