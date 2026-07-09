@@ -208,63 +208,44 @@ export interface PayReport {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-// Which coach covered a client the most in a given month, and the tier in force.
-// Day-walk over the ACTUAL calendar days (engagement coverage), independent of the
-// fixed-30 proration. First matching engagement wins the day's coach/tier.
-function coverInMonth(ym: string, engs: PayEngagementInput[]): { coachId: number | null; tier: string } {
-  const dim = daysInMonth(ym);
-  const monthEnd = `${ym}-${String(dim).padStart(2, "0")}`;
-  const daysByCoach = new Map<number, number>();
-  let tier = "other";
-  for (let day = 1; day <= dim; day++) {
-    const d = `${ym}-${String(day).padStart(2, "0")}`;
-    let coverCoach: number | null = null;
-    let coverTier: string | null = null;
-    let covered = false;
-    for (const e of engs) {
-      const s = (e.startDate ?? "0000-01-01").slice(0, 10);
-      const en = (e.endDate ?? "9999-12-31").slice(0, 10);
-      if (d >= s && d <= en && d <= monthEnd) {
-        covered = true;
-        if (coverCoach == null && e.coachId != null) {
-          coverCoach = e.coachId;
-          coverTier = engagementTier(e.name);
-        }
-      }
-    }
-    if (covered) {
-      if (coverCoach != null) daysByCoach.set(coverCoach, (daysByCoach.get(coverCoach) ?? 0) + 1);
-      if (coverTier) tier = coverTier;
-    }
-  }
-  let coachId: number | null = null;
-  let best = 0;
-  for (const [cid, n] of daysByCoach) {
-    if (n > best) {
-      best = n;
-      coachId = cid;
-    }
-  }
-  return { coachId, tier };
-}
-
-// Which coach/tier covers a client ON a specific date (the invoice's date_of).
-// Among engagements spanning that date, the most-recently-STARTED one wins, so an
-// end-of-month tier change credits the NEW invoice to the NEW coach instead of the
-// outgoing one. Falls back to the month-majority coach (coverInMonth) only when no
-// engagement covers the exact date, so invoices on uncovered days keep prior behavior.
-function coverOnDate(dateYmd: string, engs: PayEngagementInput[]): { coachId: number | null; tier: string } {
+// The MENTORING (4x/2x/1x) coverage in force for an invoice, or null when none —
+// i.e. the invoice is non-mentoring revenue (JumpStart/JYF, mentor training, group,
+// after-graduation, or no covering engagement) and must be excluded from mentor pay.
+//
+// Pay-eligibility and tier BOTH come from this: an invoice counts iff a mentoring
+// engagement is active. We deliberately look only at MENTORING engagements so that a
+// non-mentoring engagement which merely OVERLAPS a still-open mentoring one (e.g. an
+// "After Graduation Care" engagement that starts later while the 4x row was never
+// closed, or a JumpStart→4x transition) can't hijack the tier and wrongly drop — or
+// wrongly pay — the invoice. Among mentoring engagements, the most-recently-STARTED
+// one covering the invoice date wins (so an end-of-month tier change credits the new
+// tier/coach); if none covers the exact date, any mentoring engagement overlapping the
+// invoice's service month is used, so an invoice on an uncovered day isn't dropped.
+function mentoringCoverFor(dateYmd: string, engs: PayEngagementInput[]): { coachId: number; tier: string } | null {
   const d = dateYmd.slice(0, 10);
-  let best: PayEngagementInput | null = null;
+  const ym = d.slice(0, 7);
+  const monthStart = `${ym}-01`;
+  const monthEnd = `${ym}-${String(daysInMonth(ym)).padStart(2, "0")}`;
+  let dateBest: { coachId: number; tier: string } | null = null;
+  let dateStart = "";
+  let monthBest: { coachId: number; tier: string } | null = null;
+  let monthBestStart = "";
   for (const e of engs) {
+    if (e.coachId == null) continue;
+    const tier = engagementTier(e.name);
+    if (!MENTORING_PAY_TIERS.has(tier)) continue;
     const s = (e.startDate ?? "0000-01-01").slice(0, 10);
     const en = (e.endDate ?? "9999-12-31").slice(0, 10);
-    if (d >= s && d <= en && e.coachId != null) {
-      if (!best || s > (best.startDate ?? "0000-01-01").slice(0, 10)) best = e;
+    if (d >= s && d <= en && (dateBest == null || s > dateStart)) {
+      dateBest = { coachId: e.coachId, tier };
+      dateStart = s;
+    }
+    if (s <= monthEnd && en >= monthStart && (monthBest == null || s > monthBestStart)) {
+      monthBest = { coachId: e.coachId, tier };
+      monthBestStart = s;
     }
   }
-  if (best) return { coachId: best.coachId, tier: engagementTier(best.name) };
-  return coverInMonth(d.slice(0, 7), engs);
+  return dateBest ?? monthBest;
 }
 
 // Per-(coach, client) accumulator for a payout month.
@@ -320,8 +301,9 @@ export function computePayReport(input: PayInputs): PayReport {
   };
 
   // The coach credited for this mentee's invoice: the OWNER (CA primary coach) when
-  // known, else the engagement-coverage coach. The tier always comes from coverage.
-  const creditFor = (clientId: number, cov: { coachId: number | null; tier: string }): number | null =>
+  // known, else the mentoring-engagement coach. The tier comes from the mentoring
+  // coverage.
+  const creditFor = (clientId: number, cov: { coachId: number }): number | null =>
     input.primaryCoachOf?.(clientId) ?? cov.coachId;
 
   // Non-mentoring revenue billed in the payout month itself (rollover slices from
@@ -332,25 +314,22 @@ export function computePayReport(input: PayInputs): PayReport {
     const amt = inv.billed || 0;
     if (amt <= 0) continue;
     if (invYm !== ym && invYm !== prev) continue;
-    const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
-    // Pay basis is 4x/2x/1x mentoring only. JumpStart & everything else is
-    // excluded from mentor pay — tracked (this month) rather than dropped.
-    if (!MENTORING_PAY_TIERS.has(cov.tier)) {
+    // Pay basis is 4x/2x/1x mentoring only. JumpStart & everything else is excluded
+    // from mentor pay — tracked (this month) rather than silently dropped.
+    const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
+    if (!cov) {
       if (invYm === ym) excludedBilled += amt;
       continue;
     }
+    const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
     if (invYm === ym) {
       const day = dayOf(inv.serviceDate);
-      const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
       a.billed += amt;
       a.collected += inv.collected || 0;
       a.recognizedThis += amt * (1 - elapsedFraction(day));
       a.invoiceDay = a.invoiceDay == null ? day : Math.min(a.invoiceDay, day);
-      if (a.tier === "other") a.tier = cov.tier;
     } else {
-      const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
       a.rolloverPrev += amt * elapsedFraction(dayOf(inv.serviceDate));
-      if (a.tier === "other") a.tier = cov.tier;
     }
   }
 
@@ -382,7 +361,8 @@ export function computePayReport(input: PayInputs): PayReport {
 
     const startMonth = startMonthFor(a.coachId);
     const tenure = startMonth ? tenureMonthsBetween(startMonth, ym) : null;
-    const ramp = input.rampOverride?.get(a.coachId) ?? PAY_RAMP;
+    const rampOv = input.rampOverride?.get(a.coachId) ?? PAY_RAMP;
+    const ramp = rampOv.length ? rampOv : PAY_RAMP; // never index into an empty ramp
     // Unknown tenure (engagements but no dated start) defaults to the established
     // rate rather than penalizing the mentor as "new".
     const splitPct = tenure != null ? splitForTenureMonth(tenure, ramp) : ramp[ramp.length - 1];

@@ -61,8 +61,30 @@ and surfaced four forks; the user ruled:
 
 ## State
 - `typecheck` + `build` + `verify` all **green**. UI **not** browser-tested (headless).
-- An **adversarial review workflow** (3 dimensions → independent refutation → synthesis) was
-  launched over the staged diff; results to be folded in (follow-up commit if anything confirmed).
+
+## Post-review fixes (adversarial workflow, 10 agents → 5 confirmed + 1 uncertain, all addressed)
+1. **[medium] Engine tier gate keyed off the wrong engagement.** The JYF gate used
+   `coverOnDate`'s single *latest-started* covering engagement, so a later-starting
+   NON-mentoring engagement (e.g. an "After Graduation Care" row while the 4× was never
+   closed, or a JumpStart↔4× overlap) could hijack the tier and **drop a legit 4× invoice**
+   (or wrongly pay a JumpStart one). **Fix:** replaced `coverOnDate`/`coverInMonth` with
+   **`mentoringCoverFor`** — keys pay-eligibility + tier + fallback coach off the most-recently-
+   started **mentoring** engagement covering the invoice date (month-overlap fallback), ignoring
+   non-mentoring engagements entirely. New verify case locks it (`overlap`, still-paid 4×).
+2. **[low] Empty ramp override → NaN.** `ramp[ramp.length-1]` on `[]` when tenure is null.
+   **Fix:** guard `rampOv.length ? rampOv : PAY_RAMP`; new `emptyRamp` verify case.
+3. **[low] Reconcile "Remaining" footer could be a cent off the sum of its cells** (round-of-sum
+   vs sum-of-rounds). **Fix:** derive the tiles/Total from the per-mentee rounded cells so they
+   always foot.
+4. **[low] Stale docs.** `general.coachAttribution` still said "unassigned" for no-coach revenue,
+   and the `pay.compute` source line referenced the removed `coverOnDate`. **Fixed** both.
+5. **[low] Stale comment** in BuildPayoutView about the (now-unreachable) unassigned bucket. **Fixed.**
+6. **[uncertain] Migration re-run could revert a hand-set ramp/mentor flag.** **Fix:** the seed now
+   `coalesce`s all three columns (fill-if-unset), so re-pasting never clobbers an Admin edit.
+
+Not changed (accepted): the `unassigned` bucket + its UI (banner/row) are now unreachable but left
+as harmless dead paths; per-mentee "excluded" detail is a possible follow-up (only the aggregate
+"Excluded from pay" $ is surfaced today). Re-ran `typecheck` + `build` + `verify` — all still green.
 
 ## ⚠ Cutover / next steps
 1. **Apply `9973_coach_pay_ramp.sql`** in the Supabase SQL Editor (HJG-owned table; no re-sync

@@ -28,10 +28,17 @@ Admin "Pay ramp" editor column; `verify-metrics` §8/§9 (Caleb $765 + running+r
 re-sync). Until applied, everyone uses the default 35/50/60 (Caleb would be wrong). **Next new
 migration is `9972_…`.**
 
+**Post-ship review (done):** an adversarial workflow (10 agents) found **5 confirmed + 1 uncertain**,
+**all fixed** in a follow-up commit — chief among them the engine tier gate keying off the wrong
+(latest-started, possibly non-mentoring) engagement, now fixed via **`mentoringCoverFor`** (keys off
+the covering **mentoring** engagement so a later-starting graduation/JumpStart overlap can't drop a
+legit 4×). Also: empty-ramp NaN guard, reconcile "Remaining" footer footing, stale docs/comment,
+and the migration now `coalesce`s all columns (fill-if-unset). Still green.
+
 **Next session:** browser-verify the reconciliation panel + Admin ramp column; note that JYF
 exclusion + ramps change **every** mentor's numbers (spot-check others + signed-off Build months);
-optionally surface *which* invoices were excluded (only the aggregate $ is shown today). An
-adversarial review workflow ran over the diff at ship time — fold in any confirmed findings.
+optionally surface *which* invoices were excluded per mentor (only the aggregate $ is shown today,
+and the old "unassigned" banner/row are now unreachable dead paths).
 
 ---
 

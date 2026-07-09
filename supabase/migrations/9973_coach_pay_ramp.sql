@@ -13,12 +13,14 @@ alter table coach_settings
   add column if not exists pay_ramp text;  -- e.g. '50/60/60' or '35/50/60'; null = default 35/50/60
 
 -- Seed Caleb Otto (ca_coaches.id = 40711): fast-tracked ramp 50/60/60, anchored to
--- his first month of mentoring (March 2026). Decided with the user 2026-07-09. Uses
--- insert-or-update so it's safe to re-run and won't clobber a hand-set capacity/notes.
+-- his first month of mentoring (March 2026). Decided with the user 2026-07-09.
+-- Insert-if-absent, FILL-IF-UNSET on re-run: every column uses coalesce so a later
+-- hand edit in Admin (ramp, mentor flag, pay start) is never reverted by re-pasting
+-- this one-time seed. (is_mentor is NOT NULL, so coalesce always keeps the stored
+-- value on an existing row and only applies the seed's `true` for a fresh insert.)
 insert into coach_settings (coach_id, is_mentor, pay_ramp, pay_start_month)
   values (40711, true, '50/60/60', '2026-03')
 on conflict (coach_id) do update
-  set is_mentor       = true,
-      pay_ramp        = excluded.pay_ramp,
-      -- keep a hand-set pay_start_month if one already exists
+  set is_mentor       = coalesce(coach_settings.is_mentor, excluded.is_mentor),
+      pay_ramp        = coalesce(coach_settings.pay_ramp, excluded.pay_ramp),
       pay_start_month = coalesce(coach_settings.pay_start_month, excluded.pay_start_month);

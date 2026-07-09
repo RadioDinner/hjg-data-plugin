@@ -414,6 +414,36 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   eq(jyfExcl.mentors[0]?.menteeCount, 1, "only the 4x mentee is paid (JYF mentee dropped)");
   eq(jyfExcl.mentors[0]?.lines.every((l) => l.tier === "4x"), true, "the only paid line is the 4x mentee");
 
+  // ---- Overlap guard (post-review 2026-07-09): a still-open 4x engagement PLUS a
+  //      later-starting NON-mentoring engagement (After Graduation Care) must not
+  //      hijack the tier and drop the legit 4x invoice. The gate keys off the
+  //      mentoring engagement (mentoringCoverFor), so the 4x is still paid. ----
+  const overlap = computePayReport({
+    ym: "2026-06",
+    invoices: [{ clientId: 1, serviceDate: "2026-06-15", billed: 425, collected: 425 }],
+    engagements: [
+      { clientId: 1, coachId: 600, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+      { clientId: 1, coachId: 600, startDate: "2026-06-01", endDate: null, isCanceled: false, name: "After Graduation Care Tune-Up" }, // starts LATER, tier "graduated"
+    ],
+    coachName: (id) => `#${id}`,
+    clientName,
+    startMonthOverride: new Map([[600, "2026-01"]]),
+  });
+  eq(overlap.mentors[0]?.lines[0]?.tier, "4x", "later-starting graduation engagement does not hijack the 4x tier");
+  eq(overlap.mentors[0]?.payout, round2(425 * (1 - 15 / 30) * 0.6), "the legit 4x invoice is still paid, not excluded");
+  eq(overlap.excludedBilled, 0, "nothing excluded — a mentoring engagement is active");
+
+  // Empty ramp override must not NaN-poison the payout (guarded fallback to PAY_RAMP).
+  const emptyRamp = computePayReport({
+    ym: "2026-06",
+    invoices: [{ clientId: 1, serviceDate: "2026-06-15", billed: 425, collected: 425 }],
+    engagements: [{ clientId: 1, coachId: 601, startDate: null, endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" }],
+    coachName: (id) => `#${id}`,
+    clientName,
+    rampOverride: new Map([[601, []]]),
+  });
+  eq(Number.isFinite(emptyRamp.totals.payout), true, "empty ramp override falls back to PAY_RAMP (no NaN)");
+
   // ---- Mentor-start override pins tenure (a late-synced veteran isn't "new") ----
   const lateSync: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 }];
   const lateEng: PayEngagementInput[] = [

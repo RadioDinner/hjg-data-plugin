@@ -151,8 +151,10 @@ export function BuildPayoutView({
     // save (builds changes), and we want the "saved" confirmation to survive.
   }, [coach, ym, builds]);
 
-  // Engine report for the selected month, then this coach's lines + the month's
-  // unassigned bucket (surfaced for awareness, not part of any coach's payout).
+  // Engine report for the selected month, then this coach's lines. (Non-mentoring
+  // revenue is excluded upstream and reported as report.excludedBilled; the legacy
+  // "unassigned" bucket no longer populates since a mentoring tier always implies a
+  // covering engagement with a coach.)
   const report = useMemo(() => {
     if (!data || !ym) return null;
     return computePayReport({

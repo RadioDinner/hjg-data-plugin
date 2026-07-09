@@ -156,17 +156,9 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
   const month = monthSel && coachMonths.includes(monthSel) ? monthSel : defaultMonth;
   const nxt = month ? nextYm(month) : null;
 
-  // The reconciliation: running total through the target month + the tail still
-  // owed on already-billed invoices (next month's rollover slices, at next
-  // month's rate) = the total value billed through the target month.
-  const recon = useMemo(() => {
-    const thisMonth = round2(coachRows.filter((r) => r.ym === month).reduce((s, r) => s + r.payout, 0));
-    const running = round2(coachRows.filter((r) => month != null && r.ym <= month).reduce((s, r) => s + r.payout, 0));
-    const remaining = round2(coachRows.filter((r) => r.ym === nxt).reduce((s, r) => s + r.rolloverPrev * r.splitPct, 0));
-    return { thisMonth, running, remaining, total: round2(running + remaining) };
-  }, [coachRows, month, nxt]);
-
-  // Per-mentee: this-month payout, paid-to-date, and remaining tail.
+  // Per-mentee: this-month payout, paid-to-date, and remaining tail. Each figure is
+  // rounded per mentee here so the tiles + Total row (summed from these) always foot
+  // with the cells shown.
   const perMentee = useMemo(() => {
     const map = new Map<number, { name: string; tier: string; thisMonth: number; paid: number; remaining: number }>();
     const ensure = (id: number, name: string) => {
@@ -191,6 +183,17 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
     }
     return [...map.values()].sort((a, b) => b.paid - a.paid);
   }, [coachRows, month, nxt]);
+
+  // The reconciliation tiles = the sums of the per-mentee cells above, so the tiles,
+  // the Total row, and the visible cells always agree to the penny. running = paid
+  // through the target month; remaining = the tail still owed on already-billed
+  // invoices (next month's rollover slices at next month's rate); total = both.
+  const recon = useMemo(() => {
+    const thisMonth = round2(perMentee.reduce((s, p) => s + p.thisMonth, 0));
+    const running = round2(perMentee.reduce((s, p) => s + p.paid, 0));
+    const remaining = round2(perMentee.reduce((s, p) => s + p.remaining, 0));
+    return { thisMonth, running, remaining, total: round2(running + remaining) };
+  }, [perMentee]);
 
   // Monthly payout + a cumulative running-total line, oldest -> newest.
   const chartData = useMemo(() => {

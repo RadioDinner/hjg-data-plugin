@@ -133,7 +133,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 - See the **"How clients are matched to coaches"** help for the full picture.
 
 ### Source
-- \`ca_invoices\` (billed, service **date** \`date_of\`) + \`ca_clients.coach_id\` (owner) + \`ca_engagements\` (tier + fallback coach). Engine in \`lib/pay.ts\` (\`primaryCoachOf\` → \`coverOnDate\` → \`coverInMonth\`); see \`docs/legacy-pay-calculator.md\`.`,
+- \`ca_invoices\` (billed, service **date** \`date_of\`) + \`ca_clients.coach_id\` (owner) + \`ca_engagements\` (mentoring tier + fallback coach). Engine in \`lib/pay.ts\` (\`primaryCoachOf\` → \`mentoringCoverFor\`); see \`docs/legacy-pay-calculator.md\`.`,
   },
 
   "pay.build": {
@@ -409,7 +409,7 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 
 ### Fallback when the primary coach isn't known yet
 When a mentee has no synced primary coach, each surface falls back to how it worked before:
-- **Pay staff / Journeys stages** → the coach on the covering **engagement** (\`ca_engagements.coach_id\`): for an invoice's \`date_of\`, the most-recently-started engagement spanning that date, else the coach who covered the most days that month. Revenue with no coach at all = **"unassigned"**.
+- **Pay staff / Journeys stages** → the coach on the covering **mentoring engagement** (\`ca_engagements.coach_id\`): for an invoice's \`date_of\`, the most-recently-started 4×/2×/1× engagement spanning that date, else a mentoring engagement covering that service month. Revenue with **no covering mentoring engagement** (JumpStart/JYF, non-mentoring, or a missing engagement) is **excluded from pay** and shows in the "Excluded from pay" total — never silently dropped.
 - **Mentor capacity / per-meeting Coach column** → the coach who **ran each meeting** (\`ca_appointments.coach_id\`).
 - The Journeys owner line says "(from latest meeting — primary coach not synced)" when it's using this fallback.
 
