@@ -19,9 +19,9 @@ import {
 export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
-import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP } from "../lib/pay";
+import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec } from "../lib/pay";
 import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine } from "../lib/pay";
-export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP };
+export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec };
 export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine };
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
@@ -600,6 +600,7 @@ export interface CoachWithSettings {
   capacity: number | null;
   notes: string | null;
   payStartMonth: string | null; // 'YYYY-MM' override for the pay-ramp start; null = derived
+  payRamp: string | null; // per-mentor ramp, e.g. '50/60/60'; null = default 35/50/60
 }
 
 // Every coach from ca_coaches with their HJG-owned mentor flag + capacity
@@ -608,13 +609,13 @@ export interface CoachWithSettings {
 export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
   const [coachesRes, settingsRes] = await Promise.all([
     supabase.from("ca_coaches").select("id,name").order("name", { ascending: true }),
-    supabase.from("coach_settings").select("coach_id,is_mentor,capacity,notes,pay_start_month"),
+    supabase.from("coach_settings").select("coach_id,is_mentor,capacity,notes,pay_start_month,pay_ramp"),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (settingsRes.error) throw new Error(settingsRes.error.message);
-  const settings = new Map<number, { is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null }>();
-  for (const s of (settingsRes.data ?? []) as { coach_id: number; is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null }[]) {
-    settings.set(s.coach_id, { is_mentor: s.is_mentor, capacity: s.capacity, notes: s.notes, pay_start_month: s.pay_start_month });
+  const settings = new Map<number, { is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null; pay_ramp: string | null }>();
+  for (const s of (settingsRes.data ?? []) as { coach_id: number; is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null; pay_ramp: string | null }[]) {
+    settings.set(s.coach_id, { is_mentor: s.is_mentor, capacity: s.capacity, notes: s.notes, pay_start_month: s.pay_start_month, pay_ramp: s.pay_ramp });
   }
   return ((coachesRes.data ?? []) as { id: number; name: string | null }[]).map((c) => {
     const s = settings.get(c.id);
@@ -625,6 +626,7 @@ export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
       capacity: s?.capacity ?? null,
       notes: s?.notes ?? null,
       payStartMonth: s?.pay_start_month ?? null,
+      payRamp: s?.pay_ramp ?? null,
     };
   });
 }
@@ -643,7 +645,7 @@ export async function fetchMentorCoachIds(): Promise<Set<number>> {
 
 export async function upsertCoachSettings(
   coachId: number,
-  patch: { isMentor: boolean; capacity: number | null; notes: string | null; payStartMonth: string | null }
+  patch: { isMentor: boolean; capacity: number | null; notes: string | null; payStartMonth: string | null; payRamp: string | null }
 ): Promise<void> {
   const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
   const { error } = await supabase
@@ -655,6 +657,7 @@ export async function upsertCoachSettings(
         capacity: patch.capacity,
         notes: patch.notes,
         pay_start_month: patch.payStartMonth,
+        pay_ramp: patch.payRamp,
         created_by: createdBy,
         updated_by: createdBy,
       },
@@ -1142,6 +1145,9 @@ export interface PayData {
   // clientId -> the mentee's OWNER (CA primary coach); the engine credits this coach
   // for the invoice. Null when not synced yet => engine falls back to engagement coverage.
   primaryCoachOf: (clientId: number) => number | null;
+  // coachId -> a per-mentor revenue-share ramp override (parsed from coach_settings.pay_ramp);
+  // absent => the default 35/50/60 (PAY_RAMP).
+  rampOverride: Map<number, readonly number[]>;
 }
 
 async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
@@ -1223,7 +1229,7 @@ export async function fetchPayData(): Promise<PayData> {
     fetchAllPayEngagements(),
     supabase.from("ca_coaches").select("id,name"),
     supabase.from("ca_clients").select("id,name"),
-    supabase.from("coach_settings").select("coach_id,pay_start_month"),
+    supabase.from("coach_settings").select("coach_id,pay_start_month,pay_ramp"),
     fetchPrimaryCoachByClient(),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
@@ -1235,11 +1241,15 @@ export async function fetchPayData(): Promise<PayData> {
   const clients = new Map<number, string>();
   for (const c of (clientsRes.data ?? []) as { id: number; name: string | null }[]) clients.set(c.id, c.name ?? `#${c.id}`);
 
-  // Staff overrides for the mentor pay-ramp start. Only well-formed 'YYYY-MM'
-  // values are honored; anything else falls back to the derived start.
+  // Staff overrides for the mentor pay-ramp start + per-mentor ramp. Only
+  // well-formed 'YYYY-MM' starts are honored; a blank/invalid pay_ramp falls back
+  // to the default 35/50/60 (parseRampSpec returns null).
   const startMonthOverride = new Map<number, string>();
-  for (const s of (settingsRes.data ?? []) as { coach_id: number; pay_start_month: string | null }[]) {
+  const rampOverride = new Map<number, readonly number[]>();
+  for (const s of (settingsRes.data ?? []) as { coach_id: number; pay_start_month: string | null; pay_ramp: string | null }[]) {
     if (s.pay_start_month && /^\d{4}-\d{2}$/.test(s.pay_start_month)) startMonthOverride.set(s.coach_id, s.pay_start_month);
+    const ramp = parseRampSpec(s.pay_ramp);
+    if (ramp) rampOverride.set(s.coach_id, ramp);
   }
 
   // Payout months = each service month + the following month (the rollover tail).
@@ -1253,6 +1263,7 @@ export async function fetchPayData(): Promise<PayData> {
     months,
     startMonthOverride,
     primaryCoachOf: (clientId) => primaryCoach.get(clientId) ?? null,
+    rampOverride,
   };
 }
 

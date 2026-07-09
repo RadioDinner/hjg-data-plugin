@@ -53,6 +53,8 @@ import {
   elapsedFraction,
   splitForTenureMonth,
   tenureMonthsBetween,
+  parseRampSpec,
+  formatRampSpec,
   type PayInvoiceInput,
   type PayEngagementInput,
 } from "../lib/pay.js";
@@ -282,12 +284,23 @@ console.log("[7] appointment categorization (group sessions vs 1-on-1)");
 
 console.log("[8] staff payment engine — Clayton split (invoice-date proration, two-month roll, per-mentor ramp)");
 {
-  // Ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60% (by MENTOR tenure).
+  // Default ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60% (by MENTOR tenure).
   eq(splitForTenureMonth(1), 0.35, "tenure month 1 -> 35%");
   eq(splitForTenureMonth(2), 0.5, "tenure month 2 -> 50%");
   eq(splitForTenureMonth(3), 0.6, "tenure month 3 -> 60%");
   eq(splitForTenureMonth(12), 0.6, "established mentor -> 60%");
   eq(tenureMonthsBetween("2026-01", "2026-03"), 3, "Jan start -> March is tenure month 3");
+  // Per-mentor ramp override (a fast-tracked mentor at 50/60/60).
+  eq(splitForTenureMonth(1, [0.5, 0.6, 0.6]), 0.5, "custom ramp month 1 -> 50%");
+  eq(splitForTenureMonth(2, [0.5, 0.6, 0.6]), 0.6, "custom ramp month 2 -> 60%");
+  eq(splitForTenureMonth(9, [0.5, 0.6, 0.6]), 0.6, "custom ramp holds at final -> 60%");
+  eq(splitForTenureMonth(0, [0.5, 0.6, 0.6]), 0.5, "pre-tenure uses the first ramp value");
+  // Ramp spec parse/format: "50/60/60" and "0.5,0.6,0.6" both mean 50/60/60.
+  eq(JSON.stringify(parseRampSpec("50/60/60")), JSON.stringify([0.5, 0.6, 0.6]), "parse '50/60/60'");
+  eq(JSON.stringify(parseRampSpec("0.5,0.6,0.6")), JSON.stringify([0.5, 0.6, 0.6]), "parse '0.5,0.6,0.6'");
+  eq(parseRampSpec(""), null, "blank ramp -> null (falls back to default)");
+  eq(parseRampSpec("  "), null, "whitespace ramp -> null");
+  eq(formatRampSpec([0.5, 0.6, 0.6]), "50/60/60", "format [0.5,0.6,0.6] -> '50/60/60'");
   // Fixed 30-day proration denominator (Clayton).
   eq(elapsedFraction(12), 0.4, "day 12 -> 12/30 elapsed (fixed 30-day month)");
   eq(elapsedFraction(19), 19 / 30, "day 19 -> 19/30 elapsed");
@@ -366,7 +379,9 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   // Each invoice day 1: recognized this month = 425*(29/30) each -> *0.35.
   eq(newMentor.mentors[0].payout, round2(2 * 425 * (29 / 30) * 0.35), "35% across both mentees, day-1 proration");
 
-  // ---- Unassigned: billed revenue with no overlapping engagement ----
+  // ---- No mentoring coverage: revenue is EXCLUDED from pay (surfaced, not dropped).
+  //      An invoice with no engagement covering any day of its month has tier
+  //      "other" -> not a 4x/2x/1x mentoring tier -> excluded per the user's rule. ----
   const noEng = computePayReport({
     ym: "2026-04",
     invoices: [{ clientId: 1, serviceDate: "2026-04-12", billed: 425, collected: 425 }],
@@ -375,8 +390,29 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     clientName,
   });
   eq(noEng.mentors.length, 0, "no mentor paid when no engagement overlaps the invoice month");
-  eq(noEng.unassigned.length, 1, "revenue surfaced as unassigned, not dropped");
-  eq(noEng.unassigned[0].payout, 0, "unassigned pays 0");
+  eq(noEng.unassigned.length, 0, "no-coverage revenue is not a paid line");
+  eq(noEng.excludedBilled, 425, "no-coverage (non-mentoring) revenue surfaced as excludedBilled, not dropped");
+
+  // ---- JYF / JumpStart is excluded; only 4x/2x/1x mentoring is mentor pay ----
+  // Decided with the user 2026-07-09. A JumpStart-covered invoice pays nothing and
+  // is surfaced in excludedBilled; a 4x-covered invoice the same month pays normally.
+  const jyfExcl = computePayReport({
+    ym: "2026-05",
+    invoices: [
+      { clientId: 1, serviceDate: "2026-05-01", billed: 175, collected: 175 }, // JumpStart -> excluded
+      { clientId: 2, serviceDate: "2026-05-02", billed: 425, collected: 425 }, // 4x -> paid
+    ],
+    engagements: [
+      { clientId: 1, coachId: 500, startDate: "2026-04-01", endDate: "2026-05-29", isCanceled: false, name: "MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress" },
+      { clientId: 2, coachId: 500, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+    ],
+    coachName: (id) => `#${id}`,
+    clientName,
+    startMonthOverride: new Map([[500, "2026-01"]]),
+  });
+  eq(jyfExcl.excludedBilled, 175, "JumpStart/JYF invoice ($175) excluded from pay and surfaced");
+  eq(jyfExcl.mentors[0]?.menteeCount, 1, "only the 4x mentee is paid (JYF mentee dropped)");
+  eq(jyfExcl.mentors[0]?.lines.every((l) => l.tier === "4x"), true, "the only paid line is the 4x mentee");
 
   // ---- Mentor-start override pins tenure (a late-synced veteran isn't "new") ----
   const lateSync: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 }];
@@ -437,6 +473,67 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     primaryCoachOf: () => null,
   });
   eq(ownedNull.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0, 425, "null owner falls back to the engagement-coverage coach (222)");
+
+  // ---- Per-mentor ramp override credits the mentor's custom rate ----
+  // A fast-tracked mentor (ramp 50/60/60) starting March: April is tenure month 2,
+  // which pays 60% under 50/60/60 (vs 50% under the default 35/50/60).
+  const rampInv: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 }];
+  const rampEng: PayEngagementInput[] = [
+    { clientId: 1, coachId: 800, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+  ];
+  const rampBase = { ym: "2026-04", invoices: rampInv, engagements: rampEng, coachName: (id: number) => `#${id}`, clientName, startMonthOverride: new Map([[800, "2026-03"]]) };
+  eq(computePayReport(rampBase).mentors[0].splitPct, 0.5, "default ramp: April (tenure month 2) -> 50%");
+  eq(
+    computePayReport({ ...rampBase, rampOverride: new Map([[800, [0.5, 0.6, 0.6]]]) }).mentors[0].splitPct,
+    0.6,
+    "fast-track ramp 50/60/60: April (tenure month 2) -> 60%"
+  );
+
+  // ---- Caleb Otto, June 2026 (real-data replica, decided with the user 2026-07-09).
+  //      Three 4x mentees each billed $425 on the 15th of May & June -> each nets
+  //      one full $425 in June under the two-month split; Caleb's fast-track ramp
+  //      (50/60/60 from March) resolves to 60% -> $255 each -> $765. (JYF exclusion
+  //      is covered by the jyfExcl / §9 cases; kept out of this replica so the
+  //      day-15 split stays on clean cents for the reconciliation invariant.) ----
+  const CALEB = 40711;
+  const calebEng: PayEngagementInput[] = [1, 2, 3].map((c) => ({
+    clientId: c,
+    coachId: CALEB,
+    startDate: "2026-03-31",
+    endDate: null,
+    isCanceled: false,
+    name: "MN Subscription | (4x Month) Zoom Meetings",
+  }));
+  const calebInv: PayInvoiceInput[] = [1, 2, 3].flatMap((c) => [
+    { clientId: c, serviceDate: "2026-05-15", billed: 425, collected: 425 },
+    { clientId: c, serviceDate: "2026-06-15", billed: 425, collected: 425 },
+  ]);
+  const calebArgs = {
+    invoices: calebInv,
+    engagements: calebEng,
+    coachName: (id: number) => (id === CALEB ? "Caleb Otto" : `#${id}`),
+    clientName,
+    startMonthOverride: new Map([[CALEB, "2026-03"]]),
+    rampOverride: new Map([[CALEB, [0.5, 0.6, 0.6]]]),
+    primaryCoachOf: () => CALEB, // owner = Caleb for all three mentees
+  };
+  const calebJun = computePayReport({ ym: "2026-06", ...calebArgs });
+  eq(calebJun.mentors[0].coachId, CALEB, "Caleb is the credited mentor");
+  eq(calebJun.mentors[0].splitPct, 0.6, "Caleb's ramp resolves to 60% in June (tenure month 4 of 50/60/60)");
+  eq(calebJun.mentors[0].menteeCount, 3, "three paying 4x mentees in June");
+  eq(calebJun.mentors[0].payout, 765, "Caleb June payout = 3 x $255 = $765");
+
+  // Reconciliation invariant: running total (through June) + remaining tail = the
+  // full 4x value billed through June. All 6 4x invoices are billed by June; the
+  // ramp is 60% across May+ so the total 4x value = 6 * 425 * 0.6 = $1530.
+  const calebTl = computePayTimeline({ ...calebArgs, months: ["2026-05", "2026-06", "2026-07"] });
+  const junYm = "2026-06";
+  const rows = calebTl.ledger.filter((r) => r.assigned && r.coachId === CALEB);
+  const running = round2(rows.filter((r) => r.ym <= junYm).reduce((s, r) => s + r.payout, 0));
+  const remaining = round2(rows.filter((r) => r.ym === "2026-07").reduce((s, r) => s + r.rolloverPrev * r.splitPct, 0));
+  eq(running, 1147.5, "running total through June = May $382.50 + June $765.00");
+  eq(remaining, 382.5, "remaining tail = the June invoices' July rollover at 60%");
+  eq(round2(running + remaining), 1530, "running + remaining = full 4x value billed through June (6 x $425 x 60%)");
 }
 
 console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned, scoping)");
@@ -445,7 +542,7 @@ console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned,
   const clientName = (id: number) => `Mentee ${id}`;
 
   // Mentee 1: one invoice (Apr 10), Harry established. Mentee 2: invoice (May 5)
-  // with NO overlapping engagement -> unassigned.
+  // with NO overlapping engagement -> non-mentoring tier -> EXCLUDED from pay.
   const invoices: PayInvoiceInput[] = [
     { clientId: 1, serviceDate: "2026-04-10", billed: 425, collected: 425 },
     { clientId: 2, serviceDate: "2026-05-05", billed: 100, collected: 100 },
@@ -463,9 +560,11 @@ console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned,
   eq(round2(harryRows.reduce((s, r) => s + r.payout, 0)), 255, "Harry's split payouts sum to 60% of $425 = $255");
   eq(tl.totals.payout, 255, "only the assigned mentee is paid");
 
-  const unassigned = tl.ledger.filter((r) => !r.assigned);
-  eq(unassigned.length >= 1, true, "mentee 2 surfaced as unassigned (no engagement)");
-  eq(unassigned.every((r) => r.payout === 0), true, "unassigned lines pay 0");
+  // Mentee 2 has no covering (mentoring) engagement -> excluded from pay, surfaced
+  // via excludedBilled rather than dropped. The unassigned bucket stays empty (a
+  // mentoring tier always implies a covering engagement with a coach).
+  eq(tl.totals.excludedBilled, 100, "mentee 2 ($100, no engagement) is excluded from pay, not paid");
+  eq(tl.ledger.some((r) => !r.assigned), false, "no unassigned paid lines once non-mentoring revenue is excluded");
 
   // An explicit months list scopes the timeline (e.g. a single-month explore).
   const one = computePayTimeline({ invoices, engagements, coachName, clientName, months: ["2026-04"] });

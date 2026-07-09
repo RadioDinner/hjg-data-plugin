@@ -55,7 +55,7 @@ export function AdminView() {
   // `coaches` is the canonical roster joined with current saved settings.
   // `mcEdits` mirrors what's in the inputs; rows are saved by Save changes.
   const [coaches, setCoaches] = useState<CoachWithSettings[]>([]);
-  const [mcEdits, setMcEdits] = useState<Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string }>>({});
+  const [mcEdits, setMcEdits] = useState<Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }>>({});
   const [mcDirty, setMcDirty] = useState<Set<number>>(new Set());
   const [mcSaving, setMcSaving] = useState(false);
   const [mcMsg, setMcMsg] = useState<string | null>(null);
@@ -77,13 +77,14 @@ export function AdminView() {
   async function loadCoaches() {
     const all = await fetchCoachesWithSettings();
     setCoaches(all);
-    const edits: Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string }> = {};
+    const edits: Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }> = {};
     for (const c of all) {
       edits[c.coachId] = {
         isMentor: c.isMentor,
         capacity: c.capacity == null ? "" : String(c.capacity),
         notes: c.notes ?? "",
         payStart: c.payStartMonth ?? "",
+        payRamp: c.payRamp ?? "",
       };
     }
     setMcEdits(edits);
@@ -118,6 +119,7 @@ export function AdminView() {
             capacity: Number.isFinite(cap as number) || cap === null ? cap : null,
             notes: e.notes.trim() === "" ? null : e.notes.trim(),
             payStartMonth: e.payStart.trim() === "" ? null : e.payStart.trim(),
+            payRamp: e.payRamp.trim() === "" ? null : e.payRamp.trim(),
           });
         })
       );
@@ -386,8 +388,10 @@ export function AdminView() {
         </div>
         <p className="view__hint">
           Mark which CoachAccountable coaches actually count as mentors, and set how many concurrent mentees each can
-          take. <strong>Pay start</strong> anchors the staff-payment ramp (35→50→60%) to a mentor&apos;s true first
-          month of work — leave it blank to infer from their earliest engagement. The Metrics tab&apos;s Mentors metric
+          take. <strong>Pay start</strong> anchors the staff-payment ramp to a mentor&apos;s true first
+          month of work — leave it blank to infer from their earliest engagement. <strong>Pay ramp</strong> sets a
+          mentor&apos;s revenue-share ramp by tenure month (e.g. <code>50/60/60</code> for a fast-tracked mentor); blank =
+          the default <code>35/50/60</code>. The Metrics tab&apos;s Mentors metric
           is filtered to flagged mentors once any are set, and the
           <strong> Mentor capacity utilization </strong>card reads these capacities. Saves write to the HJG-owned
           <code> coach_settings</code> table, untouched by CA sync.
@@ -400,6 +404,7 @@ export function AdminView() {
                 <th>Mentor?</th>
                 <th className="num">Capacity</th>
                 <th>Pay start</th>
+                <th>Pay ramp</th>
                 <th>Notes</th>
               </tr>
             </thead>
@@ -407,7 +412,7 @@ export function AdminView() {
               {coaches
                 .filter((c) => mcShowOnly === "all" || mcEdits[c.coachId]?.isMentor)
                 .map((c) => {
-                  const e = mcEdits[c.coachId] ?? { isMentor: false, capacity: "", notes: "", payStart: "" };
+                  const e = mcEdits[c.coachId] ?? { isMentor: false, capacity: "", notes: "", payStart: "", payRamp: "" };
                   return (
                     <tr key={c.coachId}>
                       <td>
@@ -448,12 +453,28 @@ export function AdminView() {
                         <input
                           type="month"
                           value={e.payStart}
-                          title="Mentor's first month of work — anchors the 35/50/60 pay ramp. Blank = inferred from earliest engagement."
+                          title="Mentor's first month of work — anchors the pay ramp. Blank = inferred from earliest engagement."
                           style={{ width: 130 }}
                           onChange={(ev) => {
                             setMcEdits((prev) => ({
                               ...prev,
                               [c.coachId]: { ...e, payStart: ev.target.value },
+                            }));
+                            markDirty(c.coachId);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={e.payRamp}
+                          placeholder="35/50/60"
+                          title="Per-mentor revenue-share ramp by tenure month, e.g. 50/60/60 for a fast-tracked mentor. Blank = default 35/50/60."
+                          style={{ width: 90 }}
+                          onChange={(ev) => {
+                            setMcEdits((prev) => ({
+                              ...prev,
+                              [c.coachId]: { ...e, payRamp: ev.target.value },
                             }));
                             markDirty(c.coachId);
                           }}

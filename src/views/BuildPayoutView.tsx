@@ -99,6 +99,7 @@ export function BuildPayoutView({
       months: data.months,
       startMonthOverride: data.startMonthOverride,
       primaryCoachOf: data.primaryCoachOf,
+      rampOverride: data.rampOverride,
     });
   }, [data]);
 
@@ -162,6 +163,7 @@ export function BuildPayoutView({
       clientName: data.clientName,
       startMonthOverride: data.startMonthOverride,
       primaryCoachOf: data.primaryCoachOf,
+      rampOverride: data.rampOverride,
     });
   }, [data, ym]);
   const mentor = useMemo(

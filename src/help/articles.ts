@@ -112,8 +112,12 @@ Pure math lives in \`lib/compare.ts\`.`,
     title: "How staff pay is computed",
     body: `Each mentor earns a **ramped share of the revenue billed** to their mentees, split across two months by each invoice's date (the method the former admin, Clayton, used).
 
+### What counts (only 4×/2×/1× mentoring)
+- Only **4×/2×/1× mentoring** revenue is mentor pay. **JumpStart/JYF**, mentor training, group, after-graduation, and uncovered revenue are **excluded** — surfaced in the **"Excluded from pay"** tile, never silently dropped. The tier comes from the covering **engagement** (reliably named), not the free-text invoice line.
+
 ### The share (ramp)
-- The share **ramps with the MENTOR's tenure**: month 1 = **35%**, month 2 = **50%**, month 3 onward = **60%** — applied to **all** their mentees. Tenure is from the mentor's earliest engagement (or a pinned start in Admin → Mentor capacity).
+- The share **ramps with the MENTOR's tenure**: default month 1 = **35%**, month 2 = **50%**, month 3 onward = **60%** — applied to **all** their mentees. Tenure is from the mentor's earliest engagement (or a pinned start in Admin → Mentor capacity).
+- A **fast-tracked mentor can have a custom ramp** (e.g. **50/60/60**), set per mentor in Admin → Mentor capacity → **Pay ramp**. Blank = the default 35/50/60.
 
 ### The two-month split (Clayton)
 - Pay is on the amount **billed** (invoice \`amount\`); collected is reference only.
@@ -125,7 +129,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 ### Attribution (which coach gets paid)
 - A mentee's invoice is credited to their **owner = CoachAccountable primary coach** (\`ca_clients.coach_id\`). Re-pair a mentee in CA + re-sync to move their pay to a different coach.
 - **Fallback** (owner not synced yet — needs migration \`9984\` + a re-sync): the coach on the covering **engagement** — for the invoice's \`date_of\`, the most-recently-started engagement spanning it, else the most-days-covered coach that month.
-- The **tier** always comes from the engagement coverage regardless of who's paid. Revenue with no owner *and* no engagement shows as **"unassigned"**, never dropped.
+- The **tier** always comes from the engagement coverage regardless of who's paid. Non-mentoring revenue (JumpStart/JYF, or no covering mentoring engagement) is **excluded from pay** and reported in the "Excluded from pay" total, never silently dropped.
 - See the **"How clients are matched to coaches"** help for the full picture.
 
 ### Source
@@ -146,6 +150,24 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 ### Important
 - This **never changes the engine's numbers** — overrides and exclusions live only in the review record (\`payout_builds\`). It's read-only toward CoachAccountable; the engine stays the source of truth.`,
+  },
+
+  "pay.reconcile": {
+    title: "Mentor payout reconciliation",
+    body: `Pick a **mentor** and a **target month** to check any past month's payout and prove it's complete.
+
+### What the tiles mean
+- **Payout — <month>**: what the mentor earns *for that month alone* (the Clayton two-month split — this month's invoice slices + last month's rolled-forward slices, at that month's rate).
+- **Paid through this month** (running total): everything paid to the mentor from their first month up to and including the target month.
+- **Remaining (billed, unpaid)**: the **rollover tail** of invoices *already billed* through the target month that hasn't been paid yet — the elapsed slices of the target month's invoices that pay next month.
+- **Total billed through month** = **paid + remaining**. This is the accuracy check: it equals the full value of every 4×/2×/1× invoice billed through that month.
+
+### Example
+A mentee starts 4× on the 15th at $425/mo, mentor at 60%. Through June (Mar partial + Apr/May/Jun full): **paid = $892.50**, **remaining = $127.50**, total **$1,020** = 4 invoices × $255. The $127.50 is June's half that pays out in July.
+
+### Notes
+- JumpStart/JYF and other non-mentoring revenue is **excluded** (see "How staff pay is computed").
+- The graph shows each month's payout (bars) with the **running total** as a line; the selected month's bar is highlighted. Table + CSV give the per-mentee breakdown.`,
   },
 
   "mentees.screen": {

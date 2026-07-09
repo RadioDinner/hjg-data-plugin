@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimeline, type PayMonth } from "../db";
 import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
@@ -22,6 +22,15 @@ function monthLabel(ym: string): string {
 function currentYm(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// 'YYYY-MM' -> the following month, for the rollover-tail lookup.
+function nextYm(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const o = y * 12 + (m - 1) + 1;
+  return `${Math.floor(o / 12)}-${String((o % 12) + 1).padStart(2, "0")}`;
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -109,6 +118,209 @@ function MonthDetail({ month, onExplore, onBuild }: { month: PayMonth; onExplore
   );
 }
 
+// Per-mentor payout reconciliation: pick a mentor + a target month, and see that
+// month's payout, the RUNNING TOTAL paid through that month, the REMAINING tail
+// still owed on invoices already billed (the elapsed slices that roll past the
+// target month), and their sum — the accuracy check the user asked for. Built
+// entirely from the timeline ledger (Clayton two-month split, per-mentor ramp,
+// JYF already excluded), so it always agrees with the Payout-by-month table.
+function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: string; ct: ReturnType<typeof useChartTokens> }) {
+  const AXIS = ct.axis;
+  const GRID = ct.grid;
+  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
+
+  const mentors = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const r of timeline.ledger) if (r.assigned && r.coachId != null) m.set(r.coachId, r.coachName);
+    return [...m.entries()].map(([coachId, name]) => ({ coachId, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [timeline]);
+
+  const [coachSel, setCoachSel] = useState<number | null>(null);
+  const coachId = coachSel != null && mentors.some((m) => m.coachId === coachSel) ? coachSel : mentors[0]?.coachId ?? null;
+
+  const coachRows = useMemo(
+    () => timeline.ledger.filter((r) => r.assigned && r.coachId === coachId),
+    [timeline, coachId]
+  );
+  // Months (ascending) in which this mentor has a payout.
+  const coachMonths = useMemo(
+    () => [...new Set(coachRows.map((r) => r.ym))].sort((a, b) => a.localeCompare(b)),
+    [coachRows]
+  );
+
+  const [monthSel, setMonthSel] = useState<string | null>(null);
+  const defaultMonth = useMemo(
+    () => [...coachMonths].reverse().find((m) => m <= cur) ?? coachMonths[coachMonths.length - 1] ?? null,
+    [coachMonths, cur]
+  );
+  const month = monthSel && coachMonths.includes(monthSel) ? monthSel : defaultMonth;
+  const nxt = month ? nextYm(month) : null;
+
+  // The reconciliation: running total through the target month + the tail still
+  // owed on already-billed invoices (next month's rollover slices, at next
+  // month's rate) = the total value billed through the target month.
+  const recon = useMemo(() => {
+    const thisMonth = round2(coachRows.filter((r) => r.ym === month).reduce((s, r) => s + r.payout, 0));
+    const running = round2(coachRows.filter((r) => month != null && r.ym <= month).reduce((s, r) => s + r.payout, 0));
+    const remaining = round2(coachRows.filter((r) => r.ym === nxt).reduce((s, r) => s + r.rolloverPrev * r.splitPct, 0));
+    return { thisMonth, running, remaining, total: round2(running + remaining) };
+  }, [coachRows, month, nxt]);
+
+  // Per-mentee: this-month payout, paid-to-date, and remaining tail.
+  const perMentee = useMemo(() => {
+    const map = new Map<number, { name: string; tier: string; thisMonth: number; paid: number; remaining: number }>();
+    const ensure = (id: number, name: string) => {
+      let e = map.get(id);
+      if (!e) { e = { name, tier: "", thisMonth: 0, paid: 0, remaining: 0 }; map.set(id, e); }
+      return e;
+    };
+    for (const r of coachRows) {
+      if (r.tier && r.tier !== "other") {
+        const e = ensure(r.clientId, r.clientName);
+        if (!e.tier) e.tier = r.tier;
+      }
+      if (month != null && r.ym <= month) {
+        const e = ensure(r.clientId, r.clientName);
+        e.paid = round2(e.paid + r.payout);
+        if (r.ym === month) e.thisMonth = round2(e.thisMonth + r.payout);
+      }
+      if (r.ym === nxt) {
+        const e = ensure(r.clientId, r.clientName);
+        e.remaining = round2(e.remaining + r.rolloverPrev * r.splitPct);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.paid - a.paid);
+  }, [coachRows, month, nxt]);
+
+  // Monthly payout + a cumulative running-total line, oldest -> newest.
+  const chartData = useMemo(() => {
+    let cum = 0;
+    return coachMonths.map((ym) => {
+      const payout = round2(coachRows.filter((r) => r.ym === ym).reduce((s, r) => s + r.payout, 0));
+      cum = round2(cum + payout);
+      return { ym, month: monthLabel(ym), payout, cumulative: cum };
+    });
+  }, [coachMonths, coachRows]);
+
+  const mentorName = mentors.find((m) => m.coachId === coachId)?.name ?? "—";
+
+  const exportCsv = () => {
+    if (!month) return;
+    downloadCsv(
+      `payout-reconcile-${mentorName.replace(/\s+/g, "-")}-${month}`,
+      ["Mentee", "Tier", `Payout ${monthLabel(month)}`, "Paid through month", "Remaining (billed, unpaid)"],
+      perMentee.map((p) => [p.name, p.tier || "—", p.thisMonth, p.paid, p.remaining])
+    );
+  };
+
+  if (mentors.length === 0) return null;
+
+  return (
+    <section className="card">
+      <div className="card__head">
+        <div>
+          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            Mentor payout reconciliation <SectionId id="pay.reconcile" />
+            <HelpButton id="pay.reconcile" label="Reconciliation" />
+          </h2>
+          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+            Pick a mentor and a month to see that month's payout, the <strong>running total</strong> paid through it, and
+            the <strong>remaining</strong> tail still owed on invoices already billed. Running total + remaining = the
+            full value billed through that month — the accuracy check.
+          </div>
+        </div>
+        <button className="btn btn--sm" onClick={exportCsv} disabled={!month}>Export CSV</button>
+      </div>
+
+      <div className="table-toolbar" style={{ gap: 12, flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <span className="muted">Mentor</span>
+          <select value={coachId ?? ""} onChange={(e) => { setCoachSel(Number(e.target.value)); setMonthSel(null); }}>
+            {mentors.map((m) => (
+              <option key={m.coachId} value={m.coachId}>{m.name}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <span className="muted">Through month</span>
+          <select value={month ?? ""} onChange={(e) => setMonthSel(e.target.value)}>
+            {[...coachMonths].reverse().map((ym) => (
+              <option key={ym} value={ym}>{monthLabel(ym)}{ym > cur ? " (projection)" : ""}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+        <StatTile label={month ? `Payout — ${monthLabel(month)}` : "Payout"} value={fmtUsd(recon.thisMonth)} sub="this month only" />
+        <StatTile label="Paid through this month" value={fmtUsd(recon.running)} sub="running total, all months so far" />
+        <StatTile label="Remaining (billed, unpaid)" value={fmtUsd(recon.remaining)} sub="rollover tail of billed invoices" />
+        <StatTile label="Total billed through month" value={fmtUsd(recon.total)} sub="paid + remaining" />
+      </div>
+
+      <p className="view__hint" style={{ marginTop: 10, marginBottom: 4 }}>
+        {mentorName}: <strong>{fmtUsd(recon.running)}</strong> paid through {month ? monthLabel(month) : "—"} +{" "}
+        <strong>{fmtUsd(recon.remaining)}</strong> remaining = <strong>{fmtUsd(recon.total)}</strong> billed to date.
+      </p>
+
+      <div style={{ width: "100%", height: 260 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+            <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
+            <XAxis dataKey="month" stroke={AXIS} tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
+            <YAxis stroke={AXIS} tick={{ fontSize: 11 }} />
+            <Tooltip contentStyle={TOOLTIP} formatter={(v, n) => [fmtUsd(Number(v)), n === "cumulative" ? "Running total" : "Monthly payout"]} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar name="Monthly payout" dataKey="payout" radius={[4, 4, 0, 0]}>
+              {chartData.map((d) => (
+                <Cell key={d.ym} fill={d.ym === month ? ct.accent : "#94a3b8"} />
+              ))}
+            </Bar>
+            <Line name="Running total" type="monotone" dataKey="cumulative" stroke={ct.accent} strokeWidth={2} dot={{ r: 2 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="table-scroll" style={{ marginTop: 8 }}>
+        <table className="table table--center">
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left" }}>Mentee</th>
+              <th>Tier</th>
+              <th>Payout {month ? monthLabel(month) : ""}</th>
+              <th>Paid through month</th>
+              <th>Remaining</th>
+            </tr>
+          </thead>
+          <tbody>
+            {perMentee.map((p) => (
+              <tr key={p.name}>
+                <td style={{ textAlign: "left" }}>{p.name}</td>
+                <td>{p.tier || "—"}</td>
+                <td className="num">{fmtUsd(p.thisMonth)}</td>
+                <td className="num">{fmtUsd(p.paid)}</td>
+                <td className="num">{fmtUsd(p.remaining)}</td>
+              </tr>
+            ))}
+            {perMentee.length > 0 && (
+              <tr className="row--muted" style={{ fontWeight: 700 }}>
+                <td style={{ textAlign: "left" }}>Total</td>
+                <td>—</td>
+                <td className="num">{fmtUsd(recon.thisMonth)}</td>
+                <td className="num">{fmtUsd(recon.running)}</td>
+                <td className="num">{fmtUsd(recon.remaining)}</td>
+              </tr>
+            )}
+            {perMentee.length === 0 && (
+              <tr><td colSpan={5} className="muted">No mentoring payouts for this mentor.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function PayStaffView() {
   const [data, setData] = useState<PayData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,6 +366,7 @@ export function PayStaffView() {
       months: data.months,
       startMonthOverride: data.startMonthOverride,
       primaryCoachOf: data.primaryCoachOf,
+      rampOverride: data.rampOverride,
     });
   }, [data]);
 
@@ -220,8 +433,10 @@ export function PayStaffView() {
               <HelpButton id="general.coachAttribution" label="How coaches are matched" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Mentors earn a ramped share ({PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by mentor-tenure
-              month) of revenue <strong>billed</strong> to each mentee. Each invoice's share is{" "}
+              Mentors earn a ramped share (default {PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by
+              mentor-tenure month; a fast-tracked mentor can have a custom ramp) of the{" "}
+              <strong>4×/2×/1× mentoring</strong> revenue <strong>billed</strong> to each mentee. JumpStart/JYF and other
+              non-mentoring revenue is <strong>excluded</strong>. Each invoice's share is{" "}
               <strong>split across two months</strong> by its invoice date (fixed 30-day): the remaining part pays in the
               invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
             </div>
@@ -259,7 +474,10 @@ export function PayStaffView() {
             <StatTile label="Collected so far" value={fmtUsd(timeline.totals.collected)} sub="reference" />
             <StatTile label="Months covered" value={String(timeline.months.length)} />
             <StatTile label="Mentors paid" value={String(distinctMentors)} sub="distinct, all-time" />
+            <StatTile label="Excluded from pay" value={fmtUsd(timeline.totals.excludedBilled)} sub="JumpStart/JYF + non-mentoring" />
           </div>
+
+          <MentorReconcile timeline={timeline} cur={cur} ct={ct} />
 
           <section className="card">
             <div className="card__head">

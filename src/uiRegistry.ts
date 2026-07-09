@@ -43,6 +43,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "pay.payoutByMonth": 202,
   "build.screen": 203,
   "build.review": 204,
+  "pay.reconcile": 205,
 
   // 3xx — Raw data
   "raw.screen": 301,

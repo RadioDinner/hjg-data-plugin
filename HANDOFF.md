@@ -1,9 +1,41 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-06-29 (session 011 — Mentees screen: right-docked editor + inline-edit grid).
+2026-07-09 (session 012 — mentor-pay verification: per-mentor ramps + JYF exclusion + reconciliation panel).
 
-## ▶ START HERE (2026-06-29, session 011)
+## ▶ START HERE (2026-07-09, session 012)
+
+**Mentor-payment correctness pass + a new reconciliation feature shipped on branch
+`claude/mentor-payment-verification-3asxd8`.** `typecheck` + `build` + `verify` all green.
+**UI NOT browser-tested** (headless). Full detail in `Session log/012_2026-07-09/session_log.md`.
+
+**The user's rules (locked via AskUserQuestion 2026-07-09):** (1) mentee pay follows the
+**owner** (`ca_clients.coach_id`), so Jonathan Heinzman → Caleb even though his 4× is cut under
+Arthur in CA; (2) **only 4×/2×/1× mentoring counts — JumpStart/JYF is excluded** from mentor pay;
+(3) the running total spans a mentee's **full 4×/2×/1× history**; (4) **per-mentor ramps** —
+default 35/50/60, but **Caleb Otto (40711) is fast-tracked to 50/60/60**. Verified against the
+export: **Caleb June 2026 = $765.00**; running-through-June $2,130.67 + remaining $348.50 =
+$2,479.17 billed-to-date.
+
+**What shipped:** engine (`lib/pay.ts`) JYF exclusion (`MENTORING_PAY_TIERS`, `excludedBilled`)
++ per-mentor ramp (`rampOverride`, `splitForTenureMonth(t, ramp)`, `parseRampSpec`/`formatRampSpec`);
+migration **`9973_coach_pay_ramp.sql`** (`coach_settings.pay_ramp`, seeds Caleb); `db.ts` wiring;
+new **Mentor payout reconciliation** panel on Pay staff (`pay.reconcile`=205: mentor+month picker,
+this-month / running / remaining / total tiles, graph+table+CSV) + an "Excluded from pay" tile;
+Admin "Pay ramp" editor column; `verify-metrics` §8/§9 (Caleb $765 + running+remaining invariant).
+
+**⚠ CUTOVER:** **Apply `9973_coach_pay_ramp.sql`** in the Supabase SQL Editor (HJG-owned; no
+re-sync). Until applied, everyone uses the default 35/50/60 (Caleb would be wrong). **Next new
+migration is `9972_…`.**
+
+**Next session:** browser-verify the reconciliation panel + Admin ramp column; note that JYF
+exclusion + ramps change **every** mentor's numbers (spot-check others + signed-off Build months);
+optionally surface *which* invoices were excluded (only the aggregate $ is shown today). An
+adversarial review workflow ran over the diff at ship time — fold in any confirmed findings.
+
+---
+
+## ▶ Prior session START HERE (2026-06-29, session 011)
 
 **Mentees (§501) editing UX shipped on `main` and is green** (`typecheck` + `verify` +
 `build`). Commits: `f935e9f` (right-dock + inline-edit) → `46d2cd3` (panel **always docked**).

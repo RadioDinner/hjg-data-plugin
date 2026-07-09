@@ -38,13 +38,47 @@
 import { engagementTier } from "./config";
 
 // Mentor revenue-share ramp by tenure month (1-indexed). Past the table it holds
-// at the final value (60%).
+// at the final value (60%). This is the DEFAULT ramp; a mentor can be given a
+// custom ramp (e.g. a fast-tracked mentor at 50/60/60) via PayInputs.rampOverride.
 export const PAY_RAMP = [0.35, 0.5, 0.6] as const;
 
-export function splitForTenureMonth(tenureMonth: number): number {
-  if (tenureMonth < 1) return PAY_RAMP[0];
-  const i = Math.min(tenureMonth, PAY_RAMP.length) - 1;
-  return PAY_RAMP[i];
+// Tiers that count toward mentor pay. JumpStart/JYF ("jumpstart"), mentor
+// training, group, after-graduation care, and uncovered ("other") revenue are
+// NOT mentor pay. Decided with the user 2026-07-09: "only 4x/2x/1x count; JYF
+// shouldn't be counted toward mentor payouts." The tier comes from the covering
+// engagement (engagementTier), which is reliably named — never the free-text
+// invoice line item.
+export const MENTORING_PAY_TIERS: ReadonlySet<string> = new Set(["4x", "2x", "1x"]);
+
+// The mentor's revenue share for a given tenure month (1-indexed), read off the
+// mentor's ramp. Defaults to the standard 35/50/60; pass a per-mentor ramp for a
+// fast-tracked mentor. Past the end of the ramp it holds at the final value.
+export function splitForTenureMonth(tenureMonth: number, ramp: readonly number[] = PAY_RAMP): number {
+  const r = ramp.length ? ramp : PAY_RAMP;
+  if (tenureMonth < 1) return r[0];
+  return r[Math.min(tenureMonth, r.length) - 1];
+}
+
+// Parse a human-entered ramp — "50/60/60", "0.5,0.6,0.6", "35 50 60" — into a
+// fraction array. Any value > 1 is read as a percentage (÷100), so both "60" and
+// "0.6" mean 60%. Returns null when nothing is parseable so callers fall back to
+// the default PAY_RAMP. Fractions clamp to [0, 1].
+export function parseRampSpec(spec: string | null | undefined): number[] | null {
+  if (!spec) return null;
+  const nums = spec
+    .split(/[^0-9.]+/)
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  if (!nums.length) return null;
+  const asPct = nums.some((n) => n > 1);
+  return nums.map((n) => Math.min(asPct ? n / 100 : n, 1));
+}
+
+// Serialize a fraction ramp to a compact percent string: [0.5, 0.6, 0.6] -> "50/60/60".
+export function formatRampSpec(ramp: readonly number[] | null | undefined): string {
+  if (!ramp || !ramp.length) return "";
+  return ramp.map((n) => String(Math.round(n * 100))).join("/");
 }
 
 // 'YYYY-MM' -> absolute month ordinal, for tenure + adjacency arithmetic.
@@ -121,6 +155,9 @@ export interface PayInputs {
   // this coach is credited for the invoice instead of the engagement-coverage coach.
   // Absent / null => fall back to engagement coverage (prior behavior).
   primaryCoachOf?: (clientId: number) => number | null;
+  // coachId -> a custom revenue-share ramp (e.g. [0.5, 0.6, 0.6] for a
+  // fast-tracked mentor). Absent => the default PAY_RAMP (35/50/60).
+  rampOverride?: Map<number, readonly number[]>;
 }
 
 // --- engine outputs ---
@@ -162,6 +199,10 @@ export interface PayReport {
   ym: string;
   mentors: PayMentorSummary[];
   unassigned: PayMenteeLine[]; // billed revenue with no overlapping engagement
+  // Non-mentoring revenue billed this month (JumpStart/JYF, mentor training,
+  // group, after-graduation, uncovered). Excluded from mentor pay per the user's
+  // rule, but surfaced here so it's auditable rather than silently dropped.
+  excludedBilled: number;
   totals: { billed: number; collected: number; earned: number; payout: number; mentorCount: number; menteeCount: number };
 }
 
@@ -283,25 +324,32 @@ export function computePayReport(input: PayInputs): PayReport {
   const creditFor = (clientId: number, cov: { coachId: number | null; tier: string }): number | null =>
     input.primaryCoachOf?.(clientId) ?? cov.coachId;
 
+  // Non-mentoring revenue billed in the payout month itself (rollover slices from
+  // the prior month aren't re-counted here — they were counted in their own month).
+  let excludedBilled = 0;
   for (const inv of input.invoices) {
     const invYm = ymOf(inv.serviceDate);
     const amt = inv.billed || 0;
     if (amt <= 0) continue;
+    if (invYm !== ym && invYm !== prev) continue;
+    const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
+    // Pay basis is 4x/2x/1x mentoring only. JumpStart & everything else is
+    // excluded from mentor pay — tracked (this month) rather than dropped.
+    if (!MENTORING_PAY_TIERS.has(cov.tier)) {
+      if (invYm === ym) excludedBilled += amt;
+      continue;
+    }
     if (invYm === ym) {
-      const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
       const day = dayOf(inv.serviceDate);
-      const recognized = amt * (1 - elapsedFraction(day));
       const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
       a.billed += amt;
       a.collected += inv.collected || 0;
-      a.recognizedThis += recognized;
+      a.recognizedThis += amt * (1 - elapsedFraction(day));
       a.invoiceDay = a.invoiceDay == null ? day : Math.min(a.invoiceDay, day);
       if (a.tier === "other") a.tier = cov.tier;
-    } else if (invYm === prev) {
-      const cov = coverOnDate(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
-      const rollover = amt * elapsedFraction(dayOf(inv.serviceDate));
+    } else {
       const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
-      a.rolloverPrev += rollover;
+      a.rolloverPrev += amt * elapsedFraction(dayOf(inv.serviceDate));
       if (a.tier === "other") a.tier = cov.tier;
     }
   }
@@ -334,9 +382,10 @@ export function computePayReport(input: PayInputs): PayReport {
 
     const startMonth = startMonthFor(a.coachId);
     const tenure = startMonth ? tenureMonthsBetween(startMonth, ym) : null;
+    const ramp = input.rampOverride?.get(a.coachId) ?? PAY_RAMP;
     // Unknown tenure (engagements but no dated start) defaults to the established
     // rate rather than penalizing the mentor as "new".
-    const splitPct = tenure != null ? splitForTenureMonth(tenure) : PAY_RAMP[PAY_RAMP.length - 1];
+    const splitPct = tenure != null ? splitForTenureMonth(tenure, ramp) : ramp[ramp.length - 1];
     const payout = round2(earned * splitPct);
 
     let m = mentors.get(a.coachId);
@@ -376,7 +425,7 @@ export function computePayReport(input: PayInputs): PayReport {
     menteeCount: mentorList.reduce((s, m) => s + m.menteeCount, 0),
   };
 
-  return { ym, mentors: mentorList, unassigned, totals };
+  return { ym, mentors: mentorList, unassigned, excludedBilled: round2(excludedBilled), totals };
 }
 
 // --- Multi-month timeline + flat ledger ------------------------------------
@@ -409,7 +458,7 @@ export interface PayMonth {
 export interface PayTimeline {
   months: PayMonth[]; // one per requested month, in the requested order
   ledger: PayLedgerRow[]; // every mentee line across all months (incl. unassigned)
-  totals: { billed: number; collected: number; earned: number; payout: number };
+  totals: { billed: number; collected: number; earned: number; payout: number; excludedBilled: number };
 }
 
 export interface PayTimelineInput {
@@ -421,6 +470,8 @@ export interface PayTimelineInput {
   // clientId -> the mentee's OWNER (CA primary coach); credited instead of the
   // engagement-coverage coach when present (see computePayReport).
   primaryCoachOf?: (clientId: number) => number | null;
+  // coachId -> per-mentor revenue-share ramp override (see computePayReport).
+  rampOverride?: Map<number, readonly number[]>;
   // Payout months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
   // month PLUS the following month (where the rollover slice lands), newest first.
   months?: string[];
@@ -455,6 +506,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
       clientName: input.clientName,
       startMonthOverride: input.startMonthOverride,
       primaryCoachOf: input.primaryCoachOf,
+      rampOverride: input.rampOverride,
     })
   );
 
@@ -507,6 +559,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
     collected: round2(reports.reduce((s, r) => s + r.totals.collected, 0)),
     earned: round2(reports.reduce((s, r) => s + r.totals.earned, 0)),
     payout: round2(reports.reduce((s, r) => s + r.totals.payout, 0)),
+    excludedBilled: round2(reports.reduce((s, r) => s + r.excludedBilled, 0)),
   };
 
   return { months: reports.map((report) => ({ ym: report.ym, report })), ledger, totals };
