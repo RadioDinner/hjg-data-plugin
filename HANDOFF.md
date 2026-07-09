@@ -5,9 +5,10 @@ Working notes for resuming this project in a future session. Last updated
 
 ## ▶ START HERE (2026-07-09, session 012)
 
-**Mentor-payment correctness pass + a new reconciliation feature shipped on branch
-`claude/mentor-payment-verification-3asxd8`.** `typecheck` + `build` + `verify` all green.
-**UI NOT browser-tested** (headless). Full detail in `Session log/012_2026-07-09/session_log.md`.
+**Mentor-payment correctness pass + a new reconciliation feature — MERGED TO `main`**
+(developed on `claude/mentor-payment-verification-3asxd8`, fast-forwarded to `main` 2026-07-09).
+`typecheck` + `build` + `verify` all green. **UI NOT browser-tested** (headless). Full detail in
+`Session log/012_2026-07-09/session_log.md`. **Migration `9973` is APPLIED** (user confirmed).
 
 **The user's rules (locked via AskUserQuestion 2026-07-09):** (1) mentee pay follows the
 **owner** (`ca_clients.coach_id`), so Jonathan Heinzman → Caleb even though his 4× is cut under
@@ -24,9 +25,8 @@ new **Mentor payout reconciliation** panel on Pay staff (`pay.reconcile`=205: me
 this-month / running / remaining / total tiles, graph+table+CSV) + an "Excluded from pay" tile;
 Admin "Pay ramp" editor column; `verify-metrics` §8/§9 (Caleb $765 + running+remaining invariant).
 
-**⚠ CUTOVER:** **Apply `9973_coach_pay_ramp.sql`** in the Supabase SQL Editor (HJG-owned; no
-re-sync). Until applied, everyone uses the default 35/50/60 (Caleb would be wrong). **Next new
-migration is `9972_…`.**
+**✅ CUTOVER DONE:** `9973_coach_pay_ramp.sql` is **applied** (HJG-owned; no re-sync needed).
+Caleb's 50/60/60 ramp + March start are live. **Next new migration is `9972_…`.**
 
 **Post-ship review (done):** an adversarial workflow (10 agents) found **5 confirmed + 1 uncertain**,
 **all fixed** in a follow-up commit — chief among them the engine tier gate keying off the wrong
