@@ -31,6 +31,32 @@ import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDe
 export { summarizeBuild, effectiveLinePayout, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
 export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
+// Payment groups (engagement templates × staff groups; Company options §451).
+import {
+  parsePayGroupsConfig,
+  serializePayGroupsConfig,
+  payEligibleForGroup,
+  findGroup,
+  groupHasTemplates,
+  normalizeTemplateName,
+  slugifyGroupName,
+  MENTORS_GROUP_ID,
+  DEFAULT_PAY_GROUPS_CONFIG,
+} from "../lib/payGroups";
+import type { PayGroup, PayGroupsConfig } from "../lib/payGroups";
+export {
+  parsePayGroupsConfig,
+  serializePayGroupsConfig,
+  payEligibleForGroup,
+  findGroup,
+  groupHasTemplates,
+  normalizeTemplateName,
+  slugifyGroupName,
+  MENTORS_GROUP_ID,
+  DEFAULT_PAY_GROUPS_CONFIG,
+};
+export type { PayGroup, PayGroupsConfig };
+
 // Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
 // frontend imports lib through db.ts — same pattern as the pay engine above.
 export { COMPARE_PRESETS, derivePeriodB, delta, shiftMonths } from "../lib/compare";
@@ -1148,6 +1174,10 @@ export interface PayData {
   // coachId -> a per-mentor revenue-share ramp override (parsed from coach_settings.pay_ramp);
   // absent => the default 35/50/60 (PAY_RAMP).
   rampOverride: Map<number, readonly number[]>;
+  // Pay-eligibility predicate from the "Mentors" Payment-group (which engagement
+  // templates are checked). Undefined when that group has no templates configured,
+  // so the engine falls back to its legacy 4x/2x/1x detection.
+  payEligible?: (engagementName: string | null) => boolean;
 }
 
 async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
@@ -1275,13 +1305,14 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
 }
 
 export async function fetchPayData(): Promise<PayData> {
-  const [invoices, engagements, coachesRes, clientsRes, settingsRes, primaryCoach] = await Promise.all([
+  const [invoices, engagements, coachesRes, clientsRes, settingsRes, primaryCoach, payGroups] = await Promise.all([
     fetchAllPayInvoices(),
     fetchAllPayEngagements(),
     supabase.from("ca_coaches").select("id,name"),
     supabase.from("ca_clients").select("id,name"),
     supabase.from("coach_settings").select("coach_id,pay_start_month,pay_ramp"),
     fetchPrimaryCoachByClient(),
+    fetchPayGroupsConfig(),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
@@ -1306,6 +1337,10 @@ export async function fetchPayData(): Promise<PayData> {
   // Payout months = each service month + the following month (the rollover tail).
   const months = payoutMonths(invoices);
 
+  // Pay-eligibility from the "Mentors" Payment-group. Null (no templates configured
+  // yet) => leave payEligible undefined so the engine uses its legacy 4x/2x/1x rule.
+  const payEligible = payEligibleForGroup(payGroups, MENTORS_GROUP_ID) ?? undefined;
+
   return {
     invoices,
     engagements,
@@ -1315,6 +1350,7 @@ export async function fetchPayData(): Promise<PayData> {
     startMonthOverride,
     primaryCoachOf: (clientId) => primaryCoach.get(clientId) ?? null,
     rampOverride,
+    payEligible,
   };
 }
 
@@ -1560,6 +1596,7 @@ export const RAW_TABLES = [
   "ca_clients",
   "ca_coaches",
   "ca_engagements",
+  "ca_engagement_templates",
   "ca_invoices",
   "ca_offerings",
   "ca_offering_submissions",
@@ -1639,4 +1676,40 @@ export async function fetchCompanyOptions(): Promise<Record<string, string>> {
 export async function setCompanyOption(key: string, value: string): Promise<void> {
   const { error } = await supabase.from("app_settings").update({ value }).eq("key", key);
   if (error) throw new Error(error.message);
+}
+
+// --- Payment groups (Company options §451) ---
+// The engagement-template mirror (row source for the checkbox grid) + the org-wide
+// config mapping templates + coaches to staff groups used for payouts.
+
+export interface EngagementTemplate {
+  id: number;
+  name: string;
+  managingCoachId: number | null;
+  allocationUnit: string | null;
+  allocation: number | null;
+}
+
+export async function fetchEngagementTemplates(): Promise<EngagementTemplate[]> {
+  const { data, error } = await supabase
+    .from("ca_engagement_templates")
+    .select("id,name,managing_coach_id,allocation_unit,allocation")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: number; name: string | null; managing_coach_id: number | null; allocation_unit: string | null; allocation: number | null }[]).map(
+    (t) => ({ id: t.id, name: t.name ?? `#${t.id}`, managingCoachId: t.managing_coach_id, allocationUnit: t.allocation_unit, allocation: t.allocation })
+  );
+}
+
+const PAY_GROUPS_KEY = "pay_engagement_groups";
+
+export async function fetchPayGroupsConfig(): Promise<PayGroupsConfig> {
+  const { data, error } = await supabase.from("app_settings").select("value").eq("key", PAY_GROUPS_KEY).maybeSingle();
+  if (error) throw new Error(error.message);
+  const value = (data as { value?: unknown } | null)?.value;
+  return parsePayGroupsConfig(typeof value === "string" ? value : null);
+}
+
+export async function savePayGroupsConfig(cfg: PayGroupsConfig): Promise<void> {
+  await setCompanyOption(PAY_GROUPS_KEY, serializePayGroupsConfig(cfg));
 }

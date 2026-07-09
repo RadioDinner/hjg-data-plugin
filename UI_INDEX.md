@@ -42,6 +42,7 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 403 | `admin.capacity` | Mentor capacity (editor) | `AdminView` editor |
 | 404 | `admin.settings` | Settings | `AdminView` card |
 | 451 | `options.screen` | Company options (screen) | nav tab |
+| 452 | `options.payGroups` | Payment groups (engagement templates × staff groups) | `PayGroupsCard` |
 | 501 | `mentees.screen` | Mentees — source of truth (screen) | nav tab |
 | 601 | `margins.screen` | Margins (screen) | nav tab |
 | 701 | `discovery.screen` | Discovery calls (screen) | nav tab |

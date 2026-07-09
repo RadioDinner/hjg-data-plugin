@@ -55,6 +55,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "admin.capacity": 403,
   "admin.settings": 404,
   "options.screen": 451,
+  "options.payGroups": 452, // Payment groups: engagement templates × staff groups (2026-07-09)
 
   // 5xx — Mentees (rebuilt mentee management, 2026-06-24)
   "mentees.screen": 501,

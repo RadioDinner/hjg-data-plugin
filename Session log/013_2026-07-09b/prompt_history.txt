@@ -5,3 +5,15 @@ Why is Caleb's payout saying he has $430.83 in earned income for Ty Miller? How 
 I want you to make the following changes after you diagnose the problems with the payout engine.
 1) Make the Export CSV buttons, accross the board, export the data used to calculate the data presented on that screen. So for this instance on screen 204, I want you to export the invoices and the times they were paid, etc, that were used to build the payout
 2) I want you to make so I can click on the name of the mentee in screen 204 and see the invoices that he paid for the month it's calculating, as well as the dates he paid. Rather too much information than too little
+
+--- 2026-07-09 (session 013, follow-up) ---
+merge this to main
+
+--- 2026-07-09 (session 013, follow-up) ---
+youre wrong and a liar. You said that the 5.83 was a remainder from a previous month. That was wrong. You included JYF supervised progress. That isn't right. I've told you before, I only want MN Subscriptions included in payouts
+
+--- 2026-07-09 (session 013, follow-up) ---
+I want you to add something to Company Options (451) for me. I want you to pull a list from CoachAccountable offerings. Make a grid of the engament templates from CoachAccountable with checkboxes in columns in which engagements (which become engagements used in staff/mentor payment calculations) should be used for what group of staff. [pasted the current CoachAccountable engagement-template list: IMN Subscription | CA & JYF Access $85; MN Subscription | (0x Month) JYF Supervised Progress $210; (1x/2x/4x Month) Zoom Meetings $145/$265/$425; After Graduation Care; Fortify Group $115; Gain Momentum Group $315; MT Engagement | Mentor Training Program (x3 variants); MT Engagement | Post-Graduation Input]. I actually want a checkbox on each engagement template line, or a multi-select dropdown, of which groups should be included in payments. (4x/2x/1x Month) Zoom Meetings would be checked on "Mentors". Then when someone has an engagement opened, you'd use the engagement description to calculate the payment for the mentor.
+
+--- 2026-07-09 (session 013, AskUserQuestion answers) ---
+Q(engine rule): "Yes — the grid decides"; Q(template list): "Via Admin → Sync + a Refresh button"; Q(groups): "Multiple groups. Put an additional/separate option to build out which coach should be in which group."

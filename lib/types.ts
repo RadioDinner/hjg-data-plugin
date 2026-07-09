@@ -116,6 +116,19 @@ export interface CAInvoice {
   paymentSet?: CAInvoicePayment[];
 }
 
+// A CoachAccountable Engagement Template (Engagement.getTemplates) — the
+// subscription/engagement "product" a client can be enrolled in. Its `name` is the
+// exact string that appears as an engagement's name once opened for a client, so
+// it's the join key between templates and ca_engagements.
+export interface CAEngagementTemplate {
+  ID: number;
+  name?: string;
+  managingCoachID?: number;
+  duration?: number;
+  allocationUnit?: string;
+  allocation?: number;
+}
+
 // "Submissions" = signups and/or purchases for an Offering.
 export interface CAOfferingSubmission {
   ID: number;
@@ -323,6 +336,15 @@ export interface CaInvoiceRow {
   line_items: CAInvoiceLineItem[] | null;
   payments: CAInvoicePayment[] | null;
   synced_at?: string;
+}
+
+export interface CaEngagementTemplateRow {
+  id: number;
+  name: string | null;
+  managing_coach_id: number | null;
+  duration: number | null;
+  allocation_unit: string | null;
+  allocation: number | null;
 }
 
 export type SyncTrigger = "manual" | "scheduled";

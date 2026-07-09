@@ -70,6 +70,15 @@ import {
 } from "../lib/payBuild.js";
 import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
 import {
+  parsePayGroupsConfig,
+  serializePayGroupsConfig,
+  payEligibleForGroup,
+  groupHasTemplates,
+  normalizeTemplateName,
+  DEFAULT_PAY_GROUPS_CONFIG,
+  MENTORS_GROUP_ID,
+} from "../lib/payGroups.js";
+import {
   parseTrendWindow,
   serializeTrendWindow,
   trendWindowLabel,
@@ -643,6 +652,56 @@ console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned,
   // An explicit months list scopes the timeline (e.g. a single-month explore).
   const one = computePayTimeline({ invoices, engagements, coachName, clientName, months: ["2026-04"] });
   eq(one.months.length, 1, "explicit months list scopes the timeline");
+}
+
+console.log("[9b] payment groups — engagement-template gating (Company options §451)");
+{
+  const clientName = (id: number) => `Mentee ${id}`;
+
+  // parse/serialize + defaults
+  eq(groupHasTemplates(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID), false, "default Mentors group has no templates (falls back to legacy)");
+  eq(payEligibleForGroup(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID), null, "empty group -> null predicate (legacy fallback)");
+  eq(parsePayGroupsConfig("not json").groups[0].id, MENTORS_GROUP_ID, "garbage config -> default (Mentors)");
+  eq(parsePayGroupsConfig("").groups.length, 1, "blank config -> default one-group");
+  const rt = parsePayGroupsConfig(
+    serializePayGroupsConfig({ groups: [{ id: "mentors", name: "Mentors", templateNames: ["MN Subscription | (4x Month) Zoom Meetings"], coachIds: [40711] }] })
+  );
+  eq(rt.groups[0].templateNames[0], "MN Subscription | (4x Month) Zoom Meetings", "round-trips template names");
+  eq(rt.groups[0].coachIds[0], 40711, "round-trips coach ids");
+
+  // Predicate matches by NORMALIZED name (tolerates whitespace/case drift).
+  const cfg4x = parsePayGroupsConfig(
+    serializePayGroupsConfig({ groups: [{ id: "mentors", name: "Mentors", templateNames: ["MN Subscription | (4x Month) Zoom Meetings"], coachIds: [] }] })
+  );
+  const pred = payEligibleForGroup(cfg4x, MENTORS_GROUP_ID)!;
+  eq(pred("MN Subscription | (4x Month) Zoom Meetings"), true, "exact template name is eligible");
+  eq(pred("MN Subscription  |  (4x Month) Zoom Meetings"), true, "whitespace-drifted name still matches (normalized)");
+  eq(pred("MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress"), false, "an unchecked JYF template is NOT eligible");
+  eq(normalizeTemplateName("  Foo   Bar "), "foo bar", "normalizeTemplateName collapses whitespace + lowercases");
+
+  // Engine gating: the grid OVERRIDES the legacy 4x/2x/1x detection.
+  const eng4x: PayEngagementInput[] = [
+    { clientId: 1, coachId: 500, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+  ];
+  const inv: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-05-15", billed: 425, collected: 425 }];
+  const base = { ym: "2026-05", invoices: inv, engagements: eng4x, coachName: (id: number) => `#${id}`, clientName, startMonthOverride: new Map([[500, "2026-01"]]) };
+
+  // (a) No predicate -> legacy: the (4x) engagement is paid.
+  const legacy = computePayReport(base);
+  eq(legacy.mentors[0]?.billed ?? 0, 425, "legacy (no grid): a (4x Month) engagement is paid");
+
+  // (b) Grid checks ONLY a different template -> the same 4x invoice is now EXCLUDED.
+  const otherCfg = parsePayGroupsConfig(
+    serializePayGroupsConfig({ groups: [{ id: "mentors", name: "Mentors", templateNames: ["MN Subscription | Fortify Group"], coachIds: [] }] })
+  );
+  const gatedOut = computePayReport({ ...base, payEligible: payEligibleForGroup(otherCfg, MENTORS_GROUP_ID)! });
+  eq(gatedOut.mentors.length, 0, "grid decides: a 4x engagement whose template is UNCHECKED is not paid");
+  eq(gatedOut.excludedBilled, 425, "the unchecked 4x revenue is surfaced as excludedBilled, not silently dropped");
+
+  // (c) Grid checks the 4x template -> paid again (grid authoritative, positive case).
+  const gatedIn = computePayReport({ ...base, payEligible: payEligibleForGroup(cfg4x, MENTORS_GROUP_ID)! });
+  eq(gatedIn.mentors[0]?.billed ?? 0, 425, "grid decides: a checked (4x) template is paid");
+  eq(gatedIn.mentors[0]?.lines[0]?.tier, "4x", "tier label still derived from the engagement name");
 }
 
 console.log("[10] compare-mode period math (shiftMonths, presets, delta)");

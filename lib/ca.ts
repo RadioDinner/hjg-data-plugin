@@ -9,6 +9,7 @@ import type {
   CAClient as CAClientEntity,
   CACoach,
   CAEngagement,
+  CAEngagementTemplate,
   CAInvoice,
   CAOffering,
   CAOfferingSubmission,
@@ -173,6 +174,14 @@ export class CAClient {
         includeAppointments: opts.includeAppointments ?? false,
       })
     );
+  }
+
+  // READ-ONLY: Engagement.getTemplates only. Returns the engagement "products"
+  // (e.g. "MN Subscription | (4x Month) Zoom Meetings") with a stable ID + name.
+  // Used to build the Payment-groups checkbox grid (which templates count toward
+  // which staff group's payout).
+  async getEngagementTemplates(): Promise<CAEngagementTemplate[]> {
+    return asArray<CAEngagementTemplate>(await this.call(CA_FN.engagementGetTemplates, {}));
   }
 
   // READ-ONLY: Invoice.getAll only. Each invoice already carries its nested

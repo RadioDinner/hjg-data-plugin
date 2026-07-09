@@ -18,6 +18,7 @@ import type {
   CaOfferingSubmissionRow,
   CaEngagementRow,
   CaInvoiceRow,
+  CaEngagementTemplateRow,
 } from "./types.js";
 
 export class SyncInProgressError extends Error {
@@ -92,6 +93,60 @@ async function chunkedUpsert<T extends object>(
     written += batch.length;
   }
   return written;
+}
+
+// Pull CoachAccountable engagement templates and upsert the ca_engagement_templates
+// mirror. Shared by the full sync and the standalone "Refresh templates" endpoint.
+async function syncEngagementTemplateRows(
+  admin: ReturnType<typeof getAdminClient>,
+  ca: CAClient
+): Promise<number> {
+  const templates = await ca.getEngagementTemplates();
+  const rows: CaEngagementTemplateRow[] = templates.map((t) => ({
+    id: t.ID,
+    name: t.name ?? null,
+    managing_coach_id: t.managingCoachID ?? null,
+    duration: t.duration ?? null,
+    allocation_unit: t.allocationUnit ?? null,
+    allocation: t.allocation ?? null,
+  }));
+  return chunkedUpsert(admin, "ca_engagement_templates", rows);
+}
+
+// Standalone refresh of just the engagement-template mirror — for the Company
+// options "Refresh templates" button, which shouldn't require a full sync. Its CA
+// call is budget-guarded AND recorded in sync_runs (a short "manual" row) so the
+// daily cap accounts for refreshes too — getUsedToday sums sync_runs.calls_made,
+// so without the row a repeated Refresh would silently bypass the cap.
+export async function syncEngagementTemplates(): Promise<{ count: number }> {
+  const admin = getAdminClient();
+  const tracker: BudgetTracker = await makeTracker(admin);
+  const ca = new CAClient(() => tracker.spend());
+  let count = 0;
+  let status: "success" | "error" = "success";
+  let error: string | null = null;
+  try {
+    count = await syncEngagementTemplateRows(admin, ca);
+    return { count };
+  } catch (e) {
+    status = "error";
+    error = sanitizeError(e);
+    throw e;
+  } finally {
+    // Best-effort accounting write — never mask the real result/error.
+    try {
+      await admin.from("sync_runs").insert({
+        trigger: "manual",
+        status,
+        finished_at: new Date().toISOString(),
+        calls_made: tracker.callsMade,
+        records_synced: count,
+        error,
+      });
+    } catch {
+      /* accounting row is best-effort */
+    }
+  }
 }
 
 export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
@@ -301,6 +356,16 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
     } catch (e) {
       if (e instanceof BudgetExhaustedError) throw e;
       warnings.push(`Invoices skipped: ${sanitizeError(e)}`);
+    }
+
+    // Engagement templates feed the Payment-groups grid (which templates count
+    // toward which staff group's payout). Cheap (one call), best-effort like the
+    // other satellite data — a failure here doesn't sink the core sync.
+    try {
+      records += await syncEngagementTemplateRows(admin, ca);
+    } catch (e) {
+      if (e instanceof BudgetExhaustedError) throw e;
+      warnings.push(`Engagement templates skipped: ${sanitizeError(e)}`);
     }
 
     // Materialize the Mentee-management CA layer from the freshly-synced mirror.

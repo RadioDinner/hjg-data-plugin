@@ -347,6 +347,23 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 - First option: **Journeys → stage-date basis** (engagement start vs. first 1-on-1 meeting), also togglable inline on the Journeys tab.`,
   },
 
+  "options.payGroups": {
+    title: "Payment groups",
+    body: `Control **which CoachAccountable engagement templates count toward which group of staff** when payouts are calculated — no code change needed.
+
+### The grid
+- **Rows** are the engagement templates synced from CoachAccountable (e.g. \`MN Subscription | (4x Month) Zoom Meetings\`). **Columns** are staff groups (starts with **Mentors**).
+- **Check a box** to include that template's revenue in that group's payout. When a mentee has an engagement opened, its template decides whether the revenue is paid — so JumpStart Your Freedom / Supervised Progress, After-Graduation care, Fortify/Gain Momentum groups, and Mentor Training simply stay **unchecked** and never count.
+- A second grid assigns **coaches to groups** (the roster you're building toward group-specific pay schemes).
+
+### How it drives payouts
+- The **Mentors** group is wired into Pay staff / Build payout: an invoice counts **iff** the engagement covering it is a template checked for Mentors.
+- **Until you check any templates for a group**, the engine falls back to the legacy 4×/2×/1× auto-detection, so nothing changes until you configure it. Once you check templates, the grid is the source of truth.
+
+### Keeping the list fresh
+- **Refresh templates** pulls the latest templates from CoachAccountable on demand (they also refresh on Admin → Sync). Needs migration \`9972_pay_engagement_groups.sql\` applied.`,
+  },
+
   "metrics.freedom": {
     title: "Meetings to Freedom!",
     body: `For each **graduated** mentee, how many **1-on-1 mentoring sessions** (4x / 2x / 1x) it took to walk them from finishing JumpStart to graduation ("Freedom").

@@ -151,6 +151,7 @@ export const CA_FN = {
   offeringGetAll: "Offering.getAll",
   offeringGetSubmissions: "Offering.getSubmissions", // UNCONFIRMED name
   engagementGetAll: "Engagement.getAll",
+  engagementGetTemplates: "Engagement.getTemplates",
   invoiceGetAll: "Invoice.getAll",
   invoiceGetPayments: "Invoice.getPayments",
 };

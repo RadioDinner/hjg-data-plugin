@@ -1,53 +1,71 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-07-09 (session 013 — payout transparency: invoice-source drill-down + "data used to build the payout" CSV).
+2026-07-09 (session 013 — payout invoice-drilldown/CSV **and** a configurable Payment-groups grid).
 
 ## ▶ START HERE (2026-07-09, session 013)
 
-**Payout transparency shipped on `claude/payout-calculation-csv-export-mez3a9`.** `typecheck` +
-`verify` + `build` all green. **UI NOT browser-tested** (headless container — no live Supabase
-creds). **No migration** (the data was already synced). Full detail in
-`Session log/013_2026-07-09b/session_log.md`.
+**Two things shipped on `claude/payout-calculation-csv-export-mez3a9`:** (A) payout invoice
+transparency (drill-down + "data used to build the payout" CSV) — **already merged to `main`** —
+and (B) a **Payment-groups** feature: an admin grid picking which engagement templates count for
+which staff group. `typecheck` + `verify` + `build` all green. **UI NOT browser-tested** (headless).
+Full detail in `Session log/013_2026-07-09b/session_log.md`.
 
-**The question answered — "why is Ty Miller's June earned $430.83?"** The §204 payout uses
-Clayton's **two-month split**: each invoice pays its *remaining* fraction `billed × (1 − e)` in its
-own month and rolls its *elapsed* fraction `billed × e` (`e = invoiceDay ÷ 30`) into the next.
-Ty's **June invoice is $425 dated the 30th** → `e = 1` → this-month slice **$0**; his whole June
-number is **May's rolled-in slice = $430.83**, × Caleb's 60% = **$258.50**. It exceeds $425 because
-`rolloverPrev` **sums all of May's mentoring invoices** — so May had >1 4× invoice (likely a
-proration around Ty's ~5/29 JumpStart→4× switch + his regular $425). The engine math was faithful;
-the old screen/CSV just **hid the invoices**. (June's $425 rolls into July — not lost.) A verify
-assertion now reproduces the exact **$430.83 → $258.50** from a two-May-invoice replica.
+**⚠ CUTOVER for (B): apply `9972_pay_engagement_groups.sql`** in the Supabase SQL Editor, then click
+**Company options → Payment groups → Refresh templates** (or run Admin → Sync) to populate
+`ca_engagement_templates`, then **check the mentoring templates for the "Mentors" group** (the
+(4×/2×/1× Month) MN Subscriptions) and leave JumpStart/JYF/(0x)/groups/MT unchecked. **Until a group
+has any templates checked, payouts use the legacy 4×/2×/1× auto-detection** (unchanged), so applying
+the migration is safe on its own. **Next new migration is `9971_…`.**
 
-**What shipped:**
-- **Engine (`lib/pay.ts`)** — additive, math unchanged: `PayMenteeLine`/`PayLedgerRow` now carry
-  `sources: PayLineSource[]` (the invoices — with payment dates + line items — whose slices built
-  the line). `PayInvoiceInput` gained optional `invoiceId/invoiceNumber/payments/lineItems`.
-- **Data (`src/db.ts`)** — `fetchAllPayInvoices` now selects `id, invoice_number, line_items,
-  payments` and normalizes the jsonb (`asArray`/`normInvoicePayments`/`normInvoiceLineItems`). The
-  data was already in `ca_invoices` (9993) — just dropped before the engine.
-- **CSV (`lib/payBuild.ts`)** — new `payoutDetailCsvRows()` + `PAYOUT_DETAIL_CSV_COLUMNS`: **one
-  row per contributing invoice** (this-month + rolled-in slices) with payment dates; mentee-level
-  payout columns filled only on each mentee's FIRST invoice row (no double-count).
-- **§204 `BuildPayoutView`** — Export CSV now exports that invoice-level detail; the **mentee name
-  is a button** → new **`PayoutLineDetailModal` (§905)** showing the mentee's invoices, every
-  payment date/amount/method, line items, and the `this-month + rolled-in = earned → payout` math.
-- **Pay Explore Invoices (§901)** — added Invoice #, Payment dates, Payment methods, Line items.
-- **Registry/help** — `modal.payoutLineDetail = 905` (uiRegistry + UI_INDEX); `pay.build` article
-  updated. **verify-metrics** §8/§13 gained the Ty replica + `sources`/CSV invariants.
+**⚠ DIAGNOSIS CORRECTION — Ty Miller's $430.83.** An earlier note here claimed the excess over $425
+was a legit *rollover / second 4× invoice*. **That was wrong** (stated without seeing the invoice
+line items). The real cause: **JumpStart Your Freedom "Supervised Progress" (non-MN-Subscription)
+revenue is swept into the mentoring basis** because the engine pays on the invoice's **total
+`amount`** and gates only by whether a 4×/2×/1× engagement covers the invoice DATE — it never
+inspects the invoice's own line items. The user's rule: **only MN Subscription mentoring counts.**
+The Payment-groups grid (B) is the durable fix (uncheck JYF). **STILL OPEN** (user deferred the exact
+invoice breakdown): whether the pay basis must ALSO be filtered at the **line-item** level — i.e. if
+a JYF charge is a line item on the SAME invoice as an MN Subscription charge, the grid gates by
+engagement template but the engine still sums the invoice TOTAL. Confirm the invoice structure, then
+decide if line-item filtering is also needed.
 
-**Review:** adversarial review run via parallel subagents — DB-normalization dimension came back
-**clean**; engine/CSV + UI dimensions were also reviewed (fold any surviving findings into a
-follow-up commit).
+**(A) Payout transparency — shipped + merged to `main` (commits `5b37c31`, `505d38f`).** Engine
+(`lib/pay.ts`) `PayMenteeLine`/`PayLedgerRow` carry `sources: PayLineSource[]` (the invoices — with
+payment dates + line items — whose two-month slices built the line; math unchanged, additive).
+`fetchAllPayInvoices` now loads `id/invoice_number/line_items/payments` (already in `ca_invoices` 9993).
+`payoutDetailCsvRows()` → §204 Export CSV is now **one row per contributing invoice** with payment
+dates. §204 **mentee name → `PayoutLineDetailModal` (§905)** (invoices + payment dates/methods + line
+items + the earned→payout math). Pay Explore Invoices (§901) gained Invoice #/Payment dates/methods/
+line items. verify §8/§13.
 
-**Next session:** browser-verify §204 (click a mentee → drill-down shows invoices + payment dates;
-Export CSV downloads per-invoice detail; Pay Explore → Invoices shows the new columns). With live
-data, open Ty Miller's June drill-down to see the actual May invoices behind $430.83 and decide if
-any is a duplicate to exclude/override. Optional: extend the clickable-name drill-down to the
-reconcile (§205) + Explore ledger tables (this session scoped it to §204 per the request).
+**(B) Payment groups — engine templates × staff groups (Company options §451, `options.payGroups`=452).**
+- **`9972_pay_engagement_groups.sql`** — `ca_engagement_templates` mirror (RLS read) + seeds
+  `app_settings` key `pay_engagement_groups` (default: one empty "Mentors" group).
+- **CA/sync** — `Engagement.getTemplates` (`ca.getEngagementTemplates`); `runSync` upserts templates
+  (best-effort) + standalone `syncEngagementTemplates()` (records a `sync_runs` row so the daily CA
+  cap accounts for refreshes) behind **`api/sync-templates.ts`** + `refreshEngagementTemplates()`.
+- **`lib/payGroups.ts`** (pure) — parse/serialize, `normalizeTemplateName`, `payEligibleForGroup`
+  (predicate or **null** when a group has no templates → legacy fallback), `MENTORS_GROUP_ID`.
+- **Engine** — `computePayReport`/`mentoringCoverFor` take optional `payEligible(name)`; when present
+  it **replaces** the `MENTORING_PAY_TIERS` gate, else legacy. Tier label still from the name.
+- **`src/db.ts`** — `fetchEngagementTemplates`/`fetchPayGroupsConfig`/`savePayGroupsConfig`;
+  `fetchPayData` builds `payEligible` from the Mentors group (`?? undefined` → legacy). Threaded into
+  all pay call sites. `ca_engagement_templates` in RAW_TABLES.
+- **UI** — `src/components/PayGroupsCard.tsx` on §451: template×group + coach×group checkbox grids,
+  add/rename/remove group, Refresh button, debounced save. Help `options.payGroups`. verify §9b.
 
-**Next new migration is `9972_…`** (unchanged — no migration this session).
+**Review (B):** adversarial review via 3 parallel subagents — engine/payGroups/db **clean**;
+sync/CA/migration found **1 low-sev** (refresh CA call didn't count against the daily budget) — **fixed**
+(records a `sync_runs` row); UI found **2 minor** (sub-500ms unmount save-drop; blank rename box on
+empty blur) — **both fixed** + dead `lastSavedRef` removed + coaches grid shown without templates.
+
+**Next session:** DO THE CUTOVER (apply `9972` + Refresh + configure Mentors). Browser-verify §204
+drill-down + CSV, Pay Explore Invoices columns, and the §451 grid (toggle a template → payout changes;
+add/rename/remove group; coach assignment; Refresh). Resolve the OPEN line-item question once the user
+sends the invoice breakdown. Optional: extend the clickable-name drill-down to §205 + Explore ledger.
+
+**Next new migration is `9971_…`.**
 
 ## ▶ Prior session START HERE (2026-07-09, session 012)
 

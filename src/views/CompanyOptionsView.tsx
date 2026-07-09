@@ -14,6 +14,7 @@ import {
   type TrendUnit,
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
+import { PayGroupsCard } from "../components/PayGroupsCard";
 
 // Self-serve, organization-wide dashboard settings. Every option is declared in
 // src/companyOptions.ts (the registry); this tab just renders them grouped by
@@ -73,6 +74,7 @@ export function CompanyOptionsView() {
   }
 
   return (
+    <>
     <section className="card">
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
         Company options <HelpButton id="company.options" label="Company options" />
@@ -137,6 +139,8 @@ export function CompanyOptionsView() {
         ))
       )}
     </section>
+    <PayGroupsCard />
+    </>
   );
 }
 

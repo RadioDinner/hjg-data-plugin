@@ -22,3 +22,12 @@ export async function triggerSync(): Promise<SyncResult> {
   if (!res.ok) throw new Error(body.message || `Sync failed (${res.status})`);
   return body as SyncResult;
 }
+
+// Refreshes just the engagement-template mirror (Company options → Payment groups
+// "Refresh templates"), without a full sync. Requires a signed-in session.
+export async function refreshEngagementTemplates(): Promise<{ count: number }> {
+  const res = await fetch(`/api/sync-templates`, { method: "POST", headers: await authHeader() });
+  const body = (await res.json().catch(() => ({}))) as { count?: number; message?: string };
+  if (!res.ok) throw new Error(body.message || `Refresh failed (${res.status})`);
+  return { count: body.count ?? 0 };
+}

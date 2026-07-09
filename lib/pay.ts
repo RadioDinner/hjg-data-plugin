@@ -204,6 +204,11 @@ export interface PayInputs {
   // coachId -> a custom revenue-share ramp (e.g. [0.5, 0.6, 0.6] for a
   // fast-tracked mentor). Absent => the default PAY_RAMP (35/50/60).
   rampOverride?: Map<number, readonly number[]>;
+  // Predicate deciding whether an engagement's revenue is pay-eligible — built from
+  // the Payment-groups config (which engagement templates are checked for the group).
+  // When absent, the legacy 4x/2x/1x tier detection is used, so behavior is unchanged
+  // until an admin configures the grid.
+  payEligible?: (engagementName: string | null) => boolean;
 }
 
 // --- engine outputs ---
@@ -271,7 +276,11 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // one covering the invoice date wins (so an end-of-month tier change credits the new
 // tier/coach); if none covers the exact date, any mentoring engagement overlapping the
 // invoice's service month is used, so an invoice on an uncovered day isn't dropped.
-function mentoringCoverFor(dateYmd: string, engs: PayEngagementInput[]): { coachId: number; tier: string } | null {
+function mentoringCoverFor(
+  dateYmd: string,
+  engs: PayEngagementInput[],
+  payEligible?: (engagementName: string | null) => boolean
+): { coachId: number; tier: string } | null {
   const d = dateYmd.slice(0, 10);
   const ym = d.slice(0, 7);
   const monthStart = `${ym}-01`;
@@ -283,7 +292,11 @@ function mentoringCoverFor(dateYmd: string, engs: PayEngagementInput[]): { coach
   for (const e of engs) {
     if (e.coachId == null) continue;
     const tier = engagementTier(e.name);
-    if (!MENTORING_PAY_TIERS.has(tier)) continue;
+    // Pay-eligibility: the configured Payment-groups predicate (which engagement
+    // templates are checked for the group) when supplied, else the legacy 4x/2x/1x
+    // tier detection. The TIER label below still comes from the engagement name.
+    const eligible = payEligible ? payEligible(e.name) : MENTORING_PAY_TIERS.has(tier);
+    if (!eligible) continue;
     const s = (e.startDate ?? "0000-01-01").slice(0, 10);
     const en = (e.endDate ?? "9999-12-31").slice(0, 10);
     if (d >= s && d <= en && (dateBest == null || s > dateStart)) {
@@ -367,7 +380,7 @@ export function computePayReport(input: PayInputs): PayReport {
     if (invYm !== ym && invYm !== prev) continue;
     // Pay basis is 4x/2x/1x mentoring only. JumpStart & everything else is excluded
     // from mentor pay — tracked (this month) rather than silently dropped.
-    const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? []);
+    const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible);
     if (!cov) {
       if (invYm === ym) excludedBilled += amt;
       continue;
@@ -529,6 +542,8 @@ export interface PayTimelineInput {
   primaryCoachOf?: (clientId: number) => number | null;
   // coachId -> per-mentor revenue-share ramp override (see computePayReport).
   rampOverride?: Map<number, readonly number[]>;
+  // Pay-eligibility predicate from the Payment-groups config (see computePayReport).
+  payEligible?: (engagementName: string | null) => boolean;
   // Payout months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
   // month PLUS the following month (where the rollover slice lands), newest first.
   months?: string[];
@@ -564,6 +579,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
       startMonthOverride: input.startMonthOverride,
       primaryCoachOf: input.primaryCoachOf,
       rampOverride: input.rampOverride,
+      payEligible: input.payEligible,
     })
   );
 

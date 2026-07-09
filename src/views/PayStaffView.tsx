@@ -370,6 +370,7 @@ export function PayStaffView() {
       startMonthOverride: data.startMonthOverride,
       primaryCoachOf: data.primaryCoachOf,
       rampOverride: data.rampOverride,
+      payEligible: data.payEligible,
     });
   }, [data]);
 
