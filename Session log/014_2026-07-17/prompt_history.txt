@@ -17,3 +17,6 @@ Context: Harry (mentor) emailed re: subscription/no-show policy — Cade/Joel/Jo
 
 --- 2026-07-17 23:42 ---
 well, ok I don't actually know. Clayton was saying how he would calculate rollovers from month to month, based on the transition date of when someone went from 4x to 2x. That is stupid confusing to my mind. IDK why. But that is how our Data Hub "Pay staff" tool calculates it and I think that the "Pay staff" tool is "right"
+
+--- 2026-07-17 23:52 ---
+[attached: payout-build-harry-shenk-2026-04 CSV + hjg-raw-data-2026-07-17.xlsx] Can't trust payout data yet. April build is MISSING mentees. Harry's April mentees should be: Alex Reiff, Brett Wengerd, Cade Byers, Daryl Bowman, David Weaver, Isaiah Hursh, Joel Mast, John Troyer, Josh Lehman, Lavon Stoltfus, Luke Smucker, Myles Miller, Nelson Miller. The build is missing people. Use hjg-raw-data to compile the correct list.
