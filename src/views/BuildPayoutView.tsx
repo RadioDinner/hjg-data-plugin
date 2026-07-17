@@ -5,8 +5,7 @@ import {
   computePayTimeline,
   summarizeBuild,
   effectiveLineTotal,
-  payoutAfterInvoiceExclusions,
-  excludedInvoiceSet,
+  payoutAfterExclusions,
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
@@ -199,20 +198,6 @@ export function BuildPayoutView({
 
   function updateLine(clientId: number, patch: Partial<BuildLineState>) {
     setLineStates((s) => ({ ...s, [clientId]: { ...(s[clientId] ?? DEFAULT_LINE_STATE), ...patch } }));
-    setDirty(true);
-    setFlash(null);
-  }
-
-  // Add/remove one invoice from a mentee's payout (driven by the §905 drill-down
-  // checkboxes). Rides in the same lineStates so it saves + reloads with the build.
-  function toggleInvoice(clientId: number, sourceKey: string, exclude: boolean) {
-    setLineStates((st) => {
-      const cur = st[clientId] ?? DEFAULT_LINE_STATE;
-      const set = new Set(cur.excludedInvoices ?? []);
-      if (exclude) set.add(sourceKey);
-      else set.delete(sourceKey);
-      return { ...st, [clientId]: { ...cur, excludedInvoices: [...set] } };
-    });
     setDirty(true);
     setFlash(null);
   }
@@ -428,8 +413,11 @@ export function BuildPayoutView({
                     {lines.map((l) => {
                       const s = stateFor(l.clientId);
                       const eff = effectiveLineTotal(l, s);
-                      const base = payoutAfterInvoiceExclusions(l, excludedInvoiceSet(s));
-                      const droppedInv = s.excludedInvoices?.length ?? 0;
+                      const base = payoutAfterExclusions(l, s);
+                      const affectedInv = new Set<string>();
+                      (s.excludedInvoices ?? []).forEach((k) => affectedInv.add(k));
+                      (s.excludedLineItems ?? []).forEach((k) => affectedInv.add(k.split("#")[0]));
+                      const droppedInv = affectedInv.size;
                       return (
                         <tr key={l.clientId} className={s.included ? "" : "builder__row--excluded"}>
                           <td>
@@ -454,7 +442,7 @@ export function BuildPayoutView({
                               <span
                                 className="pill pill--running"
                                 style={{ marginLeft: 6 }}
-                                title={`${droppedInv} invoice${droppedInv === 1 ? "" : "s"} dropped from this payout (click the name to review)`}
+                                title={`${droppedInv} invoice${droppedInv === 1 ? "" : "s"} adjusted (whole invoice or line items dropped) — click the name to review`}
                               >
                                 −{droppedInv} inv
                               </span>
@@ -610,7 +598,7 @@ export function BuildPayoutView({
           coachName={mentor?.coachName ?? data?.coachName(coach) ?? ""}
           ym={ym}
           state={stateFor(detail.clientId)}
-          onToggleInvoice={(key, excl) => toggleInvoice(detail.clientId, key, excl)}
+          onChange={(patch) => updateLine(detail.clientId, patch)}
           readOnly={locked}
           onClose={() => setDetail(null)}
         />

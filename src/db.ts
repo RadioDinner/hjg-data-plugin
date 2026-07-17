@@ -26,9 +26,9 @@ export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, P
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
 // re-exported so the frontend imports lib through db.ts — same pattern as above.
-import { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterInvoiceExclusions, payLineSourceKey, excludedInvoiceSet, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS } from "../lib/payBuild";
+import { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS } from "../lib/payBuild";
 import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine } from "../lib/payBuild";
-export { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterInvoiceExclusions, payLineSourceKey, excludedInvoiceSet, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
+export { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
 export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
 // Payment groups (engagement templates × staff groups; Company options §451).

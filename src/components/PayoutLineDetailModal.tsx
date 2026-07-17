@@ -6,9 +6,14 @@ import {
   PAYOUT_DETAIL_CSV_COLUMNS,
   DEFAULT_LINE_STATE,
   effectiveLineTotal,
-  payoutAfterInvoiceExclusions,
+  payoutAfterExclusions,
   payLineSourceKey,
+  payLineItemKey,
   excludedInvoiceSet,
+  excludedLineItemSet,
+  lineItemsSplittable,
+  sourceIncludedBilled,
+  sourceRecognizedAfterExclusions,
   type PayMenteeLine,
   type PayLineSource,
   type PayInvoicePayment,
@@ -40,7 +45,7 @@ export function PayoutLineDetailModal({
   ym,
   state,
   onClose,
-  onToggleInvoice,
+  onChange,
   readOnly = false,
 }: {
   line: PayMenteeLine;
@@ -48,15 +53,16 @@ export function PayoutLineDetailModal({
   ym: string;
   state?: BuildLineState;
   onClose: () => void;
-  // Toggle one invoice in/out of this mentee's payout. Absent => a read-only view
-  // (no checkboxes). Called with the invoice's source-key + whether it's now excluded.
-  onToggleInvoice?: (sourceKey: string, excluded: boolean) => void;
+  // Update this line's invoice / line-item drops. Absent => a read-only view (no
+  // checkboxes). Called with the full next exclusion arrays; the caller merges them
+  // into the build's lineStates (so they save + reload with the build).
+  onChange?: (patch: Pick<BuildLineState, "excludedInvoices" | "excludedLineItems">) => void;
   readOnly?: boolean; // build approved/locked — show the selection but disable edits
 }) {
   const s = state ?? DEFAULT_LINE_STATE;
-  const excluded = excludedInvoiceSet(s);
-  const isExcluded = (src: PayLineSource) => excluded.has(payLineSourceKey(src));
-  const canToggle = !!onToggleInvoice && !readOnly;
+  const exclInv = excludedInvoiceSet(s);
+  const exclLI = excludedLineItemSet(s);
+  const canEdit = !!onChange && !readOnly;
   const eff = effectiveLineTotal(line, s);
   const prevYm = (() => {
     const [y, m] = ym.split("-").map(Number);
@@ -66,16 +72,63 @@ export function PayoutLineDetailModal({
 
   const thisMonth = line.sources.filter((x) => x.slice === "this-month");
   const rollover = line.sources.filter((x) => x.slice === "rollover");
-  // Recognized subtotals over the SURVIVING (included) invoices — the live effect
-  // of the checkboxes. adjEarned/adjPayout track the current selection; the raw
-  // engine figure (line.payout) stays available as the "before" reference.
-  const sumRecognizedIncl = (arr: PayLineSource[]) =>
-    round2(arr.filter((x) => !isExcluded(x)).reduce((t, x) => t + x.recognized, 0));
-  const adjThisMonth = sumRecognizedIncl(thisMonth);
-  const adjRollover = sumRecognizedIncl(rollover);
+  // Effective (post-drop) figures — the live effect of the checkboxes. recogOf
+  // scales an invoice's recognized slice to its surviving line-item basis;
+  // adjEarned/adjPayout track the selection while line.payout stays the "before".
+  const recogOf = (src: PayLineSource) => sourceRecognizedAfterExclusions(src, s);
+  const includedBilledOf = (src: PayLineSource) => sourceIncludedBilled(src, s);
+  const fullyOff = (src: PayLineSource) => round2(includedBilledOf(src)) <= 0.005;
+  const partlyOff = (src: PayLineSource) => {
+    const inc = includedBilledOf(src);
+    return inc > 0.005 && Math.abs(inc - src.billed) > 0.005;
+  };
+  const sumRecogIncl = (arr: PayLineSource[]) => round2(arr.reduce((t, x) => t + recogOf(x), 0));
+  const adjThisMonth = sumRecogIncl(thisMonth);
+  const adjRollover = sumRecogIncl(rollover);
   const adjEarned = round2(adjThisMonth + adjRollover);
-  const adjPayout = payoutAfterInvoiceExclusions(line, excluded);
-  const excludedCount = line.sources.filter(isExcluded).length;
+  const adjPayout = payoutAfterExclusions(line, s);
+  const affectedCount = line.sources.filter((src) => round2(includedBilledOf(src)) !== round2(src.billed)).length;
+
+  // Emit the next exclusion arrays. The invoice-level checkbox is a MASTER toggle:
+  // for a splittable invoice it flips all its line items; for a non-splittable one
+  // (line items missing or not reconciling to the total) it drops the whole invoice.
+  const emit = (nextInv: Set<string>, nextLI: Set<string>) =>
+    onChange?.({ excludedInvoices: [...nextInv], excludedLineItems: [...nextLI] });
+  function toggleInvoice(src: PayLineSource) {
+    const key = payLineSourceKey(src);
+    const inv = new Set(exclInv);
+    const li = new Set(exclLI);
+    if (lineItemsSplittable(src)) {
+      const anyOn = src.lineItems.some((_, i) => !li.has(payLineItemKey(src, i)));
+      src.lineItems.forEach((_, i) => {
+        const k = payLineItemKey(src, i);
+        if (anyOn) li.add(k);
+        else li.delete(k);
+      });
+      inv.delete(key); // splittable invoices are driven by their line items
+    } else if (inv.has(key)) {
+      inv.delete(key);
+    } else {
+      inv.add(key);
+    }
+    emit(inv, li);
+  }
+  function toggleLineItem(src: PayLineSource, index: number) {
+    const k = payLineItemKey(src, index);
+    const li = new Set(exclLI);
+    if (li.has(k)) li.delete(k);
+    else li.add(k);
+    emit(new Set(exclInv), li);
+  }
+  // Master checkbox state for one invoice (checked / indeterminate).
+  const invBoxState = (src: PayLineSource): { checked: boolean; indeterminate: boolean } => {
+    if (lineItemsSplittable(src)) {
+      const n = src.lineItems.length;
+      const dropped = src.lineItems.filter((_, i) => exclLI.has(payLineItemKey(src, i))).length;
+      return { checked: dropped < n, indeterminate: dropped > 0 && dropped < n };
+    }
+    return { checked: !exclInv.has(payLineSourceKey(src)), indeterminate: false };
+  };
 
   // Every payment across the contributing invoices, oldest first — the plain
   // answer to "when did he pay?".
@@ -110,42 +163,88 @@ export function PayoutLineDetailModal({
     );
   };
 
-  const itemsCell = (src: PayLineSource) =>
-    src.lineItems.length ? (
+  // Line items, each with its own checkbox when the invoice is splittable. A
+  // whole-invoice drop (or a non-splittable invoice) strikes every item.
+  const itemsCell = (src: PayLineSource) => {
+    if (!src.lineItems.length) return <span className="muted">—</span>;
+    const splittable = lineItemsSplittable(src);
+    const invOff = exclInv.has(payLineSourceKey(src));
+    return (
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {src.lineItems.map((li, i) => (
-          <span key={i} style={{ fontSize: 12 }}>
-            {li.item ?? "—"} ({fmtUsd(li.amount)})
+        {src.lineItems.map((li, i) => {
+          const off = invOff || (splittable && exclLI.has(payLineItemKey(src, i)));
+          return (
+            <label
+              key={i}
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "baseline",
+                fontSize: 12,
+                textDecoration: off ? "line-through" : undefined,
+                color: off ? "var(--muted)" : undefined,
+              }}
+            >
+              {onChange && splittable ? (
+                <input
+                  type="checkbox"
+                  checked={!off}
+                  disabled={!canEdit}
+                  onChange={() => toggleLineItem(src, i)}
+                  aria-label={`Include line item "${li.item ?? "item"}" (${fmtUsd(li.amount)})`}
+                  title={off ? "Excluded — check to count this line item" : "Included — uncheck to drop this line item"}
+                />
+              ) : null}
+              <span>
+                {li.item ?? "—"} ({fmtUsd(li.amount)})
+              </span>
+            </label>
+          );
+        })}
+        {onChange && !splittable && src.lineItems.length > 1 ? (
+          <span className="muted" style={{ fontSize: 11 }}>
+            line items don't reconcile to the total — use the Incl. box to drop the whole invoice
           </span>
-        ))}
+        ) : null}
       </div>
-    ) : (
-      <span className="muted">—</span>
     );
+  };
 
   const sliceRows = (arr: PayLineSource[], label: string) => {
     if (!arr.length) return null;
-    const inclSubtotal = round2(arr.filter((x) => !isExcluded(x)).reduce((t, x) => t + x.recognized, 0));
-    const droppedHere = arr.filter(isExcluded).length;
+    const inclSubtotal = round2(arr.reduce((t, x) => t + recogOf(x), 0));
+    const adjustedHere = arr.filter((x) => round2(includedBilledOf(x)) !== round2(x.billed)).length;
     return (
       <>
         {arr.map((src, i) => {
-          const off = isExcluded(src);
-          const key = payLineSourceKey(src);
+          const off = fullyOff(src);
+          const part = partlyOff(src);
+          const box = invBoxState(src);
+          const effRecog = round2(recogOf(src));
+          const rawRecog = round2(src.recognized);
           return (
             <tr key={`${label}-${i}`} className={off ? "builder__row--excluded" : ""}>
               <td>
-                {onToggleInvoice ? (
+                {onChange ? (
                   <input
                     type="checkbox"
-                    checked={!off}
-                    disabled={!canToggle}
-                    onChange={(e) => onToggleInvoice(key, !e.target.checked)}
+                    ref={(el) => {
+                      if (el) el.indeterminate = box.indeterminate;
+                    }}
+                    checked={box.checked}
+                    disabled={!canEdit}
+                    onChange={() => toggleInvoice(src)}
                     aria-label={`Include invoice ${src.invoiceNumber ?? src.serviceDate} in the payout`}
-                    title={off ? "Excluded — check to count this invoice" : "Included — uncheck to drop this invoice"}
+                    title={
+                      box.indeterminate
+                        ? "Some line items dropped — click to drop the rest"
+                        : box.checked
+                          ? "Included — uncheck to drop this invoice"
+                          : "Excluded — check to count this invoice"
+                    }
                   />
                 ) : (
-                  <span className="muted">{off ? "✕" : "✓"}</span>
+                  <span className="muted">{off ? "✕" : part ? "◐" : "✓"}</span>
                 )}
               </td>
               <td>
@@ -165,7 +264,10 @@ export function PayoutLineDetailModal({
                 style={{ fontWeight: 600, textDecoration: off ? "line-through" : undefined, color: off ? "var(--muted)" : undefined }}
                 title={src.slice === "this-month" ? "billed × (1 − e)" : "billed × e (rolled forward)"}
               >
-                {fmtUsd(round2(src.recognized))}
+                {fmtUsd(effRecog)}
+                {part && effRecog !== rawRecog ? (
+                  <span className="muted" style={{ fontWeight: 400, fontSize: 11 }}> (was {fmtUsd(rawRecog)})</span>
+                ) : null}
               </td>
               <td style={{ textAlign: "left" }}>{paymentsCell(src.payments)}</td>
               <td style={{ textAlign: "left" }}>{itemsCell(src)}</td>
@@ -174,7 +276,7 @@ export function PayoutLineDetailModal({
         })}
         <tr className="row--muted">
           <td colSpan={9} style={{ textAlign: "right", fontWeight: 600 }}>
-            {label} subtotal{droppedHere ? ` · ${droppedHere} dropped` : ""}
+            {label} subtotal{adjustedHere ? ` · ${adjustedHere} adjusted` : ""}
           </td>
           <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(inclSubtotal)}</td>
           <td colSpan={2} />
@@ -236,9 +338,9 @@ export function PayoutLineDetailModal({
             <span>
               Payout <strong>{fmtUsd(adjPayout)}</strong>
             </span>
-            {excludedCount > 0 && (
+            {affectedCount > 0 && (
               <span className="muted" style={{ fontSize: 12 }}>
-                (engine {fmtUsd(line.payout)} before {excludedCount} excluded invoice{excludedCount === 1 ? "" : "s"})
+                (engine {fmtUsd(line.payout)} before {affectedCount} adjusted invoice{affectedCount === 1 ? "" : "s"})
               </span>
             )}
             {eff !== adjPayout && (
@@ -254,14 +356,15 @@ export function PayoutLineDetailModal({
             <em>elapsed</em> fraction (invoice day ÷ 30) into the next. So {monthLabel(ym)}'s payout blends{" "}
             {monthLabel(ym)}'s new invoice slice with {monthLabel(prevYm)}'s rolled-in slice — which is why the earned
             amount can differ from a single month's billed total.
-            {canToggle ? (
+            {canEdit ? (
               <>
                 {" "}
-                <strong>Uncheck an invoice</strong> to drop it from this payout — e.g. a JumpStart/JYF charge that
-                shouldn't count toward mentor pay. The earned and payout recompute live and save with the build.
+                <strong>Uncheck an invoice — or a single line item inside it</strong> — to drop it from this payout (e.g.
+                a JumpStart/JYF charge, a duplicate, or a credit line that shouldn't count toward mentor pay). The basis
+                becomes the sum of the surviving line items; earned and payout recompute live and save with the build.
               </>
-            ) : onToggleInvoice ? (
-              <> This build is approved — reopen it to change which invoices are included.</>
+            ) : onChange ? (
+              <> This build is approved — reopen it to change which invoices or line items are included.</>
             ) : null}
             {s.note ? <> Review note: <strong>{s.note}</strong>.</> : null}
           </p>
@@ -298,7 +401,7 @@ export function PayoutLineDetailModal({
                 {line.sources.length > 0 && (
                   <tr style={{ fontWeight: 700 }}>
                     <td colSpan={9} style={{ textAlign: "right" }}>
-                      Earned (this + rolled{excludedCount ? ", included only" : ""})
+                      Earned (this + rolled{affectedCount ? ", included only" : ""})
                     </td>
                     <td className="num">{fmtUsd(adjEarned)}</td>
                     <td colSpan={2} />

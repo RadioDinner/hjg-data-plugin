@@ -62,8 +62,11 @@ import {
   summarizeBuild,
   effectiveLinePayout,
   effectiveLineTotal,
-  payoutAfterInvoiceExclusions,
+  payoutAfterExclusions,
   payLineSourceKey,
+  payLineItemKey,
+  lineItemsSplittable,
+  sourceIncludedBilled,
   excludedInvoiceSet,
   isDefaultLineState,
   DEFAULT_LINE_STATE,
@@ -887,7 +890,7 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   eq(col(detailRows[1], "Recognized into month"), 0, "the June (day-30) slice recognizes $0");
 }
 
-console.log("[13b] per-invoice exclusions in a payout line (drop a JYF charge)");
+console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
 {
   const mk = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => ({
     invoiceId: 0,
@@ -905,9 +908,12 @@ console.log("[13b] per-invoice exclusions in a payout line (drop a JYF charge)")
     lineItems: [],
     ...over,
   });
-  // Ty Miller's June payout, straight from the user's CSV: a JumpStart/JYF
-  // "Supervised Progress" rollover ($5.83) rides alongside two MN-Subscription 4x
-  // slices ($425 rolled-in + $0 this-month). Earned 430.83 × 60% = $258.50.
+  const cc = PAYOUT_DETAIL_CSV_COLUMNS;
+  const cget = (row: (string | number)[], label: string) => row[cc.indexOf(label as (typeof cc)[number])];
+
+  // --- Whole-invoice drop: Ty Miller's June payout (user CSV). A JumpStart/JYF
+  // "Supervised Progress" rollover ($5.83) rides alongside two MN 4x slices ($425
+  // rolled-in + $0 this-month). Earned 430.83 × 60% = $258.50; drop JYF -> $255.00.
   const jyf = mk({ invoiceId: 4061, invoiceNumber: "4061", billed: 175, collected: 175, elapsedFraction: 1 / 30, recognized: 175 * (1 / 30), lineItems: [{ item: "JYF Supervised Progress", amount: 175 }] });
   const mn1 = mk({ invoiceId: 4126, invoiceNumber: "4126", serviceDate: "2026-05-30", invoiceDay: 30, billed: 425, collected: 425, elapsedFraction: 1, recognized: 425, lineItems: [{ item: "MN Subscription | (4x Month)", amount: 425 }] });
   const mn2 = mk({ invoiceId: 4187, invoiceNumber: "4187", serviceDate: "2026-06-30", serviceMonth: "2026-06", invoiceDay: 30, slice: "this-month", billed: 425, collected: 425, elapsedFraction: 1, recognized: 0, lineItems: [{ item: "MN Subscription | (4x Month)", amount: 425 }] });
@@ -916,47 +922,92 @@ console.log("[13b] per-invoice exclusions in a payout line (drop a JYF charge)")
   eq(payLineSourceKey(jyf), "id:4061", "source key prefers the CA invoice id");
   eq(payLineSourceKey(mk({ invoiceId: null, invoiceNumber: "X9" })), "no:X9", "source key falls back to invoice number");
 
-  eq(payoutAfterInvoiceExclusions(ty, new Set()), 258.5, "no exclusions == engine payout, to the penny");
-  eq(payoutAfterInvoiceExclusions(ty, new Set(["id:4061"])), 255, "dropping the JYF invoice -> earned 425 x 60% = $255.00");
-  eq(payoutAfterInvoiceExclusions(ty, new Set(["id:9999"])), 258.5, "a non-matching exclusion is a no-op");
-  eq(payoutAfterInvoiceExclusions(ty, new Set(["id:4061", "id:4126", "id:4187"])), 0, "dropping every invoice -> $0");
+  const dropJyfInv: BuildLineState = { included: true, override: null, note: null, excludedInvoices: ["id:4061"] };
+  const dropJyfLI: BuildLineState = { included: true, override: null, note: null, excludedLineItems: ["id:4061#0"] };
+  eq(payoutAfterExclusions(ty, DEFAULT_LINE_STATE), 258.5, "no exclusions == engine payout, to the penny");
+  eq(payoutAfterExclusions(ty, dropJyfInv), 255, "dropping the whole JYF invoice -> earned 425 x 60% = $255.00");
+  eq(payoutAfterExclusions(ty, dropJyfLI), 255, "dropping the JYF via its single line item -> same $255.00");
+  eq(payoutAfterExclusions(ty, { included: true, override: null, note: null, excludedInvoices: ["id:9999"] }), 258.5, "a non-matching drop is a no-op");
+  eq(payoutAfterExclusions(ty, { included: true, override: null, note: null, excludedInvoices: ["id:4061", "id:4126", "id:4187"] }), 0, "dropping every invoice -> $0");
 
-  // Precedence in effectiveLineTotal: line-exclude > manual override > invoice exclusions.
-  const withDrop: BuildLineState = { included: true, override: null, note: null, excludedInvoices: ["id:4061"] };
-  eq(effectiveLineTotal(ty, withDrop), 255, "invoice exclusion flows through effectiveLineTotal");
-  eq(effectiveLineTotal(ty, { ...withDrop, override: 250 }), 250, "a manual override wins over invoice exclusions");
-  eq(effectiveLineTotal(ty, { ...withDrop, included: false }), 0, "a line-level exclusion zeroes it regardless");
+  // Precedence in effectiveLineTotal: line-exclude > manual override > invoice/line-item drops.
+  eq(effectiveLineTotal(ty, dropJyfInv), 255, "invoice drop flows through effectiveLineTotal");
+  eq(effectiveLineTotal(ty, { ...dropJyfInv, override: 250 }), 250, "a manual override wins over invoice/line-item drops");
+  eq(effectiveLineTotal(ty, { ...dropJyfInv, included: false }), 0, "a line-level exclusion zeroes it regardless");
   eq(effectiveLineTotal(ty, DEFAULT_LINE_STATE), 258.5, "default state -> engine payout");
 
-  // isDefaultLineState: only-invoice-excluded is NOT default (so it persists).
-  eq(isDefaultLineState(withDrop), false, "an invoice-excluded line is not default (persists)");
-  eq(isDefaultLineState({ included: true, override: null, note: null, excludedInvoices: [] }), true, "an empty exclusion list is default");
-  eq(excludedInvoiceSet(withDrop).has("id:4061"), true, "excludedInvoiceSet reads the state");
+  // isDefaultLineState: a line carrying only invoice OR line-item drops isn't default.
+  eq(isDefaultLineState(dropJyfInv), false, "an invoice-dropped line is not default (persists)");
+  eq(isDefaultLineState(dropJyfLI), false, "a line-item-dropped line is not default (persists)");
+  eq(isDefaultLineState({ included: true, override: null, note: null, excludedInvoices: [], excludedLineItems: [] }), true, "empty drop lists are default");
+  eq(excludedInvoiceSet(dropJyfInv).has("id:4061"), true, "excludedInvoiceSet reads the state");
 
-  // summarizeBuild: builtTotal honors invoice exclusions; computedTotal stays raw.
+  // summarizeBuild: builtTotal honors drops; computedTotal stays raw engine.
   const others = [
     { clientId: 287546, payout: 255, splitPct: 0.6, sources: [mk({ invoiceId: 1, recognized: 425 })] },
     { clientId: 280993, payout: 255, splitPct: 0.6, sources: [mk({ invoiceId: 2, recognized: 425 })] },
   ];
-  const sm = summarizeBuild([ty, ...others], new Map([[294592, withDrop]]));
+  const sm = summarizeBuild([ty, ...others], new Map([[294592, dropJyfInv]]));
   eq(sm.computedTotal, 768.5, "computed total = raw engine (258.5 + 255 + 255)");
   eq(sm.builtTotal, 765, "built total drops the JYF invoice (255 + 255 + 255)");
-  eq(sm.invoiceAdjustedCount, 1, "one line adjusted by an invoice exclusion");
-  eq(sm.overriddenCount, 0, "an invoice exclusion is not counted as an override");
+  eq(sm.invoiceAdjustedCount, 1, "one line adjusted by a drop");
+  eq(sm.overriddenCount, 0, "a drop is not counted as an override");
 
-  // CSV: the dropped invoice is flagged; the mentee's effective payout reflects it.
   const csvRows = payoutDetailCsvRows(
     [{ clientId: 294592, clientName: "Ty Miller", tier: "4x", splitPct: 0.6, payout: 258.5, sources: [jyf, mn1, mn2] }],
-    new Map([[294592, withDrop]])
+    new Map([[294592, dropJyfInv]])
   );
-  const cc = PAYOUT_DETAIL_CSV_COLUMNS;
-  const cget = (row: (string | number)[], label: string) => row[cc.indexOf(label as (typeof cc)[number])];
-  const jyfRow = csvRows.find((r) => cget(r, "Invoice #") === "4061")!;
-  const mnRow = csvRows.find((r) => cget(r, "Invoice #") === "4126")!;
-  eq(cget(jyfRow, "Invoice incl."), "no", "the JYF invoice row is flagged excluded");
-  eq(cget(mnRow, "Invoice incl."), "yes", "the MN Subscription invoice stays included");
+  eq(cget(csvRows.find((r) => cget(r, "Invoice #") === "4061")!, "Invoice incl."), "no", "the JYF invoice row is flagged excluded");
+  eq(cget(csvRows.find((r) => cget(r, "Invoice #") === "4126")!, "Invoice incl."), "yes", "the MN Subscription invoice stays included");
   eq(cget(csvRows[0], "Engine payout"), 258.5, "engine payout stays the raw number");
   eq(cget(csvRows[0], "Effective payout"), 255, "effective payout reflects the dropped invoice");
+
+  // --- Line-item drop: Josh Lehman's #4109 (user CSV) — a multi-line invoice.
+  //   $425 (MN) + $425 (MN) − $175 (credit) − $50 (credit) = $625, this-month day 11.
+  //   Recognized = 625 × (1 − 11/30) = $395.83; alone -> 395.83 × 60% = $237.50.
+  const inv4109 = mk({
+    invoiceId: 4109,
+    invoiceNumber: "4109",
+    serviceDate: "2026-05-11",
+    invoiceDay: 11,
+    slice: "this-month",
+    billed: 625,
+    collected: 625,
+    elapsedFraction: 11 / 30,
+    recognized: 625 * (1 - 11 / 30),
+    lineItems: [
+      { item: "MN Subscription (4x Month)", amount: 425 },
+      { item: "MN Subscription (4x Month)", amount: 425 },
+      { item: "Credit for previous payment", amount: -175 },
+      { item: '"Apology" Credit', amount: -50 },
+    ],
+  });
+  const josh = { clientId: 289870, payout: 237.5, splitPct: 0.6, sources: [inv4109] };
+
+  eq(lineItemsSplittable(inv4109), true, "line items reconcile to the $625 total -> splittable");
+  eq(payLineItemKey(inv4109, 2), "id:4109#2", "line-item key = sourceKey#index");
+  eq(sourceIncludedBilled(inv4109, { included: true, override: null, note: null, excludedLineItems: ["id:4109#2", "id:4109#3"] }), 850, "dropping both credits -> basis = 425 + 425 = 850");
+
+  eq(payoutAfterExclusions(josh, DEFAULT_LINE_STATE), 237.5, "no drops -> engine payout $237.50");
+  eq(payoutAfterExclusions(josh, { included: true, override: null, note: null, excludedLineItems: ["id:4109#2", "id:4109#3"] }), 323, "drop the two credits -> 850 × 19/30 × 60% = $323.00");
+  eq(payoutAfterExclusions(josh, { included: true, override: null, note: null, excludedLineItems: ["id:4109#0"] }), 76, "drop one $425 line -> 200 × 19/30 × 60% = $76.00");
+  eq(payoutAfterExclusions(josh, { included: true, override: null, note: null, excludedLineItems: ["id:4109#0", "id:4109#1", "id:4109#2", "id:4109#3"] }), 0, "drop every line item -> $0");
+
+  const joshState: BuildLineState = { included: true, override: null, note: null, excludedLineItems: ["id:4109#2", "id:4109#3"] };
+  const smJ = summarizeBuild([josh], new Map([[289870, joshState]]));
+  eq(smJ.computedTotal, 237.5, "computed total = raw engine payout");
+  eq(smJ.builtTotal, 323, "built total reflects the dropped credit lines");
+  eq(smJ.invoiceAdjustedCount, 1, "line-item drop counts as an adjusted line");
+
+  const csvJ = payoutDetailCsvRows(
+    [{ clientId: 289870, clientName: "Josh Lehman", tier: "4x", splitPct: 0.6, payout: 237.5, sources: [inv4109] }],
+    new Map([[289870, joshState]])
+  );
+  const row4109 = csvJ.find((r) => cget(r, "Invoice #") === "4109")!;
+  eq(cget(row4109, "Invoice incl."), "partial", "a partially-dropped invoice reads 'partial'");
+  eq(cget(row4109, "Effective payout"), 323, "line-item drop reflected in effective payout");
+  eq(String(cget(row4109, "Line items")).includes("[dropped]"), true, "dropped line items are tagged in the CSV");
+  eq(cget(row4109, "Recognized into month"), 538.33, "recognized scales to the surviving $850 basis");
 }
 
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");

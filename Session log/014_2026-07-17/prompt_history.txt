@@ -6,3 +6,6 @@ ok, i want to start working on building staff payouts again. get fired up and le
 
 --- 2026-07-17 22:15 ---
 @".../e5d40d66-payoutbuildharryshenk20260520260717.csv" There are not only single line item invoices. Josh Lehman is an example. Invoice 4109
+
+--- 2026-07-17 22:46 ---
+checkbox per line item is fine
