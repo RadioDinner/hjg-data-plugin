@@ -5,7 +5,10 @@ import {
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
   DEFAULT_LINE_STATE,
-  effectiveLinePayout,
+  effectiveLineTotal,
+  payoutAfterInvoiceExclusions,
+  payLineSourceKey,
+  excludedInvoiceSet,
   type PayMenteeLine,
   type PayLineSource,
   type PayInvoicePayment,
@@ -37,15 +40,24 @@ export function PayoutLineDetailModal({
   ym,
   state,
   onClose,
+  onToggleInvoice,
+  readOnly = false,
 }: {
   line: PayMenteeLine;
   coachName: string;
   ym: string;
   state?: BuildLineState;
   onClose: () => void;
+  // Toggle one invoice in/out of this mentee's payout. Absent => a read-only view
+  // (no checkboxes). Called with the invoice's source-key + whether it's now excluded.
+  onToggleInvoice?: (sourceKey: string, excluded: boolean) => void;
+  readOnly?: boolean; // build approved/locked — show the selection but disable edits
 }) {
   const s = state ?? DEFAULT_LINE_STATE;
-  const eff = effectiveLinePayout(line.payout, s);
+  const excluded = excludedInvoiceSet(s);
+  const isExcluded = (src: PayLineSource) => excluded.has(payLineSourceKey(src));
+  const canToggle = !!onToggleInvoice && !readOnly;
+  const eff = effectiveLineTotal(line, s);
   const prevYm = (() => {
     const [y, m] = ym.split("-").map(Number);
     const o = y * 12 + (m - 1) - 1;
@@ -54,7 +66,16 @@ export function PayoutLineDetailModal({
 
   const thisMonth = line.sources.filter((x) => x.slice === "this-month");
   const rollover = line.sources.filter((x) => x.slice === "rollover");
-  const sumRecognized = (arr: PayLineSource[]) => round2(arr.reduce((t, x) => t + x.recognized, 0));
+  // Recognized subtotals over the SURVIVING (included) invoices — the live effect
+  // of the checkboxes. adjEarned/adjPayout track the current selection; the raw
+  // engine figure (line.payout) stays available as the "before" reference.
+  const sumRecognizedIncl = (arr: PayLineSource[]) =>
+    round2(arr.filter((x) => !isExcluded(x)).reduce((t, x) => t + x.recognized, 0));
+  const adjThisMonth = sumRecognizedIncl(thisMonth);
+  const adjRollover = sumRecognizedIncl(rollover);
+  const adjEarned = round2(adjThisMonth + adjRollover);
+  const adjPayout = payoutAfterInvoiceExclusions(line, excluded);
+  const excludedCount = line.sources.filter(isExcluded).length;
 
   // Every payment across the contributing invoices, oldest first — the plain
   // answer to "when did he pay?".
@@ -102,39 +123,65 @@ export function PayoutLineDetailModal({
       <span className="muted">—</span>
     );
 
-  const sliceRows = (arr: PayLineSource[], label: string, subtotal: number) =>
-    arr.length ? (
+  const sliceRows = (arr: PayLineSource[], label: string) => {
+    if (!arr.length) return null;
+    const inclSubtotal = round2(arr.filter((x) => !isExcluded(x)).reduce((t, x) => t + x.recognized, 0));
+    const droppedHere = arr.filter(isExcluded).length;
+    return (
       <>
-        {arr.map((src, i) => (
-          <tr key={`${label}-${i}`}>
-            <td>
-              <span className={`pill ${src.slice === "this-month" ? "pill--success" : "pill--running"}`}>
-                {src.slice === "this-month" ? "this month" : "rolled in"}
-              </span>
-            </td>
-            <td>{fmtDate(src.serviceDate)}</td>
-            <td className="num">{src.invoiceDay}</td>
-            <td>{src.invoiceNumber ?? "—"}</td>
-            <td>{src.tier}</td>
-            <td className="num">{fmtUsd(src.billed)}</td>
-            <td className="num">{fmtUsd(src.collected)}</td>
-            <td className="num" title={`elapsed ${Math.round(src.elapsedFraction * 30)}/30`}>{fmtPct(src.elapsedFraction)}</td>
-            <td className="num" style={{ fontWeight: 600 }} title={src.slice === "this-month" ? "billed × (1 − e)" : "billed × e (rolled forward)"}>
-              {fmtUsd(round2(src.recognized))}
-            </td>
-            <td style={{ textAlign: "left" }}>{paymentsCell(src.payments)}</td>
-            <td style={{ textAlign: "left" }}>{itemsCell(src)}</td>
-          </tr>
-        ))}
+        {arr.map((src, i) => {
+          const off = isExcluded(src);
+          const key = payLineSourceKey(src);
+          return (
+            <tr key={`${label}-${i}`} className={off ? "builder__row--excluded" : ""}>
+              <td>
+                {onToggleInvoice ? (
+                  <input
+                    type="checkbox"
+                    checked={!off}
+                    disabled={!canToggle}
+                    onChange={(e) => onToggleInvoice(key, !e.target.checked)}
+                    aria-label={`Include invoice ${src.invoiceNumber ?? src.serviceDate} in the payout`}
+                    title={off ? "Excluded — check to count this invoice" : "Included — uncheck to drop this invoice"}
+                  />
+                ) : (
+                  <span className="muted">{off ? "✕" : "✓"}</span>
+                )}
+              </td>
+              <td>
+                <span className={`pill ${src.slice === "this-month" ? "pill--success" : "pill--running"}`}>
+                  {src.slice === "this-month" ? "this month" : "rolled in"}
+                </span>
+              </td>
+              <td>{fmtDate(src.serviceDate)}</td>
+              <td className="num">{src.invoiceDay}</td>
+              <td>{src.invoiceNumber ?? "—"}</td>
+              <td>{src.tier}</td>
+              <td className="num">{fmtUsd(src.billed)}</td>
+              <td className="num">{fmtUsd(src.collected)}</td>
+              <td className="num" title={`elapsed ${Math.round(src.elapsedFraction * 30)}/30`}>{fmtPct(src.elapsedFraction)}</td>
+              <td
+                className="num"
+                style={{ fontWeight: 600, textDecoration: off ? "line-through" : undefined, color: off ? "var(--muted)" : undefined }}
+                title={src.slice === "this-month" ? "billed × (1 − e)" : "billed × e (rolled forward)"}
+              >
+                {fmtUsd(round2(src.recognized))}
+              </td>
+              <td style={{ textAlign: "left" }}>{paymentsCell(src.payments)}</td>
+              <td style={{ textAlign: "left" }}>{itemsCell(src)}</td>
+            </tr>
+          );
+        })}
         <tr className="row--muted">
-          <td colSpan={8} style={{ textAlign: "right", fontWeight: 600 }}>
-            {label} subtotal
+          <td colSpan={9} style={{ textAlign: "right", fontWeight: 600 }}>
+            {label} subtotal{droppedHere ? ` · ${droppedHere} dropped` : ""}
           </td>
-          <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(subtotal)}</td>
+          <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(inclSubtotal)}</td>
           <td colSpan={2} />
         </tr>
       </>
-    ) : null;
+    );
+  };
 
   return (
     <div className="modal" onClick={onClose}>
@@ -175,24 +222,29 @@ export function PayoutLineDetailModal({
             }}
           >
             <span title={`recognized from ${monthLabel(ym)}'s own invoice(s)`}>
-              This-month slice <strong>{fmtUsd(line.recognizedThis)}</strong>
+              This-month slice <strong>{fmtUsd(adjThisMonth)}</strong>
             </span>
             <span style={{ color: "var(--muted)" }}>+</span>
             <span title={`rolled forward from ${monthLabel(prevYm)}'s invoice(s)`}>
-              Rolled-in from {monthLabel(prevYm)} <strong>{fmtUsd(line.rolloverPrev)}</strong>
+              Rolled-in from {monthLabel(prevYm)} <strong>{fmtUsd(adjRollover)}</strong>
             </span>
             <span style={{ color: "var(--muted)" }}>=</span>
             <span>
-              Earned <strong>{fmtUsd(line.earned)}</strong>
+              Earned <strong>{fmtUsd(adjEarned)}</strong>
             </span>
             <span style={{ color: "var(--muted)" }}>× {fmtPct(line.splitPct)} =</span>
             <span>
-              Engine payout <strong>{fmtUsd(line.payout)}</strong>
+              Payout <strong>{fmtUsd(adjPayout)}</strong>
             </span>
-            {eff !== line.payout && (
+            {excludedCount > 0 && (
+              <span className="muted" style={{ fontSize: 12 }}>
+                (engine {fmtUsd(line.payout)} before {excludedCount} excluded invoice{excludedCount === 1 ? "" : "s"})
+              </span>
+            )}
+            {eff !== adjPayout && (
               <span style={{ color: "var(--accent)" }}>
                 Effective <strong>{fmtUsd(eff)}</strong>
-                {!s.included ? " (excluded)" : s.override != null ? " (override)" : ""}
+                {!s.included ? " (line excluded)" : s.override != null ? " (manual override)" : ""}
               </span>
             )}
           </div>
@@ -202,6 +254,15 @@ export function PayoutLineDetailModal({
             <em>elapsed</em> fraction (invoice day ÷ 30) into the next. So {monthLabel(ym)}'s payout blends{" "}
             {monthLabel(ym)}'s new invoice slice with {monthLabel(prevYm)}'s rolled-in slice — which is why the earned
             amount can differ from a single month's billed total.
+            {canToggle ? (
+              <>
+                {" "}
+                <strong>Uncheck an invoice</strong> to drop it from this payout — e.g. a JumpStart/JYF charge that
+                shouldn't count toward mentor pay. The earned and payout recompute live and save with the build.
+              </>
+            ) : onToggleInvoice ? (
+              <> This build is approved — reopen it to change which invoices are included.</>
+            ) : null}
             {s.note ? <> Review note: <strong>{s.note}</strong>.</> : null}
           </p>
 
@@ -209,6 +270,7 @@ export function PayoutLineDetailModal({
             <table className="table table--center">
               <thead>
                 <tr>
+                  <th style={{ width: 40 }} title="Include this invoice in the payout?">Incl.</th>
                   <th>Slice</th>
                   <th>Invoice date</th>
                   <th>Day</th>
@@ -223,11 +285,11 @@ export function PayoutLineDetailModal({
                 </tr>
               </thead>
               <tbody>
-                {sliceRows(rollover, `Rolled in from ${monthLabel(prevYm)}`, sumRecognized(rollover))}
-                {sliceRows(thisMonth, `This month (${monthLabel(ym)})`, sumRecognized(thisMonth))}
+                {sliceRows(rollover, `Rolled in from ${monthLabel(prevYm)}`)}
+                {sliceRows(thisMonth, `This month (${monthLabel(ym)})`)}
                 {line.sources.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="muted">
+                    <td colSpan={12} className="muted">
                       No invoice detail is attached to this line (it may predate the invoice sync that captures payment
                       dates). Re-sync to populate it.
                     </td>
@@ -235,10 +297,10 @@ export function PayoutLineDetailModal({
                 )}
                 {line.sources.length > 0 && (
                   <tr style={{ fontWeight: 700 }}>
-                    <td colSpan={8} style={{ textAlign: "right" }}>
-                      Earned (this + rolled)
+                    <td colSpan={9} style={{ textAlign: "right" }}>
+                      Earned (this + rolled{excludedCount ? ", included only" : ""})
                     </td>
-                    <td className="num">{fmtUsd(line.earned)}</td>
+                    <td className="num">{fmtUsd(adjEarned)}</td>
                     <td colSpan={2} />
                   </tr>
                 )}

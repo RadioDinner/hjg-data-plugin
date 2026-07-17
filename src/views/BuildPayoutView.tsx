@@ -4,7 +4,9 @@ import {
   computePayReport,
   computePayTimeline,
   summarizeBuild,
-  effectiveLinePayout,
+  effectiveLineTotal,
+  payoutAfterInvoiceExclusions,
+  excludedInvoiceSet,
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
@@ -188,16 +190,29 @@ export function BuildPayoutView({
     return m;
   }, [lineStates]);
 
-  const summary = useMemo(
-    () => summarizeBuild(lines.map((l) => ({ clientId: l.clientId, payout: l.payout })), stateMap),
-    [lines, stateMap]
-  );
+  // Pass the full lines (with sources + splitPct) so the summary honors per-invoice
+  // exclusions; computedTotal still sums the raw engine payout as the drift reference.
+  const summary = useMemo(() => summarizeBuild(lines, stateMap), [lines, stateMap]);
 
   const locked = status === "approved";
   const stateFor = (clientId: number): BuildLineState => lineStates[clientId] ?? DEFAULT_LINE_STATE;
 
   function updateLine(clientId: number, patch: Partial<BuildLineState>) {
     setLineStates((s) => ({ ...s, [clientId]: { ...(s[clientId] ?? DEFAULT_LINE_STATE), ...patch } }));
+    setDirty(true);
+    setFlash(null);
+  }
+
+  // Add/remove one invoice from a mentee's payout (driven by the §905 drill-down
+  // checkboxes). Rides in the same lineStates so it saves + reloads with the build.
+  function toggleInvoice(clientId: number, sourceKey: string, exclude: boolean) {
+    setLineStates((st) => {
+      const cur = st[clientId] ?? DEFAULT_LINE_STATE;
+      const set = new Set(cur.excludedInvoices ?? []);
+      if (exclude) set.add(sourceKey);
+      else set.delete(sourceKey);
+      return { ...st, [clientId]: { ...cur, excludedInvoices: [...set] } };
+    });
     setDirty(true);
     setFlash(null);
   }
@@ -412,7 +427,9 @@ export function BuildPayoutView({
                   <tbody>
                     {lines.map((l) => {
                       const s = stateFor(l.clientId);
-                      const eff = effectiveLinePayout(l.payout, s);
+                      const eff = effectiveLineTotal(l, s);
+                      const base = payoutAfterInvoiceExclusions(l, excludedInvoiceSet(s));
+                      const droppedInv = s.excludedInvoices?.length ?? 0;
                       return (
                         <tr key={l.clientId} className={s.included ? "" : "builder__row--excluded"}>
                           <td>
@@ -429,10 +446,19 @@ export function BuildPayoutView({
                               className="linkbtn"
                               style={{ fontSize: "inherit", fontWeight: 500, textAlign: "left" }}
                               onClick={() => setDetail(l)}
-                              title={`See the invoices + payment dates behind ${l.clientName}'s payout`}
+                              title={`See the invoices + payment dates behind ${l.clientName}'s payout — and pick which invoices count`}
                             >
                               {l.clientName}
                             </button>
+                            {droppedInv > 0 && (
+                              <span
+                                className="pill pill--running"
+                                style={{ marginLeft: 6 }}
+                                title={`${droppedInv} invoice${droppedInv === 1 ? "" : "s"} dropped from this payout (click the name to review)`}
+                              >
+                                −{droppedInv} inv
+                              </span>
+                            )}
                           </td>
                           <td>{l.tier}</td>
                           <td className="num" title={l.invoiceDay != null ? `invoice day ${l.invoiceDay}` : "rollover only"}>
@@ -449,7 +475,7 @@ export function BuildPayoutView({
                               type="number"
                               step="0.01"
                               min="0"
-                              placeholder={l.payout.toFixed(2)}
+                              placeholder={base.toFixed(2)}
                               value={s.override == null ? "" : String(s.override)}
                               disabled={locked || !s.included}
                               onChange={(e) => {
@@ -520,6 +546,7 @@ export function BuildPayoutView({
                 {summary.includedCount} of {summary.lineCount} line{summary.lineCount === 1 ? "" : "s"} included
                 {summary.excludedCount ? ` · ${summary.excludedCount} dropped` : ""}
                 {summary.overriddenCount ? ` · ${summary.overriddenCount} overridden` : ""}
+                {summary.invoiceAdjustedCount ? ` · ${summary.invoiceAdjustedCount} with invoices dropped` : ""}
               </div>
             </div>
 
@@ -583,6 +610,8 @@ export function BuildPayoutView({
           coachName={mentor?.coachName ?? data?.coachName(coach) ?? ""}
           ym={ym}
           state={stateFor(detail.clientId)}
+          onToggleInvoice={(key, excl) => toggleInvoice(detail.clientId, key, excl)}
+          readOnly={locked}
           onClose={() => setDetail(null)}
         />
       )}

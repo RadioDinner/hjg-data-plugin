@@ -19,33 +19,103 @@ export interface BuildLineState {
   included: boolean; // counted toward the built total
   override: number | null; // reviewer-set payout; null = use the engine's number
   note: string | null; // why this line was changed/dropped
+  // Per-INVOICE exclusions: source-keys (payLineSourceKey) of invoices the
+  // reviewer dropped from THIS line's payout — e.g. a JumpStart/JYF charge that
+  // rides on the same mentee's month but shouldn't count toward mentor pay. The
+  // line's payout recomputes from the surviving invoices (see effectiveLineTotal).
+  // Absent / empty = every contributing invoice counts (the engine's number).
+  excludedInvoices?: string[];
 }
 
 export const DEFAULT_LINE_STATE: BuildLineState = { included: true, override: null, note: null };
 
-// Minimal shape a reviewable line must expose — both PayMenteeLine and
-// PayLedgerRow satisfy it, so the engine's output drops straight in.
+// Minimal shape a reviewable line must expose. PayMenteeLine / PayLedgerRow
+// satisfy it, so the engine's output drops straight in. `splitPct` + `sources`
+// are optional and only needed for per-invoice exclusions; a bare {clientId,
+// payout} still works for callers that don't offer invoice-level review.
 export interface BuildLineInput {
   clientId: number;
-  payout: number; // engine-computed payout for this line
+  payout: number; // engine-computed payout for this line (all invoices)
+  splitPct?: number; // mentor revenue share — re-applied after invoice exclusions
+  sources?: PayLineSource[]; // contributing invoice slices — enables per-invoice exclusions
 }
 
 export type BuildStatus = "draft" | "approved";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-// A non-default state is one worth persisting (excluded, overridden, or noted).
-// Lets the store keep line_states compact — default lines aren't written.
+// A non-default state is one worth persisting (excluded, overridden, noted, or
+// carrying per-invoice exclusions). Lets the store keep line_states compact —
+// untouched lines aren't written.
 export function isDefaultLineState(s: BuildLineState): boolean {
-  return s.included && s.override == null && (s.note == null || s.note === "");
+  return (
+    s.included &&
+    s.override == null &&
+    (s.note == null || s.note === "") &&
+    !(s.excludedInvoices && s.excludedInvoices.length > 0)
+  );
 }
 
 // What a line actually contributes to the built total: 0 if excluded, else the
-// override when set, else the engine's payout.
+// override when set, else the engine's payout. This is the ENGINE-payout-only
+// form (no invoice-level review); effectiveLineTotal layers invoice exclusions on.
 export function effectiveLinePayout(enginePayout: number, state?: BuildLineState): number {
   const s = state ?? DEFAULT_LINE_STATE;
   if (!s.included) return 0;
   return round2(s.override != null ? s.override : enginePayout);
+}
+
+// A stable key identifying one invoice's slice within a line, for per-invoice
+// exclusions. Prefers the CA invoice id (stable across re-syncs), then the human
+// invoice number, then the service date as a last resort.
+export function payLineSourceKey(src: PayLineSource): string {
+  if (src.invoiceId != null) return `id:${src.invoiceId}`;
+  if (src.invoiceNumber) return `no:${src.invoiceNumber}`;
+  return `dt:${src.serviceDate}`;
+}
+
+// The set of invoice source-keys a reviewer has dropped from a line.
+export function excludedInvoiceSet(state?: BuildLineState): Set<string> {
+  return new Set(state?.excludedInvoices ?? []);
+}
+
+// A line's payout after dropping the reviewer-excluded invoices: recompute earned
+// from the SURVIVING sources' recognized slices, then re-apply the mentor split.
+// Matches the engine's rounding (round the earned sum, then round earned × split),
+// so an unexcluded line reproduces the engine number to the penny. With no
+// exclusions (or no sources/split to recompute from) this IS the engine payout.
+export function payoutAfterInvoiceExclusions(
+  line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
+  excluded: ReadonlySet<string>
+): number {
+  if (!excluded.size || !line.sources || line.splitPct == null) return round2(line.payout);
+  let anyExcluded = false;
+  const rawEarned = line.sources.reduce((t, src) => {
+    if (excluded.has(payLineSourceKey(src))) {
+      anyExcluded = true;
+      return t;
+    }
+    return t + src.recognized;
+  }, 0);
+  if (!anyExcluded) return round2(line.payout); // excluded keys matched nothing here
+  return round2(round2(rawEarned) * line.splitPct);
+}
+
+// The final signed-off payout for a line, honoring EVERY review decision in
+// precedence order:
+//   1. line-level exclusion (`included: false`) -> 0
+//   2. a manual dollar override -> that number wins (the reviewer's explicit value)
+//   3. otherwise the engine payout MINUS any per-invoice exclusions.
+// `sources` + `splitPct` are only consulted for path 3, so a bare {payout} still
+// works for callers that don't do invoice-level review.
+export function effectiveLineTotal(
+  line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
+  state?: BuildLineState
+): number {
+  const s = state ?? DEFAULT_LINE_STATE;
+  if (!s.included) return 0;
+  if (s.override != null) return round2(s.override);
+  return payoutAfterInvoiceExclusions(line, excludedInvoiceSet(s));
 }
 
 // Roll-up of a build: the engine total (every line), the reviewed/built total
@@ -58,6 +128,7 @@ export interface BuildSummary {
   includedCount: number;
   excludedCount: number;
   overriddenCount: number; // included lines carrying an override
+  invoiceAdjustedCount: number; // included, un-overridden lines with ≥1 dropped invoice
 }
 
 // --- "Data used to build the payout" CSV -----------------------------------
@@ -95,6 +166,7 @@ export const PAYOUT_DETAIL_CSV_COLUMNS = [
   "Payment amounts",
   "Payment methods",
   "Line items",
+  "Invoice incl.",
   "Split",
   "Engine payout",
   "Included",
@@ -124,10 +196,12 @@ function joinLineItems(src: PayLineSource): string {
 // One CSV row per contributing invoice. Mentee-level columns (Split, Engine/
 // Effective payout, Included, Override, Note) are written only on that mentee's
 // FIRST invoice row and left blank on the rest, so summing a payout column never
-// double-counts a mentee across their several invoices. The per-invoice
-// "Recognized into month" column sums (per mentee) to that line's earned — up to
-// per-cell rounding: each cell is rounded to the cent, so a spreadsheet summing
-// them can drift a cent from the engine's earned (which rounds the raw sum once).
+// double-counts a mentee across their several invoices. The per-invoice "Invoice
+// incl." column flags any invoice the reviewer dropped (so the "Effective payout"
+// reduction is auditable to the exact invoice); the mentee-level "Included"
+// column is the whole-line decision. The per-invoice "Recognized into month"
+// column keeps its RAW value even for a dropped invoice — up to per-cell rounding
+// the surviving rows sum (per mentee) to that line's effective earned.
 export function payoutDetailCsvRows(
   lines: BuildDetailLine[],
   states: Map<number, BuildLineState>
@@ -135,7 +209,8 @@ export function payoutDetailCsvRows(
   const rows: (string | number)[][] = [];
   for (const l of lines) {
     const s = states.get(l.clientId) ?? DEFAULT_LINE_STATE;
-    const eff = effectiveLinePayout(l.payout, s);
+    const excluded = excludedInvoiceSet(s);
+    const eff = effectiveLineTotal(l, s); // honors per-invoice exclusions + override + line exclusion
     const split = `${Math.round(l.splitPct * 100)}%`;
     const menteeCols = (first: boolean): (string | number)[] => [
       first ? split : "",
@@ -151,7 +226,7 @@ export function payoutDetailCsvRows(
     srcs.forEach((src, i) => {
       const first = i === 0;
       if (src == null) {
-        rows.push([l.clientName, l.clientId, l.tier, "", "", "", "", "", "", "", "", "", "", "", "", "", ...menteeCols(first)]);
+        rows.push([l.clientName, l.clientId, l.tier, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ...menteeCols(first)]);
         return;
       }
       rows.push([
@@ -171,6 +246,7 @@ export function payoutDetailCsvRows(
         joinPaymentAmounts(src),
         joinPaymentMethods(src),
         joinLineItems(src),
+        excluded.has(payLineSourceKey(src)) ? "no" : "yes",
         ...menteeCols(first),
       ]);
     });
@@ -184,13 +260,15 @@ export function summarizeBuild(lines: BuildLineInput[], states: Map<number, Buil
   let includedCount = 0;
   let excludedCount = 0;
   let overriddenCount = 0;
+  let invoiceAdjustedCount = 0;
   for (const l of lines) {
-    computedTotal += l.payout;
+    computedTotal += l.payout; // always the raw engine number — the drift reference
     const s = states.get(l.clientId) ?? DEFAULT_LINE_STATE;
-    builtTotal += effectiveLinePayout(l.payout, s);
+    builtTotal += effectiveLineTotal(l, s); // honors invoice exclusions when sources are present
     if (s.included) {
       includedCount++;
       if (s.override != null) overriddenCount++;
+      else if (s.excludedInvoices && s.excludedInvoices.length > 0) invoiceAdjustedCount++;
     } else {
       excludedCount++;
     }
@@ -203,5 +281,6 @@ export function summarizeBuild(lines: BuildLineInput[], states: Map<number, Buil
     includedCount,
     excludedCount,
     overriddenCount,
+    invoiceAdjustedCount,
   };
 }

@@ -148,6 +148,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 ### See the invoices behind a number
 - **Click a mentee's name** to open the invoice/payment drill-down: every invoice whose slice built that payout, the **date(s) it was paid**, the method, and the line items — plus the **this-month slice + rolled-in slice = earned → payout** math spelled out.
 - A payout blends **two months** (each invoice pays its remaining fraction in its own month and rolls its elapsed fraction — invoice day ÷ 30 — into the next), so a mentee's **earned amount can differ from a single month's billed total**. The drill-down shows exactly which invoices produced it.
+- **Pick which invoices count.** Each invoice in the drill-down has an **Incl.** checkbox — **uncheck one to drop it** (e.g. a JumpStart/JYF charge that rides on the same month but shouldn't count toward mentor pay). The earned and payout **recompute live** from the surviving invoices and save with the build; a **−N inv** tag on the line shows when invoices were dropped. A typed **override** still wins over the invoice selection.
 
 ### Export
 - **Export CSV** downloads the **data used to build the payout** — one row per contributing invoice (this-month + rolled-in slices), with the dates each was paid — not just the on-screen per-mentee summary.
