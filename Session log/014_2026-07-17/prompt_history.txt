@@ -3,3 +3,6 @@ ok, i want to start working on building staff payouts again. get fired up and le
 
 --- 2026-07-17 21:49 ---
 @".../c3512c41-payoutbuildcalebotto20260620260717.csv" in screen 905, I want to be able to select what invoices get added to the payout. For instance Caleb's buildout for his payment for June work is this data but it shouldn't include the JYF invoice
+
+--- 2026-07-17 22:15 ---
+@".../e5d40d66-payoutbuildharryshenk20260520260717.csv" There are not only single line item invoices. Josh Lehman is an example. Invoice 4109
