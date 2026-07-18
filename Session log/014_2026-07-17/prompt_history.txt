@@ -20,3 +20,6 @@ well, ok I don't actually know. Clayton was saying how he would calculate rollov
 
 --- 2026-07-17 23:52 ---
 [attached: payout-build-harry-shenk-2026-04 CSV + hjg-raw-data-2026-07-17.xlsx] Can't trust payout data yet. April build is MISSING mentees. Harry's April mentees should be: Alex Reiff, Brett Wengerd, Cade Byers, Daryl Bowman, David Weaver, Isaiah Hursh, Joel Mast, John Troyer, Josh Lehman, Lavon Stoltfus, Luke Smucker, Myles Miller, Nelson Miller. The build is missing people. Use hjg-raw-data to compile the correct list.
+
+--- 2026-07-18 00:24 ---
+1. Confirmed, yes [pay = 60% of every MN Subscription line, by invoice owner, regardless of engagement status]. 2. I want to decide eligibility per invoice and per line item.
