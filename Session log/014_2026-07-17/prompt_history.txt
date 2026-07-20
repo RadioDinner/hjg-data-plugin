@@ -29,3 +29,6 @@ I want the Invoice lines to be in company settings. App looks at the list of eng
 
 --- 2026-07-20 12:39 ---
 Continue from where you left off.
+
+--- 2026-07-20 13:00 ---
+Print a Pay stub with a comprehensive breakdown of payments made. Not over complicated - sent to mentors to review their income. Enough data to understand, not overwhelming. Want them to see when I made changes to someone's invoice - e.g. Josh Lehman's refund that I didn't want subtracting from Harry's pay - Harry should see and understand that. One page summary, breakdown afterwards. Beautiful graphically. Print a 'review paystub' from a saved draft payout; after I approve the draft, a 'Paystub' generated for the month.

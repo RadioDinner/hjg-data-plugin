@@ -31,6 +31,13 @@ import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDe
 export { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, includedLineItemSet, sourceIsClassified, sourceAutoBasis, lineItemCounts, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
 export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
+// Printable mentor pay stub (one-page summary + per-invoice breakdown), built
+// from a Build-payout review — pure model + self-contained HTML (lib/payStub).
+import { buildPayStubModel, payStubHtml, monthLabelLong } from "../lib/payStub";
+import type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition } from "../lib/payStub";
+export { buildPayStubModel, payStubHtml, monthLabelLong };
+export type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition };
+
 // Payment groups (engagement templates × staff groups; Company options §451).
 import {
   parsePayGroupsConfig,

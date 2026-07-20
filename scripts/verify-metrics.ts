@@ -80,6 +80,7 @@ import {
   type BuildLineState,
 } from "../lib/payBuild.js";
 import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
+import { buildPayStubModel, payStubHtml } from "../lib/payStub.js";
 import {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
@@ -1191,6 +1192,104 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
     new Map()
   );
   eq(String(mget(kRows[0], "Line items")).includes("[credit]"), true, "counted credit line tagged [credit] in CSV");
+}
+
+console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
+{
+  const src = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => {
+    const base = {
+      invoiceId: 4147,
+      invoiceNumber: "4147",
+      serviceDate: "2026-06-10",
+      serviceMonth: "2026-06",
+      invoiceDay: 10,
+      slice: "this-month" as const,
+      billed: 425,
+      collected: 425,
+      elapsedFraction: 1 / 3,
+      recognized: 425 * (2 / 3),
+      tier: "4x",
+      payments: [],
+      lineItems: [{ item: "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)", amount: 425, status: "included" as const }],
+      ...over,
+    };
+    return { ...base, eligibleBilled: over.eligibleBilled ?? base.billed };
+  };
+  // Josh-style: MN charge + a refund credit the engine auto-includes (reduces),
+  // which the REVIEWER kicks out — the stub must say "does NOT reduce your pay".
+  const joshSrc = src({
+    invoiceId: 900,
+    invoiceNumber: "900",
+    billed: 250,
+    eligibleBilled: 250,
+    recognized: 250 * (2 / 3),
+    lineItems: [
+      { item: "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)", amount: 425, status: "included" },
+      { item: "Credit for previous payment", amount: -175, status: "credit" },
+    ],
+  });
+  const mkLine = (over: Partial<import("../lib/pay.js").PayMenteeLine>): import("../lib/pay.js").PayMenteeLine => ({
+    clientId: 1,
+    clientName: "Josh Lehman",
+    coachId: 900,
+    billed: 250,
+    collected: 250,
+    invoiceDay: 10,
+    recognizedThis: round2(250 * (2 / 3)),
+    rolloverPrev: 0,
+    earned: round2(250 * (2 / 3)),
+    splitPct: 0.6,
+    payout: round2(round2(250 * (2 / 3)) * 0.6),
+    tier: "4x",
+    sources: [joshSrc],
+    ...over,
+  });
+  const josh = mkLine({});
+  const plain = mkLine({ clientId: 2, clientName: "Myles Miller", sources: [src({ invoiceId: 4135, invoiceNumber: "4135" })], billed: 425, earned: round2(425 * (2 / 3)), recognizedThis: round2(425 * (2 / 3)), payout: round2(round2(425 * (2 / 3)) * 0.6) });
+  const creditOut: BuildLineState = { included: true, override: null, note: "refund shouldn't hit Harry", excludedLineItems: ["id:900#1"] };
+  const model = buildPayStubModel({
+    coachName: "Harry Shenk",
+    ym: "2026-06",
+    splitPct: 0.6,
+    status: "draft",
+    lines: [josh, plain],
+    states: new Map([[1, creditOut]]),
+    monthNote: "June payout",
+    generatedOn: "2026-07-17",
+  });
+  eq(model.approved, false, "draft build -> review copy");
+  eq(model.monthLabel, "June 2026", "long month label");
+  const jr = model.rows.find((r) => r.name === "Josh Lehman")!;
+  eq(jr.invoices[0].items[1].disposition, "credit-out", "reviewer-excluded credit reads credit-out (does NOT reduce pay)");
+  eq(jr.invoices[0].items[0].disposition, "counted", "MN line reads counted");
+  eq(jr.invoices[0].counts, 425, "invoice counts $425 once the credit is kicked out");
+  eq(jr.earned, round2(425 * (2 / 3)), "earned recomputed from the surviving basis");
+  eq(jr.payout, round2(round2(425 * (2 / 3)) * 0.6), "payout follows the review");
+  eq(jr.adjusted, true, "credit-out marks the line adjusted/reviewed");
+  const mr = model.rows.find((r) => r.name === "Myles Miller")!;
+  eq(mr.adjusted, false, "untouched line is not flagged");
+  eq(model.totals.payout, round2(jr.payout + mr.payout), "stub total = Σ effective payouts");
+  eq(model.totals.delta, round2(model.totals.payout - model.totals.enginePayout), "delta = effective − engine");
+  eq(model.totals.adjustedCount, 1, "one adjusted line counted");
+  // credit COUNTED (default) reads credit-counted; excluded line-level states.
+  const model2 = buildPayStubModel({
+    coachName: "Harry Shenk", ym: "2026-06", splitPct: 0.6, status: "approved",
+    lines: [josh, plain],
+    states: new Map([[2, { included: false, override: null, note: "no-show month" }]]),
+    generatedOn: "2026-07-17",
+  });
+  eq(model2.approved, true, "approved build -> final stub");
+  eq(model2.rows.find((r) => r.name === "Josh Lehman")!.invoices[0].items[1].disposition, "credit-counted", "default credit reads credit-counted");
+  const mx = model2.rows.find((r) => r.name === "Myles Miller")!;
+  eq(mx.excluded, true, "line-level exclusion surfaces");
+  eq(mx.payout, 0, "excluded line pays 0 on the stub");
+  eq(model2.totals.menteeCount, 1, "excluded mentee not counted");
+  // HTML smoke: renders, carries the key transparency string + watermark rules.
+  const html = payStubHtml(model);
+  eq(html.includes("does NOT reduce your pay"), true, "stub HTML carries the credit-out explanation");
+  eq(html.includes("REVIEW COPY"), true, "draft stub is watermarked/badged");
+  eq(payStubHtml(model2).includes("APPROVED PAY STUB"), true, "approved stub badged");
+  eq(html.includes("<script"), false, "no scripts in the stub document");
 }
 
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");

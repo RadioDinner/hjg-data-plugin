@@ -6,6 +6,8 @@ import {
   summarizeBuild,
   effectiveLineTotal,
   payoutAfterExclusions,
+  buildPayStubModel,
+  payStubHtml,
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
@@ -267,6 +269,35 @@ export function BuildPayoutView({
   // invoice was paid — not just the on-screen per-mentee summary. The TOTAL row's
   // "Engine payout"/"Effective payout" columns sum cleanly because those fields
   // are written only on each mentee's first invoice row (see payoutDetailCsvRows).
+  // Open the printable pay stub in a new window (draft => "REVIEW COPY" with a
+  // watermark; approved => the final stub). Uses the CURRENT on-screen review
+  // state — if it's unsaved, the stub says so, so a mentor can't be handed a
+  // stub that silently differs from the saved build.
+  function printStub() {
+    if (coach == null || !ym || !mentor || !lines.length) return;
+    const model = buildPayStubModel({
+      coachName: mentor.coachName,
+      ym,
+      splitPct: mentor.splitPct,
+      status,
+      unsavedChanges: dirty,
+      lines,
+      states: stateMap,
+      monthNote: notes.trim() || null,
+      reviewedAt: savedRec?.reviewedAt ?? null,
+      generatedOn: new Date().toISOString().slice(0, 10),
+    });
+    const w = window.open("", "_blank");
+    if (!w) {
+      setFlash("Popup blocked — allow popups for this site to print the pay stub.");
+      return;
+    }
+    w.document.write(payStubHtml(model));
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }
+
   function exportCsv() {
     if (coach == null || !ym) return;
     const rows = payoutDetailCsvRows(lines, stateMap);
@@ -385,9 +416,23 @@ export function BuildPayoutView({
                   )}
                 </div>
               </div>
-              <button className="btn btn--sm" onClick={exportCsv} disabled={!lines.length}>
-                Export CSV
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className={`btn btn--sm ${locked ? "btn--primary" : ""}`}
+                  onClick={printStub}
+                  disabled={!lines.length}
+                  title={
+                    locked
+                      ? "Print the approved pay stub for this month (opens a print window)"
+                      : "Print a REVIEW-COPY pay stub of the current draft (watermarked; opens a print window)"
+                  }
+                >
+                  {locked ? "Print pay stub" : "Print review stub"}
+                </button>
+                <button className="btn btn--sm" onClick={exportCsv} disabled={!lines.length}>
+                  Export CSV
+                </button>
+              </div>
             </div>
 
             {lines.length === 0 ? (
