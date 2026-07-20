@@ -107,6 +107,7 @@ export function BuildPayoutView({
       primaryCoachOf: data.primaryCoachOf,
       rampOverride: data.rampOverride,
       payEligible: data.payEligible,
+      payEligibleLineItem: data.payEligibleLineItem,
     });
   }, [data]);
 
@@ -174,6 +175,7 @@ export function BuildPayoutView({
       primaryCoachOf: data.primaryCoachOf,
       rampOverride: data.rampOverride,
       payEligible: data.payEligible,
+      payEligibleLineItem: data.payEligibleLineItem,
     });
   }, [data, ym]);
   const mentor = useMemo(
@@ -417,7 +419,14 @@ export function BuildPayoutView({
                       const affectedInv = new Set<string>();
                       (s.excludedInvoices ?? []).forEach((k) => affectedInv.add(k));
                       (s.excludedLineItems ?? []).forEach((k) => affectedInv.add(k.split("#")[0]));
+                      (s.includedLineItems ?? []).forEach((k) => affectedInv.add(k.split("#")[0]));
                       const droppedInv = affectedInv.size;
+                      // Engine-flagged judgment lines (credits/unmatched charges) —
+                      // the hand-review targets for the first payout rounds.
+                      const reviewLines = l.sources.reduce(
+                        (t, src) => t + src.lineItems.filter((li) => li.status === "credit" || li.status === "excluded").length,
+                        0
+                      );
                       return (
                         <tr key={l.clientId} className={s.included ? "" : "builder__row--excluded"}>
                           <td>
@@ -442,9 +451,18 @@ export function BuildPayoutView({
                               <span
                                 className="pill pill--running"
                                 style={{ marginLeft: 6 }}
-                                title={`${droppedInv} invoice${droppedInv === 1 ? "" : "s"} adjusted (whole invoice or line items dropped) — click the name to review`}
+                                title={`${droppedInv} invoice${droppedInv === 1 ? "" : "s"} adjusted (whole invoice or line items flipped) — click the name to review`}
                               >
-                                −{droppedInv} inv
+                                ±{droppedInv} inv
+                              </span>
+                            )}
+                            {reviewLines > 0 && (
+                              <span
+                                className="pill"
+                                style={{ marginLeft: 6 }}
+                                title={`${reviewLines} line item${reviewLines === 1 ? "" : "s"} flagged for review (credits / unmatched charges) — click the name to inspect`}
+                              >
+                                review {reviewLines}
                               </span>
                             )}
                           </td>

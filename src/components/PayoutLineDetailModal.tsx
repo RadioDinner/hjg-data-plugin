@@ -11,6 +11,10 @@ import {
   payLineItemKey,
   excludedInvoiceSet,
   excludedLineItemSet,
+  includedLineItemSet,
+  sourceIsClassified,
+  sourceAutoBasis,
+  lineItemCounts,
   lineItemsSplittable,
   sourceIncludedBilled,
   sourceRecognizedAfterExclusions,
@@ -53,15 +57,16 @@ export function PayoutLineDetailModal({
   ym: string;
   state?: BuildLineState;
   onClose: () => void;
-  // Update this line's invoice / line-item drops. Absent => a read-only view (no
-  // checkboxes). Called with the full next exclusion arrays; the caller merges them
-  // into the build's lineStates (so they save + reload with the build).
-  onChange?: (patch: Pick<BuildLineState, "excludedInvoices" | "excludedLineItems">) => void;
+  // Update this line's invoice / line-item overrides. Absent => a read-only view
+  // (no checkboxes). Called with the full next override arrays; the caller merges
+  // them into the build's lineStates (so they save + reload with the build).
+  onChange?: (patch: Pick<BuildLineState, "excludedInvoices" | "excludedLineItems" | "includedLineItems">) => void;
   readOnly?: boolean; // build approved/locked — show the selection but disable edits
 }) {
   const s = state ?? DEFAULT_LINE_STATE;
   const exclInv = excludedInvoiceSet(s);
   const exclLI = excludedLineItemSet(s);
+  const inclLI = includedLineItemSet(s);
   const canEdit = !!onChange && !readOnly;
   const eff = effectiveLineTotal(line, s);
   const prevYm = (() => {
@@ -72,7 +77,7 @@ export function PayoutLineDetailModal({
 
   const thisMonth = line.sources.filter((x) => x.slice === "this-month");
   const rollover = line.sources.filter((x) => x.slice === "rollover");
-  // Effective (post-drop) figures — the live effect of the checkboxes. recogOf
+  // Effective (post-override) figures — the live effect of the checkboxes. recogOf
   // scales an invoice's recognized slice to its surviving line-item basis;
   // adjEarned/adjPayout track the selection while line.payout stays the "before".
   const recogOf = (src: PayLineSource) => sourceRecognizedAfterExclusions(src, s);
@@ -87,23 +92,49 @@ export function PayoutLineDetailModal({
   const adjRollover = sumRecogIncl(rollover);
   const adjEarned = round2(adjThisMonth + adjRollover);
   const adjPayout = payoutAfterExclusions(line, s);
-  const affectedCount = line.sources.filter((src) => round2(includedBilledOf(src)) !== round2(src.billed)).length;
+  // Invoices whose effective basis differs from the engine's auto basis (i.e. the
+  // reviewer changed something) — powers the "(engine $X before …)" note.
+  const affectedCount = line.sources.filter(
+    (src) => Math.abs(includedBilledOf(src) - sourceAutoBasis(src)) > 0.005
+  ).length;
+  // Line items the engine flagged for human judgment (credits + unmatched charges).
+  const reviewCount = line.sources.reduce(
+    (t, src) => t + src.lineItems.filter((li) => li.status === "credit" || li.status === "excluded").length,
+    0
+  );
 
-  // Emit the next exclusion arrays. The invoice-level checkbox is a MASTER toggle:
-  // for a splittable invoice it flips all its line items; for a non-splittable one
-  // (line items missing or not reconciling to the total) it drops the whole invoice.
-  const emit = (nextInv: Set<string>, nextLI: Set<string>) =>
-    onChange?.({ excludedInvoices: [...nextInv], excludedLineItems: [...nextLI] });
+  const emit = (nextInv: Set<string>, nextExcl: Set<string>, nextIncl: Set<string>) =>
+    onChange?.({ excludedInvoices: [...nextInv], excludedLineItems: [...nextExcl], includedLineItems: [...nextIncl] });
+  // The invoice-level checkbox is a MASTER toggle. Classified (invoice-truth)
+  // sources: OFF force-drops the whole invoice; ON restores the ENGINE's default
+  // selection (clears that invoice's per-line flips too). Legacy sources keep the
+  // splittable flip-all / whole-invoice behavior.
   function toggleInvoice(src: PayLineSource) {
     const key = payLineSourceKey(src);
     const inv = new Set(exclInv);
-    const li = new Set(exclLI);
-    if (lineItemsSplittable(src)) {
-      const anyOn = src.lineItems.some((_, i) => !li.has(payLineItemKey(src, i)));
+    const excl = new Set(exclLI);
+    const incl = new Set(inclLI);
+    const clearFlips = () => {
       src.lineItems.forEach((_, i) => {
         const k = payLineItemKey(src, i);
-        if (anyOn) li.add(k);
-        else li.delete(k);
+        excl.delete(k);
+        incl.delete(k);
+      });
+    };
+    if (sourceIsClassified(src)) {
+      if (inv.has(key) || fullyOff(src)) {
+        inv.delete(key);
+        clearFlips(); // back to the engine's auto selection
+      } else {
+        inv.add(key);
+        clearFlips(); // force-exclude whole; per-line flips are moot
+      }
+    } else if (lineItemsSplittable(src)) {
+      const anyOn = src.lineItems.some((_, i) => !excl.has(payLineItemKey(src, i)));
+      src.lineItems.forEach((_, i) => {
+        const k = payLineItemKey(src, i);
+        if (anyOn) excl.add(k);
+        else excl.delete(k);
       });
       inv.delete(key); // splittable invoices are driven by their line items
     } else if (inv.has(key)) {
@@ -111,17 +142,33 @@ export function PayoutLineDetailModal({
     } else {
       inv.add(key);
     }
-    emit(inv, li);
+    emit(inv, excl, incl);
   }
+  // Flip ONE line item. Auto-excluded lines toggle via the opt-IN list; everything
+  // else via the exclusion list — payBuild.lineItemCounts reads both.
   function toggleLineItem(src: PayLineSource, index: number) {
     const k = payLineItemKey(src, index);
-    const li = new Set(exclLI);
-    if (li.has(k)) li.delete(k);
-    else li.add(k);
-    emit(new Set(exclInv), li);
+    const inv = new Set(exclInv);
+    const excl = new Set(exclLI);
+    const incl = new Set(inclLI);
+    const li = src.lineItems[index];
+    if (sourceIsClassified(src) && li?.status === "excluded") {
+      if (incl.has(k)) incl.delete(k);
+      else incl.add(k);
+    } else if (excl.has(k)) {
+      excl.delete(k);
+    } else {
+      excl.add(k);
+    }
+    emit(inv, excl, incl);
   }
   // Master checkbox state for one invoice (checked / indeterminate).
   const invBoxState = (src: PayLineSource): { checked: boolean; indeterminate: boolean } => {
+    if (sourceIsClassified(src)) {
+      const basis = includedBilledOf(src);
+      const adjusted = Math.abs(basis - sourceAutoBasis(src)) > 0.005;
+      return { checked: basis > 0.005, indeterminate: basis > 0.005 && adjusted };
+    }
     if (lineItemsSplittable(src)) {
       const n = src.lineItems.length;
       const dropped = src.lineItems.filter((_, i) => exclLI.has(payLineItemKey(src, i))).length;
@@ -163,16 +210,31 @@ export function PayoutLineDetailModal({
     );
   };
 
-  // Line items, each with its own checkbox when the invoice is splittable. A
-  // whole-invoice drop (or a non-splittable invoice) strikes every item.
+  // Line items, each with its own checkbox. Classified (invoice-truth) sources show
+  // the engine's auto-selection + a review pill on judgment lines (credits and
+  // unmatched charges); legacy sources need the reconcile (splittable) guard. A
+  // whole-invoice drop strikes and disables every item.
   const itemsCell = (src: PayLineSource) => {
     if (!src.lineItems.length) return <span className="muted">—</span>;
+    const classified = sourceIsClassified(src);
     const splittable = lineItemsSplittable(src);
+    const perLine = classified || splittable;
     const invOff = exclInv.has(payLineSourceKey(src));
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {src.lineItems.map((li, i) => {
-          const off = invOff || (splittable && exclLI.has(payLineItemKey(src, i)));
+          const counts = !invOff && (perLine ? lineItemCounts(src, i, s) : true);
+          const off = !counts;
+          const pill =
+            classified && li.status === "credit" ? (
+              <span className="pill pill--running" style={{ fontSize: 10 }} title="Credit — auto-included as a reduction; review whether it should reduce mentor pay">
+                credit · review
+              </span>
+            ) : classified && li.status === "excluded" ? (
+              <span className="pill" style={{ fontSize: 10 }} title="Didn't match a pay-eligible template (Company options → Payment groups) — check to count it anyway">
+                not pay · review
+              </span>
+            ) : null;
           return (
             <label
               key={i}
@@ -185,23 +247,24 @@ export function PayoutLineDetailModal({
                 color: off ? "var(--muted)" : undefined,
               }}
             >
-              {onChange && splittable ? (
+              {onChange && perLine ? (
                 <input
                   type="checkbox"
-                  checked={!off}
-                  disabled={!canEdit}
+                  checked={counts}
+                  disabled={!canEdit || invOff}
                   onChange={() => toggleLineItem(src, i)}
                   aria-label={`Include line item "${li.item ?? "item"}" (${fmtUsd(li.amount)})`}
-                  title={off ? "Excluded — check to count this line item" : "Included — uncheck to drop this line item"}
+                  title={off ? "Not counted — check to include this line in the pay basis" : "Counted — uncheck to drop this line from the pay basis"}
                 />
               ) : null}
               <span>
                 {li.item ?? "—"} ({fmtUsd(li.amount)})
               </span>
+              {pill}
             </label>
           );
         })}
-        {onChange && !splittable && src.lineItems.length > 1 ? (
+        {onChange && !perLine && src.lineItems.length > 1 ? (
           <span className="muted" style={{ fontSize: 11 }}>
             line items don't reconcile to the total — use the Incl. box to drop the whole invoice
           </span>
@@ -359,12 +422,22 @@ export function PayoutLineDetailModal({
             {canEdit ? (
               <>
                 {" "}
-                <strong>Uncheck an invoice — or a single line item inside it</strong> — to drop it from this payout (e.g.
-                a JumpStart/JYF charge, a duplicate, or a credit line that shouldn't count toward mentor pay). The basis
-                becomes the sum of the surviving line items; earned and payout recompute live and save with the build.
+                <strong>Uncheck an invoice — or a single line item inside it</strong> — to drop it from this payout; check
+                a "not pay" line to count it. Lines matching the pay-eligible templates (Company options → Payment groups)
+                are selected automatically; <strong>credits and unmatched charges carry a "review" pill</strong> for human
+                judgment. The basis is the sum of the counted lines; earned and payout recompute live and save with the
+                build.
               </>
             ) : onChange ? (
               <> This build is approved — reopen it to change which invoices or line items are included.</>
+            ) : null}
+            {reviewCount > 0 ? (
+              <>
+                {" "}
+                <strong style={{ color: "var(--accent)" }}>
+                  {reviewCount} line item{reviewCount === 1 ? "" : "s"} flagged for review.
+                </strong>
+              </>
             ) : null}
             {s.note ? <> Review note: <strong>{s.note}</strong>.</> : null}
           </p>

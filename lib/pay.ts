@@ -34,6 +34,11 @@
 //    The TIER always comes from the engagement coverage regardless of who's credited.
 //    Billed revenue with no coach at all (no owner, no engagement) is reported as
 //    "unassigned" rather than silently dropped.
+//  - INVOICE-TRUTH MODE (2026-07-17): when `payEligibleLineItem` is configured (the
+//    Payment-groups grid has templates checked), eligibility/basis/tier come from
+//    each invoice's own LINE ITEMS and engagement records no longer gate anything —
+//    CA engagement flags proved unreliable ("canceled" engagements that still bill
+//    monthly, live engagements sweeping in JYF/training invoices). See PayInputs.
 
 import { engagementTier } from "./config";
 
@@ -141,6 +146,24 @@ export interface PayInvoiceLineItem {
   amount: number;
 }
 
+// How the engine classified one line item in INVOICE-TRUTH mode (payEligibleLineItem
+// configured). Absent in legacy mode.
+//  - "included": matched a checked template — counts toward the pay basis.
+//  - "credit":   unmatched NEGATIVE line (discount/adjustment) — auto-included as a
+//                basis reduction, but flagged for reviewer judgment (a JYF-refund
+//                credit arguably shouldn't reduce mentoring pay; an apology/discount
+//                credit should — only a human knows which).
+//  - "excluded": unmatched positive line (JYF fee, setup fee, training tuition, or
+//                anything unrecognized) — not in the basis; reviewer can opt it in.
+export type LineItemPayStatus = "included" | "credit" | "excluded";
+
+// A line item as carried on a PayLineSource: the billed fact plus (in invoice-truth
+// mode) the engine's classification, so the drill-down/CSV can show exactly WHY the
+// basis is what it is and the reviewer can flip individual lines.
+export interface PayLineSourceLineItem extends PayInvoiceLineItem {
+  status?: LineItemPayStatus;
+}
+
 export interface PayInvoiceInput {
   clientId: number;
   serviceDate: string; // 'YYYY-MM-DD' from the invoice date_of (the DAY drives proration)
@@ -171,12 +194,16 @@ export interface PayLineSource {
   invoiceDay: number; // day-of-month driving the proration split
   slice: "this-month" | "rollover"; // which half of the two-month split this is
   billed: number; // full invoice amount
-  collected: number; // amount paid so far on this invoice
+  // The invoice's PAY BASIS: in invoice-truth mode, the eligible line items net of
+  // auto-included credits (clamped ≥ 0); in legacy mode, the full billed amount.
+  // The recognized slices below prorate THIS number, not `billed`.
+  eligibleBilled: number;
+  collected: number; // amount paid so far on this invoice (whole invoice; reference)
   elapsedFraction: number; // e = min(day, 30) / 30
-  recognized: number; // this-month: billed×(1−e); rollover: billed×e — UNROUNDED (sum, then round)
-  tier: string; // tier from the invoice's mentoring coverage
+  recognized: number; // this-month: basis×(1−e); rollover: basis×e — UNROUNDED (sum, then round)
+  tier: string; // tier from the matched line item (invoice-truth) or engagement coverage (legacy)
   payments: PayInvoicePayment[]; // when + how the mentee paid (may be empty)
-  lineItems: PayInvoiceLineItem[]; // what was billed (may be empty)
+  lineItems: PayLineSourceLineItem[]; // what was billed, with per-line classification in invoice-truth mode
 }
 
 export interface PayEngagementInput {
@@ -209,6 +236,16 @@ export interface PayInputs {
   // When absent, the legacy 4x/2x/1x tier detection is used, so behavior is unchanged
   // until an admin configures the grid.
   payEligible?: (engagementName: string | null) => boolean;
+  // INVOICE-TRUTH MODE (decided with the user 2026-07-17 after CA engagement flags
+  // proved unreliable — "canceled" engagements that still bill monthly dropped real
+  // revenue, and live engagements swept in JYF/training invoices). When present,
+  // eligibility is decided per LINE ITEM by this predicate (built from the checked
+  // Payment-group templates): an invoice's pay basis = Σ matched lines + unmatched
+  // NEGATIVE lines (credits, auto-included as reductions, flagged for review),
+  // clamped ≥ 0; unmatched positive lines are excluded. The tier comes from the
+  // matched line's text and attribution from the OWNER (primaryCoachOf), falling
+  // back to engagement coverage — engagement records no longer gate eligibility.
+  payEligibleLineItem?: (lineItemText: string | null) => boolean;
 }
 
 // --- engine outputs ---
@@ -315,6 +352,7 @@ function mentoringCoverFor(
 interface LineAcc {
   coachId: number | null;
   tier: string;
+  tierDate: string; // service date of the invoice that set the tier (latest wins)
   billed: number;
   collected: number;
   invoiceDay: number | null;
@@ -354,12 +392,17 @@ export function computePayReport(input: PayInputs): PayReport {
   // remaining-fraction slice; prev-month invoices contribute the elapsed rollover.
   const acc = new Map<string, LineAcc & { clientId: number }>();
   const keyOf = (coachId: number | null, clientId: number) => `${coachId ?? "—"}|${clientId}`;
-  const ensure = (coachId: number | null, clientId: number, tier: string): LineAcc & { clientId: number } => {
+  const ensure = (coachId: number | null, clientId: number, tier: string, tierDate: string): LineAcc & { clientId: number } => {
     const k = keyOf(coachId, clientId);
     let a = acc.get(k);
     if (!a) {
-      a = { coachId, clientId, tier, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0, sources: [] };
+      a = { coachId, clientId, tier, tierDate, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0, sources: [] };
       acc.set(k, a);
+    } else if (tierDate >= a.tierDate) {
+      // A mid-month tier change labels the line with the LATEST invoice's tier
+      // (e.g. a 4x→2x transition month reads "2x").
+      a.tier = tier;
+      a.tierDate = tierDate;
     }
     return a;
   };
@@ -373,26 +416,69 @@ export function computePayReport(input: PayInputs): PayReport {
   // Non-mentoring revenue billed in the payout month itself (rollover slices from
   // the prior month aren't re-counted here — they were counted in their own month).
   let excludedBilled = 0;
+  const liMode = !!input.payEligibleLineItem;
   for (const inv of input.invoices) {
     const invYm = ymOf(inv.serviceDate);
     const amt = inv.billed || 0;
-    if (amt <= 0) continue;
     if (invYm !== ym && invYm !== prev) continue;
-    // Pay basis is 4x/2x/1x mentoring only. JumpStart & everything else is excluded
-    // from mentor pay — tracked (this month) rather than silently dropped.
-    const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible);
-    if (!cov) {
-      if (invYm === ym) excludedBilled += amt;
-      continue;
+
+    // Resolve the invoice's pay basis, tier, credited coach, and annotated line
+    // items — by INVOICE TRUTH (line items) when configured, else by the legacy
+    // engagement gate. Skipped invoices feed excludedBilled (this month only) so
+    // non-mentoring revenue is auditable rather than silently dropped.
+    let basis: number;
+    let tier: string;
+    let coachId: number | null;
+    let lineItems: PayLineSourceLineItem[];
+    if (liMode) {
+      const pred = input.payEligibleLineItem!;
+      lineItems = (inv.lineItems ?? []).map((li) => {
+        const liAmt = li.amount || 0;
+        const status: LineItemPayStatus = pred(li.item) ? "included" : liAmt < 0 ? "credit" : "excluded";
+        return { ...li, status };
+      });
+      const matched = lineItems.filter((x) => x.status === "included");
+      if (!matched.length) {
+        // Nothing on this invoice is pay-eligible (JYF, setup, training, groups…).
+        if (invYm === ym && amt > 0) excludedBilled += amt;
+        continue;
+      }
+      const matchedSum = matched.reduce((s, x) => s + (x.amount || 0), 0);
+      const creditSum = lineItems.filter((x) => x.status === "credit").reduce((s, x) => s + (x.amount || 0), 0);
+      const excludedSum = lineItems.filter((x) => x.status === "excluded").reduce((s, x) => s + (x.amount || 0), 0);
+      basis = Math.max(0, matchedSum + creditSum);
+      if (invYm === ym && excludedSum > 0) excludedBilled += excludedSum;
+      // Tier reads off the largest matched line ("MN Subscription | (4x Month)…").
+      const top = matched.reduce((b, x) => ((x.amount || 0) > (b.amount || 0) ? x : b), matched[0]);
+      tier = engagementTier(top.item);
+      // Attribution: the OWNER when known; engagement coverage only as a fallback
+      // for unowned clients. A basis with no coach at all surfaces as unassigned.
+      const owner = input.primaryCoachOf?.(inv.clientId) ?? null;
+      coachId =
+        owner ?? mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible)?.coachId ?? null;
+      if (basis <= 0) continue; // fully credited away — nothing to pay or roll
+    } else {
+      if (amt <= 0) continue;
+      // Legacy: pay basis is the whole invoice, gated by 4x/2x/1x engagement coverage.
+      const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible);
+      if (!cov) {
+        if (invYm === ym) excludedBilled += amt;
+        continue;
+      }
+      basis = amt;
+      tier = cov.tier;
+      coachId = creditFor(inv.clientId, cov);
+      lineItems = (inv.lineItems ?? []).map((li) => ({ ...li }));
     }
-    const a = ensure(creditFor(inv.clientId, cov), inv.clientId, cov.tier);
+
+    const a = ensure(coachId, inv.clientId, tier, inv.serviceDate.slice(0, 10));
     const day = dayOf(inv.serviceDate);
     const e = elapsedFraction(day);
     const collected = inv.collected || 0;
     const thisMonth = invYm === ym;
-    // Unrounded slice (billed × remaining/elapsed); the line rounds the SUM, so
+    // Unrounded slice (basis × remaining/elapsed); the line rounds the SUM, so
     // keeping sources unrounded lets the drill-down foot to the engine's penny.
-    const recognized = amt * (thisMonth ? 1 - e : e);
+    const recognized = basis * (thisMonth ? 1 - e : e);
     a.sources.push({
       invoiceId: inv.invoiceId ?? null,
       invoiceNumber: inv.invoiceNumber ?? null,
@@ -401,15 +487,16 @@ export function computePayReport(input: PayInputs): PayReport {
       invoiceDay: day,
       slice: thisMonth ? "this-month" : "rollover",
       billed: amt,
+      eligibleBilled: basis,
       collected,
       elapsedFraction: e,
       recognized,
-      tier: cov.tier,
+      tier,
       payments: (inv.payments ?? []).map((p) => ({ ...p })),
-      lineItems: (inv.lineItems ?? []).map((li) => ({ ...li })),
+      lineItems,
     });
     if (thisMonth) {
-      a.billed += amt;
+      a.billed += basis;
       a.collected += collected;
       a.recognizedThis += recognized;
       a.invoiceDay = a.invoiceDay == null ? day : Math.min(a.invoiceDay, day);
@@ -544,6 +631,8 @@ export interface PayTimelineInput {
   rampOverride?: Map<number, readonly number[]>;
   // Pay-eligibility predicate from the Payment-groups config (see computePayReport).
   payEligible?: (engagementName: string | null) => boolean;
+  // Line-item eligibility predicate — INVOICE-TRUTH mode (see computePayReport).
+  payEligibleLineItem?: (lineItemText: string | null) => boolean;
   // Payout months to compute, 'YYYY-MM'. Defaults to every distinct invoice service
   // month PLUS the following month (where the rollover slice lands), newest first.
   months?: string[];
@@ -580,6 +669,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
       primaryCoachOf: input.primaryCoachOf,
       rampOverride: input.rampOverride,
       payEligible: input.payEligible,
+      payEligibleLineItem: input.payEligibleLineItem,
     })
   );
 

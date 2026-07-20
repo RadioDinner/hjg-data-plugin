@@ -68,6 +68,10 @@ import {
   lineItemsSplittable,
   sourceIncludedBilled,
   excludedInvoiceSet,
+  includedLineItemSet,
+  sourceIsClassified,
+  sourceAutoBasis,
+  lineItemCounts,
   isDefaultLineState,
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
@@ -80,6 +84,7 @@ import {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
   payEligibleForGroup,
+  lineItemEligibleForGroup,
   groupHasTemplates,
   normalizeTemplateName,
   DEFAULT_PAY_GROUPS_CONFIG,
@@ -849,22 +854,25 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   // ---- payoutDetailCsvRows: the "data used to build the payout" export. One row
   //      per contributing invoice; mentee-level payout columns only on the FIRST
   //      row of each mentee so a column sum never double-counts. ----
-  const mkSource = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => ({
-    invoiceId: 1,
-    invoiceNumber: "N1",
-    serviceDate: "2026-05-29",
-    serviceMonth: "2026-05",
-    invoiceDay: 29,
-    slice: "rollover",
-    billed: 425,
-    collected: 425,
-    elapsedFraction: 29 / 30,
-    recognized: 410.8333,
-    tier: "4x",
-    payments: [{ datePaid: "2026-05-29", amount: 425, method: "Credit Card", checkNumber: null }],
-    lineItems: [{ item: "4x Month", amount: 425 }],
-    ...over,
-  });
+  const mkSource = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => {
+    const base = {
+      invoiceId: 1,
+      invoiceNumber: "N1",
+      serviceDate: "2026-05-29",
+      serviceMonth: "2026-05",
+      invoiceDay: 29,
+      slice: "rollover" as const,
+      billed: 425,
+      collected: 425,
+      elapsedFraction: 29 / 30,
+      recognized: 410.8333,
+      tier: "4x",
+      payments: [{ datePaid: "2026-05-29", amount: 425, method: "Credit Card", checkNumber: null }],
+      lineItems: [{ item: "4x Month", amount: 425 }],
+      ...over,
+    };
+    return { ...base, eligibleBilled: over.eligibleBilled ?? base.billed };
+  };
   const detailLines = [
     {
       clientId: 1,
@@ -892,22 +900,25 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
 
 console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
 {
-  const mk = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => ({
-    invoiceId: 0,
-    invoiceNumber: null,
-    serviceDate: "2026-05-01",
-    serviceMonth: "2026-05",
-    invoiceDay: 1,
-    slice: "rollover",
-    billed: 0,
-    collected: 0,
-    elapsedFraction: 0,
-    recognized: 0,
-    tier: "4x",
-    payments: [],
-    lineItems: [],
-    ...over,
-  });
+  const mk = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => {
+    const base = {
+      invoiceId: 0,
+      invoiceNumber: null,
+      serviceDate: "2026-05-01",
+      serviceMonth: "2026-05",
+      invoiceDay: 1,
+      slice: "rollover" as const,
+      billed: 0,
+      collected: 0,
+      elapsedFraction: 0,
+      recognized: 0,
+      tier: "4x",
+      payments: [],
+      lineItems: [],
+      ...over,
+    };
+    return { ...base, eligibleBilled: over.eligibleBilled ?? base.billed };
+  };
   const cc = PAYOUT_DETAIL_CSV_COLUMNS;
   const cget = (row: (string | number)[], label: string) => row[cc.indexOf(label as (typeof cc)[number])];
 
@@ -1006,8 +1017,180 @@ console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
   const row4109 = csvJ.find((r) => cget(r, "Invoice #") === "4109")!;
   eq(cget(row4109, "Invoice incl."), "partial", "a partially-dropped invoice reads 'partial'");
   eq(cget(row4109, "Effective payout"), 323, "line-item drop reflected in effective payout");
-  eq(String(cget(row4109, "Line items")).includes("[dropped]"), true, "dropped line items are tagged in the CSV");
+  eq(String(cget(row4109, "Line items")).includes("[not in pay]"), true, "dropped line items are tagged in the CSV");
   eq(cget(row4109, "Recognized into month"), 538.33, "recognized scales to the surviving $850 basis");
+}
+
+console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
+{
+  // Real-world regression set from Harry Shenk's April 2026 audit (2026-07-17):
+  // CA engagement flags lied — "canceled" engagements still billing monthly were
+  // DROPPED (Brett/Wynn/Lavon), and live engagements swept in JYF/training
+  // invoices (Nelson's $550 MT tuition, Joel/David/Josh JYF fees).
+  const TPL_4X = "MN Subscription | (4x Month) Zoom Meetings";
+  const TPL_2X = "MN Subscription | (2x Month) Zoom Meetings";
+  const TPL_1X = "MN Subscription | (1x Month) Zoom Meetings";
+  const cfg = parsePayGroupsConfig(
+    JSON.stringify({ groups: [{ id: "mentors", name: "Mentors", templateNames: [TPL_4X, TPL_2X, TPL_1X], coachIds: [] }] })
+  );
+  const liPred = lineItemEligibleForGroup(cfg, MENTORS_GROUP_ID)!;
+
+  // --- the matcher itself ---
+  eq(liPred("MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)"), true, "line item matches template by prefix");
+  eq(liPred("MN Subscription | (2x Month) Zoom Meetings (Harry Shank) ($265)"), true, "coach-name typo in the suffix doesn't matter");
+  eq(liPred("mn subscription | (4x month)  zoom meetings (X)"), true, "case/whitespace lenient");
+  eq(liPred("JYF Supervised Progress (w/ Dave Troyer) ($175)"), false, "JYF fee doesn't match");
+  eq(liPred("MT Engagement | One-Year Mentor Training Program (1 of 3 payments) ($550)"), false, "MT tuition doesn't match");
+  eq(liPred("Credit for the JYF Fee ($-175)"), false, "credits never match a template");
+  eq(lineItemEligibleForGroup(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID), null, "unconfigured group -> null (legacy fallback)");
+
+  // --- the engine in invoice-truth mode ---
+  const li = (item: string, amount: number) => ({ item, amount });
+  const MN4 = (coach = "Harry Shenk") => `MN Subscription | (4x Month) Zoom Meetings (${coach}) ($425)`;
+  const inv = (
+    clientId: number,
+    serviceDate: string,
+    billed: number,
+    items: { item: string; amount: number }[],
+    id: number
+  ): PayInvoiceInput => ({ clientId, serviceDate, billed, collected: billed, invoiceId: id, invoiceNumber: String(id), lineItems: items });
+  const invoices: PayInvoiceInput[] = [
+    // Brett (1): 4x engagement is CANCELED in CA but bills $425 MN monthly.
+    inv(1, "2026-03-19", 425, [li(MN4(), 425)], 101),
+    inv(1, "2026-04-19", 425, [li(MN4(), 425)], 102),
+    // Wynn (2): canceled 2x engagement still billing $265 monthly, day 21.
+    inv(2, "2026-03-21", 265, [li("MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", 265)], 201),
+    inv(2, "2026-04-21", 265, [li("MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", 265)], 202),
+    // Nelson (3): March MN + April MT tuition (must NOT be paid).
+    inv(3, "2026-03-09", 425, [li(MN4(), 425)], 301),
+    inv(3, "2026-04-14", 550, [li("MT Engagement | One-Year Mentor Training Program (1 of 3 payments) ($550)", 550)], 302),
+    // Cade (4): JYF-only both months (must produce NO pay line, only excludedBilled).
+    inv(4, "2026-03-21", 175, [li("JYF Supervised Progress (w/ Dave Troyer) ($175)", 175)], 401),
+    inv(4, "2026-04-21", 175, [li("JYF Supervised Progress (w/ Dave Troyer) ($175)", 175)], 402),
+    // Kendrick (5): April MN + discount credit -> basis 355 (net), day 13.
+    inv(5, "2026-04-13", 355, [li(MN4(), 425), li("First-Month Discount Credit", -70)], 501),
+    // Orphan (6): eligible MN but NO owner and NO engagement -> unassigned bucket.
+    inv(6, "2026-04-10", 425, [li(MN4("Unknown"), 425)], 601),
+  ];
+  // Engagements: Brett/Wynn CANCELED (the trap — must not matter); Nelson live 4x.
+  const engagements: PayEngagementInput[] = [
+    { clientId: 1, coachId: 900, startDate: "2025-09-15", endDate: null, isCanceled: true, name: TPL_4X },
+    { clientId: 2, coachId: 900, startDate: "2025-11-19", endDate: null, isCanceled: true, name: TPL_2X },
+    { clientId: 3, coachId: 900, startDate: "2026-01-05", endDate: "2026-06-05", isCanceled: false, name: TPL_4X },
+    // Tenure anchor way back so the mentor is at the 60% rate.
+    { clientId: 99, coachId: 900, startDate: "2024-01-01", endDate: "2024-06-01", isCanceled: false, name: TPL_4X },
+  ];
+  const owner = new Map<number, number>([[1, 900], [2, 900], [3, 900], [4, 900], [5, 900]]); // 6 unowned
+  const rpt = computePayReport({
+    ym: "2026-04",
+    invoices,
+    engagements,
+    coachName: (id) => (id === 900 ? "Harry" : `#${id}`),
+    clientName: (id) => `C${id}`,
+    primaryCoachOf: (cid) => owner.get(cid) ?? null,
+    payEligible: payEligibleForGroup(cfg, MENTORS_GROUP_ID)!,
+    payEligibleLineItem: liPred,
+  });
+  const harry = rpt.mentors.find((m) => m.coachId === 900)!;
+  const lineOf = (cid: number) => harry.lines.find((l) => l.clientId === cid)!;
+
+  // Brett: 425×(19/30) rolled + 425×(11/30) this-month = 425.00 -> ×60% = 255.
+  eq(lineOf(1).earned, 425, "CANCELED-engagement mentee still earns (Brett $425)");
+  eq(lineOf(1).payout, 255, "Brett pays $255 despite canceled CA engagement");
+  eq(lineOf(1).tier, "4x", "tier read from the LINE ITEM, not the engagement");
+  // Wynn: 265×0.7 + 265×0.3 = 265 -> $159.
+  eq(lineOf(2).earned, 265, "canceled 2x mentee still earns (Wynn $265)");
+  eq(lineOf(2).payout, 159, "Wynn pays $159");
+  eq(lineOf(2).tier, "2x", "2x tier from the line item");
+  // Nelson: only the March rollover counts; the $550 MT tuition is excluded.
+  eq(lineOf(3).earned, 127.5, "Nelson April = March rollover only (425×0.3)");
+  eq(lineOf(3).payout, 76.5, "Nelson pays $76.50 — MT tuition NOT swept in");
+  // Cade: no pay line at all.
+  eq(harry.lines.some((l) => l.clientId === 4), false, "JYF-only mentee has NO pay line");
+  // Kendrick: basis = 425 − 70 = 355 (credit auto-included as reduction).
+  eq(lineOf(5).billed, 355, "discount credit reduces the basis (425−70)");
+  const kSrc = lineOf(5).sources[0];
+  eq(kSrc.eligibleBilled, 355, "source carries the eligible basis");
+  eq(kSrc.lineItems[0].status, "included", "MN line auto-included");
+  eq(kSrc.lineItems[1].status, "credit", "credit line flagged for review");
+  // excludedBilled picks up the MT tuition + Cade's April JYF fee.
+  eq(rpt.excludedBilled, 550 + 175, "MT tuition + JYF fee land in excludedBilled");
+  // The unowned/uncovered eligible invoice surfaces as unassigned, not dropped.
+  eq(rpt.unassigned.some((u) => u.clientId === 6), true, "eligible line with no coach -> unassigned bucket");
+
+  // Legacy mode is untouched: same inputs WITHOUT the line-item predicate drops
+  // Brett/Wynn (canceled) and pays Nelson's MT invoice — the old (wrong) behavior,
+  // proven here so the mode switch is intentional and observable.
+  const legacy = computePayReport({
+    ym: "2026-04",
+    invoices,
+    engagements,
+    coachName: () => "Harry",
+    clientName: (id) => `C${id}`,
+    primaryCoachOf: (cid) => owner.get(cid) ?? null,
+  });
+  const lHarry = legacy.mentors.find((m) => m.coachId === 900);
+  eq(lHarry?.lines.some((l) => l.clientId === 1) ?? false, false, "legacy still drops the canceled-engagement mentee");
+  eq(lHarry?.lines.find((l) => l.clientId === 3)?.billed ?? 0, 550, "legacy still sweeps the MT tuition (the bug, preserved until configured)");
+
+  // --- review flow on classified sources ---
+  const bLine = lineOf(3); // Nelson: rollover MN (included) + this-month MT (…wait, MT invoice produced no source)
+  eq(bLine.sources.length, 1, "Nelson's line has only the MN source (MT invoice never joined)");
+  const kLine = lineOf(5);
+  eq(sourceIsClassified(kLine.sources[0]), true, "engine-classified source detected");
+  eq(sourceAutoBasis(kLine.sources[0]), 355, "auto basis = eligible net");
+  // Exclude the credit -> basis rises to 425; payout = 425×(17/30)×0.6.
+  const noCredit: BuildLineState = { included: true, override: null, note: null, excludedLineItems: ["id:501#1"] };
+  eq(lineItemCounts(kLine.sources[0], 1, noCredit), false, "excluded credit no longer counts");
+  eq(sourceIncludedBilled(kLine.sources[0], noCredit), 425, "basis without the credit = 425");
+  eq(payoutAfterExclusions(kLine, noCredit), round2(round2(425 * (17 / 30)) * 0.6), "payout recomputes with credit excluded");
+  // Exclude the MN line, keep the credit -> clamped at 0, not negative.
+  const onlyCredit: BuildLineState = { included: true, override: null, note: null, excludedLineItems: ["id:501#0"] };
+  eq(sourceIncludedBilled(kLine.sources[0], onlyCredit), 0, "credit-only basis clamps at 0");
+  // Opt IN an auto-excluded line: give Nelson's MT invoice a hand-inclusion…
+  // (MT invoice creates no source, so opt-in applies to lines on eligible invoices —
+  // exercise via a synthetic classified source with an excluded JYF line.)
+  const mixed: import("../lib/pay.js").PayLineSource = {
+    invoiceId: 700,
+    invoiceNumber: "700",
+    serviceDate: "2026-04-10",
+    serviceMonth: "2026-04",
+    invoiceDay: 10,
+    slice: "this-month",
+    billed: 600,
+    eligibleBilled: 425,
+    collected: 600,
+    elapsedFraction: 1 / 3,
+    recognized: 425 * (2 / 3),
+    tier: "4x",
+    payments: [],
+    lineItems: [
+      { item: MN4(), amount: 425, status: "included" },
+      { item: "JYF Supervised Progress ($175)", amount: 175, status: "excluded" },
+    ],
+  };
+  const mixedLine = { payout: round2(round2(425 * (2 / 3)) * 0.6), splitPct: 0.6, sources: [mixed] };
+  const optIn: BuildLineState = { included: true, override: null, note: null, includedLineItems: ["id:700#1"] };
+  eq(lineItemCounts(mixed, 1, DEFAULT_LINE_STATE), false, "auto-excluded line doesn't count by default");
+  eq(lineItemCounts(mixed, 1, optIn), true, "…until the reviewer opts it in");
+  eq(sourceIncludedBilled(mixed, optIn), 600, "opt-in raises the basis to 600");
+  eq(payoutAfterExclusions(mixedLine, optIn), round2(round2(600 * (2 / 3)) * 0.6), "payout recomputes with the opt-in");
+  eq(isDefaultLineState({ included: true, override: null, note: null, includedLineItems: ["x"] }), false, "an opt-in persists (not default)");
+  eq(includedLineItemSet(optIn).has("id:700#1"), true, "includedLineItemSet reads the state");
+  // CSV: partial flag + tags for the mixed invoice.
+  const mixedRows = payoutDetailCsvRows(
+    [{ clientId: 9, clientName: "Mixed", tier: "4x", splitPct: 0.6, payout: mixedLine.payout, sources: [mixed] }],
+    new Map()
+  );
+  const mcols = PAYOUT_DETAIL_CSV_COLUMNS;
+  const mget = (row: (string | number)[], label: string) => row[mcols.indexOf(label as (typeof mcols)[number])];
+  eq(mget(mixedRows[0], "Invoice incl."), "partial", "auto-partial invoice (excluded JYF line) reads 'partial'");
+  eq(String(mget(mixedRows[0], "Line items")).includes("[not in pay]"), true, "auto-excluded line tagged in CSV");
+  const kRows = payoutDetailCsvRows(
+    [{ clientId: 5, clientName: "Kendrick", tier: "4x", splitPct: 0.6, payout: kLine.payout, sources: kLine.sources }],
+    new Map()
+  );
+  eq(String(mget(kRows[0], "Line items")).includes("[credit]"), true, "counted credit line tagged [credit] in CSV");
 }
 
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");

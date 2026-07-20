@@ -29,6 +29,10 @@ export interface BuildLineState {
   // duplicate that rides on an otherwise-mentoring invoice. The invoice's pay basis
   // becomes the sum of its surviving line items (see sourceIncludedBilled).
   excludedLineItems?: string[];
+  // Per-LINE-ITEM opt-INS (invoice-truth mode): keys of lines the engine auto-
+  // EXCLUDED (unmatched positives — status "excluded") that the reviewer decided
+  // should count after all. Ignored for lines the engine already includes.
+  includedLineItems?: string[];
 }
 
 export const DEFAULT_LINE_STATE: BuildLineState = { included: true, override: null, note: null };
@@ -57,7 +61,8 @@ export function isDefaultLineState(s: BuildLineState): boolean {
     s.override == null &&
     (s.note == null || s.note === "") &&
     !(s.excludedInvoices && s.excludedInvoices.length > 0) &&
-    !(s.excludedLineItems && s.excludedLineItems.length > 0)
+    !(s.excludedLineItems && s.excludedLineItems.length > 0) &&
+    !(s.includedLineItems && s.includedLineItems.length > 0)
   );
 }
 
@@ -86,31 +91,77 @@ export function payLineItemKey(src: PayLineSource, index: number): string {
   return `${payLineSourceKey(src)}#${index}`;
 }
 
-// The sets of invoice / line-item keys a reviewer has dropped from a line.
+// The sets of invoice / line-item keys a reviewer has overridden on a line.
 export function excludedInvoiceSet(state?: BuildLineState): Set<string> {
   return new Set(state?.excludedInvoices ?? []);
 }
 export function excludedLineItemSet(state?: BuildLineState): Set<string> {
   return new Set(state?.excludedLineItems ?? []);
 }
+export function includedLineItemSet(state?: BuildLineState): Set<string> {
+  return new Set(state?.includedLineItems ?? []);
+}
+
+// Whether the engine classified this source's line items (INVOICE-TRUTH mode). When
+// true, every line item carries a status and per-line review always works; when
+// false (legacy engagement-gated engine), line items are raw text and per-line
+// review needs the reconcile guard below.
+export function sourceIsClassified(src: PayLineSource): boolean {
+  return src.lineItems.length > 0 && src.lineItems.every((li) => li.status != null);
+}
+
+// The engine's own basis for this invoice (before any reviewer overrides): the
+// eligible line-item net in invoice-truth mode, the full billed amount in legacy.
+export function sourceAutoBasis(src: PayLineSource): number {
+  return src.eligibleBilled ?? src.billed;
+}
 
 // Whether an invoice's line items can drive a line-item-level pay basis: there is
 // at least one line item and they sum to the invoice's billed amount (so dropping
-// some of them leaves a meaningful remaining basis). When false — no line items,
-// or they don't reconcile to the total — the invoice is only excludable whole.
+// some of them leaves a meaningful remaining basis). Only consulted in LEGACY mode —
+// classified sources are always per-line reviewable (the engine already works at
+// line-item grain). When false — no line items, or they don't reconcile to the
+// total — a legacy invoice is only excludable whole.
 export function lineItemsSplittable(src: PayLineSource): boolean {
   if (!src.lineItems || src.lineItems.length === 0) return false;
   const sum = src.lineItems.reduce((t, li) => t + (li.amount || 0), 0);
   return Math.abs(sum - src.billed) < 0.01;
 }
 
-// The billed amount of an invoice that still counts after the reviewer's drops:
-//   • whole invoice excluded            -> 0
-//   • splittable + some line items off  -> sum of the surviving line items
-//   • otherwise                         -> the full billed amount
+// Whether one line item of this source counts toward the pay basis, honoring the
+// engine's classification and the reviewer's per-line flips:
+//   auto-included ("included"/"credit", or any line in legacy mode) → counts unless
+//   the reviewer EXCLUDED it; auto-excluded ("excluded") → counts only if the
+//   reviewer OPTED IT IN.
+export function lineItemCounts(src: PayLineSource, index: number, state?: BuildLineState): boolean {
+  const s = state ?? DEFAULT_LINE_STATE;
+  const key = payLineItemKey(src, index);
+  const li = src.lineItems[index];
+  if (!li) return false;
+  if (sourceIsClassified(src)) {
+    if (li.status === "excluded") return includedLineItemSet(s).has(key);
+    return !excludedLineItemSet(s).has(key);
+  }
+  return !excludedLineItemSet(s).has(key);
+}
+
+// The pay basis of an invoice that still counts after the reviewer's overrides:
+//   • whole invoice excluded → 0
+//   • classified (invoice-truth) → Σ counted line items, clamped ≥ 0
+//   • legacy + per-line drops + splittable → Σ surviving line items
+//   • legacy otherwise → the full billed amount
 export function sourceIncludedBilled(src: PayLineSource, state?: BuildLineState): number {
   const s = state ?? DEFAULT_LINE_STATE;
   if (excludedInvoiceSet(s).has(payLineSourceKey(src))) return 0;
+  if (sourceIsClassified(src)) {
+    const hasFlips = excludedLineItemSet(s).size > 0 || includedLineItemSet(s).size > 0;
+    if (!hasFlips) return sourceAutoBasis(src);
+    let sum = 0;
+    src.lineItems.forEach((li, i) => {
+      if (lineItemCounts(src, i, s)) sum += li.amount || 0;
+    });
+    return Math.max(0, sum);
+  }
   const exclLI = excludedLineItemSet(s);
   if (!exclLI.size || !lineItemsSplittable(src)) return src.billed;
   const key = payLineSourceKey(src);
@@ -121,30 +172,31 @@ export function sourceIncludedBilled(src: PayLineSource, state?: BuildLineState)
   return sum;
 }
 
-// One invoice's recognized slice AFTER the reviewer's drops (UNROUNDED, to be
-// summed then rounded). Recognized scales with the surviving billed basis at the
-// invoice's own proration fraction (this-month = 1 − e, rollover = e), so dropping
-// a line item removes exactly its prorated contribution. An unchanged basis returns
-// the engine's stored recognized untouched (no rounding drift).
+// One invoice's recognized slice AFTER the reviewer's overrides (UNROUNDED, to be
+// summed then rounded). Recognized scales with the surviving basis at the invoice's
+// own proration fraction (this-month = 1 − e, rollover = e), so flipping a line
+// item moves exactly its prorated contribution. An unchanged basis returns the
+// engine's stored recognized untouched (no rounding drift).
 export function sourceRecognizedAfterExclusions(src: PayLineSource, state?: BuildLineState): number {
   const included = sourceIncludedBilled(src, state);
-  if (Math.abs(included - src.billed) < 0.005) return src.recognized;
+  if (Math.abs(included - sourceAutoBasis(src)) < 0.005) return src.recognized;
   const fraction = src.slice === "this-month" ? 1 - src.elapsedFraction : src.elapsedFraction;
   return included * fraction;
 }
 
-// A line's payout after the reviewer's per-invoice / per-line-item drops: recompute
-// earned from the surviving slices, then re-apply the mentor split. Matches the
-// engine's rounding (round the earned sum, then round earned × split), so an
-// untouched line reproduces the engine number to the penny. With no drops (or no
-// sources/split to recompute from) this IS the engine payout.
+// A line's payout after the reviewer's per-invoice / per-line-item overrides:
+// recompute earned from the surviving slices, then re-apply the mentor split.
+// Matches the engine's rounding (round the earned sum, then round earned × split),
+// so an untouched line reproduces the engine number to the penny. With no overrides
+// (or no sources/split to recompute from) this IS the engine payout.
 export function payoutAfterExclusions(
   line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
   state?: BuildLineState
 ): number {
   const s = state ?? DEFAULT_LINE_STATE;
   if (!line.sources || line.splitPct == null) return round2(line.payout);
-  if (!excludedInvoiceSet(s).size && !excludedLineItemSet(s).size) return round2(line.payout);
+  if (!excludedInvoiceSet(s).size && !excludedLineItemSet(s).size && !includedLineItemSet(s).size)
+    return round2(line.payout);
   const rawEarned = line.sources.reduce((t, src) => t + sourceRecognizedAfterExclusions(src, s), 0);
   return round2(round2(rawEarned) * line.splitPct);
 }
@@ -237,13 +289,17 @@ function joinPaymentMethods(src: PayLineSource): string {
     .filter(Boolean)
     .join("; ");
 }
-function joinLineItems(src: PayLineSource, exclLI?: ReadonlySet<string>): string {
-  const splittable = exclLI && exclLI.size ? lineItemsSplittable(src) : false;
-  const key = payLineSourceKey(src);
+// Render a source's line items with their effective pay disposition: lines not in
+// the basis are tagged " [not in pay]"; counted credit lines are tagged " [credit]"
+// so a basis below the matched charges is explicable at a glance.
+function joinLineItems(src: PayLineSource, state?: BuildLineState): string {
+  const legacyReviewable = !sourceIsClassified(src) && lineItemsSplittable(src);
+  const invoiceOff = excludedInvoiceSet(state).has(payLineSourceKey(src));
   return src.lineItems
     .map((li, i) => {
-      const off = splittable && exclLI!.has(`${key}#${i}`);
-      return `${li.item ?? "—"} ($${round2(li.amount)})${off ? " [dropped]" : ""}`;
+      const counts = !invoiceOff && (sourceIsClassified(src) || legacyReviewable ? lineItemCounts(src, i, state) : true);
+      const tag = !counts ? " [not in pay]" : li.status === "credit" ? " [credit]" : "";
+      return `${li.item ?? "—"} ($${round2(li.amount)})${tag}`;
     })
     .join("; ");
 }
@@ -265,8 +321,7 @@ export function payoutDetailCsvRows(
   const rows: (string | number)[][] = [];
   for (const l of lines) {
     const s = states.get(l.clientId) ?? DEFAULT_LINE_STATE;
-    const exclLI = excludedLineItemSet(s);
-    const eff = effectiveLineTotal(l, s); // honors invoice/line-item drops + override + line exclusion
+    const eff = effectiveLineTotal(l, s); // honors invoice/line-item overrides + override + line exclusion
     const split = `${Math.round(l.splitPct * 100)}%`;
     const menteeCols = (first: boolean): (string | number)[] => [
       first ? split : "",
@@ -303,7 +358,7 @@ export function payoutDetailCsvRows(
         joinPaymentDates(src),
         joinPaymentAmounts(src),
         joinPaymentMethods(src),
-        joinLineItems(src, exclLI),
+        joinLineItems(src, s),
         inclFlag,
         ...menteeCols(first),
       ]);
@@ -326,7 +381,11 @@ export function summarizeBuild(lines: BuildLineInput[], states: Map<number, Buil
     if (s.included) {
       includedCount++;
       if (s.override != null) overriddenCount++;
-      else if ((s.excludedInvoices?.length ?? 0) + (s.excludedLineItems?.length ?? 0) > 0) invoiceAdjustedCount++;
+      else if (
+        (s.excludedInvoices?.length ?? 0) + (s.excludedLineItems?.length ?? 0) + (s.includedLineItems?.length ?? 0) >
+        0
+      )
+        invoiceAdjustedCount++;
     } else {
       excludedCount++;
     }

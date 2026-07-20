@@ -148,7 +148,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 ### See the invoices behind a number
 - **Click a mentee's name** to open the invoice/payment drill-down: every invoice whose slice built that payout, the **date(s) it was paid**, the method, and the line items — plus the **this-month slice + rolled-in slice = earned → payout** math spelled out.
 - A payout blends **two months** (each invoice pays its remaining fraction in its own month and rolls its elapsed fraction — invoice day ÷ 30 — into the next), so a mentee's **earned amount can differ from a single month's billed total**. The drill-down shows exactly which invoices produced it.
-- **Pick what counts — invoice or line item.** Each invoice in the drill-down has an **Incl.** checkbox, and every **line item inside it** has its own checkbox. Uncheck a whole invoice, or just one line item (a JumpStart/JYF charge, a duplicate, or a credit that shouldn't count toward mentor pay). The pay basis becomes the **sum of the surviving line items**; earned and payout **recompute live** and save with the build. A **−N inv** tag on the line flags an adjusted mentee. A typed **override** still wins over the selection. (Invoices whose line items don't reconcile to their total are only excludable whole.)
+- **Pick what counts — invoice or line item.** Each invoice in the drill-down has an **Incl.** checkbox, and every **line item inside it** has its own checkbox. Lines matching the pay-eligible templates (**Company options → Payment groups**) are **selected automatically**; credits and unmatched charges carry a **review** pill for human judgment — flip any line by hand. The pay basis is the **sum of the counted lines**; earned and payout **recompute live** and save with the build. A **±N inv** tag flags an adjusted mentee, a **review N** tag flags judgment lines. A typed **override** still wins over the selection.
 
 ### Export
 - **Export CSV** downloads the **data used to build the payout** — one row per contributing invoice (this-month + rolled-in slices), with the dates each was paid — not just the on-screen per-mentee summary.
@@ -354,15 +354,17 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 
 ### The grid
 - **Rows** are the engagement templates synced from CoachAccountable (e.g. \`MN Subscription | (4x Month) Zoom Meetings\`). **Columns** are staff groups (starts with **Mentors**).
-- **Check a box** to include that template's revenue in that group's payout. When a mentee has an engagement opened, its template decides whether the revenue is paid — so JumpStart Your Freedom / Supervised Progress, After-Graduation care, Fortify/Gain Momentum groups, and Mentor Training simply stay **unchecked** and never count.
+- **Check a box** to include that template's revenue in that group's payout — so JumpStart Your Freedom / Supervised Progress, After-Graduation care, Fortify/Gain Momentum groups, and Mentor Training simply stay **unchecked** and never count.
 - A second grid assigns **coaches to groups** (the roster you're building toward group-specific pay schemes).
 
-### How it drives payouts
-- The **Mentors** group is wired into Pay staff / Build payout: an invoice counts **iff** the engagement covering it is a template checked for Mentors.
-- **Until you check any templates for a group**, the engine falls back to the legacy 4×/2×/1× auto-detection, so nothing changes until you configure it. Once you check templates, the grid is the source of truth.
+### How it drives payouts — INVOICE truth, not engagement records
+- Once templates are checked, the engine decides eligibility **per invoice line item**: a line counts **iff its text starts with a checked template's name** (CA bills line items as the template name plus the coach and price). The pay basis is the sum of a mentee's eligible lines — **engagement records no longer gate anything**. This matters because CA engagement flags can lie: a "canceled" engagement can keep billing real monthly subscriptions (which the old gate silently dropped), and a live engagement can sweep in JYF/training invoices (which the old gate wrongly paid).
+- **Credits** (negative lines) on an eligible invoice are auto-included as basis *reductions*; **unmatched charges** are auto-excluded. Both carry a **review** flag in the payout drill-down (905) where you can flip any line by hand — do that for the first rounds until the tags are trusted.
+- **Attribution** goes to the mentee's **owner** (CA primary coach), falling back to engagement coverage only when no owner is known.
+- **Until you check any templates for a group**, the engine falls back to the legacy 4×/2×/1× engagement auto-detection, so nothing changes until you configure it. Once you check templates, the grid is the source of truth.
 
 ### Keeping the list fresh
-- **Refresh templates** pulls the latest templates from CoachAccountable on demand (they also refresh on Admin → Sync). Needs migration \`9972_pay_engagement_groups.sql\` applied.`,
+- **Refresh templates** pulls the latest templates from CoachAccountable on demand (they also refresh on Admin → Sync). Needs migration \`9972_pay_engagement_groups.sql\` applied. Until the first refresh, the grid lists the distinct engagement names already synced as a stand-in.`,
   },
 
   "metrics.freedom": {

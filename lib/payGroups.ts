@@ -108,3 +108,28 @@ export function payEligibleForGroup(
   const set = new Set(g.templateNames.map(normalizeTemplateName));
   return (name) => set.has(normalizeTemplateName(name));
 }
+
+// The LINE-ITEM pay-eligibility predicate for a group, or NULL when the group has
+// no templates checked (caller falls back to legacy engagement-gated detection).
+//
+// This is the invoice-truth gate (decided with the user 2026-07-17): an invoice
+// line item counts toward the group's payouts iff its text STARTS WITH a checked
+// template's name. CA writes line items as the template name plus suffixes —
+// "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)" — so a prefix
+// match hits every real billing row while never matching JYF fees, setup fees,
+// mentor-training tuition, or free-text credits. Deliberately NOT a contains-match:
+// "Credit for the JYF Fee" must not match the 0x JumpStart template, and credits in
+// general stay unmatched so the reviewer decides them (see lib/pay.ts).
+export function lineItemEligibleForGroup(
+  cfg: PayGroupsConfig,
+  groupId: string
+): ((lineItemText: string | null | undefined) => boolean) | null {
+  const g = findGroup(cfg, groupId);
+  if (!g || g.templateNames.length === 0) return null;
+  const prefixes = g.templateNames.map(normalizeTemplateName).filter((p) => p.length > 0);
+  return (text) => {
+    const t = normalizeTemplateName(text);
+    if (!t) return false;
+    return prefixes.some((p) => t.startsWith(p));
+  };
+}

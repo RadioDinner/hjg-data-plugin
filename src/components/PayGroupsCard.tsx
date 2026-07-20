@@ -166,9 +166,12 @@ export function PayGroupsCard() {
           </h2>
           <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
             Check which CoachAccountable <strong>engagement templates</strong> count toward each group of staff for
-            payout calculations, and assign coaches to groups. When someone has an engagement opened, its template
-            decides whether the revenue is paid. <strong>Mentors</strong> drives the Pay staff / Build payout engine —
-            leaving a group's templates all unchecked keeps the legacy 4×/2×/1× auto-detection until you pick them.
+            payout calculations, and assign coaches to groups. An <strong>invoice line item</strong> counts when it
+            starts with a checked template's name — eligibility comes from what was actually <em>billed</em>, not from
+            engagement records (which can be stale/canceled while still billing). <strong>Mentors</strong> drives the
+            Pay staff / Build payout engine — leaving a group's templates all unchecked keeps the legacy 4×/2×/1×
+            auto-detection until you pick them. Unmatched charges and credits are flagged{" "}
+            <strong>review</strong> on each payout's drill-down for hand-checking the first rounds.
           </div>
         </div>
         <button className="btn btn--sm" onClick={doRefresh} disabled={refreshing} title="Pull the latest engagement templates from CoachAccountable">

@@ -371,6 +371,7 @@ export function PayStaffView() {
       primaryCoachOf: data.primaryCoachOf,
       rampOverride: data.rampOverride,
       payEligible: data.payEligible,
+      payEligibleLineItem: data.payEligibleLineItem,
     });
   }, [data]);
 

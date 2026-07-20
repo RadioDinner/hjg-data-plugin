@@ -20,15 +20,15 @@ export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
 import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec } from "../lib/pay";
-import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine, PayLineSource, PayInvoicePayment, PayInvoiceLineItem } from "../lib/pay";
+import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine, PayLineSource, PayLineSourceLineItem, LineItemPayStatus, PayInvoicePayment, PayInvoiceLineItem } from "../lib/pay";
 export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec };
-export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine, PayLineSource, PayInvoicePayment, PayInvoiceLineItem };
+export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine, PayLineSource, PayLineSourceLineItem, LineItemPayStatus, PayInvoicePayment, PayInvoiceLineItem };
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
 // re-exported so the frontend imports lib through db.ts — same pattern as above.
-import { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS } from "../lib/payBuild";
+import { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, includedLineItemSet, sourceIsClassified, sourceAutoBasis, lineItemCounts, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS } from "../lib/payBuild";
 import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine } from "../lib/payBuild";
-export { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
+export { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, includedLineItemSet, sourceIsClassified, sourceAutoBasis, lineItemCounts, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
 export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
 // Payment groups (engagement templates × staff groups; Company options §451).
@@ -36,6 +36,7 @@ import {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
   payEligibleForGroup,
+  lineItemEligibleForGroup,
   findGroup,
   groupHasTemplates,
   normalizeTemplateName,
@@ -48,6 +49,7 @@ export {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
   payEligibleForGroup,
+  lineItemEligibleForGroup,
   findGroup,
   groupHasTemplates,
   normalizeTemplateName,
@@ -1178,6 +1180,10 @@ export interface PayData {
   // templates are checked). Undefined when that group has no templates configured,
   // so the engine falls back to its legacy 4x/2x/1x detection.
   payEligible?: (engagementName: string | null) => boolean;
+  // LINE-ITEM eligibility predicate from the same group (invoice-truth mode): an
+  // invoice line item counts iff it starts with a checked template's name. Undefined
+  // when unconfigured — the engine then uses the legacy engagement gate.
+  payEligibleLineItem?: (lineItemText: string | null) => boolean;
 }
 
 async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
@@ -1338,8 +1344,12 @@ export async function fetchPayData(): Promise<PayData> {
   const months = payoutMonths(invoices);
 
   // Pay-eligibility from the "Mentors" Payment-group. Null (no templates configured
-  // yet) => leave payEligible undefined so the engine uses its legacy 4x/2x/1x rule.
+  // yet) => leave both predicates undefined so the engine uses its legacy 4x/2x/1x
+  // engagement rule. Once templates are checked, the LINE-ITEM predicate switches
+  // the engine to invoice-truth mode (eligibility/basis/tier from the invoice's own
+  // line items; engagement records no longer gate).
   const payEligible = payEligibleForGroup(payGroups, MENTORS_GROUP_ID) ?? undefined;
+  const payEligibleLineItem = lineItemEligibleForGroup(payGroups, MENTORS_GROUP_ID) ?? undefined;
 
   return {
     invoices,
@@ -1351,6 +1361,7 @@ export async function fetchPayData(): Promise<PayData> {
     primaryCoachOf: (clientId) => primaryCoach.get(clientId) ?? null,
     rampOverride,
     payEligible,
+    payEligibleLineItem,
   };
 }
 
@@ -1696,9 +1707,30 @@ export async function fetchEngagementTemplates(): Promise<EngagementTemplate[]> 
     .select("id,name,managing_coach_id,allocation_unit,allocation")
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { id: number; name: string | null; managing_coach_id: number | null; allocation_unit: string | null; allocation: number | null }[]).map(
+  const templates = ((data ?? []) as { id: number; name: string | null; managing_coach_id: number | null; allocation_unit: string | null; allocation: number | null }[]).map(
     (t) => ({ id: t.id, name: t.name ?? `#${t.id}`, managingCoachId: t.managing_coach_id, allocationUnit: t.allocation_unit, allocation: t.allocation })
   );
+  if (templates.length > 0) return templates;
+  // The CA mirror hasn't been refreshed yet (Refresh templates / Sync). Fall back
+  // to the distinct engagement names already synced so the §451 grid is usable
+  // immediately — an opened engagement carries its template's exact name. Synthetic
+  // negative ids keep these apart from real template ids; the grid keys by NAME.
+  const { data: engs, error: engErr } = await supabase.from("ca_engagements").select("name");
+  if (engErr) return templates;
+  const seen = new Map<string, string>();
+  for (const e of (engs ?? []) as { name: string | null }[]) {
+    const name = (e.name ?? "").replace(/\s+/g, " ").trim();
+    if (!name) continue;
+    const k = name.toLowerCase();
+    if (!seen.has(k)) seen.set(k, name);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b)).map((name, i) => ({
+    id: -(i + 1),
+    name,
+    managingCoachId: null,
+    allocationUnit: null,
+    allocation: null,
+  }));
 }
 
 const PAY_GROUPS_KEY = "pay_engagement_groups";
