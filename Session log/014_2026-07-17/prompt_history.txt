@@ -23,3 +23,6 @@ well, ok I don't actually know. Clayton was saying how he would calculate rollov
 
 --- 2026-07-18 00:24 ---
 1. Confirmed, yes [pay = 60% of every MN Subscription line, by invoice owner, regardless of engagement status]. 2. I want to decide eligibility per invoice and per line item.
+
+--- 2026-07-20 11:27 ---
+I want the Invoice lines to be in company settings. App looks at the list of engagements created in my CoachAccountable instance, then select what invoices to AUTOMATICALLY include in mentor payments. Setting in Company settings panel. E.g. tag MN Subscription (4x Month), (2x Month), (1x Month) to automatically be included in MENTOR payouts and auto-selected, but hand review invoice line items for the first couple rounds until we know we got it right. [pasted full CA engagement template list: IMN 5, 0x JYF 10, 1x 45, 2x 65, 4x 25, After Graduation Care, Fortify Group 15, Gain Momentum Group 15, MT programs 595/650]
