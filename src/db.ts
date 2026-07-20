@@ -1722,14 +1722,20 @@ export async function fetchEngagementTemplates(): Promise<EngagementTemplate[]> 
   // to the distinct engagement names already synced so the §451 grid is usable
   // immediately — an opened engagement carries its template's exact name. Synthetic
   // negative ids keep these apart from real template ids; the grid keys by NAME.
-  const { data: engs, error: engErr } = await supabase.from("ca_engagements").select("name");
-  if (engErr) return templates;
+  // Paged: Supabase caps a request at ~1000 rows and ca_engagements can exceed it.
   const seen = new Map<string, string>();
-  for (const e of (engs ?? []) as { name: string | null }[]) {
-    const name = (e.name ?? "").replace(/\s+/g, " ").trim();
-    if (!name) continue;
-    const k = name.toLowerCase();
-    if (!seen.has(k)) seen.set(k, name);
+  const pageSize = 1000;
+  for (let f = 0; ; f += pageSize) {
+    const { data: engs, error: engErr } = await supabase.from("ca_engagements").select("name").range(f, f + pageSize - 1);
+    if (engErr) return templates;
+    const batch = (engs ?? []) as { name: string | null }[];
+    for (const e of batch) {
+      const name = (e.name ?? "").replace(/\s+/g, " ").trim();
+      if (!name) continue;
+      const k = name.toLowerCase();
+      if (!seen.has(k)) seen.set(k, name);
+    }
+    if (batch.length < pageSize) break;
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b)).map((name, i) => ({
     id: -(i + 1),

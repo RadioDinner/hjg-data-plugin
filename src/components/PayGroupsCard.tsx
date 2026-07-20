@@ -245,6 +245,37 @@ export function PayGroupsCard() {
                         ))}
                       </tr>
                     ))}
+                    {/* Checked names NOT in the current template list (the list was
+                        refreshed, or a fallback name drifted). They still actively
+                        gate pay, so they MUST stay visible and uncheckable here —
+                        an invisible-but-active rule is how payroll goes wrong. */}
+                    {(() => {
+                      const known = new Set(templates.map((t) => normalizeTemplateName(t.name)));
+                      const orphanByKey = new Map<string, string>();
+                      for (const g of groups)
+                        for (const n of g.templateNames)
+                          if (!known.has(normalizeTemplateName(n))) orphanByKey.set(normalizeTemplateName(n), n);
+                      return [...orphanByKey.values()].sort().map((name) => (
+                        <tr key={`orphan:${name}`}>
+                          <td style={{ textAlign: "left" }}>
+                            {name}
+                            <span className="pill pill--pending" style={{ marginLeft: 6, fontSize: 10 }} title="This checked name is not in the current template list (refreshed away or renamed) but still gates payouts — uncheck it here to stop it, or re-check the matching current template.">
+                              not in current list
+                            </span>
+                          </td>
+                          {groups.map((g) => (
+                            <td key={g.id}>
+                              <input
+                                type="checkbox"
+                                checked={templateInGroup(g, name)}
+                                onChange={() => toggleTemplate(g.id, name)}
+                                aria-label={`Include ${name} in ${g.name}`}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ));
+                    })()}
                     {groups.length === 0 && (
                       <tr>
                         <td colSpan={1} className="muted">Add a group to start checking templates.</td>

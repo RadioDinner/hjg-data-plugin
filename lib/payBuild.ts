@@ -84,11 +84,17 @@ export function payLineSourceKey(src: PayLineSource): string {
   return `dt:${src.serviceDate}`;
 }
 
-// A stable key for ONE line item within an invoice: the invoice's source-key plus
-// the line item's index. Line items within an invoice aren't unique (e.g. two
-// identical "MN Subscription ($425)" charges), so the index is what disambiguates.
+// A stable key for ONE line item within an invoice: the invoice's source-key, the
+// line item's index, AND a slug of the item's text. Two identical "MN Subscription
+// ($425)" charges are disambiguated by index; the text slug anchors the key to the
+// line's IDENTITY so that if a re-sync inserts/reorders line items, a persisted
+// flip whose index now points at a different line becomes a harmless NO-OP (the
+// key no longer matches anything) instead of silently retargeting another line.
+function itemSlug(item: string | null | undefined): string {
+  return (item ?? "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 24);
+}
 export function payLineItemKey(src: PayLineSource, index: number): string {
-  return `${payLineSourceKey(src)}#${index}`;
+  return `${payLineSourceKey(src)}#${index}:${itemSlug(src.lineItems[index]?.item)}`;
 }
 
 // The sets of invoice / line-item keys a reviewer has overridden on a line.
@@ -156,18 +162,20 @@ export function sourceIncludedBilled(src: PayLineSource, state?: BuildLineState)
   if (sourceIsClassified(src)) {
     const hasFlips = excludedLineItemSet(s).size > 0 || includedLineItemSet(s).size > 0;
     if (!hasFlips) return sourceAutoBasis(src);
+    // Raw sum — a negative per-invoice basis is legitimate (a refund netting
+    // against the mentee's other invoices, mirroring the engine). The clamp to
+    // ≥ $0 lives at the LINE level (payoutAfterExclusions), never per invoice.
     let sum = 0;
     src.lineItems.forEach((li, i) => {
       if (lineItemCounts(src, i, s)) sum += li.amount || 0;
     });
-    return Math.max(0, sum);
+    return sum;
   }
   const exclLI = excludedLineItemSet(s);
   if (!exclLI.size || !lineItemsSplittable(src)) return src.billed;
-  const key = payLineSourceKey(src);
   let sum = 0;
   src.lineItems.forEach((li, i) => {
-    if (!exclLI.has(`${key}#${i}`)) sum += li.amount || 0;
+    if (!exclLI.has(payLineItemKey(src, i))) sum += li.amount || 0;
   });
   return sum;
 }
@@ -198,7 +206,10 @@ export function payoutAfterExclusions(
   if (!excludedInvoiceSet(s).size && !excludedLineItemSet(s).size && !includedLineItemSet(s).size)
     return round2(line.payout);
   const rawEarned = line.sources.reduce((t, src) => t + sourceRecognizedAfterExclusions(src, s), 0);
-  return round2(round2(rawEarned) * line.splitPct);
+  // Clamp the LINE at ≥ $0: reviewer flips (e.g. dropping charges while keeping
+  // a credit) must never produce a negative payout that docks other mentees'
+  // lines in the built total.
+  return round2(Math.max(0, round2(rawEarned)) * line.splitPct);
 }
 
 // The final signed-off payout for a line, honoring EVERY review decision in
@@ -289,16 +300,23 @@ function joinPaymentMethods(src: PayLineSource): string {
     .filter(Boolean)
     .join("; ");
 }
-// Render a source's line items with their effective pay disposition: lines not in
-// the basis are tagged " [not in pay]"; counted credit lines are tagged " [credit]"
-// so a basis below the matched charges is explicable at a glance.
+// Render a source's line items with their effective pay disposition. The tags
+// distinguish the ENGINE's classification from REVIEWER actions so the export is
+// a faithful audit trail: " [not in pay]" = auto-excluded (unmatched charge),
+// " [removed by review]" = a line the reviewer (or a whole-invoice drop) took
+// out, " [included by review]" = an auto-excluded line the reviewer opted in,
+// " [credit]" = a counted credit reducing the basis.
 function joinLineItems(src: PayLineSource, state?: BuildLineState): string {
-  const legacyReviewable = !sourceIsClassified(src) && lineItemsSplittable(src);
+  const classified = sourceIsClassified(src);
+  const legacyReviewable = !classified && lineItemsSplittable(src);
   const invoiceOff = excludedInvoiceSet(state).has(payLineSourceKey(src));
   return src.lineItems
     .map((li, i) => {
-      const counts = !invoiceOff && (sourceIsClassified(src) || legacyReviewable ? lineItemCounts(src, i, state) : true);
-      const tag = !counts ? " [not in pay]" : li.status === "credit" ? " [credit]" : "";
+      const counts = !invoiceOff && (classified || legacyReviewable ? lineItemCounts(src, i, state) : true);
+      let tag = "";
+      if (!counts) tag = classified && li.status === "excluded" ? " [not in pay]" : " [removed by review]";
+      else if (classified && li.status === "excluded") tag = " [included by review]";
+      else if (li.status === "credit") tag = " [credit]";
       return `${li.item ?? "—"} ($${round2(li.amount)})${tag}`;
     })
     .join("; ");

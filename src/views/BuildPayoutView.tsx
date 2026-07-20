@@ -650,6 +650,14 @@ export function BuildPayoutView({
                   {savedRec.status}
                 </div>
               )}
+              {savedRec && !dirty && Math.abs(summary.builtTotal - savedRec.builtTotal) > 0.005 && (
+                <div className="notice notice--warn" style={{ fontSize: 12, marginTop: 8 }}>
+                  Heads up — the engine's numbers have <strong>changed since this build was saved</strong> (saved{" "}
+                  {fmtUsd(savedRec.builtTotal)}, now {fmtUsd(summary.builtTotal)}). A re-sync or a Payment-groups change
+                  can do this. Re-review and save{status === "approved" ? " (reopen first)" : ""} so the signed-off
+                  number matches what's shown.
+                </div>
+              )}
             </div>
           </aside>
         </div>

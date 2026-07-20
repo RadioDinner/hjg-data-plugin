@@ -583,3 +583,23 @@ body {
 .cell-edit:hover { border-color: var(--line); }
 .cell-edit:focus { border-color: var(--accent); outline: none; background: var(--panel-2, var(--panel)); }
 td > .cell-edit { min-width: 84px; }
+
+/* Topbar version chip (VersionBadge): which build is running; turns into a
+   refresh pill when /version.json reports a newer deployed build. */
+.version-chip {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 2px 8px;
+  background: var(--panel-2);
+  white-space: nowrap;
+}
+button.version-chip { cursor: default; }
+.version-chip--update {
+  cursor: pointer;
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}

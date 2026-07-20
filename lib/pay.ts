@@ -381,7 +381,14 @@ export function computePayReport(input: PayInputs): PayReport {
 
   // Non-canceled engagements grouped by mentee (for coverage).
   const engByClient = new Map<number, PayEngagementInput[]>();
+  // ALL engagements incl. canceled — used ONLY for invoice-truth attribution
+  // fallback: a "canceled" CA engagement that still bills (Brett/Wynn) is exactly
+  // the record we must still read for WHO to credit when no owner is synced.
+  const engByClientAll = new Map<number, PayEngagementInput[]>();
   for (const e of input.engagements) {
+    const all = engByClientAll.get(e.clientId) ?? [];
+    all.push(e);
+    engByClientAll.set(e.clientId, all);
     if (e.isCanceled) continue;
     const arr = engByClient.get(e.clientId) ?? [];
     arr.push(e);
@@ -398,9 +405,10 @@ export function computePayReport(input: PayInputs): PayReport {
     if (!a) {
       a = { coachId, clientId, tier, tierDate, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0, sources: [] };
       acc.set(k, a);
-    } else if (tierDate >= a.tierDate) {
-      // A mid-month tier change labels the line with the LATEST invoice's tier
-      // (e.g. a 4x→2x transition month reads "2x").
+    } else if (tierDate && tierDate >= a.tierDate) {
+      // INVOICE-TRUTH mode only (legacy passes "" so its first-processed tier is
+      // preserved byte-for-byte): a mid-month tier change labels the line with
+      // the LATEST invoice's tier (e.g. a 4x→2x transition month reads "2x").
       a.tier = tier;
       a.tierDate = tierDate;
     }
@@ -430,7 +438,23 @@ export function computePayReport(input: PayInputs): PayReport {
     let tier: string;
     let coachId: number | null;
     let lineItems: PayLineSourceLineItem[];
-    if (liMode) {
+    if (liMode && (inv.lineItems ?? []).length === 0) {
+      // No line-item data on this invoice (rows synced before line items were
+      // mirrored). Invoice truth can't classify it, so fall back to the legacy
+      // engagement gate for THIS invoice — real revenue must not silently drop
+      // to $0 with no reviewer recourse. A re-sync upgrades it to line-item
+      // classification; until then the whole-invoice checkbox still works.
+      if (amt <= 0) continue;
+      const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible);
+      if (!cov) {
+        if (invYm === ym) excludedBilled += amt;
+        continue;
+      }
+      basis = amt;
+      tier = cov.tier;
+      coachId = creditFor(inv.clientId, cov);
+      lineItems = [];
+    } else if (liMode) {
       const pred = input.payEligibleLineItem!;
       lineItems = (inv.lineItems ?? []).map((li) => {
         const liAmt = li.amount || 0;
@@ -446,17 +470,24 @@ export function computePayReport(input: PayInputs): PayReport {
       const matchedSum = matched.reduce((s, x) => s + (x.amount || 0), 0);
       const creditSum = lineItems.filter((x) => x.status === "credit").reduce((s, x) => s + (x.amount || 0), 0);
       const excludedSum = lineItems.filter((x) => x.status === "excluded").reduce((s, x) => s + (x.amount || 0), 0);
-      basis = Math.max(0, matchedSum + creditSum);
+      // The basis may be ZERO or NEGATIVE (a fully-credited invoice, or a
+      // standalone refund whose matched line is negative). Emit the source
+      // anyway: a negative slice nets against the mentee's other invoices, and
+      // the reviewer can see + flip the credit in the drill-down — skipping
+      // would silently overpay vs 60% of net eligible revenue. The final line
+      // clamps its payout at ≥ $0 (a refund never claws back cash).
+      basis = matchedSum + creditSum;
       if (invYm === ym && excludedSum > 0) excludedBilled += excludedSum;
       // Tier reads off the largest matched line ("MN Subscription | (4x Month)…").
       const top = matched.reduce((b, x) => ((x.amount || 0) > (b.amount || 0) ? x : b), matched[0]);
       tier = engagementTier(top.item);
-      // Attribution: the OWNER when known; engagement coverage only as a fallback
-      // for unowned clients. A basis with no coach at all surfaces as unassigned.
+      // Attribution: the OWNER when known; engagement coverage as fallback for
+      // unowned clients — INCLUDING canceled engagements, because a canceled-yet-
+      // still-billing engagement (Brett/Wynn) is exactly the record this mode
+      // tolerates. A basis with no coach at all surfaces as unassigned.
       const owner = input.primaryCoachOf?.(inv.clientId) ?? null;
       coachId =
-        owner ?? mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible)?.coachId ?? null;
-      if (basis <= 0) continue; // fully credited away — nothing to pay or roll
+        owner ?? mentoringCoverFor(inv.serviceDate, engByClientAll.get(inv.clientId) ?? [], input.payEligible)?.coachId ?? null;
     } else {
       if (amt <= 0) continue;
       // Legacy: pay basis is the whole invoice, gated by 4x/2x/1x engagement coverage.
@@ -471,7 +502,8 @@ export function computePayReport(input: PayInputs): PayReport {
       lineItems = (inv.lineItems ?? []).map((li) => ({ ...li }));
     }
 
-    const a = ensure(coachId, inv.clientId, tier, inv.serviceDate.slice(0, 10));
+    // Legacy passes "" so ensure() keeps its historical first-processed tier.
+    const a = ensure(coachId, inv.clientId, tier, liMode ? inv.serviceDate.slice(0, 10) : "");
     const day = dayOf(inv.serviceDate);
     const e = elapsedFraction(day);
     const collected = inv.collected || 0;
@@ -511,7 +543,10 @@ export function computePayReport(input: PayInputs): PayReport {
   for (const a of acc.values()) {
     const earned = round2(a.recognizedThis + a.rolloverPrev);
     const billed = round2(a.billed);
-    if (earned <= 0 && billed <= 0) continue;
+    // Legacy drops empty lines. Invoice-truth KEEPS a zero/negative line that has
+    // sources — a fully-credited invoice must stay visible so the reviewer can
+    // inspect (and flip) the credits rather than have the row vanish.
+    if (earned <= 0 && billed <= 0 && !(liMode && a.sources.length > 0)) continue;
     const collected = round2(a.collected);
     // Oldest service date first: prior-month rollover slices lead, then this
     // month's — the order the two-month split reads in.
@@ -542,7 +577,9 @@ export function computePayReport(input: PayInputs): PayReport {
     // Unknown tenure (engagements but no dated start) defaults to the established
     // rate rather than penalizing the mentor as "new".
     const splitPct = tenure != null ? splitForTenureMonth(tenure, ramp) : ramp[ramp.length - 1];
-    const payout = round2(earned * splitPct);
+    // A net-negative month (refund exceeding charges) pays $0 — mentors never
+    // owe money back; the negative earned stays visible for the audit trail.
+    const payout = round2(Math.max(0, earned) * splitPct);
 
     let m = mentors.get(a.coachId);
     if (!m) {

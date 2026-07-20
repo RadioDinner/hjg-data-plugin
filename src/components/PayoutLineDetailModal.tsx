@@ -83,9 +83,12 @@ export function PayoutLineDetailModal({
   const recogOf = (src: PayLineSource) => sourceRecognizedAfterExclusions(src, s);
   const includedBilledOf = (src: PayLineSource) => sourceIncludedBilled(src, s);
   const fullyOff = (src: PayLineSource) => round2(includedBilledOf(src)) <= 0.005;
+  // "Adjusted" always means THE REVIEWER changed something — measured against the
+  // engine's own auto basis, never against the raw billed amount (an untouched
+  // mixed invoice whose JYF line the ENGINE excluded is not an adjustment).
   const partlyOff = (src: PayLineSource) => {
     const inc = includedBilledOf(src);
-    return inc > 0.005 && Math.abs(inc - src.billed) > 0.005;
+    return inc > 0.005 && Math.abs(inc - sourceAutoBasis(src)) > 0.005;
   };
   const sumRecogIncl = (arr: PayLineSource[]) => round2(arr.reduce((t, x) => t + recogOf(x), 0));
   const adjThisMonth = sumRecogIncl(thisMonth);
@@ -276,7 +279,7 @@ export function PayoutLineDetailModal({
   const sliceRows = (arr: PayLineSource[], label: string) => {
     if (!arr.length) return null;
     const inclSubtotal = round2(arr.reduce((t, x) => t + recogOf(x), 0));
-    const adjustedHere = arr.filter((x) => round2(includedBilledOf(x)) !== round2(x.billed)).length;
+    const adjustedHere = arr.filter((x) => Math.abs(includedBilledOf(x) - sourceAutoBasis(x)) > 0.005).length;
     return (
       <>
         {arr.map((src, i) => {

@@ -32,3 +32,6 @@ Continue from where you left off.
 
 --- 2026-07-20 13:00 ---
 Print a Pay stub with a comprehensive breakdown of payments made. Not over complicated - sent to mentors to review their income. Enough data to understand, not overwhelming. Want them to see when I made changes to someone's invoice - e.g. Josh Lehman's refund that I didn't want subtracting from Harry's pay - Harry should see and understand that. One page summary, breakdown afterwards. Beautiful graphically. Print a 'review paystub' from a saved draft payout; after I approve the draft, a 'Paystub' generated for the month.
+
+--- 2026-07-20 13:31 ---
+Can you add a version number to the top of the data plugin screen? Or somewhere? I want to be able to track what version you just committed and whether or not I need to refresh the screen to get the latest version

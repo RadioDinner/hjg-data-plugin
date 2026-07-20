@@ -12,6 +12,7 @@ import { MapsView } from "./views/MapsView";
 import { AdminView } from "./views/AdminView";
 import { CompanyOptionsView } from "./views/CompanyOptionsView";
 import { SectionId } from "./components/SectionId";
+import { VersionBadge } from "./components/VersionBadge";
 
 type Tab = "metrics" | "discovery" | "mentees" | "paystaff" | "margins" | "raw" | "maps" | "admin" | "options";
 
@@ -43,6 +44,7 @@ export function App() {
           <span className="topbar__subtitle">Discovery &amp; conversion metrics</span>
         </div>
         <div className="topbar__controls">
+          <VersionBadge />
           <span className="topbar__user">{user.email}</span>
           <button
             className="theme-toggle"
