@@ -197,19 +197,28 @@ export function sourceRecognizedAfterExclusions(src: PayLineSource, state?: Buil
 // Matches the engine's rounding (round the earned sum, then round earned × split),
 // so an untouched line reproduces the engine number to the penny. With no overrides
 // (or no sources/split to recompute from) this IS the engine payout.
+// `splitOverride` (fraction) is the build-level reviewer-set Split % — when
+// present it replaces the engine's ramp split for the whole coach-month build.
 export function payoutAfterExclusions(
   line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
-  state?: BuildLineState
+  state?: BuildLineState,
+  splitOverride?: number | null
 ): number {
   const s = state ?? DEFAULT_LINE_STATE;
-  if (!line.sources || line.splitPct == null) return round2(line.payout);
-  if (!excludedInvoiceSet(s).size && !excludedLineItemSet(s).size && !includedLineItemSet(s).size)
-    return round2(line.payout);
+  const split = splitOverride ?? line.splitPct;
+  if (!line.sources || split == null) return round2(line.payout);
+  const noFlips = !excludedInvoiceSet(s).size && !excludedLineItemSet(s).size && !includedLineItemSet(s).size;
+  if (noFlips && splitOverride == null) return round2(line.payout);
+  if (noFlips) {
+    // Only the split changed: engine earned × the overridden split.
+    const earned = line.sources.reduce((t, src) => t + src.recognized, 0);
+    return round2(Math.max(0, round2(earned)) * split);
+  }
   const rawEarned = line.sources.reduce((t, src) => t + sourceRecognizedAfterExclusions(src, s), 0);
   // Clamp the LINE at ≥ $0: reviewer flips (e.g. dropping charges while keeping
   // a credit) must never produce a negative payout that docks other mentees'
   // lines in the built total.
-  return round2(Math.max(0, round2(rawEarned)) * line.splitPct);
+  return round2(Math.max(0, round2(rawEarned)) * split);
 }
 
 // The final signed-off payout for a line, honoring EVERY review decision in
@@ -221,12 +230,13 @@ export function payoutAfterExclusions(
 // works for callers that don't do invoice-level review.
 export function effectiveLineTotal(
   line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
-  state?: BuildLineState
+  state?: BuildLineState,
+  splitOverride?: number | null
 ): number {
   const s = state ?? DEFAULT_LINE_STATE;
   if (!s.included) return 0;
-  if (s.override != null) return round2(s.override);
-  return payoutAfterExclusions(line, s);
+  if (s.override != null) return round2(s.override); // an explicit $ still beats the split
+  return payoutAfterExclusions(line, s, splitOverride);
 }
 
 // Roll-up of a build: the engine total (every line), the reviewed/built total
@@ -334,13 +344,15 @@ function joinLineItems(src: PayLineSource, state?: BuildLineState): string {
 // sum (per mentee) to that line's effective earned.
 export function payoutDetailCsvRows(
   lines: BuildDetailLine[],
-  states: Map<number, BuildLineState>
+  states: Map<number, BuildLineState>,
+  splitOverride?: number | null
 ): (string | number)[][] {
   const rows: (string | number)[][] = [];
   for (const l of lines) {
     const s = states.get(l.clientId) ?? DEFAULT_LINE_STATE;
-    const eff = effectiveLineTotal(l, s); // honors invoice/line-item overrides + override + line exclusion
-    const split = `${Math.round(l.splitPct * 100)}%`;
+    const eff = effectiveLineTotal(l, s, splitOverride); // honors line/invoice overrides + the split override
+    const effSplit = splitOverride ?? l.splitPct;
+    const split = `${Math.round(effSplit * 100)}%${splitOverride != null && splitOverride !== l.splitPct ? ` (engine ${Math.round(l.splitPct * 100)}%)` : ""}`;
     const menteeCols = (first: boolean): (string | number)[] => [
       first ? split : "",
       first ? round2(l.payout) : "",
@@ -385,7 +397,11 @@ export function payoutDetailCsvRows(
   return rows;
 }
 
-export function summarizeBuild(lines: BuildLineInput[], states: Map<number, BuildLineState>): BuildSummary {
+export function summarizeBuild(
+  lines: BuildLineInput[],
+  states: Map<number, BuildLineState>,
+  splitOverride?: number | null
+): BuildSummary {
   let computedTotal = 0;
   let builtTotal = 0;
   let includedCount = 0;
@@ -395,7 +411,7 @@ export function summarizeBuild(lines: BuildLineInput[], states: Map<number, Buil
   for (const l of lines) {
     computedTotal += l.payout; // always the raw engine number — the drift reference
     const s = states.get(l.clientId) ?? DEFAULT_LINE_STATE;
-    builtTotal += effectiveLineTotal(l, s); // honors invoice exclusions when sources are present
+    builtTotal += effectiveLineTotal(l, s, splitOverride); // honors invoice exclusions + the split override
     if (s.included) {
       includedCount++;
       if (s.override != null) overriddenCount++;

@@ -71,6 +71,8 @@ export function BuildPayoutView({
 
   // Working review state for the selected coach+month (reset on selection change).
   const [lineStates, setLineStates] = useState<Record<number, BuildLineState>>({});
+  // Build-level Split % override (fraction; null = the engine's ramp split).
+  const [splitOverride, setSplitOverride] = useState<number | null>(null);
   const [notes, setNotes] = useState<string>("");
   const [status, setStatus] = useState<BuildStatus>("draft");
   const [dirty, setDirty] = useState(false);
@@ -154,6 +156,7 @@ export function BuildPayoutView({
     if (coach == null || !ym) return;
     const rec = builds.get(payoutBuildKey(coach, ym));
     setLineStates(rec ? { ...rec.lineStates } : {});
+    setSplitOverride(rec?.splitOverride ?? null);
     setNotes(rec?.notes ?? "");
     setStatus(rec?.status ?? "draft");
     setDirty(false);
@@ -194,8 +197,9 @@ export function BuildPayoutView({
   }, [lineStates]);
 
   // Pass the full lines (with sources + splitPct) so the summary honors per-invoice
-  // exclusions; computedTotal still sums the raw engine payout as the drift reference.
-  const summary = useMemo(() => summarizeBuild(lines, stateMap), [lines, stateMap]);
+  // exclusions + the split override; computedTotal still sums the raw engine payout
+  // as the drift reference.
+  const summary = useMemo(() => summarizeBuild(lines, stateMap, splitOverride), [lines, stateMap, splitOverride]);
 
   const locked = status === "approved";
   const stateFor = (clientId: number): BuildLineState => lineStates[clientId] ?? DEFAULT_LINE_STATE;
@@ -217,6 +221,7 @@ export function BuildPayoutView({
         builtTotal: summary.builtTotal,
         computedTotal: summary.computedTotal,
         lineStates,
+        splitOverride,
         notes: notes.trim() || null,
       });
       const rec: PayoutBuildRecord = {
@@ -226,6 +231,7 @@ export function BuildPayoutView({
         builtTotal: summary.builtTotal,
         computedTotal: summary.computedTotal,
         lineStates,
+        splitOverride,
         notes: notes.trim() || null,
         reviewedBy: user?.id ?? null,
         reviewedAt: new Date().toISOString(),
@@ -279,6 +285,7 @@ export function BuildPayoutView({
       coachName: mentor.coachName,
       ym,
       splitPct: mentor.splitPct,
+      splitOverride,
       status,
       unsavedChanges: dirty,
       lines,
@@ -300,7 +307,7 @@ export function BuildPayoutView({
 
   function exportCsv() {
     if (coach == null || !ym) return;
-    const rows = payoutDetailCsvRows(lines, stateMap);
+    const rows = payoutDetailCsvRows(lines, stateMap, splitOverride);
     // TOTAL row aligned to the "Engine payout" + "Effective payout" columns of
     // PAYOUT_DETAIL_CSV_COLUMNS (found by label so it survives column reordering).
     const total: (string | number)[] = PAYOUT_DETAIL_CSV_COLUMNS.map((c) =>
@@ -405,11 +412,40 @@ export function BuildPayoutView({
                   {locked && <span className="pill pill--success" style={{ marginLeft: 8 }}>approved</span>}
                   {dirty && <span className="pill pill--running" style={{ marginLeft: 8 }}>unsaved</span>}
                 </h2>
-                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   {mentor ? (
                     <>
-                      Tenure month {mentor.tenureMonth ?? "—"} · split {fmtPct(mentor.splitPct)} · {lines.length} line
-                      {lines.length === 1 ? "" : "s"} · <em>click a mentee to see the invoices + payment dates behind their number</em>
+                      <span>Tenure month {mentor.tenureMonth ?? "—"} · split</span>
+                      <input
+                        className="input--inline"
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="100"
+                        style={{ width: 58 }}
+                        placeholder={String(Math.round(mentor.splitPct * 100))}
+                        value={splitOverride == null ? "" : String(Math.round(splitOverride * 100))}
+                        disabled={locked}
+                        onChange={(e) => {
+                          const v = e.target.value.trim();
+                          const n = Number(v);
+                          setSplitOverride(v === "" || !Number.isFinite(n) ? null : Math.min(Math.max(n, 0), 100) / 100);
+                          setDirty(true);
+                          setFlash(null);
+                        }}
+                        title={`Override the Split % for this whole build (blank = the engine's ramp split, ${fmtPct(mentor.splitPct)}). Saves with the build; a per-line $ override still wins.`}
+                        aria-label="Split % override for this build"
+                      />
+                      <span>%</span>
+                      {splitOverride != null && splitOverride !== mentor.splitPct && (
+                        <span className="pill pill--running" title={`Engine ramp split is ${fmtPct(mentor.splitPct)}`}>
+                          engine {fmtPct(mentor.splitPct)}
+                        </span>
+                      )}
+                      <span>
+                        · {lines.length} line{lines.length === 1 ? "" : "s"} ·{" "}
+                        <em>click a mentee to see the invoices + payment dates behind their number</em>
+                      </span>
                     </>
                   ) : (
                     "No engine-computed lines for this coach in this month."
@@ -459,8 +495,8 @@ export function BuildPayoutView({
                   <tbody>
                     {lines.map((l) => {
                       const s = stateFor(l.clientId);
-                      const eff = effectiveLineTotal(l, s);
-                      const base = payoutAfterExclusions(l, s);
+                      const eff = effectiveLineTotal(l, s, splitOverride);
+                      const base = payoutAfterExclusions(l, s, splitOverride);
                       const affectedInv = new Set<string>();
                       (s.excludedInvoices ?? []).forEach((k) => affectedInv.add(k));
                       (s.excludedLineItems ?? []).forEach((k) => affectedInv.add(k.split("#")[0]));
@@ -518,7 +554,7 @@ export function BuildPayoutView({
                           <td className="num" title={`this-mo ${fmtUsd(l.recognizedThis)} + rolled-in ${fmtUsd(l.rolloverPrev)}`}>
                             {fmtUsd(l.earned)}
                           </td>
-                          <td className="num">{fmtPct(l.splitPct)}</td>
+                          <td className="num" style={{ color: splitOverride != null && splitOverride !== l.splitPct ? "var(--accent)" : undefined }}>{fmtPct(splitOverride ?? l.splitPct)}</td>
                           <td className="num">{fmtUsd(l.payout)}</td>
                           <td className="num">
                             <input
@@ -669,6 +705,7 @@ export function BuildPayoutView({
           coachName={mentor?.coachName ?? data?.coachName(coach) ?? ""}
           ym={ym}
           state={stateFor(detail.clientId)}
+          splitOverride={splitOverride}
           onChange={(patch) => updateLine(detail.clientId, patch)}
           readOnly={locked}
           onClose={() => setDetail(null)}

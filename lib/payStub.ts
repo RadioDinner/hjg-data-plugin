@@ -87,7 +87,9 @@ export interface PayStubModel {
   prevMonthLabel: string;
   approved: boolean;
   unsavedChanges: boolean;
-  splitPct: number;
+  splitPct: number; // the EFFECTIVE split (override when set)
+  engineSplitPct: number; // the ramp split, for the disclosure line
+  splitAdjusted: boolean; // reviewer set a different split for this month
   generatedOn: string; // YYYY-MM-DD (caller supplies; keeps this pure)
   reviewedAt: string | null;
   monthNote: string | null;
@@ -105,7 +107,10 @@ export interface PayStubModel {
 export interface PayStubInput {
   coachName: string;
   ym: string;
-  splitPct: number;
+  splitPct: number; // the engine's ramp split for this mentor-month
+  // Build-level reviewer-set Split % (fraction) — replaces splitPct in every
+  // computation and is DISCLOSED on the stub ("set by HJG for this month").
+  splitOverride?: number | null;
   status: BuildStatus;
   unsavedChanges?: boolean;
   lines: PayMenteeLine[];
@@ -130,9 +135,10 @@ function dispositionOf(src: PayLineSource, index: number, state: BuildLineState)
 }
 
 export function buildPayStubModel(input: PayStubInput): PayStubModel {
+  const effSplit = input.splitOverride ?? input.splitPct;
   const rows: StubMenteeRow[] = input.lines.map((l) => {
     const s = input.states.get(l.clientId) ?? DEFAULT_LINE_STATE;
-    const payout = effectiveLineTotal(l, s);
+    const payout = effectiveLineTotal(l, s, input.splitOverride);
     const excluded = !s.included;
     const overridden = s.included && s.override != null;
     let thisMonth = 0;
@@ -190,7 +196,9 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
     prevMonthLabel: monthLabelLong(prevYmOf(input.ym)),
     approved: input.status === "approved",
     unsavedChanges: !!input.unsavedChanges,
-    splitPct: input.splitPct,
+    splitPct: effSplit,
+    engineSplitPct: input.splitPct,
+    splitAdjusted: input.splitOverride != null && input.splitOverride !== input.splitPct,
     generatedOn: input.generatedOn,
     reviewedAt: input.reviewedAt ?? null,
     monthNote: input.monthNote ?? null,
@@ -371,7 +379,7 @@ export function payStubHtml(m: PayStubModel): string {
       ${badge}${unsaved}
       <div style="margin-top:10px"><div class="kicker">Paid to</div>
       <div style="font-size:20px">${esc(m.coachName)}</div>
-      <div class="sub">Payout rate ${pct}</div></div>
+      <div class="sub">Payout rate ${pct}${m.splitAdjusted ? ` <span class="tag tag--warn">set by HJG for this month (standard ${Math.round(m.engineSplitPct * 100)}%)</span>` : ""}</div></div>
     </div>
   </div>
 

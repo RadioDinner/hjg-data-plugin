@@ -1385,6 +1385,10 @@ export interface PayoutBuildRecord {
   builtTotal: number; // signed-off total at save time
   computedTotal: number; // engine total at save time (drift reference)
   lineStates: Record<number, BuildLineState>; // clientId -> review decision (non-default only)
+  // Reviewer-set Split % for this build (fraction; null = engine ramp split).
+  // Column added by 9971_payout_build_split.sql — reads/writes degrade
+  // gracefully when the migration isn't applied yet.
+  splitOverride: number | null;
   notes: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null; // updated_at
@@ -1398,24 +1402,28 @@ export { buildKey as payoutBuildKey };
 // All saved builds, indexed by `${coachId}|${serviceMonth}`. The table is small
 // (one row per reviewed coach-month), so a single fetch backs the whole view.
 export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord>> {
-  const { data, error } = await supabase
-    .from("payout_builds")
-    .select("coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at");
-  if (error) throw new Error(error.message);
+  const cols = "coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at";
+  // split_override needs 9971 applied — retry without it so the screen still
+  // loads (the override just won't persist) on an un-migrated database.
+  let res = await supabase.from("payout_builds").select(`${cols},split_override`);
+  if (res.error) res = await supabase.from("payout_builds").select(cols);
+  if (res.error) throw new Error(res.error.message);
   const out = new Map<string, PayoutBuildRecord>();
-  for (const r of (data ?? []) as {
+  for (const r of (res.data ?? []) as {
     coach_id: number;
     service_month: string;
     status: BuildStatus;
     built_total: number | null;
     computed_total: number | null;
     line_states: Record<string, BuildLineState> | null;
+    split_override?: number | string | null;
     notes: string | null;
     reviewed_by: string | null;
     updated_at: string | null;
   }[]) {
     const lineStates: Record<number, BuildLineState> = {};
     for (const [k, v] of Object.entries(r.line_states ?? {})) lineStates[Number(k)] = v;
+    const so = r.split_override != null ? Number(r.split_override) : null;
     out.set(buildKey(r.coach_id, r.service_month), {
       coachId: r.coach_id,
       serviceMonth: r.service_month,
@@ -1423,6 +1431,7 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
       builtTotal: Number(r.built_total) || 0,
       computedTotal: Number(r.computed_total) || 0,
       lineStates,
+      splitOverride: Number.isFinite(so as number) ? (so as number) : null,
       notes: r.notes,
       reviewedBy: r.reviewed_by,
       reviewedAt: r.updated_at,
@@ -1442,6 +1451,7 @@ export async function savePayoutBuild(
     builtTotal: number;
     computedTotal: number;
     lineStates: Record<number, BuildLineState>;
+    splitOverride?: number | null;
     notes: string | null;
   }
 ): Promise<void> {
@@ -1449,19 +1459,25 @@ export async function savePayoutBuild(
   for (const [k, v] of Object.entries(rec.lineStates)) {
     if (!isDefaultLineState(v)) compact[k] = v;
   }
-  const { error } = await supabase.from("payout_builds").upsert(
-    {
-      coach_id: rec.coachId,
-      service_month: rec.serviceMonth,
-      status: rec.status,
-      built_total: rec.builtTotal,
-      computed_total: rec.computedTotal,
-      line_states: compact,
-      notes: rec.notes,
-      reviewed_by: reviewedBy || null,
-    },
-    { onConflict: "coach_id,service_month" }
-  );
+  const row: Record<string, unknown> = {
+    coach_id: rec.coachId,
+    service_month: rec.serviceMonth,
+    status: rec.status,
+    built_total: rec.builtTotal,
+    computed_total: rec.computedTotal,
+    line_states: compact,
+    notes: rec.notes,
+    reviewed_by: reviewedBy || null,
+    split_override: rec.splitOverride ?? null,
+  };
+  let { error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" });
+  if (error && rec.splitOverride == null) {
+    // Pre-9971 database: retry without the column so ordinary saves still work.
+    delete row.split_override;
+    ({ error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" }));
+  } else if (error && rec.splitOverride != null) {
+    throw new Error(`${error.message} — if this mentions split_override, apply migration 9971_payout_build_split.sql`);
+  }
   if (error) throw new Error(error.message);
 }
 

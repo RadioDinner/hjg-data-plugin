@@ -143,6 +143,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 ### What you do
 - Pick a **mentor + service month**; every engine-computed line for that coach/month is listed.
 - **Include / exclude** each line with the checkbox, or **override** a line's payout and add a **note** explaining why.
+- **Edit the Split %** in the header to reprice the whole build (blank = the engine's tenure-ramp split). It saves with the build, reprices every line live (a per-line **$ override still wins**), and prints on the pay stub as *"set by HJG for this month"*. Needs migration \`9971_payout_build_split.sql\` to persist.
 - The side panel shows the **built (signed-off) total** vs the **engine total**, the **delta**, and how many lines were dropped / overridden.
 
 ### See the invoices behind a number

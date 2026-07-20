@@ -1386,6 +1386,47 @@ console.log("[13e] adversarial-review regressions (empty line items, refunds, ti
   eq(rCanc.unassigned.length, 0, "…instead of landing unassigned");
 }
 
+console.log("[13f] build-level Split % override (review layer + stub)");
+{
+  const mkSrc = (): import("../lib/pay.js").PayLineSource => ({
+    invoiceId: 1, invoiceNumber: "1", serviceDate: "2026-06-10", serviceMonth: "2026-06",
+    invoiceDay: 10, slice: "this-month", billed: 425, eligibleBilled: 425, collected: 425,
+    elapsedFraction: 1 / 3, recognized: 425 * (2 / 3), tier: "4x", payments: [],
+    lineItems: [{ item: "MN Subscription | (4x Month) Zoom Meetings (X) ($425)", amount: 425, status: "included" }],
+  });
+  const line = {
+    clientId: 1, clientName: "A", coachId: 9, billed: 425, collected: 425, invoiceDay: 10,
+    recognizedThis: round2(425 * (2 / 3)), rolloverPrev: 0, earned: round2(425 * (2 / 3)),
+    splitPct: 0.6, payout: round2(round2(425 * (2 / 3)) * 0.6), tier: "4x", sources: [mkSrc()],
+  } as import("../lib/pay.js").PayMenteeLine;
+
+  eq(effectiveLineTotal(line, DEFAULT_LINE_STATE), line.payout, "no override -> engine payout");
+  eq(effectiveLineTotal(line, DEFAULT_LINE_STATE, 0.5), round2(round2(425 * (2 / 3)) * 0.5), "split override reprices the line (engine earned x 50%)");
+  eq(effectiveLineTotal(line, { included: true, override: 100, note: null }, 0.5), 100, "a per-line $ override still beats the split override");
+  eq(effectiveLineTotal(line, { included: false, override: null, note: null }, 0.5), 0, "a line exclusion still zeroes it");
+  // Split override composes with line-item flips (recompute basis, then x split).
+  const drop: BuildLineState = { included: true, override: null, note: null, excludedInvoices: ["id:1"] };
+  eq(payoutAfterExclusions(line, drop, 0.5), 0, "override + whole-invoice drop -> $0");
+  const sm = summarizeBuild([line], new Map(), 0.5);
+  eq(sm.builtTotal, round2(round2(425 * (2 / 3)) * 0.5), "builtTotal honors the split override");
+  eq(sm.computedTotal, line.payout, "computedTotal stays the raw engine number");
+  // CSV: Split cell discloses both; effective payout uses the override.
+  const rows = payoutDetailCsvRows([line], new Map(), 0.5);
+  const cc = PAYOUT_DETAIL_CSV_COLUMNS;
+  const g = (row: (string | number)[], label: string) => row[cc.indexOf(label as (typeof cc)[number])];
+  eq(g(rows[0], "Split"), "50% (engine 60%)", "CSV Split cell discloses the override");
+  eq(g(rows[0], "Effective payout"), round2(round2(425 * (2 / 3)) * 0.5), "CSV effective payout uses the override");
+  // Stub: effective rate + disclosure flag; totals reprice.
+  const model = buildPayStubModel({
+    coachName: "H", ym: "2026-06", splitPct: 0.6, splitOverride: 0.5, status: "approved",
+    lines: [line], states: new Map(), generatedOn: "2026-07-20",
+  });
+  eq(model.splitPct, 0.5, "stub shows the effective rate");
+  eq(model.splitAdjusted, true, "stub flags the adjustment");
+  eq(model.totals.payout, round2(round2(425 * (2 / 3)) * 0.5), "stub total repriced");
+  eq(payStubHtml(model).includes("set by HJG for this month"), true, "stub HTML discloses the adjusted rate");
+}
+
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");
 {
   const mentees: FreedomMenteeInput[] = [

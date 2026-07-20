@@ -50,6 +50,7 @@ export function PayoutLineDetailModal({
   state,
   onClose,
   onChange,
+  splitOverride = null,
   readOnly = false,
 }: {
   line: PayMenteeLine;
@@ -61,6 +62,9 @@ export function PayoutLineDetailModal({
   // (no checkboxes). Called with the full next override arrays; the caller merges
   // them into the build's lineStates (so they save + reload with the build).
   onChange?: (patch: Pick<BuildLineState, "excludedInvoices" | "excludedLineItems" | "includedLineItems">) => void;
+  // Build-level Split % override (fraction) — replaces the engine's ramp split
+  // in the effective math shown here.
+  splitOverride?: number | null;
   readOnly?: boolean; // build approved/locked — show the selection but disable edits
 }) {
   const s = state ?? DEFAULT_LINE_STATE;
@@ -68,7 +72,7 @@ export function PayoutLineDetailModal({
   const exclLI = excludedLineItemSet(s);
   const inclLI = includedLineItemSet(s);
   const canEdit = !!onChange && !readOnly;
-  const eff = effectiveLineTotal(line, s);
+  const eff = effectiveLineTotal(line, s, splitOverride);
   const prevYm = (() => {
     const [y, m] = ym.split("-").map(Number);
     const o = y * 12 + (m - 1) - 1;
@@ -94,7 +98,7 @@ export function PayoutLineDetailModal({
   const adjThisMonth = sumRecogIncl(thisMonth);
   const adjRollover = sumRecogIncl(rollover);
   const adjEarned = round2(adjThisMonth + adjRollover);
-  const adjPayout = payoutAfterExclusions(line, s);
+  const adjPayout = payoutAfterExclusions(line, s, splitOverride);
   // Invoices whose effective basis differs from the engine's auto basis (i.e. the
   // reviewer changed something) — powers the "(engine $X before …)" note.
   const affectedCount = line.sources.filter(
@@ -400,7 +404,7 @@ export function PayoutLineDetailModal({
             <span>
               Earned <strong>{fmtUsd(adjEarned)}</strong>
             </span>
-            <span style={{ color: "var(--muted)" }}>× {fmtPct(line.splitPct)} =</span>
+            <span style={{ color: "var(--muted)" }}>× {fmtPct(splitOverride ?? line.splitPct)}{splitOverride != null && splitOverride !== line.splitPct ? " (set for this build)" : ""} =</span>
             <span>
               Payout <strong>{fmtUsd(adjPayout)}</strong>
             </span>
