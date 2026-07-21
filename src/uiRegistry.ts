@@ -44,6 +44,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "build.screen": 203,
   "build.review": 204,
   "pay.reconcile": 205,
+  "pay.hourly": 206, // Pay staff -> Hourly staff (timesheet pay) sub-mode (2026-07-21)
+  "pay.history": 207, // Pay staff -> Pay stub history archive sub-mode (2026-07-21)
 
   // 3xx — Raw data
   "raw.screen": 301,

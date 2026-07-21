@@ -4,6 +4,8 @@ import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimel
 import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
 import { BuildPayoutView } from "./BuildPayoutView";
+import { HourlyPayView } from "../components/HourlyPayView";
+import { PayHistoryView } from "../components/PayHistoryView";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 import { useChartTokens } from "../theme";
@@ -333,6 +335,8 @@ export function PayStaffView() {
   // Build payout is hosted INSIDE this tab (no separate top-nav tab). null = the
   // overview; an object = the builder, optionally pre-scoped to a mentor+month.
   const [build, setBuild] = useState<{ coachId: number | null; ym: string } | null>(null);
+  // Hourly staff (timesheets) + pay-stub History are further sub-modes of this tab.
+  const [sub, setSub] = useState<null | "hourly" | "history">(null);
   const ct = useChartTokens();
   const AXIS = ct.axis;
   const GRID = ct.grid;
@@ -394,6 +398,20 @@ export function PayStaffView() {
       </div>
     );
   }
+  if (sub === "hourly") {
+    return (
+      <div className="stack">
+        <HourlyPayView onBack={() => setSub(null)} />
+      </div>
+    );
+  }
+  if (sub === "history") {
+    return (
+      <div className="stack">
+        <PayHistoryView onBack={() => setSub(null)} />
+      </div>
+    );
+  }
 
   if (loading) return <div className="loading">Loading…</div>;
   if (error) return <div className="notice notice--warn">Failed to load payment data: {error}</div>;
@@ -446,20 +464,28 @@ export function PayStaffView() {
               invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
             </div>
           </div>
-          {!noInvoices && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                className="btn btn--sm btn--primary"
-                onClick={() => setBuild({ coachId: null, ym: "" })}
-                title="Review and sign off a mentor's payout line by line"
-              >
-                Build payout →
-              </button>
-              <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
-                Explore source data
-              </button>
-            </div>
-          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!noInvoices && (
+              <>
+                <button
+                  className="btn btn--sm btn--primary"
+                  onClick={() => setBuild({ coachId: null, ym: "" })}
+                  title="Review and sign off a mentor's payout line by line"
+                >
+                  Build payout →
+                </button>
+                <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
+                  Explore source data
+                </button>
+              </>
+            )}
+            <button className="btn btn--sm" onClick={() => setSub("hourly")} title="Timesheet-driven pay for staff the invoice engine doesn't cover">
+              Hourly staff →
+            </button>
+            <button className="btn btn--sm" onClick={() => setSub("history")} title="Review every pay stub that was printed, exactly as it was sent">
+              History →
+            </button>
+          </div>
         </div>
 
         {noInvoices && (

@@ -41,3 +41,6 @@ I want to be able to edit the Split % in the build payout screen 204
 
 --- 2026-07-21 11:20 ---
 I want the version at the top of the page to be readable. Like, v0.3.0 not v3fd6f02
+
+--- 2026-07-21 21:19 ---
+I want a way to enter details to pay staff that are not auto calculated. They send me time sheets and then I need to calculate their times. Build a feature into the pay staff module that allows me to 1) set their rate 2) enter their hours for the time period 3) enter notes for their paystub 4) log their payout amounts and 5) build a paystub for them. Also, separate feature in pay staff module: a history tab. I want to be able to load paystubs that were sent and review them in the past

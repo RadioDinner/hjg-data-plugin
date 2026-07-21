@@ -14,6 +14,7 @@ import {
   fetchPayoutBuilds,
   savePayoutBuild,
   deletePayoutBuild,
+  savePaystub,
   payoutBuildKey,
   type PayData,
   type PayMenteeLine,
@@ -279,7 +280,7 @@ export function BuildPayoutView({
   // watermark; approved => the final stub). Uses the CURRENT on-screen review
   // state — if it's unsaved, the stub says so, so a mentor can't be handed a
   // stub that silently differs from the saved build.
-  function printStub() {
+  async function printStub() {
     if (coach == null || !ym || !mentor || !lines.length) return;
     const model = buildPayStubModel({
       coachName: mentor.coachName,
@@ -299,10 +300,26 @@ export function BuildPayoutView({
       setFlash("Popup blocked — allow popups for this site to print the pay stub.");
       return;
     }
-    w.document.write(payStubHtml(model));
+    const html = payStubHtml(model);
+    w.document.write(html);
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 300);
+    // Archive the exact printed document to History (Pay staff -> History).
+    try {
+      await savePaystub(user?.id ?? "", {
+        kind: "mentor",
+        staffName: model.coachName,
+        coachId: coach,
+        periodMonth: ym,
+        status,
+        total: model.totals.payout,
+        html,
+      });
+      setFlash(`${locked ? "Pay stub" : "Review stub"} printed + archived to History.`);
+    } catch (e) {
+      setFlash(`Stub printed, but archiving failed: ${String(e)} — apply migration 9970_staff_hourly_pay.sql`);
+    }
   }
 
   function exportCsv() {

@@ -81,6 +81,7 @@ import {
 } from "../lib/payBuild.js";
 import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
 import { buildPayStubModel, payStubHtml } from "../lib/payStub.js";
+import { normalizeEntries, hoursTotal, hourlyTotal, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay.js";
 import {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
@@ -1425,6 +1426,46 @@ console.log("[13f] build-level Split % override (review layer + stub)");
   eq(model.splitAdjusted, true, "stub flags the adjustment");
   eq(model.totals.payout, round2(round2(425 * (2 / 3)) * 0.5), "stub total repriced");
   eq(payStubHtml(model).includes("set by HJG for this month"), true, "stub HTML discloses the adjusted rate");
+}
+
+console.log("[13g] hourly (timesheet) staff pay math + stub");
+{
+  const entries = [
+    { date: "2026-07-02", label: "Admin", hours: 3.5 },
+    { date: null, label: "JYF supervision", hours: 10 },
+    { date: "2026-07-09", label: "", hours: 0 }, // blank editor row -> dropped
+    { date: null, label: "Zero-hour noted line", hours: 0 }, // kept (has a label)
+  ];
+  const clean = normalizeEntries(entries);
+  eq(clean.length, 3, "blank rows dropped, noted zero-hour lines kept");
+  eq(hoursTotal(clean), 13.5, "hours total");
+  eq(hourlyTotal(clean, 22), 297, "13.5h x $22 = $297.00");
+  eq(hourlyTotal(clean, 22, 25), 322, "adjustment adds on top");
+  eq(hourlyTotal(clean, 22, -47), 250, "negative adjustment subtracts");
+  eq(hourlyTotal([], 22), 0, "empty sheet pays $0");
+  // jsonb parse defensiveness
+  eq(parseEntries('[{"date":"2026-07-02","label":"A","hours":"2.5"}]')[0].hours, 2.5, "string hours coerced");
+  eq(parseEntries("garbage").length, 0, "garbage json -> empty");
+  eq(parseEntries(null).length, 0, "null -> empty");
+  // stub model + html
+  const model = buildHourlyStubModel({
+    staffName: "Dave Troyer", ym: "2026-07", rate: 22, entries,
+    adjustment: 25, adjustmentNote: "July bonus", notes: "Thanks for covering the extra JYF calls.",
+    status: "draft", generatedOn: "2026-07-21",
+  });
+  eq(model.hours, 13.5, "model hours");
+  eq(model.base, 297, "model base = hours x rate");
+  eq(model.total, 322, "model total includes adjustment");
+  eq(model.monthLabel, "July 2026", "long month label");
+  const html = hourlyStubHtml(model);
+  eq(html.includes("REVIEW COPY"), true, "draft hourly stub watermarked/badged");
+  eq(html.includes("July bonus"), true, "adjustment note printed");
+  eq(html.includes("Dave Troyer"), true, "staff name printed");
+  eq(html.includes("<script"), false, "no scripts in the stub document");
+  const finalHtml = hourlyStubHtml(buildHourlyStubModel({ ...{
+    staffName: "Dave Troyer", ym: "2026-07", rate: 22, entries, generatedOn: "2026-07-21",
+  }, status: "approved" }));
+  eq(finalHtml.includes("APPROVED PAY STUB"), true, "approved hourly stub badged");
 }
 
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");

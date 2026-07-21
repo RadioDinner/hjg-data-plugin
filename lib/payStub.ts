@@ -236,6 +236,75 @@ const DISPO_TEXT: Record<StubItemDisposition, { label: string; cls: string }> = 
   "removed-by-review": { label: "removed by HJG review", cls: "warn" },
 };
 
+// Shared statement stylesheet — one visual language for every stub kind
+// (mentor engine stubs + hourly timesheet stubs). Olive + cream, print-ready.
+export const STUB_CSS = `
+  :root { --olive:#77855c; --olive-dk:#5c6a45; --cream:#f7f3e8; --ink:#2f3226; --mut:#7a7d6f; --line:#dcd7c4; --good:#3c7a44; --warn:#a8722a; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Georgia, 'Times New Roman', serif; background:var(--cream); color:var(--ink); font-size:13px; }
+  .page { max-width: 7.6in; margin: 0 auto; padding: 28px 34px; position:relative; }
+  .watermark { position:fixed; top:38%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); font-size:110px; font-weight:700; color:rgba(168,114,42,.10); letter-spacing:8px; text-align:center; line-height:1.05; pointer-events:none; z-index:0; }
+  .topbar { height:10px; background:var(--olive); margin:-28px -34px 22px; }
+  .kicker { font-size:10px; letter-spacing:2.5px; color:var(--olive-dk); font-weight:700; text-transform:uppercase; }
+  h1 { font-size:34px; font-weight:400; margin:2px 0 0; }
+  .sub { color:var(--mut); font-size:12px; margin-top:2px; }
+  .badge { display:inline-block; font-family:Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:3px; }
+  .badge--ok { background:#e5eede; color:var(--good); border:1px solid #b9cba8; }
+  .badge--draft { background:#f5e8d2; color:var(--warn); border:1px solid #dcc294; }
+  .head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+  .cards { display:flex; gap:14px; margin:18px 0 20px; }
+  .card { border:1px solid var(--line); background:#fbf9f1; border-radius:6px; padding:12px 16px; flex:1; }
+  .card .lab { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--mut); font-weight:700; }
+  .card .val { font-size:22px; margin-top:4px; }
+  .card--hero { background:var(--olive); color:#fff; border-color:var(--olive-dk); }
+  .card--hero .lab { color:#e8ecdd; }
+  .card--hero .val { font-size:26px; font-weight:700; }
+  .card--hero .sumrow { color:#e8ecdd; }
+  .sumrow { display:flex; justify-content:space-between; font-size:12px; color:var(--mut); padding:2px 2px; }
+  table { width:100%; border-collapse:collapse; margin-top:6px; background:#fff; }
+  th { background:var(--olive); color:#fff; font-family:Arial,sans-serif; font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:7px 9px; text-align:right; }
+  th.l, td.l { text-align:left; }
+  td { padding:7px 9px; border-bottom:1px solid var(--line); text-align:right; font-size:12.5px; }
+  td.n { font-variant-numeric: tabular-nums; }
+  td.b { font-weight:700; }
+  tr:nth-child(even) td { background:#faf8ef; }
+  .row-x td { color:var(--mut); text-decoration:line-through; }
+  tfoot td { background:#eef0e3 !important; font-weight:700; border-top:2px solid var(--olive); }
+  .tag { font-family:Arial,sans-serif; font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 6px; border-radius:8px; vertical-align:1px; }
+  .tag--good { background:#e5eede; color:var(--good); }
+  .tag--warn { background:#f5e8d2; color:var(--warn); }
+  .note { border-left:3px solid var(--olive); background:#fbf9f1; padding:8px 12px; margin-top:14px; font-size:12px; }
+  .fine { color:var(--mut); font-size:10.5px; margin-top:16px; line-height:1.5; border-top:1px solid var(--line); padding-top:10px; }
+  .break { page-break-before: always; }
+  h2 { font-size:16px; font-weight:700; letter-spacing:.5px; margin:4px 0 10px; }
+  .mentee { border:1px solid var(--line); border-radius:6px; background:#fff; padding:12px 14px; margin-bottom:12px; page-break-inside:avoid; }
+  .mentee__head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:8px; }
+  .mentee h3 { font-size:14.5px; }
+  .mentee__math { font-size:11.5px; color:var(--mut); }
+  .inv { padding:6px 0 4px; border-bottom:1px dashed var(--line); }
+  .inv:last-child { border-bottom:none; }
+  .inv--x { opacity:.62; }
+  .inv__head { font-size:12px; margin-bottom:3px; }
+  .inv__nums { float:right; font-size:11.5px; }
+  .item { font-size:11.5px; padding:1px 0 1px 16px; color:var(--ink); }
+  .item__amt { display:inline-block; min-width:64px; font-variant-numeric:tabular-nums; }
+  .item__tag { font-family:Arial,sans-serif; font-size:9px; font-weight:700; padding:1px 6px; border-radius:8px; margin-left:6px; }
+  .item__tag--ok { background:#eef0e3; color:var(--olive-dk); }
+  .item__tag--good { background:#e5eede; color:var(--good); }
+  .item__tag--warn { background:#f5e8d2; color:var(--warn); }
+  .item__tag--mut { background:#ececec; color:#777; }
+  .item--mut, .item--warn.item--x { color:var(--mut); }
+  .was { color:var(--mut); font-weight:400; font-size:10.5px; }
+  .callout { border-left:3px solid var(--warn); background:#fdf7ec; padding:6px 10px; margin:6px 0; font-size:11.5px; }
+  .mut { color:var(--mut); }
+  @media print {
+    body { background:#fff; }
+    .page { max-width:none; padding:0.35in 0.5in; }
+    .topbar { margin:-0.35in -0.5in 18px; }
+    .noprint { display:none; }
+  }
+`;
+
 export function payStubHtml(m: PayStubModel): string {
   const badge = m.approved
     ? `<span class="badge badge--ok">APPROVED PAY STUB</span>`
@@ -301,72 +370,7 @@ export function payStubHtml(m: PayStubModel): string {
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><title>${esc(m.coachName)} — ${esc(m.monthLabel)} pay stub</title>
-<style>
-  :root { --olive:#77855c; --olive-dk:#5c6a45; --cream:#f7f3e8; --ink:#2f3226; --mut:#7a7d6f; --line:#dcd7c4; --good:#3c7a44; --warn:#a8722a; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Georgia, 'Times New Roman', serif; background:var(--cream); color:var(--ink); font-size:13px; }
-  .page { max-width: 7.6in; margin: 0 auto; padding: 28px 34px; position:relative; }
-  .watermark { position:fixed; top:38%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); font-size:110px; font-weight:700; color:rgba(168,114,42,.10); letter-spacing:8px; text-align:center; line-height:1.05; pointer-events:none; z-index:0; }
-  .topbar { height:10px; background:var(--olive); margin:-28px -34px 22px; }
-  .kicker { font-size:10px; letter-spacing:2.5px; color:var(--olive-dk); font-weight:700; text-transform:uppercase; }
-  h1 { font-size:34px; font-weight:400; margin:2px 0 0; }
-  .sub { color:var(--mut); font-size:12px; margin-top:2px; }
-  .badge { display:inline-block; font-family:Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:3px; }
-  .badge--ok { background:#e5eede; color:var(--good); border:1px solid #b9cba8; }
-  .badge--draft { background:#f5e8d2; color:var(--warn); border:1px solid #dcc294; }
-  .head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-  .cards { display:flex; gap:14px; margin:18px 0 20px; }
-  .card { border:1px solid var(--line); background:#fbf9f1; border-radius:6px; padding:12px 16px; flex:1; }
-  .card .lab { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--mut); font-weight:700; }
-  .card .val { font-size:22px; margin-top:4px; }
-  .card--hero { background:var(--olive); color:#fff; border-color:var(--olive-dk); }
-  .card--hero .lab { color:#e8ecdd; }
-  .card--hero .val { font-size:26px; font-weight:700; }
-  .card--hero .sumrow { color:#e8ecdd; }
-  .sumrow { display:flex; justify-content:space-between; font-size:12px; color:var(--mut); padding:2px 2px; }
-  table { width:100%; border-collapse:collapse; margin-top:6px; background:#fff; }
-  th { background:var(--olive); color:#fff; font-family:Arial,sans-serif; font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:7px 9px; text-align:right; }
-  th.l, td.l { text-align:left; }
-  td { padding:7px 9px; border-bottom:1px solid var(--line); text-align:right; font-size:12.5px; }
-  td.n { font-variant-numeric: tabular-nums; }
-  td.b { font-weight:700; }
-  tr:nth-child(even) td { background:#faf8ef; }
-  .row-x td { color:var(--mut); text-decoration:line-through; }
-  tfoot td { background:#eef0e3 !important; font-weight:700; border-top:2px solid var(--olive); }
-  .tag { font-family:Arial,sans-serif; font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 6px; border-radius:8px; vertical-align:1px; }
-  .tag--good { background:#e5eede; color:var(--good); }
-  .tag--warn { background:#f5e8d2; color:var(--warn); }
-  .note { border-left:3px solid var(--olive); background:#fbf9f1; padding:8px 12px; margin-top:14px; font-size:12px; }
-  .fine { color:var(--mut); font-size:10.5px; margin-top:16px; line-height:1.5; border-top:1px solid var(--line); padding-top:10px; }
-  .break { page-break-before: always; }
-  h2 { font-size:16px; font-weight:700; letter-spacing:.5px; margin:4px 0 10px; }
-  .mentee { border:1px solid var(--line); border-radius:6px; background:#fff; padding:12px 14px; margin-bottom:12px; page-break-inside:avoid; }
-  .mentee__head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:8px; }
-  .mentee h3 { font-size:14.5px; }
-  .mentee__math { font-size:11.5px; color:var(--mut); }
-  .inv { padding:6px 0 4px; border-bottom:1px dashed var(--line); }
-  .inv:last-child { border-bottom:none; }
-  .inv--x { opacity:.62; }
-  .inv__head { font-size:12px; margin-bottom:3px; }
-  .inv__nums { float:right; font-size:11.5px; }
-  .item { font-size:11.5px; padding:1px 0 1px 16px; color:var(--ink); }
-  .item__amt { display:inline-block; min-width:64px; font-variant-numeric:tabular-nums; }
-  .item__tag { font-family:Arial,sans-serif; font-size:9px; font-weight:700; padding:1px 6px; border-radius:8px; margin-left:6px; }
-  .item__tag--ok { background:#eef0e3; color:var(--olive-dk); }
-  .item__tag--good { background:#e5eede; color:var(--good); }
-  .item__tag--warn { background:#f5e8d2; color:var(--warn); }
-  .item__tag--mut { background:#ececec; color:#777; }
-  .item--mut, .item--warn.item--x { color:var(--mut); }
-  .was { color:var(--mut); font-weight:400; font-size:10.5px; }
-  .callout { border-left:3px solid var(--warn); background:#fdf7ec; padding:6px 10px; margin:6px 0; font-size:11.5px; }
-  .mut { color:var(--mut); }
-  @media print {
-    body { background:#fff; }
-    .page { max-width:none; padding:0.35in 0.5in; }
-    .topbar { margin:-0.35in -0.5in 18px; }
-    .noprint { display:none; }
-  }
-</style></head>
+<style>${STUB_CSS}</style></head>
 <body>${watermark}<div class="page">
   <div class="topbar"></div>
   <div class="head">

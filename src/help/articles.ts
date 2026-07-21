@@ -162,6 +162,31 @@ Pure math lives in \`lib/compare.ts\`.`,
 - This **never changes the engine's numbers** — overrides and exclusions live only in the review record (\`payout_builds\`). It's read-only toward CoachAccountable; the engine stays the source of truth.`,
   },
 
+  "pay.hourly": {
+    title: "Hourly staff — timesheet pay",
+    body: `Pay for staff the invoice engine doesn't cover: they send a **time sheet**, you enter it here, and the app does the math and prints the stub.
+
+### The flow
+1. **Add the person** (name + hourly rate). The rate is their standing rate; editing it here updates it for future months, while saved months keep the rate they were saved with.
+2. Pick the **period month** and type in the timesheet lines — date, what they worked on, hours. The amount per line and the running total (hours × rate) update live.
+3. Add an optional **adjustment** ($ + or −, with a reason) and a **pay stub note**.
+4. **Save draft** while checking; **Approve** to lock it (the logged payout amount is stored with the build).
+5. **Print** — a draft prints a watermarked *REVIEW COPY*, an approved build prints the final *PAY STUB*. Every print is **archived to History** automatically.
+
+Needs migration \`9970_staff_hourly_pay.sql\`.`,
+  },
+
+  "pay.history": {
+    title: "Pay stub history",
+    body: `The archive of **every printed pay stub** — mentor engine stubs and hourly timesheet stubs.
+
+- Each stub is stored as the **exact HTML document that was generated**, so opening one shows precisely what was sent — even if invoices re-synced or reviews changed since.
+- **view** opens the stub in a new window (print from there to re-send); **delete** removes an archived stub (only ones you archived).
+- Stubs are archived automatically whenever you print from **Build payout** or **Hourly staff** — review copies and approved stubs both, labeled with the status at print time.
+
+Needs migration \`9970_staff_hourly_pay.sql\`.`,
+  },
+
   "pay.reconcile": {
     title: "Mentor payout reconciliation",
     body: `Pick a **mentor** and a **target month** to check any past month's payout and prove it's complete.

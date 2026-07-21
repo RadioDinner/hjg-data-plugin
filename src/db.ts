@@ -36,6 +36,12 @@ export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDe
 import { buildPayStubModel, payStubHtml, monthLabelLong } from "../lib/payStub";
 import type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition } from "../lib/payStub";
 export { buildPayStubModel, payStubHtml, monthLabelLong };
+
+// Hourly (timesheet) staff pay — pure math + printable stub (lib/hourlyPay).
+import { normalizeEntries, hoursTotal, hourlyTotal, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay";
+import type { HourlyEntry, HourlyStubModel, HourlyStubInput } from "../lib/hourlyPay";
+export { normalizeEntries, hoursTotal, hourlyTotal, parseEntries, buildHourlyStubModel, hourlyStubHtml };
+export type { HourlyEntry, HourlyStubModel, HourlyStubInput };
 export type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition };
 
 // Payment groups (engagement templates × staff groups; Company options §451).
@@ -1639,7 +1645,10 @@ export const RAW_TABLES = [
   "manual_metrics",
   "mentees",
   "payout_builds",
+  "paystubs",
   "program_hours",
+  "staff_pay_builds",
+  "staff_pay_profiles",
   "sync_runs",
 ] as const;
 
@@ -1773,4 +1782,208 @@ export async function fetchPayGroupsConfig(): Promise<PayGroupsConfig> {
 
 export async function savePayGroupsConfig(cfg: PayGroupsConfig): Promise<void> {
   await setCompanyOption(PAY_GROUPS_KEY, serializePayGroupsConfig(cfg));
+}
+
+// --- Hourly staff pay (timesheets) + paystub history (migration 9970) -------
+// staff_pay_profiles: who gets paid hourly and at what rate. staff_pay_builds:
+// one timesheet build per profile+month. paystubs: the archive of every printed
+// stub (mentor + hourly) as the exact HTML document that was generated.
+
+export interface StaffPayProfile {
+  id: string;
+  name: string;
+  coachId: number | null;
+  hourlyRate: number;
+  active: boolean;
+  notes: string | null;
+}
+
+export async function fetchStaffPayProfiles(): Promise<StaffPayProfile[]> {
+  const { data, error } = await supabase
+    .from("staff_pay_profiles")
+    .select("id,name,coach_id,hourly_rate,active,notes")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: string; name: string | null; coach_id: number | null; hourly_rate: number | string | null; active: boolean | null; notes: string | null }[]).map((r) => ({
+    id: r.id,
+    name: r.name ?? "",
+    coachId: r.coach_id,
+    hourlyRate: Number(r.hourly_rate) || 0,
+    active: r.active ?? true,
+    notes: r.notes,
+  }));
+}
+
+export async function createStaffPayProfile(createdBy: string, p: { name: string; hourlyRate: number; coachId?: number | null }): Promise<void> {
+  const { error } = await supabase.from("staff_pay_profiles").insert({
+    name: p.name,
+    hourly_rate: p.hourlyRate,
+    coach_id: p.coachId ?? null,
+    created_by: createdBy || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateStaffPayProfile(id: string, patch: { name?: string; hourlyRate?: number; active?: boolean; notes?: string | null }): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (patch.name != null) row.name = patch.name;
+  if (patch.hourlyRate != null) row.hourly_rate = patch.hourlyRate;
+  if (patch.active != null) row.active = patch.active;
+  if ("notes" in patch) row.notes = patch.notes;
+  const { error } = await supabase.from("staff_pay_profiles").update(row).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export interface StaffPayBuildRecord {
+  profileId: string;
+  periodMonth: string; // 'YYYY-MM'
+  rate: number;
+  entries: HourlyEntry[];
+  hoursTotal: number;
+  adjustment: number;
+  adjustmentNote: string | null;
+  notes: string | null;
+  total: number;
+  status: BuildStatus;
+  updatedAt: string | null;
+}
+
+export function staffPayBuildKey(profileId: string, periodMonth: string): string {
+  return `${profileId}|${periodMonth}`;
+}
+
+export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRecord>> {
+  const { data, error } = await supabase
+    .from("staff_pay_builds")
+    .select("profile_id,period_month,rate,entries,hours_total,adjustment,adjustment_note,notes,total,status,updated_at");
+  if (error) throw new Error(error.message);
+  const out = new Map<string, StaffPayBuildRecord>();
+  for (const r of (data ?? []) as {
+    profile_id: string;
+    period_month: string;
+    rate: number | string | null;
+    entries: unknown;
+    hours_total: number | string | null;
+    adjustment: number | string | null;
+    adjustment_note: string | null;
+    notes: string | null;
+    total: number | string | null;
+    status: BuildStatus;
+    updated_at: string | null;
+  }[]) {
+    out.set(staffPayBuildKey(r.profile_id, r.period_month), {
+      profileId: r.profile_id,
+      periodMonth: r.period_month,
+      rate: Number(r.rate) || 0,
+      entries: parseEntries(r.entries),
+      hoursTotal: Number(r.hours_total) || 0,
+      adjustment: Number(r.adjustment) || 0,
+      adjustmentNote: r.adjustment_note,
+      notes: r.notes,
+      total: Number(r.total) || 0,
+      status: r.status,
+      updatedAt: r.updated_at,
+    });
+  }
+  return out;
+}
+
+export async function saveStaffPayBuild(
+  createdBy: string,
+  rec: {
+    profileId: string;
+    periodMonth: string;
+    rate: number;
+    entries: HourlyEntry[];
+    adjustment: number;
+    adjustmentNote: string | null;
+    notes: string | null;
+    status: BuildStatus;
+  }
+): Promise<void> {
+  const entries = normalizeEntries(rec.entries);
+  const { error } = await supabase.from("staff_pay_builds").upsert(
+    {
+      profile_id: rec.profileId,
+      period_month: rec.periodMonth,
+      rate: rec.rate,
+      entries,
+      hours_total: hoursTotal(entries),
+      adjustment: rec.adjustment,
+      adjustment_note: rec.adjustmentNote,
+      notes: rec.notes,
+      total: hourlyTotal(entries, rec.rate, rec.adjustment),
+      status: rec.status,
+      created_by: createdBy || null,
+    },
+    { onConflict: "profile_id,period_month" }
+  );
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteStaffPayBuild(profileId: string, periodMonth: string): Promise<void> {
+  const { error } = await supabase.from("staff_pay_builds").delete().eq("profile_id", profileId).eq("period_month", periodMonth);
+  if (error) throw new Error(error.message);
+}
+
+// --- Paystub history archive ---
+export interface PaystubListItem {
+  id: string;
+  kind: "mentor" | "hourly";
+  staffName: string;
+  coachId: number | null;
+  periodMonth: string;
+  status: BuildStatus;
+  total: number;
+  createdAt: string | null;
+}
+
+// Archive a printed stub — the exact document, so History reviews what was
+// actually sent, not a re-derivation from data that may have changed since.
+export async function savePaystub(
+  createdBy: string,
+  rec: { kind: "mentor" | "hourly"; staffName: string; coachId?: number | null; periodMonth: string; status: BuildStatus; total: number; html: string }
+): Promise<void> {
+  const { error } = await supabase.from("paystubs").insert({
+    kind: rec.kind,
+    staff_name: rec.staffName,
+    coach_id: rec.coachId ?? null,
+    period_month: rec.periodMonth,
+    status: rec.status,
+    total: rec.total,
+    html: rec.html,
+    created_by: createdBy || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// The listing intentionally omits the (large) html column.
+export async function fetchPaystubs(): Promise<PaystubListItem[]> {
+  const { data, error } = await supabase
+    .from("paystubs")
+    .select("id,kind,staff_name,coach_id,period_month,status,total,created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: string; kind: "mentor" | "hourly"; staff_name: string; coach_id: number | null; period_month: string; status: BuildStatus; total: number | string | null; created_at: string | null }[]).map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    staffName: r.staff_name,
+    coachId: r.coach_id,
+    periodMonth: r.period_month,
+    status: r.status,
+    total: Number(r.total) || 0,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function fetchPaystubHtml(id: string): Promise<string> {
+  const { data, error } = await supabase.from("paystubs").select("html").eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return String((data as { html?: unknown } | null)?.html ?? "");
+}
+
+export async function deletePaystub(id: string): Promise<void> {
+  const { error } = await supabase.from("paystubs").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }
