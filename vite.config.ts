@@ -1,11 +1,21 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
-// Build identity — lets the app show WHICH commit is running (topbar version
-// chip) and detect when a newer build has been deployed. Prefer Vercel's env
-// (present on production builds), fall back to git for local builds, then "dev".
-function resolveVersion(): string {
+// Build identity — the topbar chip shows the human-readable SEMVER from
+// package.json (bumped on every shipped change); the git commit rides along in
+// the tooltip and drives update detection (any new deploy = new commit, even if
+// a bump was forgotten). Commit: prefer Vercel's env (production builds), fall
+// back to git for local builds, then "dev".
+const APP_SEMVER = (() => {
+  try {
+    return String(JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version || "0.0.0");
+  } catch {
+    return "0.0.0";
+  }
+})();
+function resolveCommit(): string {
   const sha = process.env.VERCEL_GIT_COMMIT_SHA;
   if (sha) return sha.slice(0, 7);
   try {
@@ -14,11 +24,11 @@ function resolveVersion(): string {
     return "dev";
   }
 }
-const APP_VERSION = resolveVersion();
+const APP_VERSION = resolveCommit();
 const BUILD_AT = new Date().toISOString();
 
 // Emit /version.json alongside the bundle. The deployed file always describes
-// the LATEST build; the running app compares it to its own baked-in version and
+// the LATEST build; the running app compares its baked-in commit to it and
 // offers a refresh when they differ (real static files win over the SPA rewrite,
 // same as pay-map.html).
 function versionJson(): Plugin {
@@ -28,7 +38,7 @@ function versionJson(): Plugin {
       this.emitFile({
         type: "asset",
         fileName: "version.json",
-        source: JSON.stringify({ version: APP_VERSION, builtAt: BUILD_AT }),
+        source: JSON.stringify({ version: APP_SEMVER, commit: APP_VERSION, builtAt: BUILD_AT }),
       });
     },
   };
@@ -40,6 +50,7 @@ function versionJson(): Plugin {
 export default defineConfig({
   plugins: [react(), versionJson()],
   define: {
+    __APP_SEMVER__: JSON.stringify(APP_SEMVER),
     __APP_VERSION__: JSON.stringify(APP_VERSION),
     __BUILD_AT__: JSON.stringify(BUILD_AT),
   },

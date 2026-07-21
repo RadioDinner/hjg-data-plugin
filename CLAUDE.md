@@ -48,3 +48,10 @@ and policies.)
   a possible future direction, but it's a deliberate architectural shift (see the
   webhooks-vs-API notes) — don't bolt it on casually.
 - A C# re-implementation is a separate learning track — see `CSHARP_PORT.md`.
+
+## Versioning (topbar chip)
+The topbar shows `v<package.json version>` (e.g. `v0.3.0`); the git commit is
+in the tooltip and drives the "update available" refresh pill. **Bump
+`package.json` `version` with every push to `main` that changes the app** —
+minor (0.X.0) for features, patch (0.0.X) for fixes — and tell the user the
+new version so they can match it against the chip.

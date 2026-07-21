@@ -38,3 +38,6 @@ Can you add a version number to the top of the data plugin screen? Or somewhere?
 
 --- 2026-07-20 17:04 ---
 I want to be able to edit the Split % in the build payout screen 204
+
+--- 2026-07-21 11:20 ---
+I want the version at the top of the page to be readable. Like, v0.3.0 not v3fd6f02
