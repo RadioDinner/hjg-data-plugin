@@ -396,7 +396,7 @@ export function payStubHtml(m: PayStubModel): string {
   </div>
 
   <table>
-    <thead><tr><th class="l">Mentee</th><th>Plan</th><th>This month</th><th>Rolled in</th><th>Earned</th><th>Payout</th></tr></thead>
+    <thead><tr><th class="l">Mentee</th><th>Engagement rate</th><th>This month</th><th>Rolled in</th><th>Earned</th><th>Payout</th></tr></thead>
     <tbody>${summaryRows}</tbody>
     <tfoot><tr><td class="l">TOTAL</td><td></td><td class="n">${usd(round2(m.rows.filter((r) => !r.excluded).reduce((t, r) => t + r.thisMonth, 0)))}</td><td class="n">${usd(round2(m.rows.filter((r) => !r.excluded).reduce((t, r) => t + r.rolledIn, 0)))}</td><td class="n">${usd(m.totals.earned)}</td><td class="n">${usd(m.totals.payout)}</td></tr></tfoot>
   </table>

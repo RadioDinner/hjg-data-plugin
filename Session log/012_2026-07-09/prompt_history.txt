@@ -18,3 +18,6 @@ merge it straight to main
 
 --- 2026-07-09 ---
 I committed all the migrations, write the hand off, commit that and everything else to main and wrap the session
+
+--- 2026-07-09 (post-wrap follow-up; main had advanced through sessions 013/014) ---
+On the paystubs, I don't want the column to be named plan, I want it to be named "Engagement rate"
