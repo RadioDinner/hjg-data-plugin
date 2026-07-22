@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth, signOut } from "./auth";
 import { useTheme } from "./theme";
 import { Login } from "./components/Login";
 import { MetricsView } from "./views/MetricsView";
 import { DiscoveryView } from "./views/DiscoveryView";
 import { MenteesView } from "./views/MenteesView";
+import { UpdateMenteeView } from "./views/UpdateMenteeView";
 import { PayStaffView } from "./views/PayStaffView";
+import { TimeClockView } from "./views/TimeClockView";
+import { FinancialEventView } from "./views/FinancialEventView";
 import { RawDataView } from "./views/RawDataView";
 import { MarginsView } from "./views/MarginsView";
 import { MapsView } from "./views/MapsView";
@@ -13,25 +16,44 @@ import { AdminView } from "./views/AdminView";
 import { CompanyOptionsView } from "./views/CompanyOptionsView";
 import { SectionId } from "./components/SectionId";
 import { VersionBadge } from "./components/VersionBadge";
+import { NotificationsBell } from "./components/NotificationsBell";
+import { APP_TABS, resolveAllowedTabs, fetchMyAppUser } from "./db";
 
-type Tab = "metrics" | "discovery" | "mentees" | "paystaff" | "margins" | "raw" | "maps" | "admin" | "options";
-
-const TABS: { key: Tab; label: string; sectionId: string }[] = [
-  { key: "metrics", label: "Metrics", sectionId: "metrics.screen" },
-  { key: "discovery", label: "Discovery", sectionId: "discovery.screen" },
-  { key: "mentees", label: "Mentees", sectionId: "mentees.screen" },
-  { key: "paystaff", label: "Pay staff", sectionId: "pay.screen" },
-  { key: "margins", label: "Margins", sectionId: "margins.screen" },
-  { key: "raw", label: "Raw data", sectionId: "raw.screen" },
-  { key: "maps", label: "Maps", sectionId: "maps.screen" },
-  { key: "admin", label: "Admin", sectionId: "admin.screen" },
-  { key: "options", label: "Company options", sectionId: "options.screen" },
-];
+// The tab list lives in lib/permissions.ts (APP_TABS) — the same list the
+// User-permissions card (§405) offers as checkboxes, so the nav and the
+// permission grid can never drift apart.
 
 export function App() {
   const { user, loading } = useAuth();
   const { theme, toggle } = useTheme();
-  const [tab, setTab] = useState<Tab>("metrics");
+  const [tab, setTab] = useState<string>("metrics");
+  // Tabs the signed-in user may see. null = still resolving — show everything
+  // (the no-row default) until the app_users lookup lands, then snap.
+  const [allowed, setAllowed] = useState<Set<string> | null>(null);
+  // Bumped after actions that create a notification (e.g. a financial-event
+  // report) so the bell refreshes immediately instead of on the next poll.
+  const [bellRefresh, setBellRefresh] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setAllowed(null);
+      return;
+    }
+    let live = true;
+    fetchMyAppUser(user.email)
+      .then((rec) => live && setAllowed(resolveAllowedTabs(rec)))
+      .catch(() => live && setAllowed(resolveAllowedTabs(null)));
+    return () => {
+      live = false;
+    };
+  }, [user]);
+
+  const tabs = useMemo(() => APP_TABS.filter((t) => !allowed || allowed.has(t.key)), [allowed]);
+
+  // If the active tab just got filtered away, land on the first visible one.
+  useEffect(() => {
+    if (allowed && !allowed.has(tab) && tabs.length) setTab(tabs[0].key);
+  }, [allowed, tab, tabs]);
 
   if (loading) return <div className="loading">Loading…</div>;
   if (!user) return <Login />;
@@ -46,6 +68,7 @@ export function App() {
         <div className="topbar__controls">
           <VersionBadge />
           <span className="topbar__user">{user.email}</span>
+          <NotificationsBell refreshKey={bellRefresh} onNavigate={(k) => setTab(k)} />
           <button
             className="theme-toggle"
             onClick={toggle}
@@ -61,7 +84,7 @@ export function App() {
       </header>
 
       <nav className="tabs">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             className={`tab ${tab === t.key ? "tab--active" : ""}`}
@@ -73,15 +96,30 @@ export function App() {
       </nav>
 
       <div className="view">
-        {tab === "metrics" && <MetricsView />}
-        {tab === "discovery" && <DiscoveryView />}
-        {tab === "mentees" && <MenteesView />}
-        {tab === "paystaff" && <PayStaffView />}
-        {tab === "margins" && <MarginsView />}
-        {tab === "raw" && <RawDataView />}
-        {tab === "maps" && <MapsView />}
-        {tab === "admin" && <AdminView />}
-        {tab === "options" && <CompanyOptionsView />}
+        {tabs.length === 0 ? (
+          <div className="card">
+            <h2>No tabs assigned</h2>
+            <p className="muted">
+              Your account ({user.email}) has no tabs assigned yet. Ask an admin to grant access under{" "}
+              <strong>Admin → User permissions</strong>.
+            </p>
+          </div>
+        ) : (
+          <>
+            {tab === "metrics" && <MetricsView />}
+            {tab === "discovery" && <DiscoveryView />}
+            {tab === "mentees" && <MenteesView />}
+            {tab === "update" && <UpdateMenteeView />}
+            {tab === "paystaff" && <PayStaffView />}
+            {tab === "timeclock" && <TimeClockView />}
+            {tab === "finevent" && <FinancialEventView onSubmitted={() => setBellRefresh((k) => k + 1)} />}
+            {tab === "margins" && <MarginsView />}
+            {tab === "raw" && <RawDataView />}
+            {tab === "maps" && <MapsView />}
+            {tab === "admin" && <AdminView />}
+            {tab === "options" && <CompanyOptionsView />}
+          </>
+        )}
       </div>
 
       <footer className="footer">Read-only toward CoachAccountable · data mirrored into Supabase</footer>

@@ -10,6 +10,8 @@ import {
   STAGE_LABELS,
   parseTrendWindow,
   serializeTrendWindow,
+  parseTransitionOptions,
+  serializeTransitionOptions,
   type StageColorConfig,
   type TrendUnit,
 } from "../db";
@@ -105,6 +107,8 @@ export function CompanyOptionsView() {
                       <StageColorsControl value={valueOf(o)} onSave={(v) => change(o, v)} />
                     ) : o.type === "duration" ? (
                       <DurationControl value={valueOf(o)} onSave={(v) => change(o, v)} disabled={savingKey === o.key} />
+                    ) : o.type === "list" ? (
+                      <ListControl value={valueOf(o)} onSave={(v) => change(o, v)} disabled={savingKey === o.key} />
                     ) : o.type === "action" ? (
                       <button
                         type="button"
@@ -141,6 +145,55 @@ export function CompanyOptionsView() {
     </section>
     <PayGroupsCard />
     </>
+  );
+}
+
+// An editable list of names, one per line (e.g. the "Transition to…" options).
+// Stores a JSON string (array); parses defensively and saves on blur so
+// mid-typing never spams the DB.
+function ListControl({
+  value,
+  onSave,
+  disabled,
+}: {
+  value: string;
+  onSave: (serialized: string) => void;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(() => parseTransitionOptions(value).join("\n"));
+  const lastValueRef = useRef(value);
+  // Re-seed from the stored value on external change (ignore our own save echo).
+  useEffect(() => {
+    if (value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      setDraft(parseTransitionOptions(value).join("\n"));
+    }
+  }, [value]);
+
+  function commit() {
+    const items = draft
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const serialized = serializeTransitionOptions(items);
+    lastValueRef.current = serialized;
+    setDraft(parseTransitionOptions(serialized).join("\n"));
+    if (serialized !== value) onSave(serialized);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 240 }}>
+      <textarea
+        rows={Math.max(4, draft.split("\n").length)}
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        style={{ resize: "vertical", background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, color: "var(--text)", padding: "6px 8px", fontSize: 13 }}
+        aria-label="List options, one per line"
+      />
+      <span className="muted" style={{ fontSize: 11 }}>One option per line · saves when you click away</span>
+    </div>
   );
 }
 

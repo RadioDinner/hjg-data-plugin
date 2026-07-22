@@ -30,7 +30,10 @@ function currentYm(): string {
 }
 const fmtHours = (n: number | null) => (n == null ? "—" : `${Math.round(n * 10) / 10} h`);
 
-// One editable staff-hours cell: local draft, saves on blur if changed.
+// One editable staff-hours cell: local draft, saves on blur if changed. A save
+// that fails REVERTS the cell (so a value that didn't persist never keeps
+// looking entered — that was the "my numbers don't save" trap) and the parent
+// shows the error; a successful save flashes ✓.
 function StaffHoursCell({
   value,
   onSave,
@@ -40,11 +43,18 @@ function StaffHoursCell({
 }) {
   const [draft, setDraft] = useState(value == null ? "" : String(value));
   const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState(false);
   useEffect(() => {
     setDraft(value == null ? "" : String(value));
   }, [value]);
 
-  async function commit() {
+  async function commit(el?: HTMLInputElement) {
+    // type=number inputs report non-numeric text as an EMPTY value with
+    // validity.badInput — treat that as a rejected edit, not a "clear".
+    if (el?.validity.badInput) {
+      setDraft(value == null ? "" : String(value));
+      return;
+    }
     const trimmed = draft.trim();
     const parsed = trimmed === "" ? null : Number(trimmed);
     if (parsed != null && (Number.isNaN(parsed) || parsed < 0)) {
@@ -55,26 +65,34 @@ function StaffHoursCell({
     setSaving(true);
     try {
       await onSave(parsed);
+      setFlash(true);
+      window.setTimeout(() => setFlash(false), 1500);
+    } catch {
+      setDraft(value == null ? "" : String(value)); // didn't persist — show that
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <input
-      type="number"
-      min={0}
-      step="any"
-      className="margins__hours-input"
-      value={draft}
-      placeholder="—"
-      disabled={saving}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-      }}
-    />
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <input
+        type="number"
+        min={0}
+        step="any"
+        className="margins__hours-input"
+        value={draft}
+        placeholder="—"
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={(e) => commit(e.currentTarget)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+      />
+      {saving && <span className="muted" style={{ fontSize: 11 }}>…</span>}
+      {flash && !saving && <span style={{ fontSize: 11, color: "var(--ok-text, #16a34a)" }}>✓</span>}
+    </span>
   );
 }
 
@@ -90,6 +108,9 @@ export function MarginsView() {
   const [staffRows, setStaffRows] = useState<ProgramHoursRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Staff-hours storage problem (table missing / RLS) — shown prominently so a
+  // broken save path never fails silently again.
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [drillMonth, setDrillMonth] = useState<string | null>(null); // month whose meetings the modal shows
 
   useEffect(() => {
@@ -100,7 +121,8 @@ export function MarginsView() {
       .then(([s, hrs]) => {
         if (!live) return;
         setSessionsByMonth(s);
-        setStaffRows(hrs);
+        setStaffRows(hrs.rows);
+        setStorageError(hrs.error);
         setError(null);
       })
       .catch((e) => live && setError(String(e)))
@@ -128,14 +150,16 @@ export function MarginsView() {
   async function saveHours(month: string, hours: number | null) {
     try {
       await setProgramHours(user?.id ?? "", programKey, month, hours);
-      // Reflect locally without a full reload.
+      // Reflect locally without a full reload (chart + ratio update immediately).
       setStaffRows((prev) => {
         const next = prev.filter((r) => !(r.program === programKey && r.month === month));
         next.push({ program: programKey, month, staffHours: hours, notes: null });
         return next;
       });
+      setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(`Staff hours did NOT save: ${String(e)}`);
+      throw e; // let the cell revert so the number never LOOKS saved
     }
   }
 
@@ -223,6 +247,12 @@ export function MarginsView() {
         </div>
 
         {error && <div className="notice notice--warn">{error}</div>}
+        {storageError && (
+          <div className="notice notice--warn">
+            <strong>Staff-hours entry is unavailable:</strong> {storageError}. Numbers typed into the Staff hrs column
+            will not persist until this is fixed.
+          </div>
+        )}
 
         {loading ? (
           <div className="loading">Loading…</div>

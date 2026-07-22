@@ -100,6 +100,9 @@ import {
   DEFAULT_TREND_WINDOW,
   type TrendCall,
 } from "../lib/conversionTrend.js";
+import { prevYm, defaultServiceMonth, monthPayProgress } from "../lib/paySchedule.js";
+import { APP_TAB_KEYS, resolveAllowedTabs, normalizeRole, DEFAULT_ROLE_TABS } from "../lib/permissions.js";
+import { parseTransitionOptions, serializeTransitionOptions, DEFAULT_TRANSITION_OPTIONS } from "../lib/transitionOptions.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -1466,6 +1469,82 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
     staffName: "Dave Troyer", ym: "2026-07", rate: 22, entries, generatedOn: "2026-07-21",
   }, status: "approved" }));
   eq(finalHtml.includes("APPROVED PAY STUB"), true, "approved hourly stub badged");
+}
+
+console.log("[13h] payment-run scheduling (default service month + month completion)");
+{
+  eq(prevYm("2026-07"), "2026-06", "prevYm mid-year");
+  eq(prevYm("2026-01"), "2025-12", "prevYm across the year boundary");
+  // The user's exact scenario: today is July 2026, nothing marked paid yet →
+  // the builder opens on June.
+  eq(defaultServiceMonth("2026-07", []), "2026-06", "no payments recorded → previous month (June)");
+  eq(defaultServiceMonth("2026-07", ["2026-05", "2026-06"]), "2026-06", "newest paid month wins");
+  eq(defaultServiceMonth("2026-07", ["2026-06", "2026-05"]), "2026-06", "order-independent");
+  eq(defaultServiceMonth("2026-07", ["garbage", ""]), "2026-06", "malformed paid months ignored");
+  eq(defaultServiceMonth("2026-01", []), "2025-12", "fallback handles the year boundary");
+
+  const mm = [
+    { coachId: 1, ym: "2026-06" },
+    { coachId: 2, ym: "2026-06" },
+    { coachId: 1, ym: "2026-06" }, // duplicate — must not double-count
+    { coachId: 1, ym: "2026-05" },
+    { coachId: 3, ym: "not-a-month" }, // dropped
+  ];
+  const paidSet = new Set(["1|2026-06", "1|2026-05"]);
+  const prog = monthPayProgress(mm, (c, m) => paidSet.has(`${c}|${m}`));
+  eq(prog.length, 2, "two valid months");
+  eq(prog[0].ym, "2026-06", "newest month first");
+  eq(prog[0].paid, 1, "June: one of two mentors paid");
+  eq(prog[0].total, 2, "June: duplicate mentor-month deduped");
+  eq(prog[0].complete, false, "June incomplete");
+  eq(prog[0].unpaidCoachIds.join(","), "2", "June: coach 2 still unpaid");
+  eq(prog[1].ym, "2026-05", "May second");
+  eq(prog[1].complete, true, "May complete (its only mentor is paid)");
+}
+
+console.log("[25] user permissions — tab resolution (lib/permissions)");
+{
+  const all = APP_TAB_KEYS.length;
+  eq(resolveAllowedTabs(null).size, all, "no app_users row → ALL tabs (today's behavior)");
+  eq(resolveAllowedTabs(undefined).size, all, "undefined record → ALL tabs");
+  eq(
+    resolveAllowedTabs({ role: "admin", allowedTabs: ["metrics"], isActive: true }).size,
+    all,
+    "admin always sees everything, whatever the list says"
+  );
+  eq(
+    resolveAllowedTabs({ role: "admin", allowedTabs: null, isActive: false }).size,
+    all,
+    "even an inactive admin keeps access (can't lock the owner out)"
+  );
+  const staffPick = resolveAllowedTabs({ role: "staff", allowedTabs: ["paystaff", "timeclock", "bogus"], isActive: true });
+  eq(staffPick.size, 2, "explicit list is exact; unknown keys dropped");
+  eq(staffPick.has("paystaff") && staffPick.has("timeclock"), true, "explicit tabs kept");
+  eq(resolveAllowedTabs({ role: "staff", allowedTabs: null, isActive: true }).size, all, "staff role default = all tabs");
+  eq(resolveAllowedTabs({ role: "staff", allowedTabs: [], isActive: true }).size, all, "staff empty list fails OPEN (no lockout)");
+  eq(resolveAllowedTabs({ role: "mentor", allowedTabs: null, isActive: true }).size, 0, "mentor role default = nothing yet");
+  eq(resolveAllowedTabs({ role: "mentor", allowedTabs: [], isActive: true }).size, 0, "mentor empty list = nothing");
+  eq(
+    resolveAllowedTabs({ role: "mentor", allowedTabs: ["timeclock"], isActive: true }).has("timeclock"),
+    true,
+    "mentor with a granted tab sees it"
+  );
+  eq(resolveAllowedTabs({ role: "staff", allowedTabs: ["metrics"], isActive: false }).size, 0, "inactive non-admin → no tabs");
+  eq(normalizeRole("weird"), "staff", "unknown role normalizes to staff");
+  eq(DEFAULT_ROLE_TABS.mentor.length, 0, "mentor default set is empty (bones)");
+}
+
+console.log("[26] Update-Mentee transition options (parse/serialize)");
+{
+  eq(parseTransitionOptions(null).join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "null → seed defaults");
+  eq(parseTransitionOptions("not json").join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "garbage → seed defaults");
+  eq(parseTransitionOptions("[]").join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "empty list → seed defaults (dropdown never empty)");
+  eq(parseTransitionOptions('["A"," B ","A","",42]').join("|"), "A|B|42", "trim, dedupe, drop blanks, stringify");
+  eq(serializeTransitionOptions([" X ", "X", "", "Y"]), '["X","Y"]', "serialize trims + dedupes");
+  const roundTrip = parseTransitionOptions(serializeTransitionOptions(DEFAULT_TRANSITION_OPTIONS));
+  eq(roundTrip.join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "round-trip stable");
+  eq(DEFAULT_TRANSITION_OPTIONS[0], "Jumpstart Your Freedom", "seed order preserved (user's list)");
+  eq(DEFAULT_TRANSITION_OPTIONS.length, 7, "seven seeded options");
 }
 
 console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduation)");

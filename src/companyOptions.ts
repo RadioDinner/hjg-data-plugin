@@ -11,16 +11,19 @@
 //                    registry just declares the key + a JSON-string default.
 //   - "duration":   a number + unit (weeks / months) input. Its stored value is a
 //                   JSON string {n, unit} (see lib/conversionTrend.ts).
+//   - "list":       an editable list of names (one per line). Its stored value is
+//                   a JSON string (array of strings).
 
 import { serializeStageColorConfig, DEFAULT_STAGE_COLOR_CONFIG } from "../lib/stageColors";
 import { serializeTrendWindow, DEFAULT_TREND_WINDOW } from "../lib/conversionTrend";
+import { serializeTransitionOptions, DEFAULT_TRANSITION_OPTIONS, MENTEE_TRANSITION_OPTIONS_KEY } from "../lib/transitionOptions";
 
 export interface CompanyOptionChoice {
   value: string;
   label: string;
 }
 
-export type CompanyOptionType = "select" | "stageColors" | "duration" | "action";
+export type CompanyOptionType = "select" | "stageColors" | "duration" | "action" | "list";
 
 export interface CompanyOption {
   key: string; // app_settings key
@@ -92,6 +95,18 @@ export const COMPANY_OPTIONS: CompanyOption[] = [
       "per-month rates. Set it to whatever span your organization watches (e.g. 3 or 6 months).",
     default: serializeTrendWindow(DEFAULT_TREND_WINDOW),
     type: "duration",
+    choices: [],
+  },
+  {
+    key: MENTEE_TRANSITION_OPTIONS_KEY,
+    section: "Update Mentee",
+    label: "Transition to… options",
+    help:
+      "The choices offered by the “Transition to…” dropdown on the Update Mentee tab's " +
+      "Transition form (§552). One option per line; the order here is the dropdown order. " +
+      "Needs migration 9967_mentee_transition_options.sql applied to persist.",
+    default: serializeTransitionOptions(DEFAULT_TRANSITION_OPTIONS),
+    type: "list",
     choices: [],
   },
 ];

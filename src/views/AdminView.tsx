@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { triggerSync } from "../api";
 import { useAuth } from "../auth";
 import { SectionId } from "../components/SectionId";
+import { UserPermissionsCard } from "../components/UserPermissionsCard";
 import { fmtDateTime } from "../format";
 import {
   MANUAL_METRICS,
@@ -548,6 +549,8 @@ export function AdminView() {
         </div>
         {settingsMsg && <div className="notice notice--info">{settingsMsg}</div>}
       </div>
+
+      <UserPermissionsCard />
     </section>
   );
 }

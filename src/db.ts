@@ -72,6 +72,29 @@ export {
 };
 export type { PayGroup, PayGroupsConfig };
 
+// Payment-run scheduling (Build payout §203/§204): default service month +
+// per-month payment completion.
+import { prevYm, defaultServiceMonth, monthPayProgress } from "../lib/paySchedule";
+import type { MonthPayProgress } from "../lib/paySchedule";
+export { prevYm, defaultServiceMonth, monthPayProgress };
+export type { MonthPayProgress };
+
+// User permissions bones (Admin §405): tab access per user.
+import { APP_TABS, APP_TAB_KEYS, APP_ROLES, DEFAULT_ROLE_TABS, normalizeRole, resolveAllowedTabs } from "../lib/permissions";
+import type { AppRole, AppTabDef, AppUserLike } from "../lib/permissions";
+export { APP_TABS, APP_TAB_KEYS, APP_ROLES, DEFAULT_ROLE_TABS, normalizeRole, resolveAllowedTabs };
+export type { AppRole, AppTabDef, AppUserLike };
+
+// "Transition to..." options for the Update Mentee tab (§552) — org-editable in
+// Company options, seeded by migration 9967.
+import {
+  parseTransitionOptions,
+  serializeTransitionOptions,
+  DEFAULT_TRANSITION_OPTIONS,
+  MENTEE_TRANSITION_OPTIONS_KEY,
+} from "../lib/transitionOptions";
+export { parseTransitionOptions, serializeTransitionOptions, DEFAULT_TRANSITION_OPTIONS, MENTEE_TRANSITION_OPTIONS_KEY };
+
 // Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
 // frontend imports lib through db.ts — same pattern as the pay engine above.
 export { COMPARE_PRESETS, derivePeriodB, delta, shiftMonths } from "../lib/compare";
@@ -1197,6 +1220,11 @@ export interface PayData {
   // invoice line item counts iff it starts with a checked template's name. Undefined
   // when unconfigured — the engine then uses the legacy engagement gate.
   payEligibleLineItem?: (lineItemText: string | null) => boolean;
+  // Coach ids assigned to the "Mentors" Payment-group in Company options (§451).
+  // Empty = no coaches assigned yet => callers fall back to every coach with pay
+  // lines (legacy). Non-empty = authoritative: the Build-payout mentor list shows
+  // exactly these coaches (how a departed mentor is retired from "whom to pay").
+  mentorCoachIds: number[];
 }
 
 async function fetchAllPayEngagements(): Promise<PayEngagementInput[]> {
@@ -1363,6 +1391,7 @@ export async function fetchPayData(): Promise<PayData> {
   // line items; engagement records no longer gate).
   const payEligible = payEligibleForGroup(payGroups, MENTORS_GROUP_ID) ?? undefined;
   const payEligibleLineItem = lineItemEligibleForGroup(payGroups, MENTORS_GROUP_ID) ?? undefined;
+  const mentorCoachIds = findGroup(payGroups, MENTORS_GROUP_ID)?.coachIds ?? [];
 
   return {
     invoices,
@@ -1375,6 +1404,7 @@ export async function fetchPayData(): Promise<PayData> {
     rampOverride,
     payEligible,
     payEligibleLineItem,
+    mentorCoachIds,
   };
 }
 
@@ -1398,6 +1428,11 @@ export interface PayoutBuildRecord {
   notes: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null; // updated_at
+  // "Payment sent" mark (columns from 9969_payout_payment_sent.sql — reads
+  // degrade gracefully when unapplied): when the approved payout was actually
+  // paid, and the Melio payment number entered as the reference.
+  paymentSentAt: string | null;
+  paymentRef: string | null;
 }
 
 function buildKey(coachId: number, serviceMonth: string): string {
@@ -1409,9 +1444,11 @@ export { buildKey as payoutBuildKey };
 // (one row per reviewed coach-month), so a single fetch backs the whole view.
 export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord>> {
   const cols = "coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at";
-  // split_override needs 9971 applied — retry without it so the screen still
-  // loads (the override just won't persist) on an un-migrated database.
-  let res = await supabase.from("payout_builds").select(`${cols},split_override`);
+  // payment_sent_at/payment_ref need 9969, split_override needs 9971 — retry
+  // without the newer columns so the screen still loads (those features just
+  // won't persist) on an un-migrated database.
+  let res = await supabase.from("payout_builds").select(`${cols},split_override,payment_sent_at,payment_ref`);
+  if (res.error) res = await supabase.from("payout_builds").select(`${cols},split_override`);
   if (res.error) res = await supabase.from("payout_builds").select(cols);
   if (res.error) throw new Error(res.error.message);
   const out = new Map<string, PayoutBuildRecord>();
@@ -1423,6 +1460,8 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
     computed_total: number | null;
     line_states: Record<string, BuildLineState> | null;
     split_override?: number | string | null;
+    payment_sent_at?: string | null;
+    payment_ref?: string | null;
     notes: string | null;
     reviewed_by: string | null;
     updated_at: string | null;
@@ -1441,9 +1480,33 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
       notes: r.notes,
       reviewedBy: r.reviewed_by,
       reviewedAt: r.updated_at,
+      paymentSentAt: r.payment_sent_at ?? null,
+      paymentRef: r.payment_ref ?? null,
     });
   }
   return out;
+}
+
+// Mark (or clear) an approved build's payout as actually PAID, with the Melio
+// payment number as the reference. Only touches the two payment columns — the
+// review itself (line states, totals, status) is untouched. Requires a saved
+// build row for the coach+month (the §204 button only lights up once one
+// exists) and migration 9969_payout_payment_sent.sql.
+export async function setPayoutPaymentSent(
+  coachId: number,
+  serviceMonth: string,
+  sent: { sentAt: string; ref: string | null } | null
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("payout_builds")
+    .update({ payment_sent_at: sent?.sentAt ?? null, payment_ref: sent?.ref ?? null })
+    .eq("coach_id", coachId)
+    .eq("service_month", serviceMonth)
+    .select("coach_id");
+  if (error)
+    throw new Error(`${error.message} — if this mentions payment_sent_at, apply migration 9969_payout_payment_sent.sql`);
+  if (!data || data.length === 0)
+    throw new Error("No saved build for this coach and month — save/approve the build first.");
 }
 
 // Upsert one coach-month's review (draft or approved). line_states keeps only
@@ -1603,21 +1666,30 @@ export interface ProgramHoursRow {
   notes: string | null;
 }
 
-// All entered staff-hours rows. Defensive: if program_hours (9981) isn't applied
-// yet, returns [] so the Margins tab still renders (delivered hours from CA show;
-// entering staff hours errors until the migration lands).
-export async function fetchAllProgramHours(): Promise<ProgramHoursRow[]> {
+// All entered staff-hours rows. Fail-open on rows (the Margins tab still renders
+// delivered hours from CA) but SURFACE the error instead of swallowing it — a
+// missing program_hours table (9981 unapplied) or an RLS problem used to look
+// like "my numbers silently don't save", which is exactly the bug report this
+// fixes: the tab now shows why storage is unavailable.
+export async function fetchAllProgramHours(): Promise<{ rows: ProgramHoursRow[]; error: string | null }> {
   const { data, error } = await supabase.from("program_hours").select("program,month,staff_hours,notes");
-  if (error) return [];
-  return ((data ?? []) as { program: string; month: string; staff_hours: number | string | null; notes: string | null }[]).map((r) => ({
+  if (error)
+    return {
+      rows: [],
+      error: `${error.message} — staff-hours storage is unavailable (is migration 9981_program_hours.sql applied?)`,
+    };
+  const rows = ((data ?? []) as { program: string; month: string; staff_hours: number | string | null; notes: string | null }[]).map((r) => ({
     program: r.program,
     month: r.month,
     staffHours: r.staff_hours == null || r.staff_hours === "" ? null : Number(r.staff_hours),
     notes: r.notes ?? null,
   }));
+  return { rows, error: null };
 }
 
-// Upsert one (program, month) staff-hours entry.
+// Upsert one (program, month) staff-hours entry. `.select()` forces the row to
+// be returned, so a save that Postgres/RLS quietly dropped surfaces as an error
+// instead of looking like it worked.
 export async function setProgramHours(
   createdBy: string,
   program: string,
@@ -1625,13 +1697,337 @@ export async function setProgramHours(
   staffHours: number | null,
   notes: string | null = null
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("program_hours")
-    .upsert({ program, month, staff_hours: staffHours, notes, created_by: createdBy || null }, { onConflict: "program,month" });
+    .upsert({ program, month, staff_hours: staffHours, notes, created_by: createdBy || null }, { onConflict: "program,month" })
+    .select("program,month");
+  if (error) throw new Error(`${error.message} — is migration 9981_program_hours.sql applied?`);
+  if (!data || data.length === 0) throw new Error("Save was blocked (no row written) — check program_hours RLS/migration 9981.");
+}
+
+// --- User permissions (Admin §405, bones) ---
+// One row per person, matched to the signed-in auth user by email. Resolution
+// rules live in lib/permissions.ts (no row => all tabs; admins always all).
+
+export interface AppUserRecord {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: AppRole;
+  allowedTabs: string[] | null; // null = role default
+  coachId: number | null;
+  isActive: boolean;
+  notes: string | null;
+}
+
+function normAppUserRow(r: Record<string, unknown>): AppUserRecord {
+  return {
+    id: String(r.id),
+    email: String(r.email ?? ""),
+    displayName: (r.display_name as string | null) ?? null,
+    role: normalizeRole(r.role as string | null),
+    allowedTabs: Array.isArray(r.allowed_tabs) ? (r.allowed_tabs as string[]) : null,
+    coachId: r.coach_id != null ? Number(r.coach_id) : null,
+    isActive: r.is_active !== false,
+    notes: (r.notes as string | null) ?? null,
+  };
+}
+
+export async function fetchAppUsers(): Promise<AppUserRecord[]> {
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("id,email,display_name,role,allowed_tabs,coach_id,is_active,notes")
+    .order("email");
+  if (error) throw new Error(`${error.message} — is migration 9968_app_users.sql applied?`);
+  return ((data ?? []) as Record<string, unknown>[]).map(normAppUserRow);
+}
+
+// The signed-in user's permission record, or null when none exists (=> all
+// tabs). DEFENSIVE: any error (table missing, RLS) also returns null so an
+// unapplied migration can never lock the app.
+export async function fetchMyAppUser(email: string | null | undefined): Promise<AppUserRecord | null> {
+  if (!email) return null;
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("id,email,display_name,role,allowed_tabs,coach_id,is_active,notes")
+    .ilike("email", email)
+    .limit(1);
+  if (error || !data || data.length === 0) return null;
+  return normAppUserRow(data[0] as Record<string, unknown>);
+}
+
+export async function saveAppUser(
+  createdBy: string,
+  rec: {
+    id?: string; // absent = insert
+    email: string;
+    displayName: string | null;
+    role: AppRole;
+    allowedTabs: string[] | null;
+    coachId: number | null;
+    isActive: boolean;
+    notes?: string | null;
+  }
+): Promise<void> {
+  const row: Record<string, unknown> = {
+    email: rec.email.trim(),
+    display_name: rec.displayName,
+    role: rec.role,
+    allowed_tabs: rec.allowedTabs,
+    coach_id: rec.coachId,
+    is_active: rec.isActive,
+    notes: rec.notes ?? null,
+  };
+  let error;
+  if (rec.id) {
+    ({ error } = await supabase.from("app_users").update(row).eq("id", rec.id));
+  } else {
+    row.created_by = createdBy || null;
+    ({ error } = await supabase.from("app_users").insert(row));
+  }
+  if (error) throw new Error(`${error.message} — is migration 9968_app_users.sql applied?`);
+}
+
+export async function deleteAppUser(id: string): Promise<void> {
+  const { error } = await supabase.from("app_users").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
 
+// --- Time clock (§208) ---
+// Clock-in/out entries per person (matched by auth email). clock_out null =
+// still on the clock; submitted_at set = sent to payroll (locked).
+
+export interface TimeEntry {
+  id: string;
+  userEmail: string;
+  clockIn: string; // ISO timestamptz
+  clockOut: string | null;
+  note: string | null;
+  submittedAt: string | null;
+}
+
+function normTimeEntry(r: Record<string, unknown>): TimeEntry {
+  return {
+    id: String(r.id),
+    userEmail: String(r.user_email ?? ""),
+    clockIn: String(r.clock_in),
+    clockOut: (r.clock_out as string | null) ?? null,
+    note: (r.note as string | null) ?? null,
+    submittedAt: (r.submitted_at as string | null) ?? null,
+  };
+}
+
+// Recent entries for everyone (the table is small; totals + the all-staff
+// summary come from one fetch). Newest first.
+export async function fetchTimeEntries(limit = 1000): Promise<TimeEntry[]> {
+  const { data, error } = await supabase
+    .from("time_entries")
+    .select("id,user_email,clock_in,clock_out,note,submitted_at")
+    .order("clock_in", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`${error.message} — is migration 9966_time_entries.sql applied?`);
+  return ((data ?? []) as Record<string, unknown>[]).map(normTimeEntry);
+}
+
+export async function clockIn(createdBy: string, userEmail: string): Promise<void> {
+  const { error } = await supabase
+    .from("time_entries")
+    .insert({ user_email: userEmail, clock_in: new Date().toISOString(), created_by: createdBy || null });
+  if (error) throw new Error(`${error.message} — is migration 9966_time_entries.sql applied?`);
+}
+
+export async function clockOut(entryId: string): Promise<void> {
+  const { error } = await supabase.from("time_entries").update({ clock_out: new Date().toISOString() }).eq("id", entryId);
+  if (error) throw new Error(error.message);
+}
+
+export async function updateTimeEntryNote(entryId: string, note: string | null): Promise<void> {
+  const { error } = await supabase.from("time_entries").update({ note }).eq("id", entryId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteTimeEntry(entryId: string): Promise<void> {
+  const { error } = await supabase.from("time_entries").delete().eq("id", entryId);
+  if (error) throw new Error(error.message);
+}
+
+// Submit every completed, unsubmitted entry for this person for payroll.
+export async function submitTimeEntries(userEmail: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("time_entries")
+    .update({ submitted_at: new Date().toISOString() })
+    .eq("user_email", userEmail)
+    .is("submitted_at", null)
+    .not("clock_out", "is", null)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
+// --- Report financial event (§651) + notifications (§907) ---
+
+export interface FinancialEvent {
+  id: string;
+  happenedOn: string; // YYYY-MM-DD
+  vendor: string;
+  description: string | null;
+  paymentMethod: string | null;
+  receiptPath: string | null;
+  createdByEmail: string | null;
+  createdAt: string;
+}
+
+export async function fetchFinancialEvents(limit = 200): Promise<FinancialEvent[]> {
+  const { data, error } = await supabase
+    .from("financial_events")
+    .select("id,happened_on,vendor,description,payment_method,receipt_path,created_by_email,created_at")
+    .order("happened_on", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`${error.message} — is migration 9965_financial_events.sql applied?`);
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    happenedOn: String(r.happened_on),
+    vendor: String(r.vendor ?? ""),
+    description: (r.description as string | null) ?? null,
+    paymentMethod: (r.payment_method as string | null) ?? null,
+    receiptPath: (r.receipt_path as string | null) ?? null,
+    createdByEmail: (r.created_by_email as string | null) ?? null,
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+// Upload a receipt into the private `receipts` bucket; returns the storage path
+// to keep on the financial_events row.
+export async function uploadReceipt(file: File): Promise<string> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80) || "receipt";
+  const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeName}`;
+  const { error } = await supabase.storage.from("receipts").upload(path, file, { upsert: false });
+  if (error) throw new Error(`Receipt upload failed: ${error.message} — is the 'receipts' storage bucket created (migration 9965)?`);
+  return path;
+}
+
+// A short-lived signed URL to view a stored receipt (the bucket is private).
+export async function receiptUrl(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from("receipts").createSignedUrl(path, 300);
+  if (error || !data?.signedUrl) throw new Error(error?.message ?? "Could not sign the receipt URL");
+  return data.signedUrl;
+}
+
+export async function createFinancialEvent(
+  createdBy: string,
+  createdByEmail: string | null,
+  rec: { happenedOn: string; vendor: string; description: string | null; paymentMethod: string | null; receiptPath: string | null }
+): Promise<void> {
+  const { error } = await supabase.from("financial_events").insert({
+    happened_on: rec.happenedOn,
+    vendor: rec.vendor,
+    description: rec.description,
+    payment_method: rec.paymentMethod,
+    receipt_path: rec.receiptPath,
+    created_by: createdBy || null,
+    created_by_email: createdByEmail,
+  });
+  if (error) throw new Error(`${error.message} — is migration 9965_financial_events.sql applied?`);
+}
+
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  linkTab: string | null;
+  createdAt: string;
+  readBy: string[];
+}
+
+// Newest-first feed for the topbar bell. DEFENSIVE: an unapplied 9965 returns
+// an empty feed (the bell just shows nothing) instead of erroring the whole app.
+export async function fetchNotifications(limit = 50): Promise<AppNotification[]> {
+  const { data, error } = await supabase
+    .from("app_notifications")
+    .select("id,kind,title,body,link_tab,created_at,read_by")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    kind: String(r.kind ?? "info"),
+    title: String(r.title ?? ""),
+    body: (r.body as string | null) ?? null,
+    linkTab: (r.link_tab as string | null) ?? null,
+    createdAt: String(r.created_at ?? ""),
+    readBy: Array.isArray(r.read_by) ? (r.read_by as string[]) : [],
+  }));
+}
+
+export async function createNotification(
+  createdBy: string,
+  rec: { kind: string; title: string; body: string | null; linkTab?: string | null }
+): Promise<void> {
+  const { error } = await supabase.from("app_notifications").insert({
+    kind: rec.kind,
+    title: rec.title,
+    body: rec.body,
+    link_tab: rec.linkTab ?? null,
+    created_by: createdBy || null,
+  });
+  if (error) throw new Error(`${error.message} — is migration 9965_financial_events.sql applied?`);
+}
+
+// Append this user to read_by on the given notifications (dismiss). Row-by-row
+// keeps it simple; the feed is small.
+export async function markNotificationsRead(userId: string, notifications: AppNotification[]): Promise<void> {
+  if (!userId) return;
+  for (const n of notifications) {
+    if (n.readBy.includes(userId)) continue;
+    const { error } = await supabase
+      .from("app_notifications")
+      .update({ read_by: [...n.readBy, userId] })
+      .eq("id", n.id);
+    if (error) throw new Error(error.message);
+  }
+}
+
+// --- Update Mentee (§551): a mentee's CA engagements for the Transition form ---
+
+export interface ClientEngagement {
+  clientId: number;
+  coachId: number | null;
+  name: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  isCanceled: boolean;
+}
+
+export async function fetchClientEngagements(clientId: number): Promise<ClientEngagement[]> {
+  const { data, error } = await supabase
+    .from("ca_engagements")
+    .select("client_id,coach_id,start_date,end_date,is_canceled,name")
+    .eq("client_id", clientId)
+    .order("start_date", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map((e) => ({
+    clientId: Number(e.client_id),
+    coachId: e.coach_id != null ? Number(e.coach_id) : null,
+    name: (e.name as string | null) ?? null,
+    startDate: (e.start_date as string | null) ?? null,
+    endDate: (e.end_date as string | null) ?? null,
+    isCanceled: e.is_canceled === true,
+  }));
+}
+
+// id -> display name for every coach (small table; used by the Transition form).
+export async function fetchCoachNames(): Promise<Map<number, string>> {
+  const { data, error } = await supabase.from("ca_coaches").select("id,name");
+  if (error) throw new Error(error.message);
+  const m = new Map<number, string>();
+  for (const c of (data ?? []) as { id: number; name: string | null }[]) m.set(c.id, c.name ?? `#${c.id}`);
+  return m;
+}
+
 export const RAW_TABLES = [
+  "app_notifications",
+  "app_users",
   "ca_appointments",
   "ca_clients",
   "ca_coaches",
@@ -1642,6 +2038,7 @@ export const RAW_TABLES = [
   "ca_offering_submissions",
   "coach_settings",
   "discovery_outcomes",
+  "financial_events",
   "manual_metrics",
   "mentees",
   "payout_builds",
@@ -1650,6 +2047,7 @@ export const RAW_TABLES = [
   "staff_pay_builds",
   "staff_pay_profiles",
   "sync_runs",
+  "time_entries",
 ] as const;
 
 export type RawTable = (typeof RAW_TABLES)[number];

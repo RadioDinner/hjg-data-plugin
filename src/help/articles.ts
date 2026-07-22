@@ -142,6 +142,8 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 ### What you do
 - Pick a **mentor + service month**; every engine-computed line for that coach/month is listed.
+- The **Mentor list comes from Company options → Payment groups (§451)**: when any coaches are assigned to the Mentors group there, only THOSE mentors are offered here — that grid is how a departed mentor is retired from "whom to pay" (their historical lines stay in the data). With no coaches assigned yet, every coach with pay lines shows (legacy).
+- The **service month defaults to the last PAID month** — the newest month marked *Payment sent*, or (before any payments are recorded) the month before today.
 - **Include / exclude** each line with the checkbox, or **override** a line's payout and add a **note** explaining why.
 - **Edit the Split %** in the header to reprice the whole build (blank = the engine's tenure-ramp split). It saves with the build, reprices every line live (a per-line **$ override still wins**), and prints on the pay stub as *"set by HJG for this month"*. Needs migration \`9971_payout_build_split.sql\` to persist.
 - The side panel shows the **built (signed-off) total** vs the **engine total**, the **delta**, and how many lines were dropped / overridden.
@@ -157,6 +159,12 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 ### Saving
 - **Save draft** to come back later; **Approve** to sign the month off; **Reopen** to edit an approved month again. **Discard** removes the saved review.
+
+### Payment sent (the money actually moved)
+- Once a build is **approved**, the **Payment sent…** button records that the payout was actually paid — a dialog asks for the **Melio payment number** as the reference. Needs migration \`9969_payout_payment_sent.sql\`.
+- A paid month shows a **paid ✓** pill, its dropdown entry reads *— paid ✓*, and the print button flips to **Reprint pay stub** so it's obvious the stub was already issued.
+- The **Payments completed** strip on the picker card shows, per month, how many mentors are paid (**✓ paid** = everyone) — the at-a-glance "which months are done".
+- Click **Payment sent ✓** again to edit the reference or clear the mark (e.g. a payment that bounced).
 
 ### Important
 - This **never changes the engine's numbers** — overrides and exclusions live only in the review record (\`payout_builds\`). It's read-only toward CoachAccountable; the engine stays the source of truth.`,
@@ -472,6 +480,64 @@ A mentee like Jonathan Heinzman kept showing Arthur because his ongoing engageme
 
 ### A separate thing: the Notion "Mentor" field
 The **Mentee record** card (Journeys) shows a **Mentor** column from the Notion roster. That's a **manual roster value** and is **not** the owner — it doesn't drive Pay, capacity, or the pipeline.`,
+  },
+  "admin.users": {
+    title: "User permissions",
+    body: `Who can see which tabs — the **bones** of per-user access (and, later, mentor logins).
+
+### How matching works
+- People are matched to a row by their **sign-in email** (the Supabase auth email).
+- **No row = full access.** While this system is bones, someone without a row keeps seeing every tab — so applying the migration can never lock anyone out.
+- **Admins always see everything**, whatever their tab list says.
+
+### Setting someone up
+- **Add user** with their sign-in email and a role (**admin / staff / mentor**).
+- Tick the **tabs** they should see. A row starts on the **role default** (admin/staff: all tabs; mentor: none yet); the first tab you toggle materializes an explicit list. *Reset to role default* drops back.
+- **Active** off = no tabs (except admins). **Mentor link** ties a login to a \`ca_coaches\` record — groundwork for mentors using the app on their own data.
+
+### Source
+- \`app_users\` (migration \`9968_app_users.sql\`); resolution rules in \`lib/permissions.ts\`.`,
+  },
+
+  "updateMentee.transition": {
+    title: "Update Mentee — Transition form",
+    body: `Forms that change a mentee's state. The first one, **Transition Mentee**, moves a mentee from their current state to a new one.
+
+### From (current state)
+- **Load a mentee** (search + pick) to pull their name, CA details, **our status** (the hand/Notion/CA-resolved lifecycle), and their **current CA engagement** (name, coach, start/end).
+
+### To (the transition)
+- Pick the target from the **Transition to…** dropdown. The choices are org-editable under **Company options → Update Mentee → "Transition to… options"** (one per line; seeded with Jumpstart Your Freedom, 4x/2x/1x Mentoring, Graduated, Quit, Fired — migration \`9967\`).
+- **Apply is not wired yet** — recording the transition (and eventually pushing it anywhere) is the next build phase. Today the form is the wiring: load → review from-state → choose to-state.
+
+### Source
+- \`mentees\` (three-zone row, resolved by \`lib/menteeView.ts\`) + \`ca_engagements\` for the current engagement + \`app_settings.mentee_transition_options\` for the dropdown.`,
+  },
+
+  "timeclock.screen": {
+    title: "Time clock",
+    body: `Clock in and out, track your time, and submit it for payroll. Mentors and staff both use this; the data it collects will also fuel org metrics (hours worked vs delivered, program cost, etc.).
+
+### Using it
+- **Clock in** starts an entry; **Clock out** completes it. The running entry shows live elapsed time (and survives closing the tab — it's in the database, not the browser).
+- Add a **note** to any entry about what you worked on (editable until submitted).
+- **Submit for payroll** marks every completed entry as submitted and **locks** them; the payroll person sees exactly what was submitted. Unsubmitted entries can be deleted.
+- **All staff — hours this month** shows everyone's totals (and who's currently on the clock).
+
+### Source
+- \`time_entries\` (migration \`9966_time_entries.sql\`), matched to people by sign-in email.`,
+  },
+
+  "finevent.screen": {
+    title: "Report financial event",
+    body: `Log a transaction so the org has a record: **when it happened, the vendor, what it was, the payment method**, and an optional **receipt** (image or PDF).
+
+### What happens on submit
+- The event saves to \`financial_events\` and the receipt uploads to the private **receipts** storage bucket (view it later via the *view* link — a short-lived signed URL).
+- A **notification** is created for org support staff — it lands under the **bell icon** in the top bar (with an unread badge) for everyone signed in; clicking it jumps to this tab. *Mark all read* clears the badge.
+
+### Source
+- \`financial_events\` + \`app_notifications\` + the \`receipts\` bucket (all in migration \`9965_financial_events.sql\`).`,
   },
 };
 

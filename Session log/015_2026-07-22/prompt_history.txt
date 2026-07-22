@@ -1,0 +1,23 @@
+--- 2026-07-22 (session start) ---
+I have some changes I'd like to make to this project. Merge to main for this session. A few changes I'd like to have made to the Pay Staff screen. I want the Build Payout (203) to look at the mentors assigned in company options. Currently Neal Zimmerman is being included in the list of whom to pay, and he is no longer a mentor with us. Secondly, I would like to have the build payout (203) screen service month default to the last paid month. So today, it would load June as the service month. (We will likely need to build more provisions into this later).
+
+Another change, I want a "Payment sent" button added to the (204) screen. If the payment was already sent, make the "print pay stub" button say "Reprint pay stub". But I want a way of easily seeing which months have been completed. Also, I want a reference field or window to pop up when I click the payment sent button, then I can enter the Melio payment number in there as reference
+
+--- 2026-07-22 (mid-session) ---
+I want you to start building a user permissions system into our little app. Right now, I get all the tabs by default. I want to make a way to setup users in company options. For now, wire up the bones to make this possible. Eventually, I want mentors to be able to log into our app, and use it.
+
+In addition to this change, I want you to create an "Update Mentee" tab. In here, I want you to start building out forms. The first form will be called "Transition Mentee". In this form, I want them to be able to "load" a mentee, pull in the mentees name, details from CA and his current status according to us and his current engagement. This will be considered to be the "from" state, since this is a transition form.
+
+The second half will be the "to" state. I want the second half of the screen to have a drop down where they select from a number of options set in the Admin Company options 451 screen. Build the way to set the options in the admin screen and then add the data from there to the dropdown on the transition screen.
+
+For now, make the second half dropdown say "Transition to..." then the drop down will be seeded with "Jumpstart Your Freedom","4x Mentoring","2x Mentoring","1x Mentoring","Graduated","Quit","Fired".
+
+--- 2026-07-22 (mid-session) ---
+Also, the numbers I enter on the margins page don't save or reflect on the graph
+
+--- 2026-07-22 (mid-session) ---
+For users and admin, I want to build a "time clock" tool. That mentors and staff can use to clock in and out, track their time, submit it for payroll, etc. We'll use the data we collect here to fuel our metrics.
+
+Also, build a "Report financial event" tab on the app. I want a few fields wired up for now. When the transaction happened, the vendor, what it was and an option to upload an image or receipt. also the payment method. I want an addtional feature wired up that when someone fills out this form, that it alerts the org support staff via notifications icon on the dashboard.
+
+also, I want to be able to manage "User permissions" from the admin dashboard. I want to be able to assign or give access specific tabs to certain users. Biuld this too

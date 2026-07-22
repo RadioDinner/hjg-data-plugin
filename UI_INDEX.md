@@ -31,20 +31,35 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 105 | `journeys.meetings` | Per-mentee meeting list | `JourneysView` table |
 | 106 | `journeys.menteeRecord` | Mentee record — source of truth | `JourneysView` editor |
 | 107 | `journeys.statusEditor` | Edit graduation status | `MenteeStatusEditor` |
+| 011 | `metrics.pipelineTiming` | Pipeline timing (moved from Journeys) | `PipelineTimingCard` |
+| 012 | `metrics.funnel` | Mentee funnel + exits | `MenteeFunnelCard` |
 | 201 | `pay.screen` | Pay staff (screen) | nav tab |
 | 202 | `pay.payoutByMonth` | Payout by month | `PayStaffView` card |
 | 203 | `build.screen` | Build payout (hosted in Pay staff) | `BuildPayoutView` |
 | 204 | `build.review` | Build payout — mentor·month line review | `BuildPayoutView` editor |
+| 205 | `pay.reconcile` | Mentor payout reconciliation | `PayStaffView` card |
+| 206 | `pay.hourly` | Hourly staff (timesheet pay) sub-mode | `HourlyPayView` |
+| 207 | `pay.history` | Pay stub history sub-mode | `PayHistoryView` |
+| 208 | `timeclock.screen` | Time clock (clock in/out → payroll) | nav tab |
+| 209 | `timeclock.entries` | Time clock — my entries + submit for payroll | `TimeClockView` card |
 | 301 | `raw.screen` | Raw data (screen) | nav tab |
 | 400 | `admin.screen` | Admin (screen) | nav tab |
 | 401 | `admin.sync` | Sync | `AdminView` card |
 | 402 | `admin.manualMetrics` | Manual metrics | `AdminView` card |
 | 403 | `admin.capacity` | Mentor capacity (editor) | `AdminView` editor |
 | 404 | `admin.settings` | Settings | `AdminView` card |
+| 405 | `admin.users` | User permissions (per-user tab access) | `UserPermissionsCard` |
 | 451 | `options.screen` | Company options (screen) | nav tab |
 | 452 | `options.payGroups` | Payment groups (engagement templates × staff groups) | `PayGroupsCard` |
 | 501 | `mentees.screen` | Mentees — source of truth (screen) | nav tab |
+| 502 | `mentees.roster` | Mentee roster grid | `MenteesView` table |
+| 503 | `mentees.detail` | Per-mentee detail (3-source panel) | `MenteesView` panel |
+| 504 | `mentees.funnel` | RETIRED — funnel moved to Metrics (012) | — |
+| 551 | `updateMentee.screen` | Update Mentee (screen) | nav tab |
+| 552 | `updateMentee.transition` | Transition Mentee form (from → Transition to…) | `UpdateMenteeView` card |
 | 601 | `margins.screen` | Margins (screen) | nav tab |
+| 651 | `finevent.screen` | Report financial event (screen) | nav tab |
+| 652 | `finevent.form` | Report financial event — entry form | `FinancialEventView` card |
 | 701 | `discovery.screen` | Discovery calls (screen) | nav tab |
 | 801 | `maps.screen` | Maps (screen) | nav tab |
 | 901 | `modal.payExplore` | Explore source data (pay) | `PayExploreModal` |
@@ -52,3 +67,5 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 903 | `modal.marginsDrill` | Margins month drill-down | `MarginsView` modal |
 | 904 | `drawer.help` | Help drawer (contextual explainer) | `HelpDrawer` |
 | 905 | `modal.payoutLineDetail` | Build payout — per-mentee invoice/payment drill-down | `PayoutLineDetailModal` |
+| 906 | `modal.paymentSent` | Payment sent — Melio reference dialog (§204) | `BuildPayoutView` modal |
+| 907 | `drawer.notifications` | Notifications bell + feed (topbar) | `NotificationsBell` |

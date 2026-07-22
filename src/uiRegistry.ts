@@ -46,6 +46,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "pay.reconcile": 205,
   "pay.hourly": 206, // Pay staff -> Hourly staff (timesheet pay) sub-mode (2026-07-21)
   "pay.history": 207, // Pay staff -> Pay stub history archive sub-mode (2026-07-21)
+  "timeclock.screen": 208, // Time clock tab (clock in/out -> payroll; pay family) (2026-07-22)
+  "timeclock.entries": 209, // Time clock: my entries + submit-for-payroll card (2026-07-22)
 
   // 3xx — Raw data
   "raw.screen": 301,
@@ -56,6 +58,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "admin.manualMetrics": 402,
   "admin.capacity": 403,
   "admin.settings": 404,
+  "admin.users": 405, // User permissions: per-user tab access management (2026-07-22)
   "options.screen": 451,
   "options.payGroups": 452, // Payment groups: engagement templates × staff groups (2026-07-09)
 
@@ -64,9 +67,13 @@ export const UI_SECTIONS: Record<string, number> = {
   "mentees.roster": 502,
   "mentees.detail": 503, // per-mentee detail incl. the 3-source (CA/Notion/hand) panel
   "mentees.funnel": 504, // RETIRED 2026-06-27 — funnel moved to Metrics (metrics.funnel=12). Reserved.
+  "updateMentee.screen": 551, // Update Mentee tab (55x = mentee-update family) (2026-07-22)
+  "updateMentee.transition": 552, // Transition Mentee form (from-state -> Transition to...) (2026-07-22)
 
-  // 6xx — Margins
+  // 6xx — Margins (65x = financial-event reporting)
   "margins.screen": 601,
+  "finevent.screen": 651, // Report financial event tab (2026-07-22)
+  "finevent.form": 652, // Report financial event: the entry form card (2026-07-22)
 
   // 7xx — Discovery
   "discovery.screen": 701,
@@ -80,6 +87,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "modal.marginsDrill": 903,
   "drawer.help": 904,
   "modal.payoutLineDetail": 905, // per-mentee invoice/payment drill-down on Build payout (2026-07-09)
+  "modal.paymentSent": 906, // Payment sent — Melio reference dialog on Build payout §204 (2026-07-22)
+  "drawer.notifications": 907, // Topbar notifications bell + feed (2026-07-22)
 };
 
 // 3-digit, zero-padded string for a key (e.g. "104"); "" if the key is unknown.

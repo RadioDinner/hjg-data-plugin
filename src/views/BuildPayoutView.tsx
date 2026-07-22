@@ -14,8 +14,11 @@ import {
   fetchPayoutBuilds,
   savePayoutBuild,
   deletePayoutBuild,
+  setPayoutPaymentSent,
   savePaystub,
   payoutBuildKey,
+  defaultServiceMonth,
+  monthPayProgress,
   type PayData,
   type PayMenteeLine,
   type BuildLineState,
@@ -81,6 +84,10 @@ export function BuildPayoutView({
   const [flash, setFlash] = useState<string | null>(null);
   // The mentee line whose invoice/payment drill-down is open (click a name).
   const [detail, setDetail] = useState<PayMenteeLine | null>(null);
+  // "Payment sent" dialog (§906): enter the Melio payment number as reference.
+  const [payModal, setPayModal] = useState(false);
+  const [payRef, setPayRef] = useState("");
+  const [payErr, setPayErr] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -116,11 +123,29 @@ export function BuildPayoutView({
     });
   }, [data]);
 
-  const coachOptions = useMemo(() => {
+  // Every coach with pay lines in the ledger…
+  const allCoachOptions = useMemo(() => {
     const m = new Map<number, string>();
     for (const r of timeline?.ledger ?? []) if (r.assigned && r.coachId != null) m.set(r.coachId, r.coachName);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [timeline]);
+  // …filtered to the mentors ASSIGNED in Company options → Payment groups (§451)
+  // when any are assigned. That grid is the source of truth for "whom to pay" —
+  // it's how a departed mentor is retired from this list even though their
+  // historical pay lines remain. No coaches assigned yet => legacy fallback (all).
+  const mentorList = useMemo(() => {
+    const assigned = data?.mentorCoachIds ?? [];
+    if (!assigned.length) return allCoachOptions;
+    const set = new Set(assigned);
+    return allCoachOptions.filter(([id]) => set.has(id));
+  }, [allCoachOptions, data]);
+  // Keep a pre-scoped launch ("Build →" on a coach outside the group) usable:
+  // the current selection always appears, labeled as outside the Mentors group.
+  const coachOptions = useMemo<[number, string][]>(() => {
+    if (coach == null || mentorList.some(([id]) => id === coach)) return mentorList;
+    const extra = allCoachOptions.find(([id]) => id === coach);
+    return extra ? [...mentorList, [extra[0], `${extra[1]} (not in Mentors group)`]] : mentorList;
+  }, [mentorList, allCoachOptions, coach]);
 
   const monthsByCoach = useMemo(() => {
     const m = new Map<number, string[]>();
@@ -139,7 +164,17 @@ export function BuildPayoutView({
     if (coach == null && coachOptions.length) setCoach(coachOptions[0][0]);
   }, [coach, coachOptions]);
 
-  // Keep the month valid for the chosen coach (newest month they have lines in).
+  // Months already marked Payment sent (any mentor) — drive the default month.
+  const paidMonths = useMemo(
+    () => [...builds.values()].filter((b) => b.paymentSentAt).map((b) => b.serviceMonth),
+    [builds]
+  );
+
+  // Keep the month valid for the chosen coach. On FIRST open (no month chosen
+  // and none pre-scoped) default to the LAST PAID month — the newest month
+  // marked Payment sent, else the month before today (so on 2026-07-22 with no
+  // payments recorded the builder opens on June 2026) — clamped to the nearest
+  // month this coach actually has lines in. More provisions can layer on later.
   useEffect(() => {
     if (coach == null) return;
     const months = monthsByCoach.get(coach) ?? [];
@@ -147,8 +182,13 @@ export function BuildPayoutView({
       setYm("");
       return;
     }
+    if (!ym) {
+      const want = defaultServiceMonth(currentYm(), paidMonths);
+      setYm(months.find((m) => m <= want) ?? months[months.length - 1]); // months are newest-first
+      return;
+    }
     if (!months.includes(ym)) setYm(months[0]);
-  }, [coach, monthsByCoach, ym]);
+  }, [coach, monthsByCoach, ym, paidMonths]);
 
   const savedRec = coach != null && ym ? builds.get(payoutBuildKey(coach, ym)) : undefined;
 
@@ -203,7 +243,18 @@ export function BuildPayoutView({
   const summary = useMemo(() => summarizeBuild(lines, stateMap, splitOverride), [lines, stateMap, splitOverride]);
 
   const locked = status === "approved";
+  const paid = !!savedRec?.paymentSentAt;
   const stateFor = (clientId: number): BuildLineState => lineStates[clientId] ?? DEFAULT_LINE_STATE;
+
+  // Per-month payment completion across the mentor group — the at-a-glance
+  // "which months are done" strip. Counts only current/past months and only the
+  // mentors in the (filtered) list.
+  const progress = useMemo(() => {
+    const mm: { coachId: number; ym: string }[] = [];
+    for (const [id] of mentorList) for (const m of monthsByCoach.get(id) ?? []) mm.push({ coachId: id, ym: m });
+    const cur = currentYm();
+    return monthPayProgress(mm, (cid, m) => !!builds.get(payoutBuildKey(cid, m))?.paymentSentAt).filter((p) => p.ym < cur);
+  }, [mentorList, monthsByCoach, builds]);
 
   function updateLine(clientId: number, patch: Partial<BuildLineState>) {
     setLineStates((s) => ({ ...s, [clientId]: { ...(s[clientId] ?? DEFAULT_LINE_STATE), ...patch } }));
@@ -236,6 +287,10 @@ export function BuildPayoutView({
         notes: notes.trim() || null,
         reviewedBy: user?.id ?? null,
         reviewedAt: new Date().toISOString(),
+        // The upsert doesn't touch the payment columns, so a saved payment mark
+        // survives a re-save — mirror that in the local record.
+        paymentSentAt: savedRec?.paymentSentAt ?? null,
+        paymentRef: savedRec?.paymentRef ?? null,
       };
       setBuilds((m) => new Map(m).set(payoutBuildKey(coach, ym), rec));
       setStatus(nextStatus);
@@ -243,6 +298,54 @@ export function BuildPayoutView({
       setFlash(nextStatus === "approved" ? "Approved and saved." : "Draft saved.");
     } catch (e) {
       setFlash(`Save failed: ${String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Record (or update the reference of) the actual payment for this approved
+  // build; the Melio payment number is stored as the reference. Only the two
+  // payment columns change — the signed-off review is untouched.
+  async function markPaymentSent() {
+    if (coach == null || !ym) return;
+    setBusy(true);
+    setPayErr(null);
+    try {
+      const sentAt = savedRec?.paymentSentAt ?? new Date().toISOString();
+      const ref = payRef.trim() || null;
+      await setPayoutPaymentSent(coach, ym, { sentAt, ref });
+      setBuilds((m) => {
+        const next = new Map(m);
+        const rec = next.get(payoutBuildKey(coach, ym));
+        if (rec) next.set(payoutBuildKey(coach, ym), { ...rec, paymentSentAt: sentAt, paymentRef: ref });
+        return next;
+      });
+      setPayModal(false);
+      setFlash(`Payment recorded as sent${ref ? ` — Melio ref ${ref}` : ""}.`);
+    } catch (e) {
+      setPayErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unmarkPaymentSent() {
+    if (coach == null || !ym || !paid) return;
+    if (!confirm(`Clear the Payment-sent mark for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?`)) return;
+    setBusy(true);
+    setPayErr(null);
+    try {
+      await setPayoutPaymentSent(coach, ym, null);
+      setBuilds((m) => {
+        const next = new Map(m);
+        const rec = next.get(payoutBuildKey(coach, ym));
+        if (rec) next.set(payoutBuildKey(coach, ym), { ...rec, paymentSentAt: null, paymentRef: null });
+        return next;
+      });
+      setPayModal(false);
+      setFlash("Payment-sent mark cleared.");
+    } catch (e) {
+      setPayErr(String(e));
     } finally {
       setBusy(false);
     }
@@ -407,12 +510,35 @@ export function BuildPayoutView({
                   return (
                     <option key={m} value={m}>
                       {monthLabel(m)}
-                      {rec ? (rec.status === "approved" ? " — approved ✓" : " — draft") : ""}
+                      {rec ? (rec.paymentSentAt ? " — paid ✓" : rec.status === "approved" ? " — approved ✓" : " — draft") : ""}
                     </option>
                   );
                 })}
               </select>
             </label>
+          </div>
+        )}
+
+        {/* Which months are DONE: every mentor with lines that month marked
+            Payment sent. Green ✓ = complete; N/M = partial. */}
+        {!noInvoices && progress.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+            <span className="muted" style={{ fontSize: 12 }}>Payments completed:</span>
+            {progress.slice(0, 8).map((p) => (
+              <span
+                key={p.ym}
+                className={`pill ${p.complete ? "pill--success" : ""}`}
+                title={
+                  p.complete
+                    ? `${monthLabel(p.ym)} — every mentor's payout is marked Payment sent`
+                    : `${monthLabel(p.ym)} — ${p.paid} of ${p.total} mentor payout${p.total === 1 ? "" : "s"} sent. Waiting on: ${p.unpaidCoachIds
+                        .map((id) => data?.coachName(id) ?? `#${id}`)
+                        .join(", ")}`
+                }
+              >
+                {monthLabel(p.ym)} {p.complete ? "✓ paid" : `${p.paid}/${p.total}`}
+              </span>
+            ))}
           </div>
         )}
       </section>
@@ -426,7 +552,11 @@ export function BuildPayoutView({
                   {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)}
                   <SectionId id="build.review" />
                   {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
-                  {locked && <span className="pill pill--success" style={{ marginLeft: 8 }}>approved</span>}
+                  {locked && (
+                    <span className="pill pill--success" style={{ marginLeft: 8 }} title={paid && savedRec?.paymentRef ? `Melio ref ${savedRec.paymentRef}` : undefined}>
+                      {paid ? "paid ✓" : "approved"}
+                    </span>
+                  )}
                   {dirty && <span className="pill pill--running" style={{ marginLeft: 8 }}>unsaved</span>}
                 </h2>
                 <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -471,16 +601,36 @@ export function BuildPayoutView({
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
-                  className={`btn btn--sm ${locked ? "btn--primary" : ""}`}
+                  className={`btn btn--sm ${locked && !paid ? "btn--primary" : ""}`}
                   onClick={printStub}
                   disabled={!lines.length}
                   title={
                     locked
-                      ? "Print the approved pay stub for this month (opens a print window)"
+                      ? paid
+                        ? "This payout was already paid — reprint the approved pay stub (opens a print window)"
+                        : "Print the approved pay stub for this month (opens a print window)"
                       : "Print a REVIEW-COPY pay stub of the current draft (watermarked; opens a print window)"
                   }
                 >
-                  {locked ? "Print pay stub" : "Print review stub"}
+                  {locked ? (paid ? "Reprint pay stub" : "Print pay stub") : "Print review stub"}
+                </button>
+                <button
+                  className={`btn btn--sm ${locked && !paid ? "btn--primary" : ""}`}
+                  onClick={() => {
+                    setPayRef(savedRec?.paymentRef ?? "");
+                    setPayErr(null);
+                    setPayModal(true);
+                  }}
+                  disabled={!locked || !savedRec}
+                  title={
+                    !locked || !savedRec
+                      ? "Approve (and save) the build first — Payment sent records that the approved payout was actually paid"
+                      : paid
+                      ? `Payment sent ${savedRec?.paymentSentAt ? fmtDateTime(savedRec.paymentSentAt) : ""}${savedRec?.paymentRef ? ` · Melio ref ${savedRec.paymentRef}` : ""} — click to edit the reference or clear the mark`
+                      : "Record that this payout was paid, with the Melio payment number as reference"
+                  }
+                >
+                  {paid ? "Payment sent ✓" : "Payment sent…"}
                 </button>
                 <button className="btn btn--sm" onClick={exportCsv} disabled={!lines.length}>
                   Export CSV
@@ -703,6 +853,12 @@ export function BuildPayoutView({
                   {savedRec.status}
                 </div>
               )}
+              {paid && savedRec && (
+                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  Payment sent {fmtDateTime(savedRec.paymentSentAt)}
+                  {savedRec.paymentRef ? <> · Melio ref <strong>{savedRec.paymentRef}</strong></> : null}
+                </div>
+              )}
               {savedRec && !dirty && Math.abs(summary.builtTotal - savedRec.builtTotal) > 0.005 && (
                 <div className="notice notice--warn" style={{ fontSize: 12, marginTop: 8 }}>
                   Heads up — the engine's numbers have <strong>changed since this build was saved</strong> (saved{" "}
@@ -713,6 +869,61 @@ export function BuildPayoutView({
               )}
             </div>
           </aside>
+        </div>
+      )}
+
+      {/* Payment sent — Melio reference dialog (§906). */}
+      {payModal && coach != null && ym && (
+        <div className="modal" onClick={() => setPayModal(false)}>
+          <div className="modal__card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal__head">
+              <h2>
+                Payment sent — {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)} <SectionId id="modal.paymentSent" />
+              </h2>
+              <button className="btn btn--sm" onClick={() => setPayModal(false)}>
+                Close
+              </button>
+            </div>
+            <div className="modal__body" style={{ padding: "12px 20px 16px" }}>
+              <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+                Records that this approved payout was actually paid ({fmtUsd(summary.builtTotal)}). Enter the{" "}
+                <strong>Melio payment number</strong> as the reference so the payment is easy to trace later.
+              </p>
+              <label className="filter" style={{ width: "100%" }}>
+                <span>Melio payment number (reference)</span>
+                <input
+                  type="text"
+                  value={payRef}
+                  placeholder="e.g. PMT-12345"
+                  autoFocus
+                  onChange={(e) => setPayRef(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") markPaymentSent();
+                  }}
+                  style={{ width: "100%" }}
+                />
+              </label>
+              {paid && savedRec?.paymentSentAt && (
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Already marked sent {fmtDateTime(savedRec.paymentSentAt)} — saving updates the reference.
+                </p>
+              )}
+              {payErr && <div className="notice notice--warn" style={{ fontSize: 12 }}>{payErr}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                <button className="btn btn--sm btn--primary" onClick={markPaymentSent} disabled={busy}>
+                  {paid ? "Save reference" : "Mark payment sent"}
+                </button>
+                {paid && (
+                  <button className="btn btn--sm btn--danger" onClick={unmarkPaymentSent} disabled={busy}>
+                    Clear payment-sent mark
+                  </button>
+                )}
+                <button className="btn btn--sm" onClick={() => setPayModal(false)} disabled={busy}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
