@@ -1,9 +1,80 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-07-09 (session 013 — payout invoice-drilldown/CSV **and** a configurable Payment-groups grid).
+2026-07-22 (session 015 — pay payment-tracking, permissions bones, Update Mentee /
+Time clock / financial-event tabs, Margins save fix).
 
-## ▶ START HERE (2026-07-09, session 013 — WRAPPED, MERGED TO `main`)
+## ▶ START HERE (2026-07-22, session 015 — WRAPPED, MERGED TO `main`, v0.5.0)
+
+**Session WRAPPED, everything MERGED TO `main`** (fast-forward from
+`claude/pay-staff-screen-updates-sagejz`; commits `c0715ec` features + `ac49ced`
+adversarial-review fixes + the wrap commit). **Version 0.5.0** (chip must read
+`v0.5.0`). `typecheck` + `verify` (**622 checks**, 3 new sections) + `build`
+green. **UI NOT browser-tested** (headless). Full detail in
+`Session log/015_2026-07-22/session_log.md`.
+
+**⚠⚠ CUTOVER — TWO USER ACTIONS:**
+1. **Apply FIVE migrations** (Supabase SQL Editor, any order, re-runnable):
+   **`9969_payout_payment_sent.sql`** (Payment-sent columns), **`9968_app_users.sql`**
+   (permissions), **`9967_mentee_transition_options.sql`** (Transition-to seed),
+   **`9966_time_entries.sql`** (time clock), **`9965_financial_events.sql`**
+   (financial events + notifications + receipts bucket). If `9965` prints a NOTICE
+   about storage privileges, create the private **`receipts`** bucket + authenticated
+   SELECT/INSERT policies in the dashboard by hand. Until applied, each feature
+   degrades with an explicit on-screen error (nothing else breaks).
+2. **Company options → Payment groups → tick the real mentors in the "Mentors"
+   group's COACH row.** The Build-payout (§203) mentor dropdown only filters once
+   ≥1 coach is assigned — **that's what removes Neal Zimmerman** (he's no longer a
+   mentor). With no coaches assigned it falls back to all coaches with pay lines.
+
+**What shipped (session 015):**
+- **Pay staff §203/§204** — mentor list from the Mentors Payment-group; service
+  month defaults to the **last paid month** (else previous month → June on
+  2026-07-22); **Payment sent** button + Melio-reference dialog (§906); `paid ✓`
+  pills / `— paid ✓` dropdown markers / **Reprint pay stub** / per-month
+  **Payments completed** strip. Pure logic in `lib/paySchedule.ts` (verify §13h).
+- **User permissions bones** — `app_users` (email-matched) + `lib/permissions.ts`
+  (verify §25) + **Admin → User permissions (§405)** card; App.tsx nav renders
+  from `APP_TABS` filtered per user. **No row = all tabs**; admins always all;
+  mentor role defaults to none (future mentor logins get a `coach_id` link).
+- **Update Mentee tab (§551/§552)** — Transition Mentee form: load a mentee →
+  from-state (CA details, our status, current engagement) → **Transition to…**
+  dropdown from Company options (new `"list"` control; §26 verify). Apply is a
+  disabled "coming soon" (bones by request).
+- **Time clock tab (§208/§209)** — clock in/out (DB-backed), notes, delete
+  unsubmitted, **Submit for payroll** (locks), week/month tiles, all-staff month
+  table. One-open-entry guarded by a partial unique index.
+- **Report financial event tab (§651/§652)** — date/vendor/description/method +
+  receipt upload (private bucket, signed URLs); submit alerts staff via the new
+  **topbar notifications bell (§907)** (60s poll, unread badge, mark-all-read,
+  atomic `mark_notification_read` RPC).
+- **Margins §601 save bug FIXED** (user report: entered numbers didn't save or
+  chart). The logic was sound — failures were SILENT (missing table/RLS swallowed;
+  failed saves left the typed number showing). Now: prominent storage banner,
+  row-verified writes, failed saves revert the cell, success flashes ✓. If saving
+  still fails for the user, the banner now states the exact cause (likely `9981`
+  never actually applied).
+- **Adversarial review pass** — 61-agent workflow (7 area reviewers + 2 refuters
+  per finding): 27 raw → **25 confirmed, all fixed** in `ac49ced` (highlights: a
+  pre-scoped Build→ month was wiped on mount; `ilike` email matching could resolve
+  the WRONG user's permissions via `_`/`%` wildcards; UTC month attribution in time
+  totals; concurrent notification dismissals lost; storage DDL rollback risk in
+  9965; `setCompanyOption` false "Saved ✓" on unseeded keys — that last one now
+  guards EVERY company option).
+
+**Conventions locked this session:** verify writes with `.select()` and surface
+errors (no more silent Supabase no-ops); `APP_TABS` (`lib/permissions.ts`) is the
+single source of truth for top-nav tabs; time-entry/app-user emails are stored
+lowercased. **Next new migration is `9964_…`.**
+
+**Next session:** browser-verify the five new surfaces + cutover; then the teed-up
+phases — wire **Apply transition** (record it), notification **targeting** (org
+support group vs everyone), time-clock → payroll (Hourly staff §206) integration,
+admin-only enforcement of §405.
+
+---
+
+## ▶ Prior session START HERE (2026-07-09, session 013 — WRAPPED, MERGED TO `main`)
 
 **Session WRAPPED.** Two things shipped and are **both MERGED TO `main`** (fast-forwarded from
 `claude/payout-calculation-csv-export-mez3a9`; `main` = branch = `30d0723` at wrap, then this
