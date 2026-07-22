@@ -14,8 +14,11 @@ import { fmtDate } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 
+// LOCAL calendar date (not UTC — toISOString would already be "tomorrow" for a
+// US user in the evening, wrongly dropping an engagement that ends today).
 function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // The engagement that best represents "current": an un-canceled one covering

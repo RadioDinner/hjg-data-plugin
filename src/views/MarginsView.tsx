@@ -157,6 +157,7 @@ export function MarginsView() {
         return next;
       });
       setError(null);
+      setStorageError(null); // a successful save proves storage works now
     } catch (e) {
       setError(`Staff hours did NOT save: ${String(e)}`);
       throw e; // let the cell revert so the number never LOOKS saved

@@ -176,7 +176,10 @@ export function BuildPayoutView({
   // payments recorded the builder opens on June 2026) — clamped to the nearest
   // month this coach actually has lines in. More provisions can layer on later.
   useEffect(() => {
-    if (coach == null) return;
+    // Don't touch ym until the data (and so monthsByCoach) has actually loaded —
+    // running earlier would wipe a pre-scoped initialYm ("Build →" on a month
+    // row) and then land on the default month instead of the clicked one.
+    if (!timeline || coach == null) return;
     const months = monthsByCoach.get(coach) ?? [];
     if (!months.length) {
       setYm("");
@@ -188,7 +191,7 @@ export function BuildPayoutView({
       return;
     }
     if (!months.includes(ym)) setYm(months[0]);
-  }, [coach, monthsByCoach, ym, paidMonths]);
+  }, [timeline, coach, monthsByCoach, ym, paidMonths]);
 
   const savedRec = coach != null && ym ? builds.get(payoutBuildKey(coach, ym)) : undefined;
 
@@ -353,7 +356,10 @@ export function BuildPayoutView({
 
   async function discard() {
     if (coach == null || !ym || !savedRec) return;
-    if (!confirm(`Discard the saved review for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?`)) return;
+    const paidWarning = savedRec.paymentSentAt
+      ? ` This build is marked PAID${savedRec.paymentRef ? ` (Melio ref ${savedRec.paymentRef})` : ""} — discarding DELETES the payment record and reference too.`
+      : "";
+    if (!confirm(`Discard the saved review for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?${paidWarning}`)) return;
     setBusy(true);
     try {
       await deletePayoutBuild(coach, ym);
@@ -552,9 +558,12 @@ export function BuildPayoutView({
                   {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)}
                   <SectionId id="build.review" />
                   {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
-                  {locked && (
-                    <span className="pill pill--success" style={{ marginLeft: 8 }} title={paid && savedRec?.paymentRef ? `Melio ref ${savedRec.paymentRef}` : undefined}>
-                      {paid ? "paid ✓" : "approved"}
+                  {locked && !paid && <span className="pill pill--success" style={{ marginLeft: 8 }}>approved</span>}
+                  {/* The paid pill renders whatever the status, so reopening an
+                      already-paid build never hides that money already moved. */}
+                  {paid && (
+                    <span className="pill pill--success" style={{ marginLeft: 8 }} title={savedRec?.paymentRef ? `Melio ref ${savedRec.paymentRef}` : undefined}>
+                      paid ✓{!locked ? " (reopened)" : ""}
                     </span>
                   )}
                   {dirty && <span className="pill pill--running" style={{ marginLeft: 8 }}>unsaved</span>}
@@ -621,9 +630,9 @@ export function BuildPayoutView({
                     setPayErr(null);
                     setPayModal(true);
                   }}
-                  disabled={!locked || !savedRec}
+                  disabled={!savedRec || (!locked && !paid)}
                   title={
-                    !locked || !savedRec
+                    !savedRec || (!locked && !paid)
                       ? "Approve (and save) the build first — Payment sent records that the approved payout was actually paid"
                       : paid
                       ? `Payment sent ${savedRec?.paymentSentAt ? fmtDateTime(savedRec.paymentSentAt) : ""}${savedRec?.paymentRef ? ` · Melio ref ${savedRec.paymentRef}` : ""} — click to edit the reference or clear the mark`
@@ -831,7 +840,22 @@ export function BuildPayoutView({
                     </button>
                   </>
                 ) : (
-                  <button className="btn btn--sm" onClick={() => persist("draft")} disabled={busy}>
+                  <button
+                    className="btn btn--sm"
+                    onClick={() => {
+                      if (
+                        paid &&
+                        !confirm(
+                          `This build is already marked PAID${savedRec?.paymentRef ? ` (Melio ref ${savedRec.paymentRef})` : ""}. ` +
+                            "Reopening lets the amounts change while the payment record stays — if you re-approve at a different total, " +
+                            "what was actually sent won't match the build. Continue?"
+                        )
+                      )
+                        return;
+                      persist("draft");
+                    }}
+                    disabled={busy}
+                  >
                     Reopen
                   </button>
                 )}

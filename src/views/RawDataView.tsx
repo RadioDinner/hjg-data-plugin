@@ -81,18 +81,28 @@ export function RawDataView() {
     });
   }, [cellRows, keys, search, activeColFilters]);
 
-  // Every raw table in one .xlsx workbook, each table on its own sheet. (Untouched.)
+  // Every raw table in one .xlsx workbook, each table on its own sheet. A
+  // table that can't be read (its hand-pasted migration not applied yet) is
+  // SKIPPED with a note instead of sinking the whole export — the previously
+  // working tables must keep exporting during a migration window.
   async function exportWorkbook() {
     setExportingAll(true);
     setError(null);
     try {
       const sheets: WorkbookSheet[] = [];
+      const skipped: string[] = [];
       for (const t of RAW_TABLES) {
-        const all = await fetchAllRows(t);
-        const cols = all.length > 0 ? Object.keys(all[0]) : [];
-        sheets.push({ name: t, columns: cols, rows: all.map((row) => cols.map((c) => csvCell(toCell(row[c])))) });
+        try {
+          const all = await fetchAllRows(t);
+          const cols = all.length > 0 ? Object.keys(all[0]) : [];
+          sheets.push({ name: t, columns: cols, rows: all.map((row) => cols.map((c) => csvCell(toCell(row[c])))) });
+        } catch {
+          skipped.push(t);
+        }
       }
+      if (sheets.length === 0) throw new Error("No tables could be read.");
       await downloadWorkbook("hjg-raw-data", sheets);
+      if (skipped.length) setError(`Exported, but skipped unreadable table(s): ${skipped.join(", ")} — migration not applied yet?`);
     } catch (e) {
       setError(String(e));
     } finally {

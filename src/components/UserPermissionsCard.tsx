@@ -3,7 +3,6 @@ import { useAuth } from "../auth";
 import {
   APP_TABS,
   APP_ROLES,
-  DEFAULT_ROLE_TABS,
   resolveAllowedTabs,
   fetchAppUsers,
   saveAppUser,
@@ -56,6 +55,27 @@ export function UserPermissionsCard() {
   );
 
   async function persist(rec: AppUserRecord) {
+    // Self-lockout guard: if this edit is to MY OWN row and it takes away tabs
+    // I can currently see (Active off, role demotion, or an explicit list
+    // shrinking), confirm before saving — one mis-click here otherwise locks
+    // the editor out of this very screen on their next reload.
+    const myEmail = (user?.email ?? "").trim().toLowerCase();
+    const isMe = myEmail && rec.email.trim().toLowerCase() === myEmail;
+    if (isMe) {
+      const before = users.find((u) => u.id === rec.id);
+      const beforeTabs = resolveAllowedTabs(before ?? null);
+      const afterTabs = resolveAllowedTabs(rec);
+      const losing = [...beforeTabs].filter((k) => !afterTabs.has(k));
+      if (
+        losing.length > 0 &&
+        !confirm(
+          `You're editing YOUR OWN access — this removes ${losing.length} tab${losing.length === 1 ? "" : "s"} from your account` +
+            `${losing.includes("admin") ? " INCLUDING the Admin tab (where this screen lives)" : ""}. ` +
+            "The change applies on your next reload/sign-in. Continue?"
+        )
+      )
+        return;
+    }
     setBusy(true);
     setFlash(null);
     try {
@@ -113,10 +133,13 @@ export function UserPermissionsCard() {
     }
   }
 
-  // Toggle one tab for a user. A row whose allowed_tabs is NULL (role default)
-  // materializes the default list first, so the first click behaves as expected.
+  // Toggle one tab for a user. The base is the EFFECTIVE set (what the
+  // checkboxes display, via resolveAllowedTabs) — not the raw stored list —
+  // so the click always changes exactly the box that was clicked. (A staff row
+  // whose stored list is empty resolves fail-open to all tabs; materializing
+  // from the stored [] would make every uncheck a silent no-op.)
   function toggleTab(rec: AppUserRecord, tabKey: string, on: boolean) {
-    const base = rec.allowedTabs ?? [...DEFAULT_ROLE_TABS[rec.role]];
+    const base = [...resolveAllowedTabs({ ...rec, isActive: true })];
     const next = on ? [...new Set([...base, tabKey])] : base.filter((k) => k !== tabKey);
     persist({ ...rec, allowedTabs: next });
   }
@@ -169,6 +192,9 @@ export function UserPermissionsCard() {
                         <input
                           className="input--inline"
                           type="text"
+                          // Keyed by the stored value so a refetch (failed save,
+                          // concurrent edit) actually resets what's shown.
+                          key={`${u.id}:${u.displayName ?? ""}`}
                           defaultValue={u.displayName ?? ""}
                           placeholder="—"
                           onBlur={(e) => {

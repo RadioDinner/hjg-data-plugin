@@ -1744,16 +1744,20 @@ export async function fetchAppUsers(): Promise<AppUserRecord[]> {
 
 // The signed-in user's permission record, or null when none exists (=> all
 // tabs). DEFENSIVE: any error (table missing, RLS) also returns null so an
-// unapplied migration can never lock the app.
+// unapplied migration can never lock the app. Matching is exact
+// case-insensitive EQUALITY done client-side — NOT ilike, whose pattern
+// characters (_ %) would let j_smith@x.com match jasmith@x.com's row. The
+// table is tiny (one row per person), so fetching it is cheap.
 export async function fetchMyAppUser(email: string | null | undefined): Promise<AppUserRecord | null> {
   if (!email) return null;
+  const want = email.trim().toLowerCase();
   const { data, error } = await supabase
     .from("app_users")
     .select("id,email,display_name,role,allowed_tabs,coach_id,is_active,notes")
-    .ilike("email", email)
-    .limit(1);
-  if (error || !data || data.length === 0) return null;
-  return normAppUserRow(data[0] as Record<string, unknown>);
+    .limit(500);
+  if (error || !data) return null;
+  const hit = (data as Record<string, unknown>[]).find((r) => String(r.email ?? "").trim().toLowerCase() === want);
+  return hit ? normAppUserRow(hit) : null;
 }
 
 export async function saveAppUser(
@@ -1829,16 +1833,50 @@ export async function fetchTimeEntries(limit = 1000): Promise<TimeEntry[]> {
   return ((data ?? []) as Record<string, unknown>[]).map(normTimeEntry);
 }
 
+// Emails are normalized to lowercase at every write so reads/updates can use
+// exact equality without casing drift between devices or account changes.
+const normEmail = (e: string) => e.trim().toLowerCase();
+
 export async function clockIn(createdBy: string, userEmail: string): Promise<void> {
+  const email = normEmail(userEmail);
+  // Refuse a second open entry (a stale tab still showing "Clock in"). The
+  // partial unique index in 9966 backstops the remaining race window.
+  const { data: openRows, error: openErr } = await supabase
+    .from("time_entries")
+    .select("id")
+    .eq("user_email", email)
+    .is("clock_out", null)
+    .limit(1);
+  if (openErr) throw new Error(`${openErr.message} — is migration 9966_time_entries.sql applied?`);
+  if (openRows && openRows.length > 0) throw new Error("You're already clocked in (maybe from another device) — refresh to see the running entry.");
   const { error } = await supabase
     .from("time_entries")
-    .insert({ user_email: userEmail, clock_in: new Date().toISOString(), created_by: createdBy || null });
-  if (error) throw new Error(`${error.message} — is migration 9966_time_entries.sql applied?`);
+    .insert({ user_email: email, clock_in: new Date().toISOString(), created_by: createdBy || null });
+  if (error) {
+    // The partial unique index (uq_time_entries_open) caught a racing double
+    // clock-in — report it as the state it is, not as a database problem.
+    if (/uq_time_entries_open|duplicate key/i.test(error.message))
+      throw new Error("You're already clocked in (maybe from another device) — refresh to see the running entry.");
+    throw new Error(`${error.message} — is migration 9966_time_entries.sql applied?`);
+  }
 }
 
-export async function clockOut(entryId: string): Promise<void> {
-  const { error } = await supabase.from("time_entries").update({ clock_out: new Date().toISOString() }).eq("id", entryId);
+// Close an open entry. Guards: only a still-open row is touched (a stale tab
+// can't rewrite an entry that was already closed/submitted elsewhere), and the
+// timestamp is clamped to >= clock_in so cross-device clock skew can't trip the
+// table's clock_out >= clock_in check and wedge the entry open.
+export async function clockOut(entryId: string, clockInIso?: string): Promise<void> {
+  let out = new Date().toISOString();
+  if (clockInIso && out < clockInIso) out = clockInIso;
+  const { data, error } = await supabase
+    .from("time_entries")
+    .update({ clock_out: out })
+    .eq("id", entryId)
+    .is("clock_out", null)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0)
+    throw new Error("This entry was already clocked out (maybe on another device) — refreshing the list.");
 }
 
 export async function updateTimeEntryNote(entryId: string, note: string | null): Promise<void> {
@@ -1847,16 +1885,21 @@ export async function updateTimeEntryNote(entryId: string, note: string | null):
 }
 
 export async function deleteTimeEntry(entryId: string): Promise<void> {
-  const { error } = await supabase.from("time_entries").delete().eq("id", entryId);
+  // RLS only lets a person delete their OWN unsubmitted entries — verify a row
+  // actually went away so a filtered-to-nothing delete isn't shown as success.
+  const { data, error } = await supabase.from("time_entries").delete().eq("id", entryId).select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0)
+    throw new Error("Couldn't delete this entry (not yours, or already submitted) — refreshing the list.");
 }
 
 // Submit every completed, unsubmitted entry for this person for payroll.
+// Matches by the same normalized (lowercase) email clockIn writes.
 export async function submitTimeEntries(userEmail: string): Promise<number> {
   const { data, error } = await supabase
     .from("time_entries")
     .update({ submitted_at: new Date().toISOString() })
-    .eq("user_email", userEmail)
+    .eq("user_email", normEmail(userEmail))
     .is("submitted_at", null)
     .not("clock_out", "is", null)
     .select("id");
@@ -1974,15 +2017,25 @@ export async function createNotification(
   if (error) throw new Error(`${error.message} — is migration 9965_financial_events.sql applied?`);
 }
 
-// Append this user to read_by on the given notifications (dismiss). Row-by-row
-// keeps it simple; the feed is small.
+// Append this user to read_by on the given notifications (dismiss). Prefers
+// the atomic server-side append (mark_notification_read in migration 9965 —
+// array_append in one UPDATE, so two users dismissing concurrently can't
+// overwrite each other); falls back to a FRESH read-modify-write per row when
+// the function isn't installed (still narrows the stale-snapshot window from
+// the 60s poll to milliseconds).
 export async function markNotificationsRead(userId: string, notifications: AppNotification[]): Promise<void> {
   if (!userId) return;
   for (const n of notifications) {
     if (n.readBy.includes(userId)) continue;
+    const rpc = await supabase.rpc("mark_notification_read", { nid: n.id });
+    if (!rpc.error) continue;
+    const fresh = await supabase.from("app_notifications").select("read_by").eq("id", n.id).limit(1);
+    if (fresh.error) throw new Error(fresh.error.message);
+    const current = Array.isArray(fresh.data?.[0]?.read_by) ? (fresh.data![0].read_by as string[]) : [];
+    if (current.includes(userId)) continue;
     const { error } = await supabase
       .from("app_notifications")
-      .update({ read_by: [...n.readBy, userId] })
+      .update({ read_by: [...current, userId] })
       .eq("id", n.id);
     if (error) throw new Error(error.message);
   }
@@ -2115,8 +2168,13 @@ export async function fetchCompanyOptions(): Promise<Record<string, string>> {
 }
 
 export async function setCompanyOption(key: string, value: string): Promise<void> {
-  const { error } = await supabase.from("app_settings").update({ value }).eq("key", key);
+  // Staff can UPDATE app_settings but not INSERT, so an unseeded key makes the
+  // update match 0 rows without erroring — verify a row was actually written so
+  // "Saved ✓" is never shown for a value that silently didn't persist.
+  const { data, error } = await supabase.from("app_settings").update({ value }).eq("key", key).select("key");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0)
+    throw new Error(`Option "${key}" isn't seeded in app_settings — apply its migration in the Supabase SQL Editor first.`);
 }
 
 // --- Payment groups (Company options §451) ---

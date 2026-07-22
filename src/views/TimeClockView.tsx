@@ -33,6 +33,14 @@ function startOfWeekMs(now: Date): number {
   return d.getTime();
 }
 
+// LOCAL 'YYYY-MM' of a timestamp — month totals must follow the user's wall
+// clock, not UTC (toISOString would push a late-evening US clock-in into next
+// month at every month boundary).
+function localYm(ts: number | string): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 // Time clock (§208) — staff/mentors clock in and out, track their time, and
 // submit it for payroll. Every entry lands in `time_entries` (migration 9966),
 // so this data can fuel metrics later. Entries are matched to people by their
@@ -73,7 +81,7 @@ export function TimeClockView() {
 
   const totals = useMemo(() => {
     const weekStart = startOfWeekMs(new Date(now));
-    const monthKey = new Date(now).toISOString().slice(0, 7);
+    const monthKey = localYm(now);
     let week = 0;
     let month = 0;
     let unsubmitted = 0;
@@ -81,21 +89,24 @@ export function TimeClockView() {
       const h = entryHours(e, now);
       const start = Date.parse(e.clockIn);
       if (start >= weekStart) week += h;
-      if (e.clockIn.slice(0, 7) === monthKey) month += h;
+      if (localYm(e.clockIn) === monthKey) month += h;
       if (!e.submittedAt && e.clockOut) unsubmitted += h;
     }
     return { week: round2(week), month: round2(month), unsubmitted: round2(unsubmitted) };
   }, [mine, now]);
 
-  // All-staff roll-up (everyone's hours this month) — the "fuel our metrics" seed.
+  // All-staff roll-up (everyone's hours this month) — the "fuel our metrics"
+  // seed. Grouped by lowercased email so casing drift can't split one person
+  // into two rows.
   const staffTotals = useMemo(() => {
-    const monthKey = new Date(now).toISOString().slice(0, 7);
+    const monthKey = localYm(now);
     const m = new Map<string, { month: number; open: boolean }>();
     for (const e of entries) {
-      const rec = m.get(e.userEmail) ?? { month: 0, open: false };
-      if (e.clockIn.slice(0, 7) === monthKey) rec.month += entryHours(e, now);
+      const email = e.userEmail.toLowerCase();
+      const rec = m.get(email) ?? { month: 0, open: false };
+      if (localYm(e.clockIn) === monthKey) rec.month += entryHours(e, now);
       if (!e.clockOut) rec.open = true;
-      m.set(e.userEmail, rec);
+      m.set(email, rec);
     }
     return [...m.entries()]
       .map(([email, v]) => ({ email, month: round2(v.month), open: v.open }))
@@ -121,11 +132,12 @@ export function TimeClockView() {
     setBusy(true);
     setFlash(null);
     try {
-      await clockOut(open.id);
+      await clockOut(open.id, open.clockIn);
       await load();
       setFlash("Clocked out.");
     } catch (e) {
       setError(String(e));
+      await load(); // e.g. already closed on another device — re-sync the list
     } finally {
       setBusy(false);
     }
@@ -165,6 +177,7 @@ export function TimeClockView() {
       setEntries((prev) => prev.filter((x) => x.id !== e.id));
     } catch (err) {
       setError(String(err));
+      await load(); // the delete may have been blocked by RLS — show reality
     }
   }
 

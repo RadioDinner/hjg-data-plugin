@@ -19,6 +19,12 @@ create table if not exists time_entries (
   check (clock_out is null or clock_out >= clock_in)
 );
 create index if not exists idx_time_entries_email on time_entries (user_email, clock_in desc);
+-- At most ONE open (clock_out null) entry per person — a stale second tab that
+-- still shows "Clock in" can't create a parallel running entry that would
+-- double-count payroll hours. (Emails are written lowercased by the app;
+-- lower() here covers any hand-inserted rows too.)
+create unique index if not exists uq_time_entries_open
+  on time_entries (lower(user_email)) where clock_out is null;
 drop trigger if exists trg_time_entries_updated on time_entries;
 create trigger trg_time_entries_updated before update on time_entries
   for each row execute function set_updated_at();

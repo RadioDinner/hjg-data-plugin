@@ -14,8 +14,11 @@ import { SectionId } from "../components/SectionId";
 
 const PAYMENT_METHODS = ["Card", "Check", "Cash", "ACH / bank transfer", "Melio", "Other"];
 
+// LOCAL calendar date (not UTC — toISOString would default the form to
+// "tomorrow" for a US user in the evening).
 function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Report financial event (§651) — a quick form for logging a transaction: when
@@ -77,6 +80,7 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
         receiptPath,
       });
       // The alert for org support staff — lands in the topbar bell (§907).
+      let notified = true;
       try {
         await createNotification(user?.id ?? "", {
           kind: "financial_event",
@@ -85,7 +89,9 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
           linkTab: "finevent",
         });
       } catch {
-        // The event itself saved; a failed notification shouldn't eat the report.
+        // The event itself saved; a failed notification shouldn't eat the
+        // report — but the flash must not claim staff were alerted.
+        notified = false;
       }
       setVendor("");
       setDescription("");
@@ -93,7 +99,11 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
       setFile(null);
       setFileKey((k) => k + 1);
       setHappenedOn(todayYmd());
-      setFlash("Financial event reported — org support staff have been notified.");
+      setFlash(
+        notified
+          ? "Financial event reported — org support staff have been notified."
+          : "Financial event SAVED, but the staff alert could not be sent (notifications table unavailable?) — tell support directly."
+      );
       await load();
       onSubmitted?.();
     } catch (e) {
@@ -103,13 +113,20 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
     }
   }
 
-  async function viewReceipt(path: string) {
-    try {
-      const url = await receiptUrl(path);
-      window.open(url, "_blank");
-    } catch (e) {
-      setError(String(e));
-    }
+  function viewReceipt(path: string) {
+    // Open the window synchronously in the click handler (popup blockers kill
+    // a window.open that happens after an await), then point it at the signed
+    // URL once it arrives.
+    const w = window.open("", "_blank");
+    receiptUrl(path)
+      .then((url) => {
+        if (w) w.location.href = url;
+        else window.location.href = url;
+      })
+      .catch((e) => {
+        w?.close();
+        setError(String(e));
+      });
   }
 
   return (
