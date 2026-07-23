@@ -258,6 +258,24 @@ body {
 .card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; }
 .card__head h2 { margin: 0; }
 
+/* --- Collapsible cards (src/components/Collapsible.tsx) --- */
+.collapse-controls { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+.collapsible__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.collapsible__title { margin: 0; }
+.collapsible__toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer; text-align: left;
+}
+.collapsible__toggle:hover .collapsible__label { text-decoration: underline; text-underline-offset: 2px; }
+.collapsible__toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.collapsible__chevron { display: inline-block; font-size: 11px; color: var(--muted); transition: transform .15s ease; flex: 0 0 auto; }
+.collapsible__toggle[aria-expanded="true"] .collapsible__chevron { transform: rotate(90deg); }
+.collapsible__extras { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.collapsible__body { margin-top: 14px; }
+/* an inset sub-section reads tighter than a top-level card */
+.collapsible.card--inset .collapsible__body { margin-top: 12px; }
+
 /* --- ChartCard split --- */
 .chart-card__split { display: block; }
 .chart-card__split--both { display: flex; flex-direction: column; gap: 18px; }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "../theme";
+import { CollapsibleCard } from "../components/Collapsible";
 
 // The "Maps" tab — visual, in-app explainers, each a self-contained static page
 // under public/ embedded in an iframe (kept as snapshots; no app data needed):
@@ -30,12 +31,11 @@ export function MapsView() {
   const src = `${cur.src}?theme=${theme}`; // the static pages read ?theme to match light/dark
 
   return (
-    <section className="card" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="card__head">
-        <div>
-          <h2>Maps</h2>
-          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{cur.blurb}</div>
-        </div>
+    <CollapsibleCard
+      id="maps.screen"
+      title="Maps"
+      sectionId="maps.screen"
+      actions={
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div className="seg" role="tablist" aria-label="Map">
             {MAPS.map((m) => (
@@ -54,7 +54,9 @@ export function MapsView() {
             Full screen ↗
           </a>
         </div>
-      </div>
+      }
+    >
+      <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 12 }}>{cur.blurb}</div>
 
       <iframe
         key={cur.key + theme}
@@ -69,6 +71,6 @@ export function MapsView() {
           background: "var(--panel-2)",
         }}
       />
-    </section>
+    </CollapsibleCard>
   );
 }

@@ -4,6 +4,36 @@ Merged to `main` per the user's instruction ("Merge to main for this session").
 Version bumped **0.4.0 → 0.5.0**, then **→ 0.5.1** for the pay-stub font change
 (topbar chip shows `v0.5.1`).
 
+## Follow-up: collapsible cards everywhere + expand/collapse-all (0.6.0)
+
+User: "make the screens on Admin (400) and Company options (451) collapsible with
+expand-all/collapse-all" → then "actually do this for ALL the screens, and save
+the last state (persist collapse prefs across reloads)."
+
+- **`src/components/Collapsible.tsx`** (new): `CollapseProvider` (React context, one
+  per tab via `App.tsx` `key={tab}`) persists the COLLAPSED set to
+  `localStorage["hjg.collapse.<tab>"]`; `CollapsibleCard` (accessible accordion —
+  `heading > button[aria-expanded]`, rotating chevron, SectionId badge inside the
+  toggle, help/actions kept outside it, body unmounted while collapsed);
+  `CollapseControls` (Expand all / Collapse all, auto-hidden until ≥2 sections
+  mount). CSS added to `styles.css` (`.collapsible*`, `.collapse-controls`).
+- **`App.tsx`** wraps each tab's view in `<CollapseProvider key={tab} storageKey={tab}>`
+  + renders `<CollapseControls/>` once per screen.
+- **Converted every screen's cards** to `CollapsibleCard`: Admin (Sync/Manual
+  metrics/Mentor capacity/Settings/User permissions), Company options (each section
+  group + Payment groups), Metrics (ChartCard — covers all chart cards — + capacity +
+  PipelineTimingCard + MenteeFunnelCard), Pay staff (header + reconcile + payout-by-
+  month), Time clock (3), Financial event (2), Update Mentee (2), Discovery, Margins,
+  Raw data, Maps (1 each), Mentees (roster + detail panel). Header action buttons
+  (Sync now, Clock in, Export…) ride in the header `actions` slot so they stay visible
+  when a section is collapsed.
+- Default = everything expanded (nothing stored) → no behavior change until a user
+  collapses something. Render-checked via a headless-Chromium harness (chevron
+  rotation, persisted collapsed section, controls). typecheck ×2 + verify (622) +
+  build green; `--noUnusedLocals` confirms every converted file's imports are clean.
+- **Also (0.6.0):** pay-stub copy tweak — "does NOT reduce your pay" → "does not
+  reduce your pay" (`lib/payStub.ts`; verify §13d assertion updated).
+
 ## Follow-up: pay-stub fonts (0.5.1)
 
 User: "change the paystub fonts to something clean and modern/readable instead

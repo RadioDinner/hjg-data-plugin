@@ -231,7 +231,7 @@ const fmtD = (ymd: string) => {
 const DISPO_TEXT: Record<StubItemDisposition, { label: string; cls: string }> = {
   counted: { label: "counted", cls: "ok" },
   "credit-counted": { label: "credit — reduces the pay basis", cls: "warn" },
-  "credit-out": { label: "credit reviewed by HJG — does NOT reduce your pay", cls: "good" },
+  "credit-out": { label: "credit reviewed by HJG — does not reduce your pay", cls: "good" },
   "not-pay": { label: "not mentoring revenue — not part of mentor pay", cls: "mut" },
   "opted-in": { label: "included by HJG review", cls: "good" },
   "removed-by-review": { label: "removed by HJG review", cls: "warn" },

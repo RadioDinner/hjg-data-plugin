@@ -12,7 +12,7 @@ import {
 } from "../db";
 import { fmtDate } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
-import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 
 // LOCAL calendar date (not UTC — toISOString would already be "tomorrow" for a
 // US user in the evening, wrongly dropping an engagement that ends today).
@@ -118,29 +118,20 @@ export function UpdateMenteeView() {
 
   return (
     <div className="stack">
-      <section className="card">
-        <div className="card__head">
-          <div>
-            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Update Mentee <SectionId id="updateMentee.screen" />
-              <HelpButton id="updateMentee.transition" label="Update Mentee" />
-            </h2>
-            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Forms that change a mentee's state. The first form is <strong>Transition Mentee</strong>: load a mentee to
-              see their current (from) state, then pick what they're transitioning to. Recording the transition is the
-              next build phase — today this is the wiring.
-            </div>
-          </div>
+      <CollapsibleCard
+        id="updateMentee.screen"
+        title="Update Mentee"
+        sectionId="updateMentee.screen"
+        help={<HelpButton id="updateMentee.transition" label="Update Mentee" />}
+      >
+        <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+          Forms that change a mentee's state. The first form is <strong>Transition Mentee</strong>: load a mentee to
+          see their current (from) state, then pick what they're transitioning to. Recording the transition is the
+          next build phase — today this is the wiring.
         </div>
-      </section>
+      </CollapsibleCard>
 
-      <section className="card">
-        <div className="card__head">
-          <h2 style={{ fontSize: 15 }}>
-            Transition Mentee <SectionId id="updateMentee.transition" />
-          </h2>
-        </div>
-
+      <CollapsibleCard id="updateMentee.transition" title="Transition Mentee" sectionId="updateMentee.transition">
         {/* Picker: search + select + Load. */}
         <div className="filter-bar" style={{ padding: "4px 0 12px", borderBottom: "1px solid var(--line)" }}>
           <label className="filter">
@@ -247,7 +238,7 @@ export function UpdateMenteeView() {
             </div>
           </div>
         )}
-      </section>
+      </CollapsibleCard>
     </div>
   );
 }

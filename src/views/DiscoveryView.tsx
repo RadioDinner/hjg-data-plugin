@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { HelpButton } from "../components/HelpDrawer";
+import { CollapsibleCard } from "../components/Collapsible";
 import { fmtDate } from "../format";
 import {
   clearDiscoveryOutcome,
@@ -147,11 +148,13 @@ export function DiscoveryView() {
   }, [year]);
 
   return (
-    <section className="card">
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        Discovery calls <HelpButton id="discovery.tab" label="Discovery calls" />
-      </h2>
-      <p className="view__hint">
+    <CollapsibleCard
+      id="discovery.screen"
+      title="Discovery calls"
+      sectionId="discovery.screen"
+      help={<HelpButton id="discovery.tab" label="Discovery calls" />}
+    >
+      <p className="view__hint" style={{ marginTop: -2 }}>
         Every discovery call synced from CoachAccountable. Status is computed automatically — a call converts when the
         prospect buys JumpStart Your Freedom (Waiting List) on or after the call, stays pending for 30 days otherwise,
         then becomes not converted. Set an outcome here to override (e.g. a no-show), or Clear to revert to automatic.
@@ -211,6 +214,6 @@ export function DiscoveryView() {
           </table>
         </div>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

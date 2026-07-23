@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { downloadWorkbook, type WorkbookSheet } from "../xlsx";
 import { fetchAllRows, RAW_TABLES, type RawTable } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
+import { CollapsibleCard } from "../components/Collapsible";
 import { SortableTable, type Cell, type Row, type SortColumn } from "../components/SortableTable";
 
 // Coerce any DB value into a sortable/searchable cell: objects/arrays (jsonb) →
@@ -113,23 +114,23 @@ export function RawDataView() {
   const anyFilter = search.trim() !== "" || activeColFilters.length > 0;
 
   return (
-    <section className="card">
-      <div className="card__head">
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          Raw data <HelpButton id="raw.data" label="Raw data" />
-        </h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="btn btn--sm"
-            onClick={exportWorkbook}
-            disabled={exportingAll}
-            title="Download every table in one Excel workbook, each table on its own sheet"
-          >
-            {exportingAll ? "Exporting…" : "Export all (.xlsx)"}
-          </button>
-        </div>
-      </div>
-      <p className="view__hint">
+    <CollapsibleCard
+      id="raw.screen"
+      title="Raw data"
+      sectionId="raw.screen"
+      help={<HelpButton id="raw.data" label="Raw data" />}
+      actions={
+        <button
+          className="btn btn--sm"
+          onClick={exportWorkbook}
+          disabled={exportingAll}
+          title="Download every table in one Excel workbook, each table on its own sheet"
+        >
+          {exportingAll ? "Exporting…" : "Export all (.xlsx)"}
+        </button>
+      }
+    >
+      <p className="view__hint" style={{ marginTop: -2 }}>
         The data synced from CoachAccountable, straight from the database tables. Search across all columns, click a
         header to sort, or add per-column filters. The “Export CSV” button downloads the current filtered + sorted view.
       </p>
@@ -194,6 +195,6 @@ export function RawDataView() {
           <SortableTable columns={columns} rows={filtered} exportName={table} maxRows={RENDER_CAP} emptyText="No rows match the filters." />
         </>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

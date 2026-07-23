@@ -24,6 +24,7 @@ import {
 import { SortableTable, type SortColumn, type Row } from "../components/SortableTable";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 import { NotionImportModal } from "../components/NotionImportModal";
 import { fmtDate } from "../format";
 
@@ -483,7 +484,7 @@ export function MenteesView() {
 
       <div className="mentee-layout">
         <div className="mentee-layout__main">
-      <div className="card card--inset" style={{ marginBottom: 16 }}>
+      <CollapsibleCard variant="inset" id="mentees.roster" title="Roster" sectionId="mentees.roster" style={{ marginBottom: 16 }}>
         <div className="journey-filters">
           <label className="journey-filters__field">
             <span>Search</span>
@@ -538,26 +539,24 @@ export function MenteesView() {
         {loading ? (
           <div className="loading">Loading…</div>
         ) : (
-          <>
-            <SectionId id="mentees.roster" />
-            <SortableTable columns={columns} rows={tableRows} exportName="mentees" maxRows={500} emptyText="No mentees match the filters." />
-          </>
+          <SortableTable columns={columns} rows={tableRows} exportName="mentees" maxRows={500} emptyText="No mentees match the filters." />
         )}
-      </div>
+      </CollapsibleCard>
         </div>
 
         <aside className="mentee-panel">
         {selectedRow && selectedEff ? (
-        <div className="card" style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <h2 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
-              {selectedEff.name} <span className={pillClass(selectedEff)}>{selectedEff.statusLabel}</span>
-              <SectionId id="mentees.detail" />
-            </h2>
+        <CollapsibleCard
+          id="mentees.detail"
+          sectionId="mentees.detail"
+          style={{ marginBottom: 18 }}
+          title={<>{selectedEff.name} <span className={pillClass(selectedEff)}>{selectedEff.statusLabel}</span></>}
+          actions={
             <button className="btn btn--sm" onClick={() => setSelectedId(null)}>
               Close
             </button>
-          </div>
+          }
+        >
           <p className="view__hint" style={{ marginTop: 4 }}>
             Coach: <strong>{selectedEff.ownerCoachName ?? "—"}</strong> · {selectedEff.meetingCount} meetings ·{" "}
             {selectedRow.client_id != null ? `CA client #${selectedRow.client_id}` : "Notion-only (no CA client)"} · CA synced:{" "}
@@ -798,7 +797,7 @@ export function MenteesView() {
               )}
             </div>
           </div>
-        </div>
+        </CollapsibleCard>
         ) : (
           <div className="card mentee-panel__empty">
             <p className="muted" style={{ margin: 0 }}>

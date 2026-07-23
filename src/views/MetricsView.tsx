@@ -47,7 +47,7 @@ import {
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
-import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 import { PipelineTimingCard } from "../components/PipelineTimingCard";
 import { MenteeFunnelCard } from "../components/MenteeFunnelCard";
 import { useChartTokens } from "../theme";
@@ -288,14 +288,13 @@ function ChartCard({
   const showTable = !!table && view !== "graph";
 
   return (
-    <section className="card">
-      <div className="card__head">
-        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {title}
-          {sectionId && <SectionId id={sectionId} />}
-        </h2>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {helpId && <HelpButton id={helpId} label={title} />}
+    <CollapsibleCard
+      id={sectionId ?? `metrics:${title}`}
+      title={title}
+      sectionId={sectionId}
+      help={helpId ? <HelpButton id={helpId} label={title} /> : undefined}
+      actions={
+        <>
           {table && (
             <button
               className="btn btn--sm"
@@ -325,8 +324,9 @@ function ChartCard({
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
       {extra}
       <div className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}>
         {showGraph && (
@@ -340,7 +340,7 @@ function ChartCard({
           </div>
         )}
       </div>
-    </section>
+    </CollapsibleCard>
   );
 }
 
@@ -1843,12 +1843,13 @@ export function MetricsView() {
             </ChartCard>
           </div>
 
-          <section className="card" style={{ marginTop: 18 }}>
-            <div className="card__head">
-              <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                Mentor capacity utilization <HelpButton id="metrics.capacity" label="Mentor capacity utilization" />
-                <SectionId id="metrics.capacity" />
-              </h2>
+          <CollapsibleCard
+            id="metrics.capacity"
+            title="Mentor capacity utilization"
+            sectionId="metrics.capacity"
+            style={{ marginTop: 18 }}
+            help={<HelpButton id="metrics.capacity" label="Mentor capacity utilization" />}
+            actions={
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   className="btn btn--sm"
@@ -1877,8 +1878,9 @@ export function MetricsView() {
                   Explore
                 </button>
               </div>
-            </div>
-            <p className="view__hint">
+            }
+          >
+            <p className="view__hint" style={{ marginTop: -2 }}>
               Active mentees per mentor in the selected range vs the capacity set on the Admin tab. Mark coaches as
               mentors and set a capacity in <strong>Admin → Mentor capacity</strong>.
             </p>
@@ -1933,7 +1935,7 @@ export function MetricsView() {
                 </div>
               </>
             )}
-          </section>
+          </CollapsibleCard>
 
           <div style={{ marginTop: 18 }}>
             <ChartCard

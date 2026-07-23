@@ -17,6 +17,7 @@ import { CompanyOptionsView } from "./views/CompanyOptionsView";
 import { SectionId } from "./components/SectionId";
 import { VersionBadge } from "./components/VersionBadge";
 import { NotificationsBell } from "./components/NotificationsBell";
+import { CollapseProvider, CollapseControls } from "./components/Collapsible";
 import { APP_TABS, resolveAllowedTabs, fetchMyAppUser } from "./db";
 
 // The tab list lives in lib/permissions.ts (APP_TABS) — the same list the
@@ -105,7 +106,12 @@ export function App() {
             </p>
           </div>
         ) : (
-          <>
+          // One collapse scope per tab: cards register with this provider and
+          // their expand/collapse state persists to localStorage under the tab
+          // key. `key={tab}` gives each screen a fresh provider (its own saved
+          // state) as the user switches tabs.
+          <CollapseProvider key={tab} storageKey={tab}>
+            <CollapseControls />
             {tab === "metrics" && <MetricsView />}
             {tab === "discovery" && <DiscoveryView />}
             {tab === "mentees" && <MenteesView />}
@@ -118,7 +124,7 @@ export function App() {
             {tab === "maps" && <MapsView />}
             {tab === "admin" && <AdminView />}
             {tab === "options" && <CompanyOptionsView />}
-          </>
+          </CollapseProvider>
         )}
       </div>
 

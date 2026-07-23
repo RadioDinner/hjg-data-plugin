@@ -24,3 +24,15 @@ also, I want to be able to manage "User permissions" from the admin dashboard. I
 
 --- 2026-07-22 (mid-session) ---
 I want the fonts on the paystubs to be changed to something more professional instead of the old classic looking fonts. I want something clean and modern/readable
+
+--- 2026-07-22 (mid-session) ---
+I want to make the screens on the admin tab (400) and Company options (451) collapsable, along with an expand all and a collapse all button
+
+--- 2026-07-22 (mid-session) ---
+actually do this for all the screens, just be sure to save the last state. If the user has 2 sections collapse and 1 uncollapsed, make sure the next time they load in, it goes back to their preferences
+
+--- 2026-07-22 (mid-session) ---
+I'm not seeing a signup email when I add a user from the admin side in (405)
+
+--- 2026-07-22 (mid-session) ---
+in the paystub there is a line that says "credit reviewed by HJG - does NOT reduce your pay". I want the NOT lowercase. Like "does not reduce your pay"

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { triggerSync } from "../api";
 import { useAuth } from "../auth";
-import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 import { UserPermissionsCard } from "../components/UserPermissionsCard";
 import { fmtDateTime } from "../format";
 import {
@@ -249,9 +249,8 @@ export function AdminView() {
   }, [mmRecent]);
 
   return (
-    <section>
-      <div className="card">
-        <h2>Sync <SectionId id="admin.sync" /></h2>
+    <section className="stack">
+      <CollapsibleCard id="admin.sync" title="Sync" sectionId="admin.sync">
         <p className="view__hint">
           Pull the latest data from CoachAccountable into the dashboard. Read-only toward CoachAccountable; capped
           at the daily call budget below.
@@ -298,10 +297,9 @@ export function AdminView() {
             </tbody>
           </table>
         </div>
-      </div>
+      </CollapsibleCard>
 
-      <div className="card" style={{ marginTop: 18 }}>
-        <h2>Manual metrics <SectionId id="admin.manualMetrics" /></h2>
+      <CollapsibleCard id="admin.manualMetrics" title="Manual metrics" sectionId="admin.manualMetrics">
         <p className="view__hint">
           Board numbers that don&apos;t come from CoachAccountable. Pick a month and enter the count for each; the
           Metrics tab sums them over its date range. Saving overwrites that month&apos;s value. Leave a field blank to
@@ -367,11 +365,13 @@ export function AdminView() {
             </tbody>
           </table>
         </div>
-      </div>
+      </CollapsibleCard>
 
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card__head">
-          <h2>Mentor capacity <SectionId id="admin.capacity" /></h2>
+      <CollapsibleCard
+        id="admin.capacity"
+        title="Mentor capacity"
+        sectionId="admin.capacity"
+        actions={
           <div className="seg">
             <button
               className={`seg__btn ${mcShowOnly === "all" ? "seg__btn--active" : ""}`}
@@ -386,7 +386,8 @@ export function AdminView() {
               Mentors only ({coaches.filter((c) => mcEdits[c.coachId]?.isMentor).length})
             </button>
           </div>
-        </div>
+        }
+      >
         <p className="view__hint">
           Mark which CoachAccountable coaches actually count as mentors, and set how many concurrent mentees each can
           take. <strong>Pay start</strong> anchors the staff-payment ramp to a mentor&apos;s true first
@@ -515,10 +516,9 @@ export function AdminView() {
           </button>
           {mcMsg && <span className="muted">{mcMsg}</span>}
         </div>
-      </div>
+      </CollapsibleCard>
 
-      <div className="card" style={{ marginTop: 18 }}>
-        <h2>Settings <SectionId id="admin.settings" /></h2>
+      <CollapsibleCard id="admin.settings" title="Settings" sectionId="admin.settings">
         <p className="view__hint">
           The daily CoachAccountable call cap is{" "}
           <strong>{cap === null ? "—" : `${cap} calls/day`}</strong> (plan limit × cap %). Leave the sync interval
@@ -548,7 +548,7 @@ export function AdminView() {
           </button>
         </div>
         {settingsMsg && <div className="notice notice--info">{settingsMsg}</div>}
-      </div>
+      </CollapsibleCard>
 
       <UserPermissionsCard />
     </section>

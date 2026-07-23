@@ -17,7 +17,7 @@ import {
   type CohortTier,
 } from "../db";
 import { HelpButton } from "./HelpDrawer";
-import { SectionId } from "./SectionId";
+import { CollapsibleCard } from "./Collapsible";
 import { useChartTokens } from "../theme";
 import { pct, signed, signedPp } from "../format";
 
@@ -145,12 +145,14 @@ export function PipelineTimingCard() {
   if (error) return <div className="error">{error}</div>;
 
   return (
-    <div className="card card--inset" style={{ marginBottom: 18 }}>
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        Pipeline timing — {compareMode ? "comparing start-date cohorts" : `${anyFilter ? "filtered" : "all"} mentees`}{" "}
-        <HelpButton id="metrics.pipelineTiming" label="Pipeline timing" />
-        <SectionId id="metrics.pipelineTiming" />
-      </h2>
+    <CollapsibleCard
+      id="metrics.pipelineTiming"
+      sectionId="metrics.pipelineTiming"
+      variant="inset"
+      style={{ marginBottom: 18 }}
+      help={<HelpButton id="metrics.pipelineTiming" label="Pipeline timing" />}
+      title={<>Pipeline timing — {compareMode ? "comparing start-date cohorts" : `${anyFilter ? "filtered" : "all"} mentees`}</>}
+    >
       <p className="view__hint">
         Average time each leg of the journey takes (Discovery → JumpStart → 4x → 2x → 1x → Graduation), across every mentee where
         both ends are known (n shown per leg). Off the Mentees source of truth (effective dates); test mentees excluded. All-time.
@@ -421,6 +423,6 @@ export function PipelineTimingCard() {
           </div>
         </>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

@@ -16,6 +16,7 @@ import {
   type TrendUnit,
 } from "../db";
 import { HelpButton } from "../components/HelpDrawer";
+import { CollapsibleCard } from "../components/Collapsible";
 import { PayGroupsCard } from "../components/PayGroupsCard";
 
 // Self-serve, organization-wide dashboard settings. Every option is declared in
@@ -93,8 +94,14 @@ export function CompanyOptionsView() {
         <p className="muted">No options defined yet.</p>
       ) : (
         sections.map(([section, opts]) => (
-          <div key={section} className="card card--inset" style={{ marginTop: 16 }}>
-            <h3>{section}</h3>
+          <CollapsibleCard
+            key={section}
+            id={`options.section.${section}`}
+            title={section}
+            variant="inset"
+            level={3}
+            style={{ marginTop: 16 }}
+          >
             <div className="options-grid">
               {opts.map((o) => (
                 <div key={o.key} className="option-row">
@@ -139,7 +146,7 @@ export function CompanyOptionsView() {
                 </div>
               ))}
             </div>
-          </div>
+          </CollapsibleCard>
         ))
       )}
     </section>

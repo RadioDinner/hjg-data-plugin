@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { useChartTokens } from "../theme";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 import { downloadCsv } from "../csv";
 import { fmtDate } from "../format";
 import {
@@ -215,18 +216,12 @@ export function MarginsView() {
 
   return (
     <div className="stack">
-      <section className="card">
-        <div className="card__head">
-          <div>
-            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Margins <HelpButton id="margins.tab" label="Margins" />
-            </h2>
-            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              {def.blurb} Delivered hours use each meeting's <strong>actual duration</strong> (end − start) when recorded,
-              falling back to <strong>{PROGRAM_MEETING_HOURS} h/session</strong> otherwise. A session = a distinct coach +
-              start-time slot, so a group meeting counts once. Dollar figures come later.
-            </div>
-          </div>
+      <CollapsibleCard
+        id="margins.screen"
+        title="Margins"
+        sectionId="margins.screen"
+        help={<HelpButton id="margins.tab" label="Margins" />}
+        actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div className="seg" role="tablist" aria-label="Program">
               {PROGRAMS.map((p) => (
@@ -245,6 +240,12 @@ export function MarginsView() {
               Export CSV
             </button>
           </div>
+        }
+      >
+        <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+          {def.blurb} Delivered hours use each meeting's <strong>actual duration</strong> (end − start) when recorded,
+          falling back to <strong>{PROGRAM_MEETING_HOURS} h/session</strong> otherwise. A session = a distinct coach +
+          start-time slot, so a group meeting counts once. Dollar figures come later.
         </div>
 
         {error && <div className="notice notice--warn">{error}</div>}
@@ -342,7 +343,7 @@ export function MarginsView() {
             </p>
           </>
         )}
-      </section>
+      </CollapsibleCard>
 
       {drillMonth && (
         <div className="modal" onClick={() => setDrillMonth(null)}>

@@ -11,6 +11,7 @@ import {
 import { fmtDate, fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 
 const PAYMENT_METHODS = ["Card", "Check", "Cash", "ACH / bank transfer", "Melio", "Other"];
 
@@ -131,18 +132,15 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
 
   return (
     <div className="stack">
-      <section className="card">
-        <div className="card__head">
-          <div>
-            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Report financial event <SectionId id="finevent.screen" />
-              <HelpButton id="finevent.screen" label="Report financial event" />
-            </h2>
-            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Log a transaction — when it happened, the vendor, what it was, how it was paid — and attach the receipt.
-              Submitting alerts org support staff via the <strong>notification bell</strong> in the top bar.
-            </div>
-          </div>
+      <CollapsibleCard
+        id="finevent.screen"
+        title="Report financial event"
+        sectionId="finevent.screen"
+        help={<HelpButton id="finevent.screen" label="Report financial event" />}
+      >
+        <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+          Log a transaction — when it happened, the vendor, what it was, how it was paid — and attach the receipt.
+          Submitting alerts org support staff via the <strong>notification bell</strong> in the top bar.
         </div>
 
         {error && <div className="notice notice--warn">{error}</div>}
@@ -189,10 +187,9 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
             {busy ? "Submitting…" : "Submit report"}
           </button>
         </div>
-      </section>
+      </CollapsibleCard>
 
-      <section className="card">
-        <h2 style={{ fontSize: 15 }}>Reported events</h2>
+      <CollapsibleCard id="finevent.events" title="Reported events">
         {loading ? (
           <div className="loading">Loading…</div>
         ) : (
@@ -238,7 +235,7 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
             </table>
           </div>
         )}
-      </section>
+      </CollapsibleCard>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import {
   type AppUserRecord,
 } from "../db";
 import { HelpButton } from "./HelpDrawer";
-import { SectionId } from "./SectionId";
+import { CollapsibleCard } from "./Collapsible";
 
 // User permissions (§405, Admin) — the "bones" of per-user access. One row per
 // person (matched to their sign-in by EMAIL); each row picks a role and,
@@ -145,20 +145,17 @@ export function UserPermissionsCard() {
   }
 
   return (
-    <div className="card">
-      <div className="card__head">
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            User permissions <SectionId id="admin.users" />
-            <HelpButton id="admin.users" label="User permissions" />
-          </h2>
-          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-            Who can see which tabs. People are matched to a row by their <strong>sign-in email</strong>; someone{" "}
-            <strong>without a row keeps full access</strong> while this system is bones, and <strong>admins always see
-            everything</strong>. Assign a mentor's row to their coach record to prepare for mentor logins. Needs migration{" "}
-            <code>9968_app_users.sql</code>.
-          </div>
-        </div>
+    <CollapsibleCard
+      id="admin.users"
+      title="User permissions"
+      sectionId="admin.users"
+      help={<HelpButton id="admin.users" label="User permissions" />}
+    >
+      <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 12 }}>
+        Who can see which tabs. People are matched to a row by their <strong>sign-in email</strong>; someone{" "}
+        <strong>without a row keeps full access</strong> while this system is bones, and <strong>admins always see
+        everything</strong>. Assign a mentor's row to their coach record to prepare for mentor logins. Needs migration{" "}
+        <code>9968_app_users.sql</code>.
       </div>
 
       {error && <div className="notice notice--warn">{error}</div>}
@@ -313,6 +310,6 @@ export function UserPermissionsCard() {
           </div>
         </>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

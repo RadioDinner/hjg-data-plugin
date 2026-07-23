@@ -1221,7 +1221,7 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
     return { ...base, eligibleBilled: over.eligibleBilled ?? base.billed };
   };
   // Josh-style: MN charge + a refund credit the engine auto-includes (reduces),
-  // which the REVIEWER kicks out — the stub must say "does NOT reduce your pay".
+  // which the REVIEWER kicks out — the stub must say "does not reduce your pay".
   const joshSrc = src({
     invoiceId: 900,
     invoiceNumber: "900",
@@ -1291,7 +1291,7 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
   eq(model2.totals.menteeCount, 1, "excluded mentee not counted");
   // HTML smoke: renders, carries the key transparency string + watermark rules.
   const html = payStubHtml(model);
-  eq(html.includes("does NOT reduce your pay"), true, "stub HTML carries the credit-out explanation");
+  eq(html.includes("does not reduce your pay"), true, "stub HTML carries the credit-out explanation");
   eq(html.includes("REVIEW COPY"), true, "draft stub is watermarked/badged");
   eq(payStubHtml(model2).includes("APPROVED PAY STUB"), true, "approved stub badged");
   eq(html.includes("<script"), false, "no scripts in the stub document");

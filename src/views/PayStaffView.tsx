@@ -7,7 +7,7 @@ import { BuildPayoutView } from "./BuildPayoutView";
 import { HourlyPayView } from "../components/HourlyPayView";
 import { PayHistoryView } from "../components/PayHistoryView";
 import { HelpButton } from "../components/HelpDrawer";
-import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 import { useChartTokens } from "../theme";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -221,20 +221,17 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
   if (mentors.length === 0) return null;
 
   return (
-    <section className="card">
-      <div className="card__head">
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            Mentor payout reconciliation <SectionId id="pay.reconcile" />
-            <HelpButton id="pay.reconcile" label="Reconciliation" />
-          </h2>
-          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-            Pick a mentor and a month to see that month's payout, the <strong>running total</strong> paid through it, and
-            the <strong>remaining</strong> tail still owed on invoices already billed. Running total + remaining = the
-            full value billed through that month — the accuracy check.
-          </div>
-        </div>
-        <button className="btn btn--sm" onClick={exportCsv} disabled={!month}>Export CSV</button>
+    <CollapsibleCard
+      id="pay.reconcile"
+      title="Mentor payout reconciliation"
+      sectionId="pay.reconcile"
+      help={<HelpButton id="pay.reconcile" label="Reconciliation" />}
+      actions={<button className="btn btn--sm" onClick={exportCsv} disabled={!month}>Export CSV</button>}
+    >
+      <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+        Pick a mentor and a month to see that month's payout, the <strong>running total</strong> paid through it, and
+        the <strong>remaining</strong> tail still owed on invoices already billed. Running total + remaining = the
+        full value billed through that month — the accuracy check.
       </div>
 
       <div className="table-toolbar" style={{ gap: 12, flexWrap: "wrap" }}>
@@ -322,7 +319,7 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
           </tbody>
         </table>
       </div>
-    </section>
+    </CollapsibleCard>
   );
 }
 
@@ -448,22 +445,17 @@ export function PayStaffView() {
 
   return (
     <div className="stack">
-      <section className="card">
-        <div className="card__head">
-          <div>
-            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Pay staff <HelpButton id="pay.payout" label="Pay staff" />
-              <HelpButton id="general.coachAttribution" label="How coaches are matched" />
-            </h2>
-            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Mentors earn a ramped share (default {PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by
-              mentor-tenure month; a fast-tracked mentor can have a custom ramp) of the{" "}
-              <strong>4×/2×/1× mentoring</strong> revenue <strong>billed</strong> to each mentee. JumpStart/JYF and other
-              non-mentoring revenue is <strong>excluded</strong>. Each invoice's share is{" "}
-              <strong>split across two months</strong> by its invoice date (fixed 30-day): the remaining part pays in the
-              invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
-            </div>
-          </div>
+      <CollapsibleCard
+        id="pay.screen"
+        title="Pay staff"
+        sectionId="pay.screen"
+        help={
+          <>
+            <HelpButton id="pay.payout" label="Pay staff" />
+            <HelpButton id="general.coachAttribution" label="How coaches are matched" />
+          </>
+        }
+        actions={
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {!noInvoices && (
               <>
@@ -486,6 +478,15 @@ export function PayStaffView() {
               History →
             </button>
           </div>
+        }
+      >
+        <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+          Mentors earn a ramped share (default {PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by
+          mentor-tenure month; a fast-tracked mentor can have a custom ramp) of the{" "}
+          <strong>4×/2×/1× mentoring</strong> revenue <strong>billed</strong> to each mentee. JumpStart/JYF and other
+          non-mentoring revenue is <strong>excluded</strong>. Each invoice's share is{" "}
+          <strong>split across two months</strong> by its invoice date (fixed 30-day): the remaining part pays in the
+          invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
         </div>
 
         {noInvoices && (
@@ -495,7 +496,7 @@ export function PayStaffView() {
             invoices are mirrored.
           </p>
         )}
-      </section>
+      </CollapsibleCard>
 
       {timeline && !noInvoices && (
         <>
@@ -510,14 +511,16 @@ export function PayStaffView() {
 
           <MentorReconcile timeline={timeline} cur={cur} ct={ct} />
 
-          <section className="card">
-            <div className="card__head">
-              <h2>Payout by month <SectionId id="pay.payoutByMonth" /></h2>
+          <CollapsibleCard
+            id="pay.payoutByMonth"
+            title="Payout by month"
+            sectionId="pay.payoutByMonth"
+            actions={
               <button className="btn btn--sm" onClick={monthlyCsv} disabled={timeline.months.length === 0}>
                 Export CSV
               </button>
-            </div>
-
+            }
+          >
             <div style={{ width: "100%", height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
@@ -589,7 +592,7 @@ export function PayStaffView() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </CollapsibleCard>
         </>
       )}
 

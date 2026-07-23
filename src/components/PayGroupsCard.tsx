@@ -12,7 +12,7 @@ import {
 } from "../db";
 import { refreshEngagementTemplates } from "../api";
 import { HelpButton } from "./HelpDrawer";
-import { SectionId } from "./SectionId";
+import { CollapsibleCard } from "./Collapsible";
 
 interface CoachOpt {
   coachId: number;
@@ -157,26 +157,26 @@ export function PayGroupsCard() {
   const groups = cfg?.groups ?? [];
 
   return (
-    <section className="card" style={{ marginTop: 16 }}>
-      <div className="card__head">
-        <div>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            Payment groups <HelpButton id="options.payGroups" label="Payment groups" />
-            <SectionId id="options.payGroups" />
-          </h2>
-          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-            Check which CoachAccountable <strong>engagement templates</strong> count toward each group of staff for
-            payout calculations, and assign coaches to groups. An <strong>invoice line item</strong> counts when it
-            starts with a checked template's name — eligibility comes from what was actually <em>billed</em>, not from
-            engagement records (which can be stale/canceled while still billing). <strong>Mentors</strong> drives the
-            Pay staff / Build payout engine — leaving a group's templates all unchecked keeps the legacy 4×/2×/1×
-            auto-detection until you pick them. Unmatched charges and credits are flagged{" "}
-            <strong>review</strong> on each payout's drill-down for hand-checking the first rounds.
-          </div>
-        </div>
+    <CollapsibleCard
+      id="options.payGroups"
+      title="Payment groups"
+      sectionId="options.payGroups"
+      style={{ marginTop: 16 }}
+      help={<HelpButton id="options.payGroups" label="Payment groups" />}
+      actions={
         <button className="btn btn--sm" onClick={doRefresh} disabled={refreshing} title="Pull the latest engagement templates from CoachAccountable">
           {refreshing ? "Refreshing…" : "Refresh templates"}
         </button>
+      }
+    >
+      <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 10 }}>
+        Check which CoachAccountable <strong>engagement templates</strong> count toward each group of staff for
+        payout calculations, and assign coaches to groups. An <strong>invoice line item</strong> counts when it
+        starts with a checked template's name — eligibility comes from what was actually <em>billed</em>, not from
+        engagement records (which can be stale/canceled while still billing). <strong>Mentors</strong> drives the
+        Pay staff / Build payout engine — leaving a group's templates all unchecked keeps the legacy 4×/2×/1×
+        auto-detection until you pick them. Unmatched charges and credits are flagged{" "}
+        <strong>review</strong> on each payout's drill-down for hand-checking the first rounds.
       </div>
 
       {error && <div className="notice notice--warn" style={{ marginTop: 8 }}>{error}</div>}
@@ -333,7 +333,7 @@ export function PayGroupsCard() {
           )}
         </>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }
 

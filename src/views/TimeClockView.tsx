@@ -11,7 +11,7 @@ import {
 } from "../db";
 import { fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
-import { SectionId } from "../components/SectionId";
+import { CollapsibleCard } from "../components/Collapsible";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -185,19 +185,12 @@ export function TimeClockView() {
 
   return (
     <div className="stack">
-      <section className="card">
-        <div className="card__head">
-          <div>
-            <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Time clock <SectionId id="timeclock.screen" />
-              <HelpButton id="timeclock.screen" label="Time clock" />
-            </h2>
-            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Clock in when you start, out when you stop, add a note about what you worked on, and{" "}
-              <strong>submit your completed entries for payroll</strong>. Everything recorded here also feeds the
-              org's metrics over time. Needs migration <code>9966_time_entries.sql</code>.
-            </div>
-          </div>
+      <CollapsibleCard
+        id="timeclock.screen"
+        title="Time clock"
+        sectionId="timeclock.screen"
+        help={<HelpButton id="timeclock.screen" label="Time clock" />}
+        actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {open ? (
               <>
@@ -214,6 +207,12 @@ export function TimeClockView() {
               </button>
             )}
           </div>
+        }
+      >
+        <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+          Clock in when you start, out when you stop, add a note about what you worked on, and{" "}
+          <strong>submit your completed entries for payroll</strong>. Everything recorded here also feeds the
+          org's metrics over time. Needs migration <code>9966_time_entries.sql</code>.
         </div>
         {error && <div className="notice notice--warn">{error}</div>}
         {flash && !error && <div className="notice notice--info">{flash}</div>}
@@ -232,13 +231,13 @@ export function TimeClockView() {
             <span className="stat__label">Completed, not yet submitted</span>
           </div>
         </div>
-      </section>
+      </CollapsibleCard>
 
-      <section className="card">
-        <div className="card__head">
-          <h2 style={{ fontSize: 15 }}>
-            My entries <SectionId id="timeclock.entries" />
-          </h2>
+      <CollapsibleCard
+        id="timeclock.entries"
+        title="My entries"
+        sectionId="timeclock.entries"
+        actions={
           <button
             className="btn btn--sm btn--primary"
             onClick={doSubmit}
@@ -247,7 +246,8 @@ export function TimeClockView() {
           >
             Submit for payroll
           </button>
-        </div>
+        }
+      >
         <div className="table-scroll">
           <table className="table table--center">
             <thead>
@@ -303,10 +303,9 @@ export function TimeClockView() {
             </tbody>
           </table>
         </div>
-      </section>
+      </CollapsibleCard>
 
-      <section className="card">
-        <h2 style={{ fontSize: 15 }}>All staff — hours this month</h2>
+      <CollapsibleCard id="timeclock.allStaff" title="All staff — hours this month">
         <div className="table-scroll">
           <table className="table table--center">
             <thead>
@@ -332,7 +331,7 @@ export function TimeClockView() {
             </tbody>
           </table>
         </div>
-      </section>
+      </CollapsibleCard>
     </div>
   );
 }

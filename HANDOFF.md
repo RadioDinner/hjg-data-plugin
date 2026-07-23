@@ -18,6 +18,21 @@ mentor AND hourly stubs) swapped Georgia/Times serif + Arial accents for a
 self-contained system-UI **sans** stack (`--sans`), +line-height/smoothing, h1
 retuned to 600/−0.5px. Purely cosmetic; verify/build green.
 
+**0.6.0 — collapsible cards on EVERY screen + expand/collapse-all, persisted.**
+New `src/components/Collapsible.tsx`: `CollapseProvider` (one per tab, `App.tsx`
+`key={tab}`) persists the collapsed set to `localStorage["hjg.collapse.<tab>"]` so
+a user's expand/collapse choices survive reload; `CollapsibleCard` (accessible
+accordion, rotating chevron, keeps the SectionId badge + header action buttons);
+`CollapseControls` (Expand all / Collapse all, hidden until ≥2 sections). Every
+view's cards were converted (Metrics via making `ChartCard` collapsible +
+PipelineTiming/Funnel/capacity; Admin, Company options, Pay staff, Time clock,
+Financial event, Update Mentee, Discovery, Margins, Raw data, Maps, Mentees
+roster+detail). Default = all expanded (no behavior change until a user collapses).
+Body is unmounted while collapsed (chart-safe; transient unsaved input in a card is
+lost if collapsed — noted in the component). Also a pay-stub copy tweak ("does NOT"
+→ "does not reduce your pay"). typecheck ×2 + verify (622) + build green;
+render-checked in headless Chromium. **No migration.**
+
 **⚠⚠ CUTOVER — TWO USER ACTIONS:**
 1. **Apply FIVE migrations** (Supabase SQL Editor, any order, re-runnable):
    **`9969_payout_payment_sent.sql`** (Payment-sent columns), **`9968_app_users.sql`**

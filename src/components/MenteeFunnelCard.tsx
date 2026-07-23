@@ -10,7 +10,7 @@ import {
   type EffectiveMentee,
 } from "../db";
 import { HelpButton } from "./HelpDrawer";
-import { SectionId } from "./SectionId";
+import { CollapsibleCard } from "./Collapsible";
 import { useChartTokens } from "../theme";
 import { pct } from "../format";
 
@@ -66,11 +66,14 @@ export function MenteeFunnelCard() {
   if (error) return <div className="error">{error}</div>;
 
   return (
-    <div className="card card--inset" style={{ marginTop: 18 }}>
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        Mentee funnel &amp; exits <HelpButton id="metrics.funnel" label="Mentee funnel & exits" />
-        <SectionId id="metrics.funnel" />
-      </h2>
+    <CollapsibleCard
+      id="metrics.funnel"
+      title="Mentee funnel & exits"
+      sectionId="metrics.funnel"
+      variant="inset"
+      style={{ marginTop: 18 }}
+      help={<HelpButton id="metrics.funnel" label="Mentee funnel & exits" />}
+    >
       <p className="view__hint">
         How many mentees <strong>entered</strong> each stage, who's still <strong>active</strong> there, who <strong>exited</strong> there
         (declined / quit / fired / no&nbsp;mentoring), and the <strong>conversion</strong> to the next stage. Graduation can happen directly
@@ -145,6 +148,6 @@ export function MenteeFunnelCard() {
           </table>
         </div>
       </div>
-    </div>
+    </CollapsibleCard>
   );
 }
