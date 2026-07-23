@@ -1,6 +1,6 @@
 {
   "name": "hjg-data-hub",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "HJG Data Hub - budget-governed read-only reports dashboard over CoachAccountable",

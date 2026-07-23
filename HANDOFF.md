@@ -8,10 +8,15 @@ Time clock / financial-event tabs, Margins save fix).
 
 **Session WRAPPED, everything MERGED TO `main`** (fast-forward from
 `claude/pay-staff-screen-updates-sagejz`; commits `c0715ec` features + `ac49ced`
-adversarial-review fixes + the wrap commit). **Version 0.5.0** (chip must read
-`v0.5.0`). `typecheck` + `verify` (**622 checks**, 3 new sections) + `build`
-green. **UI NOT browser-tested** (headless). Full detail in
-`Session log/015_2026-07-22/session_log.md`.
+adversarial-review fixes + wrap + `0.5.1` pay-stub font change). **Version 0.5.1**
+(chip must read `v0.5.1`). `typecheck` + `verify` (**622 checks**, 3 new sections)
++ `build` green. Pay-stub layout render-checked with headless Chromium; other UI
+NOT browser-tested. Full detail in `Session log/015_2026-07-22/session_log.md`.
+
+**0.5.1 — pay-stub fonts modernized.** `lib/payStub.ts` `STUB_CSS` (shared by the
+mentor AND hourly stubs) swapped Georgia/Times serif + Arial accents for a
+self-contained system-UI **sans** stack (`--sans`), +line-height/smoothing, h1
+retuned to 600/−0.5px. Purely cosmetic; verify/build green.
 
 **⚠⚠ CUTOVER — TWO USER ACTIONS:**
 1. **Apply FIVE migrations** (Supabase SQL Editor, any order, re-runnable):

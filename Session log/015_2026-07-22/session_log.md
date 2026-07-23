@@ -1,7 +1,23 @@
 # Session 015 — 2026-07-22
 
 Merged to `main` per the user's instruction ("Merge to main for this session").
-Version bumped **0.4.0 → 0.5.0** (topbar chip shows `v0.5.0`).
+Version bumped **0.4.0 → 0.5.0**, then **→ 0.5.1** for the pay-stub font change
+(topbar chip shows `v0.5.1`).
+
+## Follow-up: pay-stub fonts (0.5.1)
+
+User: "change the paystub fonts to something clean and modern/readable instead
+of the old classic looking fonts." Done in `lib/payStub.ts` `STUB_CSS` (the
+shared stylesheet — covers BOTH the mentor engine stub and the hourly timesheet
+stub via `lib/hourlyPay.ts`): dropped `Georgia/'Times New Roman' serif` and the
+dated `Arial` accents for one modern **system-UI sans** stack
+(`--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica
+Neue', Arial, sans-serif`) — self-contained, no web-font fetch (the stub opens
+in a print window). Added base `line-height:1.45` + font smoothing for
+readability; retuned `h1` to weight 600 / −0.5px tracking so the big month
+heading still reads deliberate at the new family. Olive+cream identity, layout,
+and all verify §13d/§13g assertions unchanged. Rendered sample stubs with the
+pre-installed Chromium to confirm layout intact.
 
 ## What shipped (commits)
 

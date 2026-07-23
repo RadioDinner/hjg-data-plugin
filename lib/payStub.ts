@@ -216,8 +216,9 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
 
 // ---------------------------------------------------------------------------
 // HTML rendering — a fully self-contained printable document (inline CSS, no
-// external assets), styled after HJG's statement look: olive + cream, serif
-// display. One summary page, then the per-mentee breakdown.
+// external assets), styled after HJG's statement look: olive + cream, clean
+// modern sans (system-UI stack — San Francisco / Segoe UI / Roboto, no web
+// fonts to fetch). One summary page, then the per-mentee breakdown.
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const usd = (n: number) =>
@@ -239,16 +240,17 @@ const DISPO_TEXT: Record<StubItemDisposition, { label: string; cls: string }> = 
 // Shared statement stylesheet — one visual language for every stub kind
 // (mentor engine stubs + hourly timesheet stubs). Olive + cream, print-ready.
 export const STUB_CSS = `
-  :root { --olive:#77855c; --olive-dk:#5c6a45; --cream:#f7f3e8; --ink:#2f3226; --mut:#7a7d6f; --line:#dcd7c4; --good:#3c7a44; --warn:#a8722a; }
+  :root { --olive:#77855c; --olive-dk:#5c6a45; --cream:#f7f3e8; --ink:#2f3226; --mut:#7a7d6f; --line:#dcd7c4; --good:#3c7a44; --warn:#a8722a;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Georgia, 'Times New Roman', serif; background:var(--cream); color:var(--ink); font-size:13px; }
+  body { font-family: var(--sans); background:var(--cream); color:var(--ink); font-size:13px; line-height:1.45; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
   .page { max-width: 7.6in; margin: 0 auto; padding: 28px 34px; position:relative; }
   .watermark { position:fixed; top:38%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); font-size:110px; font-weight:700; color:rgba(168,114,42,.10); letter-spacing:8px; text-align:center; line-height:1.05; pointer-events:none; z-index:0; }
   .topbar { height:10px; background:var(--olive); margin:-28px -34px 22px; }
   .kicker { font-size:10px; letter-spacing:2.5px; color:var(--olive-dk); font-weight:700; text-transform:uppercase; }
-  h1 { font-size:34px; font-weight:400; margin:2px 0 0; }
+  h1 { font-size:32px; font-weight:600; letter-spacing:-0.5px; margin:2px 0 0; }
   .sub { color:var(--mut); font-size:12px; margin-top:2px; }
-  .badge { display:inline-block; font-family:Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:3px; }
+  .badge { display:inline-block; font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:3px; }
   .badge--ok { background:#e5eede; color:var(--good); border:1px solid #b9cba8; }
   .badge--draft { background:#f5e8d2; color:var(--warn); border:1px solid #dcc294; }
   .head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
@@ -262,7 +264,7 @@ export const STUB_CSS = `
   .card--hero .sumrow { color:#e8ecdd; }
   .sumrow { display:flex; justify-content:space-between; font-size:12px; color:var(--mut); padding:2px 2px; }
   table { width:100%; border-collapse:collapse; margin-top:6px; background:#fff; }
-  th { background:var(--olive); color:#fff; font-family:Arial,sans-serif; font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:7px 9px; text-align:right; }
+  th { background:var(--olive); color:#fff; font-family:var(--sans); font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:7px 9px; text-align:right; }
   th.l, td.l { text-align:left; }
   td { padding:7px 9px; border-bottom:1px solid var(--line); text-align:right; font-size:12.5px; }
   td.n { font-variant-numeric: tabular-nums; }
@@ -270,7 +272,7 @@ export const STUB_CSS = `
   tr:nth-child(even) td { background:#faf8ef; }
   .row-x td { color:var(--mut); text-decoration:line-through; }
   tfoot td { background:#eef0e3 !important; font-weight:700; border-top:2px solid var(--olive); }
-  .tag { font-family:Arial,sans-serif; font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 6px; border-radius:8px; vertical-align:1px; }
+  .tag { font-family:var(--sans); font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 6px; border-radius:8px; vertical-align:1px; }
   .tag--good { background:#e5eede; color:var(--good); }
   .tag--warn { background:#f5e8d2; color:var(--warn); }
   .note { border-left:3px solid var(--olive); background:#fbf9f1; padding:8px 12px; margin-top:14px; font-size:12px; }
@@ -288,7 +290,7 @@ export const STUB_CSS = `
   .inv__nums { float:right; font-size:11.5px; }
   .item { font-size:11.5px; padding:1px 0 1px 16px; color:var(--ink); }
   .item__amt { display:inline-block; min-width:64px; font-variant-numeric:tabular-nums; }
-  .item__tag { font-family:Arial,sans-serif; font-size:9px; font-weight:700; padding:1px 6px; border-radius:8px; margin-left:6px; }
+  .item__tag { font-family:var(--sans); font-size:9px; font-weight:700; padding:1px 6px; border-radius:8px; margin-left:6px; }
   .item__tag--ok { background:#eef0e3; color:var(--olive-dk); }
   .item__tag--good { background:#e5eede; color:var(--good); }
   .item__tag--warn { background:#f5e8d2; color:var(--warn); }

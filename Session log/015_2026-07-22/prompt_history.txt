@@ -21,3 +21,6 @@ For users and admin, I want to build a "time clock" tool. That mentors and staff
 Also, build a "Report financial event" tab on the app. I want a few fields wired up for now. When the transaction happened, the vendor, what it was and an option to upload an image or receipt. also the payment method. I want an addtional feature wired up that when someone fills out this form, that it alerts the org support staff via notifications icon on the dashboard.
 
 also, I want to be able to manage "User permissions" from the admin dashboard. I want to be able to assign or give access specific tabs to certain users. Biuld this too
+
+--- 2026-07-22 (mid-session) ---
+I want the fonts on the paystubs to be changed to something more professional instead of the old classic looking fonts. I want something clean and modern/readable
