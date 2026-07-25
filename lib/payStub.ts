@@ -11,6 +11,8 @@
 // The Build-payout screen opens the HTML in a new window and calls print().
 
 import type { PayMenteeLine, PayLineSource } from "./pay";
+import { daysInMonth } from "./pay";
+import { normalizePieces, pieceAmount, piecesTotal, type PieceEntry } from "./pieceWork";
 import {
   DEFAULT_LINE_STATE,
   effectiveLineTotal,
@@ -94,9 +96,13 @@ export interface PayStubModel {
   reviewedAt: string | null;
   monthNote: string | null;
   rows: StubMenteeRow[];
+  // Flat per-unit pay on top of the mentee lines (e.g. $25 per new mentee × 8).
+  pieces: PieceEntry[];
+  piecesTotal: number;
   totals: {
     earned: number;
-    payout: number; // the number on the check
+    payout: number; // the number on the check (mentee lines + piece work)
+    linePayout: number; // mentee lines only
     enginePayout: number; // before review adjustments
     delta: number;
     menteeCount: number; // included lines
@@ -117,6 +123,7 @@ export interface PayStubInput {
   states: Map<number, BuildLineState>;
   monthNote?: string | null;
   reviewedAt?: string | null;
+  pieces?: PieceEntry[];
   generatedOn: string; // YYYY-MM-DD
 }
 
@@ -148,7 +155,9 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
       const recognized = round2(sourceRecognizedAfterExclusions(src, s));
       if (src.slice === "this-month") thisMonth += recognized;
       else rolledIn += recognized;
-      const dayPart = Math.round(src.elapsedFraction * 30);
+      // The invoice's own month length is the proration denominator.
+      const monthDays = daysInMonth(src.serviceMonth);
+      const dayPart = Math.round(src.elapsedFraction * monthDays);
       return {
         invoiceNumber: src.invoiceNumber ?? "—",
         serviceDate: src.serviceDate,
@@ -156,7 +165,10 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
         billed: round2(src.billed),
         counts,
         recognized,
-        fractionLabel: src.slice === "this-month" ? `${30 - dayPart}/30 remaining` : `${dayPart}/30 rolled in`,
+        fractionLabel:
+          src.slice === "this-month"
+            ? `${monthDays - dayPart}/${monthDays} remaining`
+            : `${dayPart}/${monthDays} rolled in`,
         wholeExcluded: excludedInvoiceSet(s).has(payLineSourceKey(src)),
         items: src.lineItems.map((li, i) => ({
           label: li.item ?? "—",
@@ -187,7 +199,10 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
   });
   rows.sort((a, b) => b.payout - a.payout || a.name.localeCompare(b.name));
   const included = rows.filter((r) => !r.excluded);
-  const payout = round2(rows.reduce((t, r) => t + r.payout, 0));
+  const linePayout = round2(rows.reduce((t, r) => t + r.payout, 0));
+  const pieces = normalizePieces(input.pieces ?? []);
+  const pTotal = piecesTotal(pieces);
+  const payout = round2(linePayout + pTotal);
   const enginePayout = round2(rows.reduce((t, r) => t + r.enginePayout, 0));
   return {
     coachName: input.coachName,
@@ -203,9 +218,12 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
     reviewedAt: input.reviewedAt ?? null,
     monthNote: input.monthNote ?? null,
     rows,
+    pieces,
+    piecesTotal: pTotal,
     totals: {
       earned: round2(included.reduce((t, r) => t + r.earned, 0)),
       payout,
+      linePayout,
       enginePayout,
       delta: round2(payout - enginePayout),
       menteeCount: included.length,
@@ -326,6 +344,17 @@ export function payStubHtml(m: PayStubModel): string {
     })
     .join("");
 
+  // Piece work rides in the same summary table, under the mentee lines, so the
+  // TOTAL row still foots to the number on the check.
+  const pieceRows = m.pieces
+    .map(
+      (p) =>
+        `<tr><td class="l">${esc(p.label || "—")} <span class="tag tag--good">piece work</span>${p.date ? ` <span class="muted">${fmtD(p.date)}</span>` : ""}</td>` +
+        `<td>${round2(p.qty).toLocaleString("en-US", { maximumFractionDigits: 2 })} × ${usd(p.unitRate)}</td>` +
+        `<td class="n"></td><td class="n"></td><td class="n"></td><td class="n b">${usd(pieceAmount(p))}</td></tr>`
+    )
+    .join("");
+
   const breakdown = m.rows
     .map((r) => {
       const invRows = r.invoices
@@ -392,6 +421,8 @@ export function payStubHtml(m: PayStubModel): string {
   <div class="cards">
     <div class="card"><div class="lab">Eligible revenue</div><div class="val">${usd(m.totals.earned)}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.totals.menteeCount} mentee${m.totals.menteeCount === 1 ? "" : "s"}</span><span>× ${pct}</span></div></div>
+    ${m.pieces.length ? `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
+      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>paid per unit</span></div></div>` : ""}
     <div class="card card--hero"><div class="lab">Total payout</div><div class="val">${usd(m.totals.payout)}</div>${deltaRow}</div>
     <div class="card"><div class="lab">HJG review</div><div class="val">${m.totals.adjustedCount || "—"}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.totals.adjustedCount === 1 ? "line reviewed / adjusted" : "lines reviewed / adjusted"}</span><span>see breakdown</span></div></div>
@@ -399,7 +430,7 @@ export function payStubHtml(m: PayStubModel): string {
 
   <table>
     <thead><tr><th class="l">Mentee</th><th>Engagement rate</th><th>This month</th><th>Rolled in</th><th>Earned</th><th>Payout</th></tr></thead>
-    <tbody>${summaryRows}</tbody>
+    <tbody>${summaryRows}${pieceRows}</tbody>
     <tfoot><tr><td class="l">TOTAL</td><td></td><td class="n">${usd(round2(m.rows.filter((r) => !r.excluded).reduce((t, r) => t + r.thisMonth, 0)))}</td><td class="n">${usd(round2(m.rows.filter((r) => !r.excluded).reduce((t, r) => t + r.rolledIn, 0)))}</td><td class="n">${usd(m.totals.earned)}</td><td class="n">${usd(m.totals.payout)}</td></tr></tfoot>
   </table>
 
@@ -410,6 +441,7 @@ export function payStubHtml(m: PayStubModel): string {
     Each invoice pays out across two months: the portion of the month remaining on its billing day counts in its own month,
     and the rest rolls into the next — so "${esc(m.monthLabel)}" blends ${esc(m.monthLabel)}'s new invoices with ${esc(m.prevMonthLabel)}'s
     rolled-in portion. Non-mentoring charges (JumpStart supervision, setup fees, training) are not part of mentor pay.
+    ${m.pieces.length ? `Piece-work items are paid flat per unit on top of that revenue share — quantity × rate each, listed in the summary table above.` : ""}
     The pages that follow show every invoice and every line item behind each number, including anything HJG adjusted in review.
   </div>
 

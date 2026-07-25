@@ -97,8 +97,8 @@ never copied the sheet's per-mentee reset.
 ## 6. Other moving parts
 
 - **Proration** in the sheet is `1 − day(start) / days_in_month` off a
-  hand-entered, drifting anchor date. (The app instead counts active engagement
-  days ÷ days in month, from real engagement dates.)
+  hand-entered, drifting anchor date. The app uses the same formula, but off the
+  invoice's own `date_of` instead of a hand-typed anchor.
 - **Tier price drops** are typed in by hand when a mentee downgrades — e.g.
   Landin goes 425 → 265 → 145, Sam Glick 425 → 265 (4x → 2x → 1x cadence lowering
   the monthly price).
@@ -109,15 +109,17 @@ never copied the sheet's per-mentee reset.
 **Aligned to Clayton's method 2026-06-22.** The engine now **replicates Clayton's
 two-month split and invoice-date proration**, computed from synced data instead of
 by hand. It keeps **one deliberate improvement** — the ramp is built on the
-**MENTOR's** tenure, not each mentee's — and uses a **fixed 30-day** proration
-denominator (the user's choice) keyed off the invoice's `date_of` day.
+**MENTOR's** tenure, not each mentee's — and prorates over the **real length of the
+invoice's own month**, keyed off the invoice's `date_of` day. (That denominator was a
+fixed 30 until 2026-07-25; the Harry Shenk reconciliation showed it drifting from the
+sheet's `1 − DAY(start)/DAY(EOMONTH(start,0))` by ~$52/month, so it now matches.)
 
 | Dimension | Legacy sheet (Clayton) | Dashboard engine (`lib/pay.ts`) |
 |---|---|---|
 | Ramp 35/50/60 | **per mentee** | **per MENTOR tenure**, across all their mentees (the one intentional change) — with an editable per-coach **Pay start** override (Admin → Mentor capacity) |
 | Revenue basis | the mentee's billed Amount | **billed** (invoice `amount`); collected (`amount_paid`) carried for reference |
 | Time assignment | one payment **split across two calendar months** by anchor date, remainder rolled forward | **matches:** split across two months by the invoice date — remaining part in the invoice's month, elapsed part rolled to the next |
-| Mid-month proration | `1 − day/days` off a drifting hand-entered date | **matches:** `1 − day/30` off the invoice's `date_of` (fixed 30-day month) |
+| Mid-month proration | `1 − day/days` off a drifting hand-entered date | **matches:** `1 − day/daysInMonth` off the invoice's `date_of` (real month length, since 2026-07-25) |
 | Make-whole | explicit **catch-up** residual + ad-hoc fixes | not needed — the two slices add back to the full share, and the per-mentor ramp is ~constant (no per-mentee residual); "unassigned" bucket for revenue with no overlapping engagement |
 | Tier price drops | typed by hand | falls out of the invoice amount |
 | Maintenance | re-typed monthly; drifts | re-synced from CoachAccountable; derived + auditable (the Explore window) |

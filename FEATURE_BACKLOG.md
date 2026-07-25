@@ -161,8 +161,8 @@ partial → two steady-full → tail partial) + a table, all computed live so it
 
 After the user reconstructed the former admin's (Clayton's) method, `lib/pay.ts` was
 rewritten from the old active-days-in-service-month model to **Clayton's two-month
-split**: an invoice dated on day D of its month is split by `elapsed = D/30` (**fixed
-30-day** month, user's choice) — the **remaining** part `(1−elapsed)` pays in the
+split**: an invoice dated on day D of its month is split by `elapsed = D/daysInMonth`
+(**real month length** since 2026-07-25; a fixed 30 before that) — the **remaining** part `(1−elapsed)` pays in the
 invoice's month, the **elapsed** part rolls into the **next** month. A payout month =
 this month's invoices × (1−elapsed) + last month's invoices × their elapsed, all ×
 the mentor's rate. Each invoice's two slices add back to its full share (made whole,

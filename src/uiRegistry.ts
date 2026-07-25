@@ -48,6 +48,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "pay.history": 207, // Pay staff -> Pay stub history archive sub-mode (2026-07-21)
   "timeclock.screen": 208, // Time clock tab (clock in/out -> payroll; pay family) (2026-07-22)
   "timeclock.entries": 209, // Time clock: my entries + submit-for-payroll card (2026-07-22)
+  "build.pieces": 210, // Build payout -> Piece work (flat per-unit pay) card (2026-07-25)
+  "pay.hourly.pieces": 211, // Hourly staff -> Piece work (flat per-unit pay) card (2026-07-25)
 
   // 3xx — Raw data
   "raw.screen": 301,

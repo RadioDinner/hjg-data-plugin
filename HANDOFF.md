@@ -4,11 +4,53 @@ Working notes for resuming this project in a future session. Last updated
 2026-07-25 (session 016 — Harry Shenk manual payout vs dashboard reconciliation;
 **no app code changed**).
 
-## ▶ START HERE (2026-07-25, session 016 — ANALYSIS ONLY, branch `claude/harry-shenk-payout-reconcile-7ij9vp`)
+## ▶ START HERE (2026-07-25, session 016 — v0.7.0, MERGED TO `main`)
 
-**No app code changed. Version stays v0.6.0.** This session hand-built Harry
-Shenk's June-2026 payout from first principles and reconciled it against the
-dashboard's payout build, to answer "is the pay engine trustworthy?"
+**Three things shipped: the proration denominator changed, per-line hourly rates,
+and piece work on both pay builders.** Version **0.7.0** (chip must read `v0.7.0`).
+`typecheck` + `verify` (**677 checks**) + `build` green; the hourly pay stub was
+render-checked in headless Chromium.
+
+**⚠ ONE USER ACTION: apply migration `9964_pay_piece_work.sql`** (Supabase SQL
+Editor, re-runnable). Until then the piece-work cards still render and calculate,
+but saving a build WITH piece-work items errors with an explicit message; ordinary
+timesheets and payouts keep saving fine (the writes retry without the columns).
+
+### 1. Proration now uses REAL month lengths (behavior change — money moves)
+
+`lib/pay.ts` `elapsedFraction(day, ym)` divides by `daysInMonth(ym)` instead of a
+fixed 30, matching the legacy sheet's `1 − DAY(start)/DAY(EOMONTH(start,0))`. The
+signature gained a `ym` argument. Knock-ons: `payStub.ts` / `PayoutLineDetailModal`
+derive the denominator with `daysInMonth(src.serviceMonth)` for their "19/31"
+labels; `daysInMonth` is now re-exported from `src/db.ts`; `public/pay-map.html`
+gained a 28/30/31 month-length selector. **Payouts for any month with a 31-day
+neighbour change** — Harry's June 2026 goes $3,273.50 → $3,213.93. Saved builds
+keep their signed-off totals; the drift warning will flag them on reopen.
+
+### 2. Per-line hourly rates (Hourly staff §206)
+
+`HourlyEntry` gained `rate?: number | null`. `null`/absent = the period's default
+rate, so every timesheet saved before today reads back unchanged. New helpers in
+`lib/hourlyPay.ts`: `entryRate`, `entryAmount`, `laborTotal`, `hasCustomRates`.
+The stub only grows a **Rate** column when rates actually vary. **No migration** —
+`entries` is jsonb and simply carries one more key.
+
+### 3. Piece work on BOTH pay builders (§210 build, §211 hourly)
+
+New pure module `lib/pieceWork.ts` (`PieceEntry {date,label,qty,unitRate}`) + a
+shared `src/components/PieceWorkCard.tsx`, wired into **Build payout** and
+**Hourly staff**. Dave Troyer's case — $25 × 8 new mentees = $200 — is the worked
+example in the tests. On the mentor side it lands in `builtTotal` but **never** in
+`computedTotal`, so it reads as review delta (the engine knows nothing about it).
+`summarizeBuild(lines, states, splitOverride, pieces)` gained a 4th argument.
+
+---
+
+## Previous context (2026-07-25, session 016 first half — the reconciliation)
+
+This session began by hand-building Harry Shenk's June-2026 payout from first
+principles and reconciling it against the dashboard's payout build, to answer
+"is the pay engine trustworthy?" **That analysis is what drove change #1 above.**
 
 **Answer: yes — the engine is not miscalculating.** `tier price × (1 − day/30) ×
 60%` reproduces the dashboard's reviewed June total ($3,273.50) to the cent on all
@@ -30,17 +72,14 @@ fixed-30-day vs real-days proration · **$144.50** David Weaver's two May invoic
 (7 tabs, 1,122 live formulas, recalc clean). Build scripts in
 `Session log/016_2026-07-25/payout-reconciliation/`.
 
-**⚠ TWO OPEN DECISIONS FOR THE USER:**
-1. **Proration denominator.** `lib/pay.ts` hardcodes `PRORATION_DAYS = 30`
-   (`elapsedFraction()`), documented in `docs/legacy-pay-calculator.md` §7 as a
-   deliberate choice. The user's stated formula is
-   `=1-DAY(start)/DAY(EOMONTH(start,0))` — **real** month lengths. These disagree by
-   $51.91 for Harry in June and recur every 31-day month. If real days is the real
-   policy, `lib/pay.ts` + the doc both need changing.
-2. **Bryce Wenger (client 301320).** CoachAccountable owns him to Harry; the Notion
-   export says "~None Assigned" (JYF waiting list). No June impact, but his **23 July
-   invoice is a $425 4x line**, so he lands in the July payout. Settle ownership
-   before July runs.
+**Decision 1 — proration denominator — RESOLVED**: the user chose real month
+lengths; shipped as change #1 above. The reconciliation workbook still shows the
+pre-change comparison, so its "Step 1 · $51.91" bridge row is now historical.
+
+**⚠ STILL OPEN: Bryce Wenger (client 301320).** CoachAccountable owns him to
+Harry; the Notion export says "~None Assigned" (JYF waiting list). No June impact,
+but his **23 July invoice is a $425 4x line**, so he lands in the July payout.
+Settle ownership before July runs.
 
 Also noted: `mentees.notion_coach` for **Ralph Swartzentruber** still holds
 'Phil Herschberger' with `notion_coach_conflict = true`; the fresh Notion export

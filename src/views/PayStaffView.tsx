@@ -485,7 +485,7 @@ export function PayStaffView() {
           mentor-tenure month; a fast-tracked mentor can have a custom ramp) of the{" "}
           <strong>4×/2×/1× mentoring</strong> revenue <strong>billed</strong> to each mentee. JumpStart/JYF and other
           non-mentoring revenue is <strong>excluded</strong>. Each invoice's share is{" "}
-          <strong>split across two months</strong> by its invoice date (fixed 30-day): the remaining part pays in the
+          <strong>split across two months</strong> by its invoice date (over that month's real length): the remaining part pays in the
           invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
         </div>
 

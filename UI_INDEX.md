@@ -42,6 +42,8 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 207 | `pay.history` | Pay stub history sub-mode | `PayHistoryView` |
 | 208 | `timeclock.screen` | Time clock (clock in/out → payroll) | nav tab |
 | 209 | `timeclock.entries` | Time clock — my entries + submit for payroll | `TimeClockView` card |
+| 210 | `build.pieces` | Build payout — piece work (flat per-unit pay) | `PieceWorkCard` in `BuildPayoutView` |
+| 211 | `pay.hourly.pieces` | Hourly staff — piece work (flat per-unit pay) | `PieceWorkCard` in `HourlyPayView` |
 | 301 | `raw.screen` | Raw data (screen) | nav tab |
 | 400 | `admin.screen` | Admin (screen) | nav tab |
 | 401 | `admin.sync` | Sync | `AdminView` card |

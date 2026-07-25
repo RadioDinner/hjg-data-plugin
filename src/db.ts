@@ -19,9 +19,9 @@ import {
 export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
-import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec } from "../lib/pay";
+import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec, daysInMonth } from "../lib/pay";
 import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine, PayLineSource, PayLineSourceLineItem, LineItemPayStatus, PayInvoicePayment, PayInvoiceLineItem } from "../lib/pay";
-export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec };
+export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec, daysInMonth };
 export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine, PayLineSource, PayLineSourceLineItem, LineItemPayStatus, PayInvoicePayment, PayInvoiceLineItem };
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
@@ -38,10 +38,15 @@ import type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, 
 export { buildPayStubModel, payStubHtml, monthLabelLong };
 
 // Hourly (timesheet) staff pay — pure math + printable stub (lib/hourlyPay).
-import { normalizeEntries, hoursTotal, hourlyTotal, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay";
+import { normalizeEntries, hoursTotal, hourlyTotal, laborTotal, entryRate, entryAmount, hasCustomRates, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay";
 import type { HourlyEntry, HourlyStubModel, HourlyStubInput } from "../lib/hourlyPay";
-export { normalizeEntries, hoursTotal, hourlyTotal, parseEntries, buildHourlyStubModel, hourlyStubHtml };
+export { normalizeEntries, hoursTotal, hourlyTotal, laborTotal, entryRate, entryAmount, hasCustomRates, parseEntries, buildHourlyStubModel, hourlyStubHtml };
 export type { HourlyEntry, HourlyStubModel, HourlyStubInput };
+// Piece work — flat per-unit pay, shared by the hourly and mentor builders.
+import { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces, emptyPiece } from "../lib/pieceWork";
+import type { PieceEntry } from "../lib/pieceWork";
+export { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces, emptyPiece };
+export type { PieceEntry };
 export type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition };
 
 // Payment groups (engagement templates × staff groups; Company options §451).
@@ -1425,6 +1430,9 @@ export interface PayoutBuildRecord {
   // Column added by 9971_payout_build_split.sql — reads/writes degrade
   // gracefully when the migration isn't applied yet.
   splitOverride: number | null;
+  // Flat per-unit pay added on top of the engine lines (migration 9964; reads
+  // degrade gracefully when unapplied).
+  pieces: PieceEntry[];
   notes: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null; // updated_at
@@ -1447,7 +1455,8 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
   // payment_sent_at/payment_ref need 9969, split_override needs 9971 — retry
   // without the newer columns so the screen still loads (those features just
   // won't persist) on an un-migrated database.
-  let res = await supabase.from("payout_builds").select(`${cols},split_override,payment_sent_at,payment_ref`);
+  let res = await supabase.from("payout_builds").select(`${cols},split_override,payment_sent_at,payment_ref,piece_items`);
+  if (res.error) res = await supabase.from("payout_builds").select(`${cols},split_override,payment_sent_at,payment_ref`);
   if (res.error) res = await supabase.from("payout_builds").select(`${cols},split_override`);
   if (res.error) res = await supabase.from("payout_builds").select(cols);
   if (res.error) throw new Error(res.error.message);
@@ -1462,6 +1471,7 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
     split_override?: number | string | null;
     payment_sent_at?: string | null;
     payment_ref?: string | null;
+    piece_items?: unknown;
     notes: string | null;
     reviewed_by: string | null;
     updated_at: string | null;
@@ -1477,6 +1487,7 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
       computedTotal: Number(r.computed_total) || 0,
       lineStates,
       splitOverride: Number.isFinite(so as number) ? (so as number) : null,
+      pieces: parsePieces(r.piece_items),
       notes: r.notes,
       reviewedBy: r.reviewed_by,
       reviewedAt: r.updated_at,
@@ -1521,6 +1532,7 @@ export async function savePayoutBuild(
     computedTotal: number;
     lineStates: Record<number, BuildLineState>;
     splitOverride?: number | null;
+    pieces?: PieceEntry[];
     notes: string | null;
   }
 ): Promise<void> {
@@ -1528,6 +1540,7 @@ export async function savePayoutBuild(
   for (const [k, v] of Object.entries(rec.lineStates)) {
     if (!isDefaultLineState(v)) compact[k] = v;
   }
+  const pieces = normalizePieces(rec.pieces ?? []);
   const row: Record<string, unknown> = {
     coach_id: rec.coachId,
     service_month: rec.serviceMonth,
@@ -1538,8 +1551,19 @@ export async function savePayoutBuild(
     notes: rec.notes,
     reviewed_by: reviewedBy || null,
     split_override: rec.splitOverride ?? null,
+    piece_items: pieces,
+    pieces_total: piecesTotal(pieces),
   };
   let { error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" });
+  if (error && pieces.length > 0) {
+    throw new Error(`${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`);
+  }
+  if (error) {
+    // Pre-9964 database: retry without the piece-work columns.
+    delete row.piece_items;
+    delete row.pieces_total;
+    ({ error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" }));
+  }
   if (error && rec.splitOverride == null) {
     // Pre-9971 database: retry without the column so ordinary saves still work.
     delete row.split_override;
@@ -2296,6 +2320,7 @@ export interface StaffPayBuildRecord {
   rate: number;
   entries: HourlyEntry[];
   hoursTotal: number;
+  pieces: PieceEntry[];
   adjustment: number;
   adjustmentNote: string | null;
   notes: string | null;
@@ -2309,9 +2334,12 @@ export function staffPayBuildKey(profileId: string, periodMonth: string): string
 }
 
 export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRecord>> {
-  const { data, error } = await supabase
-    .from("staff_pay_builds")
-    .select("profile_id,period_month,rate,entries,hours_total,adjustment,adjustment_note,notes,total,status,updated_at");
+  // piece_items needs 9964 — retry without it so the screen still loads (piece
+  // work just won't persist) on an un-migrated database.
+  const cols = "profile_id,period_month,rate,entries,hours_total,adjustment,adjustment_note,notes,total,status,updated_at";
+  let res = await supabase.from("staff_pay_builds").select(`${cols},piece_items`);
+  if (res.error) res = await supabase.from("staff_pay_builds").select(cols);
+  const { data, error } = res;
   if (error) throw new Error(error.message);
   const out = new Map<string, StaffPayBuildRecord>();
   for (const r of (data ?? []) as {
@@ -2319,6 +2347,7 @@ export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRe
     period_month: string;
     rate: number | string | null;
     entries: unknown;
+    piece_items?: unknown;
     hours_total: number | string | null;
     adjustment: number | string | null;
     adjustment_note: string | null;
@@ -2333,6 +2362,7 @@ export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRe
       rate: Number(r.rate) || 0,
       entries: parseEntries(r.entries),
       hoursTotal: Number(r.hours_total) || 0,
+      pieces: parsePieces(r.piece_items),
       adjustment: Number(r.adjustment) || 0,
       adjustmentNote: r.adjustment_note,
       notes: r.notes,
@@ -2351,6 +2381,7 @@ export async function saveStaffPayBuild(
     periodMonth: string;
     rate: number;
     entries: HourlyEntry[];
+    pieces?: PieceEntry[];
     adjustment: number;
     adjustmentNote: string | null;
     notes: string | null;
@@ -2358,22 +2389,31 @@ export async function saveStaffPayBuild(
   }
 ): Promise<void> {
   const entries = normalizeEntries(rec.entries);
-  const { error } = await supabase.from("staff_pay_builds").upsert(
-    {
-      profile_id: rec.profileId,
-      period_month: rec.periodMonth,
-      rate: rec.rate,
-      entries,
-      hours_total: hoursTotal(entries),
-      adjustment: rec.adjustment,
-      adjustment_note: rec.adjustmentNote,
-      notes: rec.notes,
-      total: hourlyTotal(entries, rec.rate, rec.adjustment),
-      status: rec.status,
-      created_by: createdBy || null,
-    },
-    { onConflict: "profile_id,period_month" }
-  );
+  const pieces = normalizePieces(rec.pieces ?? []);
+  const row: Record<string, unknown> = {
+    profile_id: rec.profileId,
+    period_month: rec.periodMonth,
+    rate: rec.rate,
+    entries,
+    hours_total: hoursTotal(entries),
+    piece_items: pieces,
+    pieces_total: piecesTotal(pieces),
+    adjustment: rec.adjustment,
+    adjustment_note: rec.adjustmentNote,
+    notes: rec.notes,
+    total: hourlyTotal(entries, rec.rate, rec.adjustment, pieces),
+    status: rec.status,
+    created_by: createdBy || null,
+  };
+  let { error } = await supabase.from("staff_pay_builds").upsert(row, { onConflict: "profile_id,period_month" });
+  if (error && pieces.length === 0) {
+    // Pre-9964 database: retry without the columns so ordinary timesheets save.
+    delete row.piece_items;
+    delete row.pieces_total;
+    ({ error } = await supabase.from("staff_pay_builds").upsert(row, { onConflict: "profile_id,period_month" }));
+  } else if (error && pieces.length > 0) {
+    throw new Error(`${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`);
+  }
   if (error) throw new Error(error.message);
 }
 

@@ -4,6 +4,8 @@ import {
   computePayReport,
   computePayTimeline,
   summarizeBuild,
+  normalizePieces,
+  piecesTotal,
   effectiveLineTotal,
   payoutAfterExclusions,
   buildPayStubModel,
@@ -22,6 +24,7 @@ import {
   type PayData,
   type PayMenteeLine,
   type BuildLineState,
+  type PieceEntry,
   type BuildStatus,
   type PayoutBuildRecord,
 } from "../db";
@@ -30,6 +33,7 @@ import { downloadCsv } from "../csv";
 import { fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
+import { PieceWorkCard } from "../components/PieceWorkCard";
 import { PayoutLineDetailModal } from "../components/PayoutLineDetailModal";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -77,6 +81,8 @@ export function BuildPayoutView({
   const [lineStates, setLineStates] = useState<Record<number, BuildLineState>>({});
   // Build-level Split % override (fraction; null = the engine's ramp split).
   const [splitOverride, setSplitOverride] = useState<number | null>(null);
+  // Flat per-unit pay for this coach-month, on top of the engine lines.
+  const [pieces, setPieces] = useState<PieceEntry[]>([]);
   const [notes, setNotes] = useState<string>("");
   const [status, setStatus] = useState<BuildStatus>("draft");
   const [dirty, setDirty] = useState(false);
@@ -201,6 +207,7 @@ export function BuildPayoutView({
     const rec = builds.get(payoutBuildKey(coach, ym));
     setLineStates(rec ? { ...rec.lineStates } : {});
     setSplitOverride(rec?.splitOverride ?? null);
+    setPieces(rec?.pieces ? rec.pieces.map((x) => ({ ...x })) : []);
     setNotes(rec?.notes ?? "");
     setStatus(rec?.status ?? "draft");
     setDirty(false);
@@ -243,7 +250,12 @@ export function BuildPayoutView({
   // Pass the full lines (with sources + splitPct) so the summary honors per-invoice
   // exclusions + the split override; computedTotal still sums the raw engine payout
   // as the drift reference.
-  const summary = useMemo(() => summarizeBuild(lines, stateMap, splitOverride), [lines, stateMap, splitOverride]);
+  const cleanPieces = useMemo(() => normalizePieces(pieces), [pieces]);
+  const pieceTotal = piecesTotal(cleanPieces);
+  const summary = useMemo(
+    () => summarizeBuild(lines, stateMap, splitOverride, cleanPieces),
+    [lines, stateMap, splitOverride, cleanPieces]
+  );
 
   const locked = status === "approved";
   const paid = !!savedRec?.paymentSentAt;
@@ -277,6 +289,7 @@ export function BuildPayoutView({
         computedTotal: summary.computedTotal,
         lineStates,
         splitOverride,
+        pieces: cleanPieces,
         notes: notes.trim() || null,
       });
       const rec: PayoutBuildRecord = {
@@ -287,6 +300,7 @@ export function BuildPayoutView({
         computedTotal: summary.computedTotal,
         lineStates,
         splitOverride,
+        pieces: cleanPieces,
         notes: notes.trim() || null,
         reviewedBy: user?.id ?? null,
         reviewedAt: new Date().toISOString(),
@@ -398,6 +412,7 @@ export function BuildPayoutView({
       splitOverride,
       status,
       unsavedChanges: dirty,
+      pieces: cleanPieces,
       lines,
       states: stateMap,
       monthNote: notes.trim() || null,
@@ -774,8 +789,9 @@ export function BuildPayoutView({
                       </td>
                       <td className="num">{fmtUsd(summary.computedTotal)}</td>
                       <td className="num muted">{summary.overriddenCount ? `${summary.overriddenCount} ovr` : ""}</td>
-                      <td className="num" style={{ fontWeight: 700 }}>
+                      <td className="num" style={{ fontWeight: 700 }} title={pieceTotal !== 0 ? `includes ${fmtUsd(pieceTotal)} piece work` : undefined}>
                         {fmtUsd(summary.builtTotal)}
+                        {pieceTotal !== 0 && <div className="muted" style={{ fontSize: 10, fontWeight: 400 }}>incl. {fmtUsd(pieceTotal)} piece work</div>}
                       </td>
                       <td />
                     </tr>
@@ -794,6 +810,19 @@ export function BuildPayoutView({
             )}
           </section>
 
+          <div style={{ gridColumn: "1 / -1" }}>
+            <PieceWorkCard
+              items={pieces}
+              onChange={(next) => {
+                setPieces(next);
+                setDirty(true);
+              }}
+              locked={locked}
+              sectionId="build.pieces"
+              hint={`Flat pay per unit for ${mentor?.coachName ?? "this mentor"}, on top of the revenue share above — e.g. $25 for every new mentee. The engine knows nothing about these, so they show up as review delta.`}
+            />
+          </div>
+
           <aside className="builder__side">
             <div className="card">
               <div className="muted" style={{ fontSize: 12 }}>Built payout (signed-off)</div>
@@ -805,6 +834,11 @@ export function BuildPayoutView({
                 Review delta:{" "}
                 <strong style={{ color: summary.delta === 0 ? undefined : "var(--accent)" }}>{fmtSigned(summary.delta)}</strong>
               </div>
+              {pieceTotal !== 0 && (
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                  Piece work: <strong>{fmtUsd(pieceTotal)}</strong> (in the built total, not the engine number)
+                </div>
+              )}
               <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                 {summary.includedCount} of {summary.lineCount} line{summary.lineCount === 1 ? "" : "s"} included
                 {summary.excludedCount ? ` · ${summary.excludedCount} dropped` : ""}

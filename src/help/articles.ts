@@ -121,7 +121,7 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 ### The two-month split (Clayton)
 - Pay is on the amount **billed** (invoice \`amount\`); collected is reference only.
-- An invoice dated on **day D** of its month is split by where D falls, using a **fixed 30-day** month: \`elapsed = D / 30\`.
+- An invoice dated on **day D** of its month is split by where D falls, over the **real length of that month**: \`elapsed = D / daysInMonth\`.
   - The **remaining** part \`(1 − elapsed)\` is paid in the **invoice's own month**.
   - The **elapsed** part rolls forward and is paid the **next month**.
 - So a month's payout = **this month's invoice × (1 − elapsed) + last month's invoice × its elapsed**, all × the mentor's rate. Each invoice's two slices add back to its full share, so the mentor is made whole across the two months.
@@ -150,9 +150,14 @@ Pure math lives in \`lib/compare.ts\`.`,
 
 ### See the invoices behind a number
 - **Click a mentee's name** to open the invoice/payment drill-down: every invoice whose slice built that payout, the **date(s) it was paid**, the method, and the line items — plus the **this-month slice + rolled-in slice = earned → payout** math spelled out.
-- A payout blends **two months** (each invoice pays its remaining fraction in its own month and rolls its elapsed fraction — invoice day ÷ 30 — into the next), so a mentee's **earned amount can differ from a single month's billed total**. The drill-down shows exactly which invoices produced it.
+- A payout blends **two months** (each invoice pays its remaining fraction in its own month and rolls its elapsed fraction — invoice day ÷ the real number of days in that month — into the next), so a mentee's **earned amount can differ from a single month's billed total**. The drill-down shows exactly which invoices produced it.
 - **Pick what counts — invoice or line item.** Each invoice in the drill-down has an **Incl.** checkbox, and every **line item inside it** has its own checkbox. Lines matching the pay-eligible templates (**Company options → Payment groups**) are **selected automatically**; credits and unmatched charges carry a **review** pill for human judgment — flip any line by hand. The pay basis is the **sum of the counted lines**; earned and payout **recompute live** and save with the build. A **±N inv** tag flags an adjusted mentee, a **review N** tag flags judgment lines. A typed **override** still wins over the selection.
 - **Flips are per-month.** Under the two-month split the same invoice also contributes a rolled-in slice to the NEXT month's build, which starts from the engine defaults — if a flip should carry (e.g. a credit kept out), repeat it when you review that month. The saved-build drift warning will flag any month whose numbers no longer match what was signed off.
+
+### Piece work (pay that isn't a revenue share)
+- The **Piece work** card adds flat **per-unit** pay on top of the mentee lines — *"$25 for every new mentee, and he had 8 in June"*. Enter the item, the quantity, and the rate each.
+- It's added to the **built (signed-off) total** but **never to the engine total**, so it deliberately reads as **review delta** — the engine knows nothing about piece work.
+- Piece-work lines print on the pay stub in the summary table, so the mentor sees them alongside their revenue share. Needs migration \`9964_pay_piece_work.sql\`.
 
 ### Export
 - **Export CSV** downloads the **data used to build the payout** — one row per contributing invoice (this-month + rolled-in slices), with the dates each was paid — not just the on-screen per-mentee summary.
@@ -175,13 +180,17 @@ Pure math lives in \`lib/compare.ts\`.`,
     body: `Pay for staff the invoice engine doesn't cover: they send a **time sheet**, you enter it here, and the app does the math and prints the stub.
 
 ### The flow
-1. **Add the person** (name + hourly rate). The rate is their standing rate; editing it here updates it for future months, while saved months keep the rate they were saved with.
-2. Pick the **period month** and type in the timesheet lines — date, what they worked on, hours. The amount per line and the running total (hours × rate) update live.
-3. Add an optional **adjustment** ($ + or −, with a reason) and a **pay stub note**.
-4. **Save draft** while checking; **Approve** to lock it (the logged payout amount is stored with the build).
-5. **Print** — a draft prints a watermarked *REVIEW COPY*, an approved build prints the final *PAY STUB*. Every print is **archived to History** automatically.
+1. **Add the person** (name + default hourly rate). That rate is their standing rate; editing it here updates it for future months, while saved months keep the rate they were saved with.
+2. Pick the **period month** and type in the timesheet lines — date, what they worked on, hours. The amount per line and the running total update live.
+3. **Per-line rates.** Each line has its own **Rate ($/h)** box. Leave it **blank** to pay that line at the default rate; fill it in when that particular work bills higher (training delivery at $40/h on a $22/h sheet, say). Lines priced off the default are highlighted, and the pay stub grows a **Rate** column so the staff member can see exactly which work paid what.
+4. **Piece work.** For pay that isn't hours at all — *"$25 for every new mentee, and he had 8 in June"* — use the **Piece work** card: item, quantity, rate each. It's added on top of the hours and printed as its own section on the stub.
+5. Add an optional **adjustment** ($ + or −, with a reason) and a **pay stub note**.
+6. **Save draft** while checking; **Approve** to lock it (the logged payout amount is stored with the build).
+7. **Print** — a draft prints a watermarked *REVIEW COPY*, an approved build prints the final *PAY STUB*. Every print is **archived to History** automatically.
 
-Needs migration \`9970_staff_hourly_pay.sql\`.`,
+**Total = Σ (each line's hours × its rate) + piece work + adjustment.**
+
+Needs migrations \`9970_staff_hourly_pay.sql\` and \`9964_pay_piece_work.sql\`.`,
   },
 
   "pay.history": {

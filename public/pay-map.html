@@ -93,12 +93,12 @@
     <h2 style="margin-top:4px">The rule, in one breath</h2>
     <p>
       Your rate is <strong>35% → 50% → 60%</strong> over your first three months mentoring, then 60%.
-      Each mentee's invoice is split by the <strong>day it falls on</strong> (using a fixed 30-day month):
+      Each mentee's invoice is split by the <strong>day it falls on</strong> (over the real length of that month):
       the part of the month <span style="color:var(--this)"><strong>still to come</strong></span> is paid that month,
       and the part <span style="color:var(--roll)"><strong>already elapsed</strong></span> rolls into the next month.
     </p>
     <p style="margin-bottom:0">
-      <code>elapsed = day ÷ 30</code> ·
+      <code>elapsed = day ÷ days in that month</code> ·
       <code>paid this month = amount × (1 − elapsed) × rate</code> ·
       <code>rolls to next month = amount × elapsed × rate</code>
     </p>
@@ -114,6 +114,15 @@
         <button data-r="0.6" class="on">60%</button>
       </div>
       <span class="muted">applies to all of your mentees</span>
+    </div>
+    <div class="ratebar">
+      <span>Days in the month:</span>
+      <div class="seg" id="mdays">
+        <button data-d="28">28</button>
+        <button data-d="30">30</button>
+        <button data-d="31" class="on">31</button>
+      </div>
+      <span class="muted">the proration denominator — a real calendar month</span>
     </div>
     <div class="legend">
       <span><span class="swatch" style="background:var(--this)"></span>Paid in the invoice's month</span>
@@ -139,7 +148,7 @@
   </div>
 
   <p class="note">
-    The month length is a <strong>fixed 30 days</strong> (so the 12th = 40% elapsed; a day past the 30th counts as fully elapsed).
+    The denominator is the <strong>real length of the invoice's month</strong> (so the 12th of a 31-day month = 38.7% elapsed; the last day counts as fully elapsed).
     Pay is figured on the amount <strong>billed</strong>. Tier prices shown are examples — your real amount comes from each mentee's invoice. This mirrors the dashboard's engine.
   </p>
 </div>
@@ -148,7 +157,7 @@
   var money = function (n) { return "$" + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var pct1 = function (n) { return (Math.round(n * 1000) / 10) + "%"; };
   function calc(amount, day, rate) {
-    var elapsed = Math.min(Math.max(day, 0), 30) / 30;
+    var elapsed = Math.min(Math.max(day, 0), monthDays) / monthDays;
     var remaining = 1 - elapsed;
     return { elapsed: elapsed, remaining: remaining, thisMonth: amount * remaining * rate, nextMonth: amount * elapsed * rate, full: amount * rate };
   }
@@ -161,6 +170,7 @@
     { name: "Chase Chester", amount: 145, day: 22 }   // 1x
   ];
   var rate = 0.6;
+  var monthDays = 31;   // proration denominator = real days in the invoice's month
 
   // Build the editable mentee rows.
   var wrap = document.getElementById("mentees");
@@ -260,6 +270,13 @@
       money(first) + ") and there's a matching <strong>tail</strong> the month after a mentee's last invoice (" + money(tail) +
       "). First + tail = " + money(first + tail) + " = one full month.";
   }
+
+  document.getElementById("mdays").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    monthDays = parseInt(b.getAttribute("data-d"), 10);
+    Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle("on", x === b); });
+    render();
+  });
 
   document.getElementById("rate").addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b) return;

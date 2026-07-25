@@ -12,6 +12,7 @@
 // supabase/migrations/9989_payout_builds.sql; the access layer is src/db.ts.
 
 import type { PayLineSource } from "./pay";
+import { piecesTotal, type PieceEntry } from "./pieceWork";
 
 // Per-line review decision, keyed by clientId within a build. A line with no
 // stored state is treated as DEFAULT_LINE_STATE (included, no override, no note).
@@ -243,8 +244,12 @@ export function effectiveLineTotal(
 // (included lines with overrides applied), the drift between them, and counts.
 export interface BuildSummary {
   computedTotal: number; // Σ engine payout over ALL lines — the automated number
-  builtTotal: number; // Σ effective payout over included lines — the signed-off number
+  builtTotal: number; // Σ effective payout over included lines + piece work — signed off
   delta: number; // builtTotal - computedTotal (how far review moved the number)
+  // Flat per-unit pay added on top of the engine lines (e.g. $25 × 8 new mentees).
+  // Included in builtTotal but NEVER in computedTotal — the engine knows nothing
+  // about it, so it reads as review drift, which is exactly what it is.
+  piecesTotal: number;
   lineCount: number;
   includedCount: number;
   excludedCount: number;
@@ -400,7 +405,8 @@ export function payoutDetailCsvRows(
 export function summarizeBuild(
   lines: BuildLineInput[],
   states: Map<number, BuildLineState>,
-  splitOverride?: number | null
+  splitOverride?: number | null,
+  pieces: PieceEntry[] = []
 ): BuildSummary {
   let computedTotal = 0;
   let builtTotal = 0;
@@ -424,10 +430,13 @@ export function summarizeBuild(
       excludedCount++;
     }
   }
+  const pTotal = piecesTotal(pieces);
+  builtTotal += pTotal;
   return {
     computedTotal: round2(computedTotal),
     builtTotal: round2(builtTotal),
     delta: round2(builtTotal - computedTotal),
+    piecesTotal: pTotal,
     lineCount: lines.length,
     includedCount,
     excludedCount,

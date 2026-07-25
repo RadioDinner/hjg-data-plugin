@@ -10,7 +10,7 @@
 //  - PRORATION + TWO-MONTH SPLIT (the heart of Clayton's method). An invoice dated
 //    on day D of its service month is split across TWO calendar months by where D
 //    falls in the month:
-//        elapsed   e        = D / 30            (FIXED 30-day month, per the user)
+//        elapsed   e        = D / daysInMonth(service month)   (REAL month length)
 //        remaining (1 − e)
 //      • the REMAINING fraction (1 − e) is recognized in the invoice's own month,
 //      • the ELAPSED fraction (e) rolls forward into the NEXT calendar month.
@@ -108,18 +108,21 @@ export function tenureMonthsBetween(startYm: string, serviceYm: string): number 
   return monthOrdinal(serviceYm) - monthOrdinal(startYm) + 1;
 }
 
-// Actual calendar days in a month — used ONLY for the engagement-coverage day-walk
-// (which coach served the mentee). The PRORATION denominator is a fixed 30 (below).
+// Actual calendar days in a month. Used both for the engagement-coverage day-walk
+// (which coach served the mentee) and as the PRORATION denominator (below).
 export function daysInMonth(ym: string): number {
   const [y, m] = ym.split("-").map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
-// Clayton's fixed 30-day proration denominator. Elapsed fraction of the month at
-// the invoice's day-of-month, clamped to [0, 1] (a day past the 30th = fully elapsed).
-export const PRORATION_DAYS = 30;
-export function elapsedFraction(dayOfMonth: number): number {
-  return Math.min(Math.max(dayOfMonth, 0), PRORATION_DAYS) / PRORATION_DAYS;
+// Clayton's proration denominator: the REAL length of the invoice's own month, so
+// the legacy sheet's `1 − DAY(start) / DAY(EOMONTH(start, 0))` reproduces exactly
+// (changed 2026-07-25 from a fixed 30 after the Harry Shenk reconciliation — see
+// docs/legacy-pay-calculator.md §7). Elapsed fraction at the invoice's
+// day-of-month, clamped to [0, 1].
+export function elapsedFraction(dayOfMonth: number, ym: string): number {
+  const days = daysInMonth(ym);
+  return Math.min(Math.max(dayOfMonth, 0), days) / days;
 }
 
 function ymOf(dateYmd: string): string {
@@ -199,7 +202,9 @@ export interface PayLineSource {
   // The recognized slices below prorate THIS number, not `billed`.
   eligibleBilled: number;
   collected: number; // amount paid so far on this invoice (whole invoice; reference)
-  elapsedFraction: number; // e = min(day, 30) / 30
+  // e = min(day, N) / N where N = daysInMonth(serviceMonth). Display code that wants
+  // to show "19/31" reads N back with daysInMonth(serviceMonth).
+  elapsedFraction: number;
   recognized: number; // this-month: basis×(1−e); rollover: basis×e — UNROUNDED (sum, then round)
   tier: string; // tier from the matched line item (invoice-truth) or engagement coverage (legacy)
   payments: PayInvoicePayment[]; // when + how the mentee paid (may be empty)
@@ -505,7 +510,9 @@ export function computePayReport(input: PayInputs): PayReport {
     // Legacy passes "" so ensure() keeps its historical first-processed tier.
     const a = ensure(coachId, inv.clientId, tier, liMode ? inv.serviceDate.slice(0, 10) : "");
     const day = dayOf(inv.serviceDate);
-    const e = elapsedFraction(day);
+    // Denominator is the invoice's OWN month length, so a rollover slice keeps the
+    // fraction it was cut with in its source month.
+    const e = elapsedFraction(day, invYm);
     const collected = inv.collected || 0;
     const thisMonth = invYm === ym;
     // Unrounded slice (basis × remaining/elapsed); the line rounds the SUM, so

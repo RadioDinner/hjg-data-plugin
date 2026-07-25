@@ -81,7 +81,8 @@ import {
 } from "../lib/payBuild.js";
 import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
 import { buildPayStubModel, payStubHtml } from "../lib/payStub.js";
-import { normalizeEntries, hoursTotal, hourlyTotal, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay.js";
+import { normalizeEntries, hoursTotal, hourlyTotal, laborTotal, entryRate, entryAmount, hasCustomRates, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay.js";
+import { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces } from "../lib/pieceWork.js";
 import {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
@@ -329,11 +330,17 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   eq(parseRampSpec(""), null, "blank ramp -> null (falls back to default)");
   eq(parseRampSpec("  "), null, "whitespace ramp -> null");
   eq(formatRampSpec([0.5, 0.6, 0.6]), "50/60/60", "format [0.5,0.6,0.6] -> '50/60/60'");
-  // Fixed 30-day proration denominator (Clayton).
-  eq(elapsedFraction(12), 0.4, "day 12 -> 12/30 elapsed (fixed 30-day month)");
-  eq(elapsedFraction(19), 19 / 30, "day 19 -> 19/30 elapsed");
-  eq(elapsedFraction(30), 1, "day 30 -> fully elapsed");
-  eq(elapsedFraction(31), 1, "a day past the 30th clamps to fully elapsed");
+  // Proration denominator = the REAL length of the invoice's month (2026-07-25;
+  // matches the legacy sheet's 1 - DAY(start)/DAY(EOMONTH(start,0))).
+  eq(elapsedFraction(12, "2026-04"), 0.4, "day 12 of a 30-day month -> 12/30 elapsed");
+  eq(elapsedFraction(12, "2026-03"), 12 / 31, "day 12 of a 31-day month -> 12/31 elapsed");
+  eq(elapsedFraction(19, "2026-05"), 19 / 31, "day 19 of May -> 19/31 elapsed");
+  eq(elapsedFraction(28, "2026-02"), 1, "day 28 of a 28-day February -> fully elapsed");
+  eq(elapsedFraction(29, "2024-02"), 29 / 29, "leap February has 29 days -> day 29 fully elapsed");
+  eq(elapsedFraction(30, "2026-06"), 1, "last day of a 30-day month -> fully elapsed");
+  eq(elapsedFraction(31, "2026-05"), 1, "last day of a 31-day month -> fully elapsed");
+  eq(elapsedFraction(31, "2026-06"), 1, "a day past the month end clamps to fully elapsed");
+  eq(elapsedFraction(0, "2026-06"), 0, "day 0 -> nothing elapsed");
 
   const coachName = (id: number) => (id === 29074 ? "Harry Shenk" : `#${id}`);
   const clientName = (id: number) => `Mentee ${id}`;
@@ -341,7 +348,8 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   // ---- The canonical Alex Arnold example (Clayton's own walkthrough) ----
   // Harry started Jan 2026 (so by March he's at the established 60%). Alex pays
   // $425 on the 12th (Mar, Apr) then the 19th (May, pushed a week). Each invoice's
-  // 60% is split across two calendar months by where its day falls (fixed /30).
+  // 60% is split across two calendar months by where its day falls, over the REAL
+  // length of that invoice's month (Mar 31, Apr 30, May 31).
   const harry: PayEngagementInput[] = [
     { clientId: 1, coachId: 29074, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
   ];
@@ -353,22 +361,22 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
 
   const mar = computePayReport({ ym: "2026-03", invoices: alex, engagements: harry, coachName, clientName });
   eq(mar.mentors[0].splitPct, 0.6, "Harry established -> 60%");
-  eq(mar.mentors[0].lines[0].recognizedThis, 255, "March: recognized this month = 425*(1-12/30) = $255");
+  eq(mar.mentors[0].lines[0].recognizedThis, 260.48, "March: recognized this month = 425*(1-12/31) = $260.48");
   eq(mar.mentors[0].lines[0].rolloverPrev, 0, "no rollover into the first month");
-  eq(mar.mentors[0].payout, 153, "March payout = 425*(1-12/30)*0.6 = $153");
+  eq(mar.mentors[0].payout, 156.29, "March payout = 425*(19/31)*0.6 = $156.29");
 
   const apr = computePayReport({ ym: "2026-04", invoices: alex, engagements: harry, coachName, clientName });
-  eq(apr.mentors[0].lines[0].rolloverPrev, 170, "March's elapsed slice rolls into April = 425*12/30 = $170");
-  eq(apr.mentors[0].payout, 255, "April payout = this(425*0.6) + rolled(425*0.4) at 60% = $255");
+  eq(apr.mentors[0].lines[0].rolloverPrev, 164.52, "March's elapsed slice rolls into April = 425*12/31 = $164.52");
+  eq(apr.mentors[0].payout, 251.71, "April payout = (425*(1-12/30) + 425*(12/31)) * 0.6 = $251.71");
 
   const may = computePayReport({ ym: "2026-05", invoices: alex, engagements: harry, coachName, clientName });
-  eq(may.mentors[0].payout, 195.5, "May payout = (425*(1-19/30) + 425*(12/30)) * 0.6 = $195.50");
+  eq(may.mentors[0].payout, 200.71, "May payout = (425*(1-19/31) + 425*(12/30)) * 0.6 = $200.71");
 
   // June has NO invoice, but May's elapsed slice still rolls forward — the mentor
   // gets the tail.
   const jun = computePayReport({ ym: "2026-06", invoices: alex, engagements: harry, coachName, clientName });
   eq(jun.mentors[0].lines[0].billed, 0, "no invoice billed in June (rollover-only line)");
-  eq(jun.mentors[0].payout, 161.5, "June payout = 425*(19/30)*0.6 = $161.50 (May's tail)");
+  eq(jun.mentors[0].payout, 156.29, "June payout = 425*(19/31)*0.6 = $156.29 (May's tail)");
 
   // Conservation: each invoice's two slices add back to its full 60%; the whole
   // run pays exactly 60% of all billed.
@@ -404,8 +412,9 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   });
   eq(newMentor.mentors[0].menteeCount, 2, "mentor has two mentees this month");
   eq(newMentor.mentors[0].splitPct, 0.35, "mentor's 1st month -> 35% across ALL mentees");
-  // Each invoice day 1: recognized this month = 425*(29/30) each -> *0.35.
-  eq(newMentor.mentors[0].payout, round2(2 * 425 * (29 / 30) * 0.35), "35% across both mentees, day-1 proration");
+  // March has 31 days, so day 1 -> recognized this month = 425*(30/31) each. Each
+  // line rounds before the split, then the mentor total rounds again: 143.95 x 2.
+  eq(newMentor.mentors[0].payout, 287.9, "35% across both mentees, day-1 proration in a 31-day month");
 
   // ---- No mentoring coverage: revenue is EXCLUDED from pay (surfaced, not dropped).
   //      An invoice with no engagement covering any day of its month has tier
@@ -501,7 +510,9 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   const hMay = computePayReport({ ym: "2026-05", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
   eq(hMay.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0, 425, "day-30 4x invoice is billed to the NEW 4x coach (222), not the outgoing JumpStart coach");
   const hJun = computePayReport({ ym: "2026-06", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
-  eq(round2(hJun.mentors.find((m) => m.coachId === 222)?.earned ?? 0), 425, "full day-30 rollover lands under the new 4x coach in June");
+  // May has 31 days, so a 5/30 invoice is 30/31 elapsed — that slice rolls to June
+  // under the NEW 4x coach (the point of the test is the attribution, not the size).
+  eq(round2(hJun.mentors.find((m) => m.coachId === 222)?.earned ?? 0), 411.29, "day-30 rollover (30/31 of May) lands under the new 4x coach in June");
   eq(hJun.mentors.find((m) => m.coachId === 111)?.earned ?? 0, 0, "the outgoing JumpStart coach gets none of the 4x invoice");
 
   // ---- Owner override (session 009: owner = CA primary coach, everywhere incl.
@@ -548,11 +559,12 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   );
 
   // ---- Caleb Otto, June 2026 (real-data replica, decided with the user 2026-07-09).
-  //      Three 4x mentees each billed $425 on the 15th of May & June -> each nets
-  //      one full $425 in June under the two-month split; Caleb's fast-track ramp
-  //      (50/60/60 from March) resolves to 60% -> $255 each -> $765. (JYF exclusion
-  //      is covered by the jyfExcl / §9 cases; kept out of this replica so the
-  //      day-15 split stays on clean cents for the reconciliation invariant.) ----
+  //      Three 4x mentees each billed $425 on the 15th of May & June. Under REAL
+  //      month lengths (2026-07-25) the June slice is 15/30 but the rolled-in May
+  //      slice is 15/31, so June nets $418.15 per mentee rather than a flat $425;
+  //      Caleb's fast-track ramp (50/60/60 from March) resolves to 60% -> $250.89
+  //      each -> $752.67. Conservation still holds per INVOICE (each invoice's two
+  //      slices add back to $425), which the reconciliation invariant below checks. ----
   const CALEB = 40711;
   const calebEng: PayEngagementInput[] = [1, 2, 3].map((c) => ({
     clientId: c,
@@ -579,7 +591,7 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   eq(calebJun.mentors[0].coachId, CALEB, "Caleb is the credited mentor");
   eq(calebJun.mentors[0].splitPct, 0.6, "Caleb's ramp resolves to 60% in June (tenure month 4 of 50/60/60)");
   eq(calebJun.mentors[0].menteeCount, 3, "three paying 4x mentees in June");
-  eq(calebJun.mentors[0].payout, 765, "Caleb June payout = 3 x $255 = $765");
+  eq(calebJun.mentors[0].payout, 752.67, "Caleb June payout = 3 x $250.89 = $752.67 (15/30 this month + 15/31 rolled in)");
 
   // Reconciliation invariant: running total (through June) + remaining tail = the
   // full 4x value billed through June. All 6 4x invoices are billed by June; the
@@ -589,16 +601,17 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   const rows = calebTl.ledger.filter((r) => r.assigned && r.coachId === CALEB);
   const running = round2(rows.filter((r) => r.ym <= junYm).reduce((s, r) => s + r.payout, 0));
   const remaining = round2(rows.filter((r) => r.ym === "2026-07").reduce((s, r) => s + r.rolloverPrev * r.splitPct, 0));
-  eq(running, 1147.5, "running total through June = May $382.50 + June $765.00");
+  eq(running, 1147.5, "running total through June = May $394.83 + June $752.67");
   eq(remaining, 382.5, "remaining tail = the June invoices' July rollover at 60%");
   eq(round2(running + remaining), 1530, "running + remaining = full 4x value billed through June (6 x $425 x 60%)");
 
-  // ---- Ty Miller replica: the real "$430.83 earned / $258.50 payout" number.
-  //      June's own $425 invoice is dated the 30th (fully elapsed) so recognizes $0
-  //      in June; June's payout is ENTIRELY May's rolled-in slices. May had TWO 4x
-  //      invoices ($425 on the 29th + $20 on the 30th), so the rolled-in total
-  //      ($410.83 + $20.00 = $430.83) EXCEEDS the $425 tier price. The new `sources`
-  //      expose exactly which invoices (and payment dates) built the number. ----
+  // ---- Ty Miller replica. June's own $425 invoice is dated the 30th — the last day
+  //      of a 30-day June — so it is fully elapsed and recognizes $0 in June; June's
+  //      payout is ENTIRELY May's rolled-in slices. May had TWO 4x invoices ($425 on
+  //      the 29th + $20 on the 30th), and BOTH roll in: 425*(29/31) + 20*(30/31) =
+  //      $416.94. The `sources` expose exactly which invoices (and payment dates)
+  //      built the number. (Under the old fixed-30 denominator this case reported
+  //      $430.83 / $258.50; real month lengths recut it to $416.94 / $250.16.) ----
   const tyEng: PayEngagementInput[] = [
     { clientId: 1, coachId: CALEB, startDate: "2026-03-31", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
   ];
@@ -619,14 +632,14 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   const tyJun = computePayReport({ ym: "2026-06", ...tyArgs });
   const tyLine = tyJun.mentors[0].lines[0];
   eq(tyLine.recognizedThis, 0, "Ty's June invoice (day 30) recognizes $0 in June — all of it rolls to July");
-  eq(tyLine.rolloverPrev, 430.83, "May's two 4x invoices roll $430.83 into June (410.83 + 20.00)");
-  eq(tyLine.earned, 430.83, "Ty's June earned = $430.83 (the exact reported number, > the $425 tier)");
-  eq(tyJun.mentors[0].payout, 258.5, "Ty's June payout = $430.83 x 60% = $258.50 (the exact reported number)");
+  eq(tyLine.rolloverPrev, 416.94, "May's two 4x invoices roll $416.94 into June (397.58 + 19.35)");
+  eq(tyLine.earned, 416.94, "Ty's June earned = $416.94, entirely rolled in from May's two invoices");
+  eq(tyJun.mentors[0].payout, 250.16, "Ty's June payout = $416.94 x 60% = $250.16");
   // The sources ARE the audit: 2 rolled-in (May) + 1 this-month (June), oldest first.
   eq(tyLine.sources.length, 3, "three contributing invoices behind the June line");
   eq(tyLine.sources.filter((s) => s.slice === "rollover").length, 2, "two May invoices rolled in");
   eq(tyLine.sources.filter((s) => s.slice === "this-month").length, 1, "one June invoice this month");
-  eq(round2(tyLine.sources.filter((s) => s.slice === "rollover").reduce((t, s) => t + s.recognized, 0)), 430.83, "rolled-in slices sum to $430.83");
+  eq(round2(tyLine.sources.filter((s) => s.slice === "rollover").reduce((t, s) => t + s.recognized, 0)), 416.94, "rolled-in slices sum to $416.94");
   eq(tyLine.sources.find((s) => s.slice === "this-month")?.recognized ?? -1, 0, "the June (day-30) source recognizes $0 this month");
   eq(tyLine.sources[0].serviceDate, "2026-05-29", "sources ordered oldest service date first");
   // Payment dates thread through untouched (the answer to 'when did he pay?').
@@ -849,6 +862,19 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   const clean = summarizeBuild(lines, new Map());
   eq(clean.builtTotal, clean.computedTotal, "all-default build == engine total");
   eq(clean.delta, 0, "no-op review has zero drift");
+  eq(clean.piecesTotal, 0, "no piece work by default");
+
+  // ---- PIECE WORK on a CALCULATED (mentor) build (2026-07-25). Flat per-unit pay
+  //      adds to the signed-off total but never to the engine total, so it reads
+  //      as review drift — which is exactly what it is. ----
+  const withPieces = summarizeBuild(lines, new Map(), null, [
+    { date: null, label: "New mentee onboarded", qty: 8, unitRate: 25 },
+  ]);
+  eq(withPieces.piecesTotal, 200, "piece work totals $200 on the build");
+  eq(withPieces.builtTotal, round2(clean.builtTotal + 200), "piece work adds to the built total");
+  eq(withPieces.computedTotal, clean.computedTotal, "piece work never touches the engine total");
+  eq(withPieces.delta, 200, "piece work shows up as review drift");
+  eq(summarizeBuild(lines, new Map(), null, []).builtTotal, clean.builtTotal, "empty piece list is a no-op");
 
   // isDefaultLineState: only the untouched line is default (compact persistence).
   eq(isDefaultLineState(DEFAULT_LINE_STATE), true, "default state is default");
@@ -1099,17 +1125,17 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
   const harry = rpt.mentors.find((m) => m.coachId === 900)!;
   const lineOf = (cid: number) => harry.lines.find((l) => l.clientId === cid)!;
 
-  // Brett: 425×(19/30) rolled + 425×(11/30) this-month = 425.00 -> ×60% = 255.
-  eq(lineOf(1).earned, 425, "CANCELED-engagement mentee still earns (Brett $425)");
-  eq(lineOf(1).payout, 255, "Brett pays $255 despite canceled CA engagement");
+  // Brett: 425×(19/31) rolled from a 31-day March + 425×(11/30) this month = 416.32.
+  eq(lineOf(1).earned, 416.32, "CANCELED-engagement mentee still earns (Brett $416.32)");
+  eq(lineOf(1).payout, 249.79, "Brett pays $249.79 despite canceled CA engagement");
   eq(lineOf(1).tier, "4x", "tier read from the LINE ITEM, not the engagement");
-  // Wynn: 265×0.7 + 265×0.3 = 265 -> $159.
-  eq(lineOf(2).earned, 265, "canceled 2x mentee still earns (Wynn $265)");
-  eq(lineOf(2).payout, 159, "Wynn pays $159");
+  // Wynn: 265×(21/31) rolled + 265×(9/30) this month = 259.02 -> ×60%.
+  eq(lineOf(2).earned, 259.02, "canceled 2x mentee still earns (Wynn $259.02)");
+  eq(lineOf(2).payout, 155.41, "Wynn pays $155.41");
   eq(lineOf(2).tier, "2x", "2x tier from the line item");
-  // Nelson: only the March rollover counts; the $550 MT tuition is excluded.
-  eq(lineOf(3).earned, 127.5, "Nelson April = March rollover only (425×0.3)");
-  eq(lineOf(3).payout, 76.5, "Nelson pays $76.50 — MT tuition NOT swept in");
+  // Nelson: only the March rollover counts (425×9/31); the $550 MT tuition is excluded.
+  eq(lineOf(3).earned, 123.39, "Nelson April = March rollover only (425×9/31)");
+  eq(lineOf(3).payout, 74.03, "Nelson pays $74.03 — MT tuition NOT swept in");
   // Cade: no pay line at all.
   eq(harry.lines.some((l) => l.clientId === 4), false, "JYF-only mentee has NO pay line");
   // Kendrick: basis = 425 − 70 = 355 (credit auto-included as reduction).
@@ -1295,6 +1321,21 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
   eq(html.includes("REVIEW COPY"), true, "draft stub is watermarked/badged");
   eq(payStubHtml(model2).includes("APPROVED PAY STUB"), true, "approved stub badged");
   eq(html.includes("<script"), false, "no scripts in the stub document");
+  eq(model.pieces.length, 0, "no piece work on the stub by default");
+  eq(model.totals.payout, model.totals.linePayout, "without piece work, payout == mentee-line payout");
+
+  // Piece work on a MENTOR stub: adds to the check and prints its own row.
+  const pieceModel = buildPayStubModel({
+    coachName: "Harry Shenk", ym: "2026-06", splitPct: 0.6, status: "approved",
+    lines: [josh, plain], states: new Map(), generatedOn: "2026-07-25",
+    pieces: [{ date: null, label: "New mentee onboarded", qty: 8, unitRate: 25 }],
+  });
+  eq(pieceModel.piecesTotal, 200, "mentor stub carries the piece-work total");
+  eq(pieceModel.totals.payout, round2(pieceModel.totals.linePayout + 200), "piece work is added to the mentor's check");
+  const pieceHtml = payStubHtml(pieceModel);
+  eq(pieceHtml.includes("New mentee onboarded"), true, "piece-work item printed on the mentor stub");
+  eq(pieceHtml.includes("piece work"), true, "piece-work row tagged on the mentor stub");
+  eq(pieceHtml.includes("<script"), false, "no scripts in the piece-work mentor stub");
 }
 
 console.log("[13e] adversarial-review regressions (empty line items, refunds, tier stability, canceled attribution)");
@@ -1469,6 +1510,68 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
     staffName: "Dave Troyer", ym: "2026-07", rate: 22, entries, generatedOn: "2026-07-21",
   }, status: "approved" }));
   eq(finalHtml.includes("APPROVED PAY STUB"), true, "approved hourly stub badged");
+
+  // ---- PER-LINE RATE (2026-07-25): some work bills above the standing rate ----
+  eq(entryRate({ date: null, label: "a", hours: 1 }, 22), 22, "no per-line rate -> the period default");
+  eq(entryRate({ date: null, label: "a", hours: 1, rate: null }, 22), 22, "explicit null -> the period default");
+  eq(entryRate({ date: null, label: "a", hours: 1, rate: 40 }, 22), 40, "per-line rate wins");
+  eq(entryRate({ date: null, label: "a", hours: 1, rate: 0 }, 22), 0, "an explicit $0 line rate is honored");
+  eq(entryRate({ date: null, label: "a", hours: 1, rate: -5 }, 22), 22, "a negative line rate falls back to the default");
+  eq(entryAmount({ date: null, label: "a", hours: 2.5, rate: 40 }, 22), 100, "2.5h x $40 = $100");
+  const mixed = [
+    { date: null, label: "Admin", hours: 10 },                 // default $22 -> 220
+    { date: null, label: "Training delivery", hours: 5, rate: 40 }, // 200
+  ];
+  eq(laborTotal(mixed, 22), 420, "mixed-rate sheet: 10h@22 + 5h@40 = $420");
+  eq(hoursTotal(mixed), 15, "hours still total across mixed rates");
+  eq(hasCustomRates(mixed, 22), true, "mixed sheet flagged as having custom rates");
+  eq(hasCustomRates(clean, 22), false, "single-rate sheet is not flagged");
+  // Back-compat: a sheet with no per-line rates pays exactly what it always did.
+  eq(laborTotal(clean, 22), 297, "no per-line rates -> identical to hours x rate");
+  eq(parseEntries('[{"label":"A","hours":2}]')[0].rate, null, "pre-2026-07-25 rows read back with rate null");
+  eq(parseEntries('[{"label":"A","hours":2,"rate":"37.5"}]')[0].rate, 37.5, "string per-line rate coerced");
+
+  // ---- PIECE WORK: Dave Troyer's real case — $25 per new mentee, 8 in June ----
+  const dave = [{ date: null, label: "New mentee onboarded", qty: 8, unitRate: 25 }];
+  eq(pieceAmount(dave[0]), 200, "8 new mentees x $25 = $200");
+  eq(piecesTotal(dave), 200, "piece-work total");
+  eq(piecesQty(dave), 8, "piece-work unit count");
+  eq(piecesTotal([]), 0, "no piece work -> $0");
+  eq(
+    normalizePieces([{ date: null, label: "", qty: 0, unitRate: 0 }, ...dave]).length,
+    1,
+    "blank piece rows dropped"
+  );
+  eq(
+    normalizePieces([{ date: null, label: "0 new mentees", qty: 0, unitRate: 25 }]).length,
+    1,
+    "a deliberate zero-quantity noted line is kept"
+  );
+  eq(piecesTotal([{ date: null, label: "Clawback", qty: -2, unitRate: 25 }]), -50, "negative quantity claws back");
+  eq(parsePieces('[{"label":"X","qty":"3","unitRate":"10"}]')[0].qty, 3, "string qty coerced");
+  eq(parsePieces('[{"label":"X","qty":3,"unit_rate":10}]')[0].unitRate, 10, "snake_case unit_rate tolerated");
+  eq(parsePieces("garbage").length, 0, "garbage piece json -> empty");
+  eq(parsePieces(null).length, 0, "null piece json -> empty");
+  // Piece work rides on top of hours and the adjustment.
+  eq(hourlyTotal(clean, 22, 0, dave), 497, "hours ($297) + piece work ($200)");
+  eq(hourlyTotal(clean, 22, 25, dave), 522, "hours + piece work + adjustment");
+  eq(hourlyTotal([], 0, 0, dave), 200, "piece-work-only period still pays");
+
+  const daveModel = buildHourlyStubModel({
+    staffName: "Dave Troyer", ym: "2026-06", rate: 22, entries: mixed, pieces: dave,
+    status: "approved", generatedOn: "2026-07-25",
+  });
+  eq(daveModel.base, 420, "stub base uses per-line rates");
+  eq(daveModel.piecesTotal, 200, "stub carries the piece-work total");
+  eq(daveModel.piecesQty, 8, "stub carries the piece-work unit count");
+  eq(daveModel.mixedRates, true, "stub knows rates vary -> renders the Rate column");
+  eq(daveModel.total, 620, "stub total = labor $420 + piece work $200");
+  const daveHtml = hourlyStubHtml(daveModel);
+  eq(daveHtml.includes("New mentee onboarded"), true, "piece-work item printed on the stub");
+  eq(daveHtml.includes("Piece work"), true, "piece-work section labelled");
+  eq(daveHtml.includes("<th>Rate</th>"), true, "Rate column appears when rates vary");
+  eq(hourlyStubHtml(model).includes("<th>Rate</th>"), false, "no Rate column on a single-rate stub");
+  eq(daveHtml.includes("<script"), false, "no scripts in the piece-work stub");
 }
 
 console.log("[13h] payment-run scheduling (default service month + month completion)");

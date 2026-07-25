@@ -18,6 +18,7 @@ import {
   lineItemsSplittable,
   sourceIncludedBilled,
   sourceRecognizedAfterExclusions,
+  daysInMonth,
   type PayMenteeLine,
   type PayLineSource,
   type PayInvoicePayment,
@@ -328,7 +329,12 @@ export function PayoutLineDetailModal({
               <td>{src.tier}</td>
               <td className="num">{fmtUsd(src.billed)}</td>
               <td className="num">{fmtUsd(src.collected)}</td>
-              <td className="num" title={`elapsed ${Math.round(src.elapsedFraction * 30)}/30`}>{fmtPct(src.elapsedFraction)}</td>
+              <td
+                className="num"
+                title={`elapsed ${Math.round(src.elapsedFraction * daysInMonth(src.serviceMonth))}/${daysInMonth(src.serviceMonth)}`}
+              >
+                {fmtPct(src.elapsedFraction)}
+              </td>
               <td
                 className="num"
                 style={{ fontWeight: 600, textDecoration: off ? "line-through" : undefined, color: off ? "var(--muted)" : undefined }}

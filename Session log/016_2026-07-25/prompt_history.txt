@@ -30,3 +30,6 @@ Q1 Proration: "Use this formula =1 - DAY(I59) / DAY(EOMONTH(I59, 0)) from this s
 Q2 Credits: "Tier price, highlight credits and give me the option on what to include"
 Q3 Double bills: "Split them: David two, Josh one"
 Q4 Sheet scope: "Full timeline back to each mentee's start"
+
+--- 2026-07-25 ---
+Change the proration denominator to match the legacy calculator.

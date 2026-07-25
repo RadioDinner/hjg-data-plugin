@@ -11,17 +11,23 @@ import {
   normalizeEntries,
   hoursTotal,
   hourlyTotal,
+  laborTotal,
+  entryAmount,
+  normalizePieces,
+  piecesTotal,
   buildHourlyStubModel,
   hourlyStubHtml,
   type StaffPayProfile,
   type StaffPayBuildRecord,
   type HourlyEntry,
+  type PieceEntry,
   type BuildStatus,
 } from "../db";
 import { useAuth } from "../auth";
 import { fmtDateTime } from "../format";
 import { HelpButton } from "./HelpDrawer";
 import { SectionId } from "./SectionId";
+import { PieceWorkCard } from "./PieceWorkCard";
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtUsd = (n: number) => usd.format(n || 0);
@@ -51,6 +57,7 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
   // Working build state for the selected profile+month.
   const [rate, setRate] = useState<number>(0);
   const [entries, setEntries] = useState<HourlyEntry[]>([]);
+  const [pieces, setPieces] = useState<PieceEntry[]>([]);
   const [adjustment, setAdjustment] = useState<number>(0);
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [notes, setNotes] = useState("");
@@ -91,6 +98,7 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
     const rec = builds.get(staffPayBuildKey(profile.id, ym));
     setRate(rec ? rec.rate : profile.hourlyRate);
     setEntries(rec ? rec.entries.map((e) => ({ ...e })) : []);
+    setPieces(rec ? rec.pieces.map((x) => ({ ...x })) : []);
     setAdjustment(rec?.adjustment ?? 0);
     setAdjustmentNote(rec?.adjustmentNote ?? "");
     setNotes(rec?.notes ?? "");
@@ -100,8 +108,11 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
 
   const locked = status === "approved";
   const cleanEntries = useMemo(() => normalizeEntries(entries), [entries]);
+  const cleanPieces = useMemo(() => normalizePieces(pieces), [pieces]);
   const hours = hoursTotal(cleanEntries);
-  const total = hourlyTotal(cleanEntries, rate, adjustment);
+  const labor = laborTotal(cleanEntries, rate);
+  const pieceTotal = piecesTotal(cleanPieces);
+  const total = hourlyTotal(cleanEntries, rate, adjustment, cleanPieces);
 
   const touch = () => {
     setDirty(true);
@@ -154,6 +165,7 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
         periodMonth: ym,
         rate,
         entries,
+        pieces,
         adjustment,
         adjustmentNote: adjustmentNote.trim() || null,
         notes: notes.trim() || null,
@@ -193,6 +205,7 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
       ym,
       rate,
       entries,
+      pieces,
       adjustment,
       adjustmentNote: adjustmentNote.trim() || null,
       notes: notes.trim() || null,
@@ -238,8 +251,9 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
               <SectionId id="pay.hourly" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Timesheet-driven pay for staff the invoice engine doesn't cover: set the <strong>hourly rate</strong>,
-              enter the <strong>hours</strong> from their time sheet, add notes, save/approve, and{" "}
+              Timesheet-driven pay for staff the invoice engine doesn't cover: set the <strong>default hourly rate</strong>,
+              enter the <strong>hours</strong> from their time sheet (any line can carry its <strong>own rate</strong> when
+              that work pays more), add <strong>piece-work</strong> items paid per unit, then save/approve and{" "}
               <strong>print the pay stub</strong> (archived to History automatically).
             </div>
           </div>
@@ -313,10 +327,14 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                       touch();
                     }}
                     onBlur={() => saveProfileRate(rate)}
-                    title="Hourly rate for this period. On blur it also becomes the staff member's standing rate for future months (saved months keep the rate they were saved with)."
-                    aria-label={`Hourly rate for ${profile.name}`}
+                    title="DEFAULT hourly rate for this period — any timesheet line left blank in the Rate column is paid at this. On blur it also becomes the staff member's standing rate for future months (saved months keep the rate they were saved with)."
+                    aria-label={`Default hourly rate for ${profile.name}`}
                   />
-                  <span>$/hour · {cleanEntries.length} line{cleanEntries.length === 1 ? "" : "s"} · {hours} h</span>
+                  <span>
+                    $/hour default · {cleanEntries.length} line{cleanEntries.length === 1 ? "" : "s"} · {hours} h ·{" "}
+                    {fmtUsd(labor)} labor
+                    {pieceTotal !== 0 ? ` · ${fmtUsd(pieceTotal)} piece work` : ""}
+                  </span>
                 </div>
               </div>
               <button
@@ -340,6 +358,9 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                     <th style={{ width: 150 }}>Date</th>
                     <th style={{ textAlign: "left" }}>Work (from the time sheet)</th>
                     <th style={{ width: 90 }}>Hours</th>
+                    <th style={{ width: 110 }} title="Leave blank to pay this line at the default rate above">
+                      Rate ($/h)
+                    </th>
                     <th style={{ width: 110 }}>Amount</th>
                     <th style={{ width: 40 }} />
                   </tr>
@@ -386,7 +407,32 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                           aria-label={`Hours for line ${i + 1}`}
                         />
                       </td>
-                      <td className="num">{fmtUsd((e.hours || 0) * rate)}</td>
+                      <td>
+                        <input
+                          className="cell-edit"
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          style={{ width: 90 }}
+                          value={e.rate == null ? "" : String(e.rate)}
+                          placeholder={rate ? String(rate) : "0"}
+                          disabled={locked}
+                          onChange={(ev) => {
+                            const raw = ev.target.value;
+                            if (raw === "") return patchEntry(i, { rate: null });
+                            const n = Number(raw);
+                            patchEntry(i, { rate: Number.isFinite(n) && n >= 0 ? n : null });
+                          }}
+                          title="Rate for THIS line only. Blank = the default rate for the period."
+                          aria-label={`Hourly rate for line ${i + 1}`}
+                        />
+                      </td>
+                      <td
+                        className="num"
+                        style={{ fontWeight: e.rate != null && e.rate !== rate ? 700 : undefined, color: e.rate != null && e.rate !== rate ? "var(--accent)" : undefined }}
+                      >
+                        {fmtUsd(entryAmount(e, rate))}
+                      </td>
                       <td>
                         <button
                           className="linkbtn"
@@ -405,7 +451,7 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                   ))}
                   {entries.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="muted">
+                      <td colSpan={6} className="muted">
                         No timesheet lines yet — add the first one below.
                       </td>
                     </tr>
@@ -414,10 +460,11 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                 <tfoot>
                   <tr>
                     <td colSpan={2} style={{ textAlign: "right", fontWeight: 600 }}>
-                      Totals
+                      Labor totals
                     </td>
                     <td className="num" style={{ fontWeight: 700 }}>{hours} h</td>
-                    <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(total)}</td>
+                    <td />
+                    <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(labor)}</td>
                     <td />
                   </tr>
                 </tfoot>
@@ -429,7 +476,7 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                 className="btn btn--sm"
                 style={{ marginTop: 8 }}
                 onClick={() => {
-                  setEntries((arr) => [...arr, { date: null, label: "", hours: 0 }]);
+                  setEntries((arr) => [...arr, { date: null, label: "", hours: 0, rate: null }]);
                   touch();
                 }}
               >
@@ -438,12 +485,27 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
             )}
           </section>
 
+          <div style={{ gridColumn: "1 / -1" }}>
+            <PieceWorkCard
+              items={pieces}
+              onChange={(next) => {
+                setPieces(next);
+                touch();
+              }}
+              locked={locked}
+              sectionId="pay.hourly.pieces"
+              hint={`Flat pay per unit for ${profile.name}, on top of the hours — e.g. $25 for every new mentee.`}
+            />
+          </div>
+
           <aside className="builder__side">
             <div className="card">
               <div className="muted" style={{ fontSize: 12 }}>Payout ({ym})</div>
               <div className="builder__total">{fmtUsd(total)}</div>
               <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-                {hours} h × {fmtUsd(rate)}/h{Math.abs(adjustment) >= 0.005 ? <> + {fmtUsd(adjustment)} adjustment</> : null}
+                {fmtUsd(labor)} labor ({hours} h)
+                {pieceTotal !== 0 ? <> + {fmtUsd(pieceTotal)} piece work</> : null}
+                {Math.abs(adjustment) >= 0.005 ? <> + {fmtUsd(adjustment)} adjustment</> : null}
               </div>
               <label className="filter" style={{ width: "100%", marginTop: 10 }}>
                 <span>Adjustment ($, + or −)</span>
