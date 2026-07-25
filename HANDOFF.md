@@ -1,10 +1,64 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-07-22 (session 015 — pay payment-tracking, permissions bones, Update Mentee /
-Time clock / financial-event tabs, Margins save fix).
+2026-07-25 (session 016 — Harry Shenk manual payout vs dashboard reconciliation;
+**no app code changed**).
 
-## ▶ START HERE (2026-07-22, session 015 — WRAPPED, MERGED TO `main`, v0.5.0)
+## ▶ START HERE (2026-07-25, session 016 — ANALYSIS ONLY, branch `claude/harry-shenk-payout-reconcile-7ij9vp`)
+
+**No app code changed. Version stays v0.6.0.** This session hand-built Harry
+Shenk's June-2026 payout from first principles and reconciled it against the
+dashboard's payout build, to answer "is the pay engine trustworthy?"
+
+**Answer: yes — the engine is not miscalculating.** `tier price × (1 − day/30) ×
+60%` reproduces the dashboard's reviewed June total ($3,273.50) to the cent on all
+17 mentee lines. Every difference from the hand calculation is a **policy choice**,
+not a bug.
+
+| June 2026 | |
+|---|---|
+| Manual method (user's own formula) | **$2,983.59** |
+| Dashboard — Effective (post-review) | **$3,273.50** |
+| Dashboard — Engine (pre-review) | $3,017.70 |
+| Variance | **−$289.91**, fully decomposed |
+
+Decomposition (applying all three reproduces the dashboard exactly): **$51.91**
+fixed-30-day vs real-days proration · **$144.50** David Weaver's two May invoices ·
+**$93.50** Josh Lehman's duplicate `4x` line.
+
+**Deliverable:** `Session log/016_2026-07-25/Harry_Shenk_manual_payout_2026-06.xlsx`
+(7 tabs, 1,122 live formulas, recalc clean). Build scripts in
+`Session log/016_2026-07-25/payout-reconciliation/`.
+
+**⚠ TWO OPEN DECISIONS FOR THE USER:**
+1. **Proration denominator.** `lib/pay.ts` hardcodes `PRORATION_DAYS = 30`
+   (`elapsedFraction()`), documented in `docs/legacy-pay-calculator.md` §7 as a
+   deliberate choice. The user's stated formula is
+   `=1-DAY(start)/DAY(EOMONTH(start,0))` — **real** month lengths. These disagree by
+   $51.91 for Harry in June and recur every 31-day month. If real days is the real
+   policy, `lib/pay.ts` + the doc both need changing.
+2. **Bryce Wenger (client 301320).** CoachAccountable owns him to Harry; the Notion
+   export says "~None Assigned" (JYF waiting list). No June impact, but his **23 July
+   invoice is a $425 4x line**, so he lands in the July payout. Settle ownership
+   before July runs.
+
+Also noted: `mentees.notion_coach` for **Ralph Swartzentruber** still holds
+'Phil Herschberger' with `notion_coach_conflict = true`; the fresh Notion export
+says Harry (JYF-only, no dollar impact). And **Brandon Burkholder** has four
+2025-10→2026-02 invoices whose line item reads
+`MN Subscription | (4x Month) Zoom Meetings (Arthur Nisly)` despite both systems
+assigning him to Harry — real transfer, or mis-named CA product?
+
+**Container note:** `libreoffice-calc` is NOT preinstalled (only
+`libreoffice-core`), so the xlsx skill's `recalc.py` times out on every file.
+`apt-get update && apt-get install -y --no-install-recommends libreoffice-calc`
+fixes it. Any future spreadsheet session needs this.
+
+Full detail in `Session log/016_2026-07-25/session_log.md`.
+
+---
+
+## Previous (2026-07-22, session 015 — WRAPPED, MERGED TO `main`, v0.5.0)
 
 **Session WRAPPED, everything MERGED TO `main`** (fast-forward from
 `claude/pay-staff-screen-updates-sagejz`; commits `c0715ec` features + `ac49ced`
