@@ -73,7 +73,7 @@ export function TimeClockView() {
   }
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const mine = useMemo(() => entries.filter((e) => e.userEmail.toLowerCase() === myEmail), [entries, myEmail]);

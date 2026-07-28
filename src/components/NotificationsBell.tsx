@@ -27,7 +27,7 @@ export function NotificationsBell({
     refresh();
     const t = window.setInterval(refresh, 60_000);
     return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [refreshKey]);
 
   // Close on outside click.

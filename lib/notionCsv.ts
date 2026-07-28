@@ -204,7 +204,7 @@ export function parseNotionDate(cell: string | null | undefined): string | null 
 export function buildHeaderIndex(header: string[]): Map<string, number> {
   const idx = new Map<string, number>();
   header.forEach((h, i) => {
-    const key = (h ?? "").replace(/^﻿/, "").trim();
+    const key = (h ?? "").replace(/^\uFEFF/, "").trim();
     if (key && !idx.has(key)) idx.set(key, i);
   });
   return idx;

@@ -28,7 +28,7 @@ function slugify(s: string): string {
 export function downloadCsv(name: string, columns: string[], rows: Cell[][]): void {
   const csv = toCsv(columns, rows);
   // Excel reads UTF-8 CSV correctly when a BOM is present.
-  const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const d = new Date();
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

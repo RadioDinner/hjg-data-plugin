@@ -55,7 +55,7 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
   }
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   async function submit() {

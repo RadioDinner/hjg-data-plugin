@@ -31,7 +31,7 @@ export function NotionImportModal({ userId, onClose, onImported }: { userId?: st
     }
   }, [text]);
 
-  const headerSet = useMemo(() => new Set((parsed?.header ?? []).map((h) => (h ?? "").replace(/^﻿/, "").trim())), [parsed]);
+  const headerSet = useMemo(() => new Set((parsed?.header ?? []).map((h) => (h ?? "").replace(/^\uFEFF/, "").trim())), [parsed]);
   const coachConflicts = useMemo(() => (parsed?.rows ?? []).filter((r) => r.notion_coach_conflict).length, [parsed]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {

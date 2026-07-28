@@ -46,7 +46,7 @@ export function UserPermissionsCard() {
   }
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const coachOptions = useMemo(
