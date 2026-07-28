@@ -1,8 +1,8 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-07-28 (session 017 — ESLint + Prettier tooling added, findings logged;
-**no app code changed**, version stays 0.7.0).
+2026-07-28 (session 017 — ESLint + Prettier tooling added; safe lint fixes +
+repo-wide format pass applied; **no behavior change**, version stays 0.7.0).
 
 ## ▶ START HERE (2026-07-28, session 017 — lint/format tooling, ON `main`)
 
@@ -17,27 +17,33 @@ eslint-config-prettier last; lints TS/TSX in `src|lib|api|scripts` +
 `format:check`**. `typecheck` + `verify` (677) + `build` re-confirmed green
 with the tooling in place.
 
-**Findings were LOGGED, NOT FIXED** (the user asked "tell me what they flag"):
-- **`lint`: 3 errors + 18 warnings.** All 3 errors are
-  `no-irregular-whitespace` on the **intentional literal U+FEFF BOM**
-  (`src/csv.ts:31` Excel-BOM prepend; `lib/notionCsv.ts:207` +
-  `src/components/NotionImportModal.tsx:34` BOM-strip regexes) — rewrite the
-  literals as escape sequences (backslash-uFEFF) or inline-disable to go
-  green. Warnings: 11 `react-hooks/exhaustive-deps` (MetricsView `isMentor`
-  ×3 + `kpis` ×2, PipelineTimingCard `winA`/`winB`, AdminView `load`,
-  BuildPayoutView `lines`), 5 `react-refresh/only-export-components`
-  (auth.tsx/theme.tsx — HMR-only, cosmetic), 4 stale `eslint-disable`
-  directives (`--fix`able).
-- **`format:check`: 76 files** would be reformatted (the whole pre-Prettier
-  codebase: 41 src, 27 lib, 4 api + scripts/index.html/vite.config.ts/
-  vercel.json). Cutover when wanted: one dedicated `npm run format` commit +
-  typecheck/verify/build (consider `.git-blame-ignore-revs` for it).
+**Initial report, then user-approved SAFE FIXES applied** (same session):
+- Original flags: 3 lint errors (`no-irregular-whitespace` on the
+  intentional literal U+FEFF BOM in `src/csv.ts` Excel-BOM prepend +
+  `lib/notionCsv.ts` / `src/components/NotionImportModal.tsx` BOM-strip
+  regexes), 18 warnings, and 76 unformatted files.
+- `14e0c21` — BOM literals → U+FEFF **escape sequences** (byte-identical)
+  + 4 stale `eslint-disable` directives auto-removed. **`npm run lint` is
+  now 0 errors / 14 warnings.**
+- `ad0f93d` — **repo-wide Prettier pass** (76 files, formatting only;
+  db.ts + MarginsView.tsx needed a 2nd pass — Prettier non-idempotency).
+  **`prettier --check` passes repo-wide.** `.git-blame-ignore-revs` lists
+  this commit so blame skips it (GitHub honors it automatically; locally:
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+- Post-fix gates re-run green: `typecheck` + `verify` (677) + `build`.
 
-Raw outputs + full detail: `Session log/017_2026-07-28/` (session_log.md,
-eslint_findings.txt, prettier_findings.txt). Open decisions for a future
-session: run the big format commit?; BOM escape rewrite?; review the 11
-exhaustive-deps warnings (some may be real stale-closure bugs); optionally
-wire `lint`/`format:check` into CI next to typecheck/verify.
+**Still flagged BY DESIGN (the not-safe bucket):** 9
+`react-hooks/exhaustive-deps` warnings (5 MetricsView `isMentor`×3+`kpis`×2,
+2 PipelineTimingCard `winA`/`winB`, 1 AdminView `load`, 1 BuildPayoutView
+`lines`) — mechanical fixes can CHANGE RUNTIME BEHAVIOR, each needs an
+eyes-on decision (real fix vs commented disable); possible stale-closure
+bugs among them. Plus 5 `react-refresh/only-export-components`
+(auth.tsx/theme.tsx — HMR-only, cosmetic, leave).
+
+Raw pre-fix outputs + full detail: `Session log/017_2026-07-28/`
+(session_log.md, eslint_findings.txt, prettier_findings.txt). Open for a
+future session: review the 9 exhaustive-deps warnings; optionally wire
+`lint`/`format:check` into CI next to typecheck/verify.
 
 ## ▶ Prior session START HERE (2026-07-25, session 016 — v0.7.0, MERGED TO `main`)
 

@@ -45,7 +45,7 @@ inline `eslint-disable` comments. Decision deferred to the user.
 
 **18 warnings:**
 
-- **11 × `react-hooks/exhaustive-deps`** — worth an eyes-on pass some
+- **9 × `react-hooks/exhaustive-deps`** — worth an eyes-on pass some
   session; some may be deliberate, some could be real staleness bugs:
   - `MetricsView.tsx` 663/671/687 (missing `isMentor`) + 756 twice (`kpis`
     object invalidates two useMemos every render)
@@ -89,13 +89,34 @@ way (one line-number shift); Prettier grew 74 → 76 files (session 016's
 - **printWidth 100** chosen from measured line lengths, not default 80.
 - **Report, don't fix**: lint/format findings were logged, not applied.
 
+## Safe fixes applied (same session, user-approved)
+
+After the report the user approved the "safe" buckets. Shipped on `main`:
+
+- `14e0c21` — the 3 BOM literals rewritten as U+FEFF escape sequences
+  (byte-identical behavior: same character in the Excel-BOM prepend and the
+  two header-strip regexes) + the 4 stale `eslint-disable` directives
+  removed via `--fix`. **`npm run lint` is now 0 errors / 14 warnings.**
+- `ad0f93d` — `npm run format`: Prettier applied to all 76 flagged files,
+  formatting only. `src/db.ts` and `src/views/MarginsView.tsx` needed a
+  second `--write` pass (Prettier non-idempotent output on the first) before
+  the check went clean. **`prettier --check` now passes repo-wide.**
+- `.git-blame-ignore-revs` added listing `ad0f93d` so blame skips the
+  format commit (GitHub honors the file automatically; locally run
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs` once).
+
+Post-fix gates: `typecheck` + `verify` (677) + `build` all green. Count
+correction vs the first report: exhaustive-deps warnings total **9**, not
+11 (5 MetricsView + 2 PipelineTimingCard + 1 AdminView + 1 BuildPayoutView).
+
+**Deliberately NOT fixed** (still flagged, by design): the 9
+`react-hooks/exhaustive-deps` warnings (mechanical fixes can change runtime
+behavior — each needs an eyes-on decision) and the 5
+`react-refresh/only-export-components` warnings (HMR-only, cosmetic).
+
 ## Open questions / next step
 
-1. Run `npm run format` as a one-shot 76-file formatting commit? (Do it in a
-   quiet moment — it touches almost every file and will dominate `git blame`
-   until/unless a `.git-blame-ignore-revs` is added.)
-2. Kill the 3 BOM lint errors via `\uFEFF` escapes, or inline-disable them?
-3. Review the 11 `exhaustive-deps` warnings — each is either a deliberate
+1. Review the 9 `exhaustive-deps` warnings — each is either a deliberate
    pattern (then disable with a comment) or a latent stale-closure bug.
-4. Optionally wire `lint`/`format:check` into a CI step or pre-push habit
+2. Optionally wire `lint`/`format:check` into a CI step or pre-push habit
    alongside `typecheck`/`verify`.

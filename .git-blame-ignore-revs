@@ -1,0 +1,6 @@
+# Revisions git blame should skip (formatting-only rewrites).
+# Local one-time setup: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub's blame view picks this file up automatically.
+
+# 2026-07-28 session 017: repo-wide Prettier format pass (76 files, no logic)
+ad0f93d179305696dd670be7d98959758068d6da
