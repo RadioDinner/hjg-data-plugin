@@ -69,7 +69,9 @@ export function hoursTotal(entries: HourlyEntry[]): number {
 // The SUM is rounded once, so a sheet with no per-line overrides reproduces the
 // old `hours × rate` number to the penny.
 export function laborTotal(entries: HourlyEntry[], defaultRate: number): number {
-  return round2(normalizeEntries(entries).reduce((t, e) => t + (e.hours || 0) * entryRate(e, defaultRate), 0));
+  return round2(
+    normalizeEntries(entries).reduce((t, e) => t + (e.hours || 0) * entryRate(e, defaultRate), 0),
+  );
 }
 
 // The logged payout: labor + piece work + the adjustment.
@@ -77,7 +79,7 @@ export function hourlyTotal(
   entries: HourlyEntry[],
   rate: number,
   adjustment = 0,
-  pieces: PieceEntry[] = []
+  pieces: PieceEntry[] = [],
 ): number {
   return round2(laborTotal(entries, rate) + piecesTotal(pieces) + (adjustment || 0));
 }
@@ -173,9 +175,11 @@ export function buildHourlyStubModel(input: HourlyStubInput): HourlyStubModel {
   };
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const usd = (n: number) =>
-  (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  (n < 0 ? "−$" : "$") +
+  Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtD = (ymd: string) => {
   const [y, m, d] = ymd.slice(0, 10).split("-").map(Number);
   return m && d ? `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}-${y}` : ymd;
@@ -188,7 +192,9 @@ export function hourlyStubHtml(m: HourlyStubModel): string {
   const badge = m.approved
     ? `<span class="badge badge--ok">APPROVED PAY STUB</span>`
     : `<span class="badge badge--draft">REVIEW COPY — DRAFT</span>`;
-  const unsaved = m.unsavedChanges ? `<span class="badge badge--draft" style="margin-left:6px">UNSAVED CHANGES</span>` : "";
+  const unsaved = m.unsavedChanges
+    ? `<span class="badge badge--draft" style="margin-left:6px">UNSAVED CHANGES</span>`
+    : "";
   const watermark = m.approved ? "" : `<div class="watermark">REVIEW<br/>COPY</div>`;
 
   // A Rate column only appears when at least one line is priced off the default,
@@ -209,7 +215,7 @@ export function hourlyStubHtml(m: HourlyStubModel): string {
   const pieceRows = m.pieces
     .map(
       (p) =>
-        `<tr><td class="l">${p.date ? fmtD(p.date) : "—"}</td><td class="l">${esc(p.label || "—")} <span class="tag tag--good">piece work</span></td><td class="n">${round2(p.qty).toLocaleString("en-US", { maximumFractionDigits: 2 })} ×</td>${rateCol ? `<td class="n">${usd(p.unitRate)} ea</td>` : ""}<td class="n">${usd(pieceAmount(p))}</td></tr>`
+        `<tr><td class="l">${p.date ? fmtD(p.date) : "—"}</td><td class="l">${esc(p.label || "—")} <span class="tag tag--good">piece work</span></td><td class="n">${round2(p.qty).toLocaleString("en-US", { maximumFractionDigits: 2 })} ×</td>${rateCol ? `<td class="n">${usd(p.unitRate)} ea</td>` : ""}<td class="n">${usd(pieceAmount(p))}</td></tr>`,
     )
     .join("");
   const pieceHeadRow = m.pieces.length
@@ -243,8 +249,12 @@ export function hourlyStubHtml(m: HourlyStubModel): string {
   <div class="cards">
     <div class="card"><div class="lab">Hours</div><div class="val">${fmtH(m.hours)}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.entries.length} timesheet line${m.entries.length === 1 ? "" : "s"}</span><span>${m.mixedRates ? `rates vary` : `× ${usd(m.rate)}/h`}</span></div></div>
-    ${m.pieces.length ? `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
-      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>${round2(m.piecesQty).toLocaleString("en-US", { maximumFractionDigits: 2 })} unit${m.piecesQty === 1 ? "" : "s"}</span></div></div>` : ""}
+    ${
+      m.pieces.length
+        ? `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
+      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>${round2(m.piecesQty).toLocaleString("en-US", { maximumFractionDigits: 2 })} unit${m.piecesQty === 1 ? "" : "s"}</span></div></div>`
+        : ""
+    }
     <div class="card card--hero"><div class="lab">Total payout</div><div class="val">${usd(m.total)}</div>
       ${m.pieces.length || Math.abs(m.adjustment) >= 0.005 ? `<div class="sumrow"><span>Hours</span><span>${usd(m.base)}</span></div>` : ""}${m.pieces.length ? `<div class="sumrow"><span>Piece work</span><span>${usd(m.piecesTotal)}</span></div>` : ""}${Math.abs(m.adjustment) >= 0.005 ? `<div class="sumrow"><span>Adjustment</span><span>${usd(m.adjustment)}</span></div>` : ""}</div>
   </div>

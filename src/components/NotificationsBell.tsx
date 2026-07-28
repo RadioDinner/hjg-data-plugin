@@ -27,7 +27,6 @@ export function NotificationsBell({
     refresh();
     const t = window.setInterval(refresh, 60_000);
     return () => window.clearInterval(t);
-     
   }, [refreshKey]);
 
   // Close on outside click.
@@ -42,14 +41,18 @@ export function NotificationsBell({
 
   const unread = useMemo(
     () => items.filter((n) => !user?.id || !n.readBy.includes(user.id)),
-    [items, user]
+    [items, user],
   );
 
   async function markAllRead() {
     if (!user?.id || unread.length === 0) return;
     try {
       await markNotificationsRead(user.id, unread);
-      setItems((prev) => prev.map((n) => (n.readBy.includes(user.id) ? n : { ...n, readBy: [...n.readBy, user.id] })));
+      setItems((prev) =>
+        prev.map((n) =>
+          n.readBy.includes(user.id) ? n : { ...n, readBy: [...n.readBy, user.id] },
+        ),
+      );
     } catch {
       // best-effort; the next poll re-syncs
     }
@@ -60,7 +63,11 @@ export function NotificationsBell({
       <button
         className="btn"
         onClick={() => setOpen((o) => !o)}
-        title={unread.length ? `${unread.length} unread notification${unread.length === 1 ? "" : "s"}` : "Notifications"}
+        title={
+          unread.length
+            ? `${unread.length} unread notification${unread.length === 1 ? "" : "s"}`
+            : "Notifications"
+        }
         aria-label="Notifications"
         style={{ position: "relative" }}
       >
@@ -102,7 +109,14 @@ export function NotificationsBell({
             boxShadow: "0 12px 40px rgba(15, 23, 42, 0.25)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
             <strong style={{ fontSize: 13 }}>
               Notifications <SectionId id="drawer.notifications" />
             </strong>
@@ -111,7 +125,9 @@ export function NotificationsBell({
             </button>
           </div>
           {items.length === 0 ? (
-            <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>Nothing yet.</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>
+              Nothing yet.
+            </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
               {items.slice(0, 20).map((n) => {
@@ -135,8 +151,14 @@ export function NotificationsBell({
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: isUnread ? 700 : 500 }}>{n.title}</div>
-                    {n.body && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{n.body}</div>}
-                    <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{fmtDateTime(n.createdAt)}</div>
+                    {n.body && (
+                      <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                        {n.body}
+                      </div>
+                    )}
+                    <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                      {fmtDateTime(n.createdAt)}
+                    </div>
                   </button>
                 );
               })}

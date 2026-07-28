@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { parseNotionCsv, upsertMenteeNotion, DEFAULT_NOTION_MAP, type NotionImportResult } from "../db";
+import {
+  parseNotionCsv,
+  upsertMenteeNotion,
+  DEFAULT_NOTION_MAP,
+  type NotionImportResult,
+} from "../db";
 
 // The expected Notion headers (the carried columns), for the "found / missing" check.
 const EXPECTED: { label: string; header: string }[] = [
@@ -17,7 +22,15 @@ const EXPECTED: { label: string; header: string }[] = [
 // CSV text or upload the file; it parses with the default HJG column mapping,
 // previews what was found, then upserts ONLY the notion_* columns (matched by
 // name) — never touching the CA zone or your hand edits. Re-importable.
-export function NotionImportModal({ userId, onClose, onImported }: { userId?: string; onClose: () => void; onImported: (r: NotionImportResult) => void }) {
+export function NotionImportModal({
+  userId,
+  onClose,
+  onImported,
+}: {
+  userId?: string;
+  onClose: () => void;
+  onImported: (r: NotionImportResult) => void;
+}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -27,12 +40,20 @@ export function NotionImportModal({ userId, onClose, onImported }: { userId?: st
     try {
       return parseNotionCsv(text, DEFAULT_NOTION_MAP);
     } catch (e) {
-      return { rows: [], header: [], skipped: 0, error: String(e) } as ReturnType<typeof parseNotionCsv> & { error: string };
+      return { rows: [], header: [], skipped: 0, error: String(e) } as ReturnType<
+        typeof parseNotionCsv
+      > & { error: string };
     }
   }, [text]);
 
-  const headerSet = useMemo(() => new Set((parsed?.header ?? []).map((h) => (h ?? "").replace(/^\uFEFF/, "").trim())), [parsed]);
-  const coachConflicts = useMemo(() => (parsed?.rows ?? []).filter((r) => r.notion_coach_conflict).length, [parsed]);
+  const headerSet = useMemo(
+    () => new Set((parsed?.header ?? []).map((h) => (h ?? "").replace(/^\uFEFF/, "").trim())),
+    [parsed],
+  );
+  const coachConflicts = useMemo(
+    () => (parsed?.rows ?? []).filter((r) => r.notion_coach_conflict).length,
+    [parsed],
+  );
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -56,25 +77,51 @@ export function NotionImportModal({ userId, onClose, onImported }: { userId?: st
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, padding: "5vh 16px", overflow: "auto" }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "5vh 16px",
+        overflow: "auto",
+      }}
       onClick={onClose}
     >
-      <div className="card" style={{ width: "min(760px, 100%)", maxHeight: "90vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div
+        className="card"
+        style={{ width: "min(760px, 100%)", maxHeight: "90vh", overflow: "auto" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+        >
           <h2 style={{ margin: 0 }}>Import Notion CSV</h2>
           <button className="btn btn--sm" onClick={onClose}>
             Close
           </button>
         </div>
         <p className="view__hint">
-          Paste your Notion <strong>Mentees Database</strong> export (or upload the file). It updates only the{" "}
-          <strong>Notion zone</strong> — matched to existing mentees by name — and never touches the CA sync data or your hand edits.
-          Re-import any time to refresh.
+          Paste your Notion <strong>Mentees Database</strong> export (or upload the file). It
+          updates only the <strong>Notion zone</strong> — matched to existing mentees by name — and
+          never touches the CA sync data or your hand edits. Re-import any time to refresh.
         </p>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            marginBottom: 8,
+            flexWrap: "wrap",
+          }}
+        >
           <input type="file" accept=".csv,text/csv" onChange={onFile} />
-          <span className="muted" style={{ fontSize: 12 }}>or paste below</span>
+          <span className="muted" style={{ fontSize: 12 }}>
+            or paste below
+          </span>
         </div>
         <textarea
           value={text}
@@ -106,7 +153,11 @@ export function NotionImportModal({ userId, onClose, onImported }: { userId?: st
               {EXPECTED.map((c) => {
                 const found = headerSet.has(c.header);
                 return (
-                  <span key={c.header} className={`pill ${found ? "pill--success" : ""}`} title={c.header}>
+                  <span
+                    key={c.header}
+                    className={`pill ${found ? "pill--success" : ""}`}
+                    title={c.header}
+                  >
                     {found ? "✓" : "— missing"} {c.label}
                   </span>
                 );
@@ -132,7 +183,15 @@ export function NotionImportModal({ userId, onClose, onImported }: { userId?: st
                         <td>{r.notion_status ?? "—"}</td>
                         <td>
                           {r.notion_coach ?? "—"}
-                          {r.notion_coach_conflict ? <span className="pill" style={{ marginLeft: 6 }} title="Mentor 1 ≠ Mentor">conflict</span> : null}
+                          {r.notion_coach_conflict ? (
+                            <span
+                              className="pill"
+                              style={{ marginLeft: 6 }}
+                              title="Mentor 1 ≠ Mentor"
+                            >
+                              conflict
+                            </span>
+                          ) : null}
                         </td>
                         <td>{r.notion_email ?? "—"}</td>
                         <td>{r.notion_dc_date ?? "—"}</td>
@@ -140,16 +199,28 @@ export function NotionImportModal({ userId, onClose, onImported }: { userId?: st
                     ))}
                   </tbody>
                 </table>
-                {parsed.rows.length > 8 ? <p className="muted" style={{ fontSize: 12 }}>…and {parsed.rows.length - 8} more.</p> : null}
+                {parsed.rows.length > 8 ? (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    …and {parsed.rows.length - 8} more.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
         )}
 
-        {err && <div className="error" style={{ marginTop: 10 }}>{err}</div>}
+        {err && (
+          <div className="error" style={{ marginTop: 10 }}>
+            {err}
+          </div>
+        )}
 
         <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
-          <button className="btn" onClick={doImport} disabled={busy || !parsed || parsed.rows.length === 0}>
+          <button
+            className="btn"
+            onClick={doImport}
+            disabled={busy || !parsed || parsed.rows.length === 0}
+          >
             {busy ? "Importing…" : `Import ${parsed?.rows.length ?? 0} rows`}
           </button>
           <button className="btn btn--sm" onClick={onClose} disabled={busy}>

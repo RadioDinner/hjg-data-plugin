@@ -153,7 +153,10 @@ export function normalizeName(s: string | null | undefined): string {
 // Reconcile the two Notion mentor columns. If both are present and normalize
 // equal → that value, no conflict. If one present → it. If both present and
 // differ → prefer Mentor 1 and flag a conflict ("they should agree").
-export function reconcileCoach(mentor1: string | null | undefined, mentor: string | null | undefined): { value: string | null; conflict: boolean } {
+export function reconcileCoach(
+  mentor1: string | null | undefined,
+  mentor: string | null | undefined,
+): { value: string | null; conflict: boolean } {
   const a = stripNotionLink(mentor1);
   const b = stripNotionLink(mentor);
   const aHas = a !== "" && !isNonePlaceholder(a);
@@ -170,14 +173,39 @@ export function reconcileCoach(mentor1: string | null | undefined, mentor: strin
 // Notion uses placeholder mentors like "~None Assigned" / "None Available".
 function isNonePlaceholder(s: string): boolean {
   const n = normalizeName(s);
-  return n === "none assigned" || n === "none available" || n === "none available placeholder" || n === "none";
+  return (
+    n === "none assigned" ||
+    n === "none available" ||
+    n === "none available placeholder" ||
+    n === "none"
+  );
 }
 
 const MONTHS: Record<string, string> = {
-  january: "01", february: "02", march: "03", april: "04", may: "05", june: "06",
-  july: "07", august: "08", september: "09", october: "10", november: "11", december: "12",
-  jan: "01", feb: "02", mar: "03", apr: "04", jun: "06", jul: "07", aug: "08",
-  sep: "09", sept: "09", oct: "10", nov: "11", dec: "12",
+  january: "01",
+  february: "02",
+  march: "03",
+  april: "04",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  september: "09",
+  october: "10",
+  november: "11",
+  december: "12",
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  sept: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
 };
 
 // Parse a Notion date cell. Handles "Month DD, YYYY" (Notion's default, with or
@@ -219,11 +247,15 @@ function cell(row: string[], idx: Map<string, number>, header: string | undefine
   return v === "" ? null : v;
 }
 
-export function mapRowToNotion(row: string[], idx: Map<string, number>, map: NotionColumnMap): NotionImportRow {
+export function mapRowToNotion(
+  row: string[],
+  idx: Map<string, number>,
+  map: NotionColumnMap,
+): NotionImportRow {
   const name = cell(row, idx, map.name) ?? "";
   const coach = reconcileCoach(
-    map.coachPrimary ? row[idx.get(map.coachPrimary.trim()) ?? -1] ?? null : null,
-    map.coachSecondary ? row[idx.get(map.coachSecondary.trim()) ?? -1] ?? null : null
+    map.coachPrimary ? (row[idx.get(map.coachPrimary.trim()) ?? -1] ?? null) : null,
+    map.coachSecondary ? (row[idx.get(map.coachSecondary.trim()) ?? -1] ?? null) : null,
   );
   return {
     name,
@@ -238,7 +270,10 @@ export function mapRowToNotion(row: string[], idx: Map<string, number>, map: Not
 }
 
 // Parse a whole CSV into NotionImportRows (skipping blank rows + rows with no name).
-export function parseNotionCsv(text: string, map: NotionColumnMap = DEFAULT_NOTION_MAP): { rows: NotionImportRow[]; header: string[]; skipped: number } {
+export function parseNotionCsv(
+  text: string,
+  map: NotionColumnMap = DEFAULT_NOTION_MAP,
+): { rows: NotionImportRow[]; header: string[]; skipped: number } {
   const grid = parseCsv(text);
   if (grid.length === 0) return { rows: [], header: [], skipped: 0 };
   const header = grid[0];
@@ -278,7 +313,10 @@ export interface NotionUpsertPlan {
 // Match each import row to an existing mentee by normalized name. 0 → insert,
 // 1 → update, >1 → ambiguous (skipped). Never matches on CA/hand fields beyond
 // the resolved name; the upsert touches only notion_*.
-export function planNotionUpsert(existing: ExistingMentee[], rows: NotionImportRow[]): NotionUpsertPlan {
+export function planNotionUpsert(
+  existing: ExistingMentee[],
+  rows: NotionImportRow[],
+): NotionUpsertPlan {
   const byName = new Map<string, string[]>();
   for (const e of existing) {
     const key = normalizeName(e.name);
@@ -290,7 +328,7 @@ export function planNotionUpsert(existing: ExistingMentee[], rows: NotionImportR
   const plan: NotionUpsertPlan = { updates: [], inserts: [], ambiguous: [] };
   for (const row of rows) {
     const key = normalizeName(row.name);
-    const matches = key ? byName.get(key) ?? [] : [];
+    const matches = key ? (byName.get(key) ?? []) : [];
     if (matches.length === 1) plan.updates.push({ id: matches[0], row });
     else if (matches.length === 0) plan.inserts.push(row);
     else plan.ambiguous.push({ name: row.name, candidateIds: matches });
@@ -310,7 +348,10 @@ export interface CaIdentity {
 // SECOND row for the same person (the prospect-imported-before-they-exist-in-CA
 // lifecycle). Only claims a UNIQUE 1:1 name match against an as-yet-unclaimed
 // client id; ambiguous names are left for manual handling. Pure — verify §23.
-export function planClientIdClaims(existing: ExistingMentee[], caRecords: CaIdentity[]): { id: string; clientId: number }[] {
+export function planClientIdClaims(
+  existing: ExistingMentee[],
+  caRecords: CaIdentity[],
+): { id: string; clientId: number }[] {
   const takenClientIds = new Set<number>();
   const nullByName = new Map<string, string[]>();
   for (const e of existing) {

@@ -84,9 +84,17 @@ export function SortableTable({
     <>
       <div className="table-toolbar">
         <span className="muted">
-          {sorted.length} rows{capped ? ` (showing first ${maxRows} — refine the search to narrow; CSV exports all ${sorted.length})` : ""}
+          {sorted.length} rows
+          {capped
+            ? ` (showing first ${maxRows} — refine the search to narrow; CSV exports all ${sorted.length})`
+            : ""}
         </span>
-        <button className="btn btn--sm" onClick={exportCsv} disabled={sorted.length === 0} title="Download the current (filtered + sorted) view as CSV">
+        <button
+          className="btn btn--sm"
+          onClick={exportCsv}
+          disabled={sorted.length === 0}
+          title="Download the current (filtered + sorted) view as CSV"
+        >
           Export CSV
         </button>
       </div>

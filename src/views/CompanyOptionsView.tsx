@@ -78,79 +78,91 @@ export function CompanyOptionsView() {
 
   return (
     <>
-    <section className="card">
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        Company options <HelpButton id="company.options" label="Company options" />
-      </h2>
-      <p className="view__hint">
-        Dashboard settings you can change yourself — no code change needed. These are{" "}
-        <strong>organization-wide</strong>: a change here applies for everyone. Each setting saves
-        as soon as you pick it.
-      </p>
-      {error && <div className="notice notice--warn">{error}</div>}
-      {loading ? (
-        <div className="loading">Loading…</div>
-      ) : sections.length === 0 ? (
-        <p className="muted">No options defined yet.</p>
-      ) : (
-        sections.map(([section, opts]) => (
-          <CollapsibleCard
-            key={section}
-            id={`options.section.${section}`}
-            title={section}
-            variant="inset"
-            level={3}
-            style={{ marginTop: 16 }}
-          >
-            <div className="options-grid">
-              {opts.map((o) => (
-                <div key={o.key} className="option-row">
-                  <div className="option-row__label">
-                    <label htmlFor={`opt-${o.key}`}>{o.label}</label>
-                    <p className="muted">{o.help}</p>
+      <section className="card">
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Company options <HelpButton id="company.options" label="Company options" />
+        </h2>
+        <p className="view__hint">
+          Dashboard settings you can change yourself — no code change needed. These are{" "}
+          <strong>organization-wide</strong>: a change here applies for everyone. Each setting saves
+          as soon as you pick it.
+        </p>
+        {error && <div className="notice notice--warn">{error}</div>}
+        {loading ? (
+          <div className="loading">Loading…</div>
+        ) : sections.length === 0 ? (
+          <p className="muted">No options defined yet.</p>
+        ) : (
+          sections.map(([section, opts]) => (
+            <CollapsibleCard
+              key={section}
+              id={`options.section.${section}`}
+              title={section}
+              variant="inset"
+              level={3}
+              style={{ marginTop: 16 }}
+            >
+              <div className="options-grid">
+                {opts.map((o) => (
+                  <div key={o.key} className="option-row">
+                    <div className="option-row__label">
+                      <label htmlFor={`opt-${o.key}`}>{o.label}</label>
+                      <p className="muted">{o.help}</p>
+                    </div>
+                    <div className="option-row__control">
+                      {o.type === "stageColors" ? (
+                        <StageColorsControl value={valueOf(o)} onSave={(v) => change(o, v)} />
+                      ) : o.type === "duration" ? (
+                        <DurationControl
+                          value={valueOf(o)}
+                          onSave={(v) => change(o, v)}
+                          disabled={savingKey === o.key}
+                        />
+                      ) : o.type === "list" ? (
+                        <ListControl
+                          value={valueOf(o)}
+                          onSave={(v) => change(o, v)}
+                          disabled={savingKey === o.key}
+                        />
+                      ) : o.type === "action" ? (
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          disabled={o.disabled}
+                          title={
+                            o.disabled
+                              ? "Disabled until the stage-date logic toggle is re-enabled and changed"
+                              : undefined
+                          }
+                        >
+                          Recalculate
+                        </button>
+                      ) : (
+                        <select
+                          id={`opt-${o.key}`}
+                          value={o.disabled ? companyOptionDefault(o.key) : valueOf(o)}
+                          onChange={(e) => change(o, e.target.value)}
+                          disabled={o.disabled || savingKey === o.key}
+                        >
+                          {o.choices.map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <span className="option-row__status muted">
+                        {savingKey === o.key ? "Saving…" : savedKey === o.key ? "Saved ✓" : ""}
+                      </span>
+                    </div>
                   </div>
-                  <div className="option-row__control">
-                    {o.type === "stageColors" ? (
-                      <StageColorsControl value={valueOf(o)} onSave={(v) => change(o, v)} />
-                    ) : o.type === "duration" ? (
-                      <DurationControl value={valueOf(o)} onSave={(v) => change(o, v)} disabled={savingKey === o.key} />
-                    ) : o.type === "list" ? (
-                      <ListControl value={valueOf(o)} onSave={(v) => change(o, v)} disabled={savingKey === o.key} />
-                    ) : o.type === "action" ? (
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        disabled={o.disabled}
-                        title={o.disabled ? "Disabled until the stage-date logic toggle is re-enabled and changed" : undefined}
-                      >
-                        Recalculate
-                      </button>
-                    ) : (
-                      <select
-                        id={`opt-${o.key}`}
-                        value={o.disabled ? companyOptionDefault(o.key) : valueOf(o)}
-                        onChange={(e) => change(o, e.target.value)}
-                        disabled={o.disabled || savingKey === o.key}
-                      >
-                        {o.choices.map((c) => (
-                          <option key={c.value} value={c.value}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <span className="option-row__status muted">
-                      {savingKey === o.key ? "Saving…" : savedKey === o.key ? "Saved ✓" : ""}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CollapsibleCard>
-        ))
-      )}
-    </section>
-    <PayGroupsCard />
+                ))}
+              </div>
+            </CollapsibleCard>
+          ))
+        )}
+      </section>
+      <PayGroupsCard />
     </>
   );
 }
@@ -196,10 +208,20 @@ function ListControl({
         disabled={disabled}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
-        style={{ resize: "vertical", background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, color: "var(--text)", padding: "6px 8px", fontSize: 13 }}
+        style={{
+          resize: "vertical",
+          background: "var(--panel-2)",
+          border: "1px solid var(--line)",
+          borderRadius: 6,
+          color: "var(--text)",
+          padding: "6px 8px",
+          fontSize: 13,
+        }}
         aria-label="List options, one per line"
       />
-      <span className="muted" style={{ fontSize: 11 }}>One option per line · saves when you click away</span>
+      <span className="muted" style={{ fontSize: 11 }}>
+        One option per line · saves when you click away
+      </span>
     </div>
   );
 }
@@ -221,7 +243,10 @@ function DurationControl({
     onSave(serializeTrendWindow({ n: safe, unit }));
   }
   return (
-    <div className="duration-control" style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+    <div
+      className="duration-control"
+      style={{ display: "inline-flex", gap: 8, alignItems: "center" }}
+    >
       <input
         type="number"
         min={1}
@@ -250,7 +275,13 @@ function DurationControl({
 // "Gradient" blends two endpoint colors across the six stages; "Custom" sets each
 // stage individually. Edits preview live; saves are debounced so dragging a color
 // picker doesn't spam the DB. The config is stored as a JSON string.
-function StageColorsControl({ value, onSave }: { value: string; onSave: (serialized: string) => void }) {
+function StageColorsControl({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (serialized: string) => void;
+}) {
   const [cfg, setCfg] = useState<StageColorConfig>(() => parseStageColorConfig(value));
   const lastSavedRef = useRef<string>(value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -299,14 +330,22 @@ function StageColorsControl({ value, onSave }: { value: string; onSave: (seriali
         <div className="stage-colors__inputs">
           <label className="stage-colors__field">
             <span>From</span>
-            <input type="color" value={cfg.from} onChange={(e) => update({ ...cfg, from: e.target.value })} />
+            <input
+              type="color"
+              value={cfg.from}
+              onChange={(e) => update({ ...cfg, from: e.target.value })}
+            />
           </label>
           <span className="muted" aria-hidden>
             →
           </span>
           <label className="stage-colors__field">
             <span>To</span>
-            <input type="color" value={cfg.to} onChange={(e) => update({ ...cfg, to: e.target.value })} />
+            <input
+              type="color"
+              value={cfg.to}
+              onChange={(e) => update({ ...cfg, to: e.target.value })}
+            />
           </label>
         </div>
       ) : (
@@ -331,7 +370,11 @@ function StageColorsControl({ value, onSave }: { value: string; onSave: (seriali
       {/* Live preview of the six resolved stage colors, in order. */}
       <div className="stage-colors__preview">
         {STAGE_KEYS.map((k, i) => (
-          <div key={k} className="stage-colors__swatch" title={`${STAGE_LABELS[k]} — ${resolved[i]}`}>
+          <div
+            key={k}
+            className="stage-colors__swatch"
+            title={`${STAGE_LABELS[k]} — ${resolved[i]}`}
+          >
             <span className="stage-colors__chip" style={{ background: resolved[i] }} />
             <span className="stage-colors__caption muted">{STAGE_LABELS[k]}</span>
           </div>

@@ -1,6 +1,4 @@
-import {
-  downloadCsv,
-} from "../csv";
+import { downloadCsv } from "../csv";
 import {
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
@@ -62,7 +60,9 @@ export function PayoutLineDetailModal({
   // Update this line's invoice / line-item overrides. Absent => a read-only view
   // (no checkboxes). Called with the full next override arrays; the caller merges
   // them into the build's lineStates (so they save + reload with the build).
-  onChange?: (patch: Pick<BuildLineState, "excludedInvoices" | "excludedLineItems" | "includedLineItems">) => void;
+  onChange?: (
+    patch: Pick<BuildLineState, "excludedInvoices" | "excludedLineItems" | "includedLineItems">,
+  ) => void;
   // Build-level Split % override (fraction) — replaces the engine's ramp split
   // in the effective math shown here.
   splitOverride?: number | null;
@@ -103,16 +103,21 @@ export function PayoutLineDetailModal({
   // Invoices whose effective basis differs from the engine's auto basis (i.e. the
   // reviewer changed something) — powers the "(engine $X before …)" note.
   const affectedCount = line.sources.filter(
-    (src) => Math.abs(includedBilledOf(src) - sourceAutoBasis(src)) > 0.005
+    (src) => Math.abs(includedBilledOf(src) - sourceAutoBasis(src)) > 0.005,
   ).length;
   // Line items the engine flagged for human judgment (credits + unmatched charges).
   const reviewCount = line.sources.reduce(
-    (t, src) => t + src.lineItems.filter((li) => li.status === "credit" || li.status === "excluded").length,
-    0
+    (t, src) =>
+      t + src.lineItems.filter((li) => li.status === "credit" || li.status === "excluded").length,
+    0,
   );
 
   const emit = (nextInv: Set<string>, nextExcl: Set<string>, nextIncl: Set<string>) =>
-    onChange?.({ excludedInvoices: [...nextInv], excludedLineItems: [...nextExcl], includedLineItems: [...nextIncl] });
+    onChange?.({
+      excludedInvoices: [...nextInv],
+      excludedLineItems: [...nextExcl],
+      includedLineItems: [...nextIncl],
+    });
   // The invoice-level checkbox is a MASTER toggle. Classified (invoice-truth)
   // sources: OFF force-drops the whole invoice; ON restores the ENGINE's default
   // selection (clears that invoice's per-line flips too). Legacy sources keep the
@@ -189,7 +194,11 @@ export function PayoutLineDetailModal({
   // answer to "when did he pay?".
   const allPayments = line.sources
     .flatMap((src) =>
-      src.payments.map((p) => ({ ...p, invoiceNumber: src.invoiceNumber, serviceDate: src.serviceDate }))
+      src.payments.map((p) => ({
+        ...p,
+        invoiceNumber: src.invoiceNumber,
+        serviceDate: src.serviceDate,
+      })),
     )
     .sort((a, b) => String(a.datePaid ?? "").localeCompare(String(b.datePaid ?? "")));
   const totalPaid = round2(allPayments.reduce((t, p) => t + (p.amount || 0), 0));
@@ -199,7 +208,7 @@ export function PayoutLineDetailModal({
     downloadCsv(
       `payout-detail-${coachName.replace(/\s+/g, "-").toLowerCase()}-${line.clientName.replace(/\s+/g, "-").toLowerCase()}-${ym}`,
       [...PAYOUT_DETAIL_CSV_COLUMNS],
-      rows
+      rows,
     );
   }
 
@@ -235,11 +244,19 @@ export function PayoutLineDetailModal({
           const off = !counts;
           const pill =
             classified && li.status === "credit" ? (
-              <span className="pill pill--running" style={{ fontSize: 10 }} title="Credit — auto-included as a reduction; review whether it should reduce mentor pay">
+              <span
+                className="pill pill--running"
+                style={{ fontSize: 10 }}
+                title="Credit — auto-included as a reduction; review whether it should reduce mentor pay"
+              >
                 credit · review
               </span>
             ) : classified && li.status === "excluded" ? (
-              <span className="pill" style={{ fontSize: 10 }} title="Didn't match a pay-eligible template (Company options → Payment groups) — check to count it anyway">
+              <span
+                className="pill"
+                style={{ fontSize: 10 }}
+                title="Didn't match a pay-eligible template (Company options → Payment groups) — check to count it anyway"
+              >
                 not pay · review
               </span>
             ) : null;
@@ -262,7 +279,11 @@ export function PayoutLineDetailModal({
                   disabled={!canEdit || invOff}
                   onChange={() => toggleLineItem(src, i)}
                   aria-label={`Include line item "${li.item ?? "item"}" (${fmtUsd(li.amount)})`}
-                  title={off ? "Not counted — check to include this line in the pay basis" : "Counted — uncheck to drop this line from the pay basis"}
+                  title={
+                    off
+                      ? "Not counted — check to include this line in the pay basis"
+                      : "Counted — uncheck to drop this line from the pay basis"
+                  }
                 />
               ) : null}
               <span>
@@ -284,7 +305,9 @@ export function PayoutLineDetailModal({
   const sliceRows = (arr: PayLineSource[], label: string) => {
     if (!arr.length) return null;
     const inclSubtotal = round2(arr.reduce((t, x) => t + recogOf(x), 0));
-    const adjustedHere = arr.filter((x) => Math.abs(includedBilledOf(x) - sourceAutoBasis(x)) > 0.005).length;
+    const adjustedHere = arr.filter(
+      (x) => Math.abs(includedBilledOf(x) - sourceAutoBasis(x)) > 0.005,
+    ).length;
     return (
       <>
         {arr.map((src, i) => {
@@ -319,7 +342,9 @@ export function PayoutLineDetailModal({
                 )}
               </td>
               <td>
-                <span className={`pill ${src.slice === "this-month" ? "pill--success" : "pill--running"}`}>
+                <span
+                  className={`pill ${src.slice === "this-month" ? "pill--success" : "pill--running"}`}
+                >
                   {src.slice === "this-month" ? "this month" : "rolled in"}
                 </span>
               </td>
@@ -337,12 +362,21 @@ export function PayoutLineDetailModal({
               </td>
               <td
                 className="num"
-                style={{ fontWeight: 600, textDecoration: off ? "line-through" : undefined, color: off ? "var(--muted)" : undefined }}
-                title={src.slice === "this-month" ? "billed × (1 − e)" : "billed × e (rolled forward)"}
+                style={{
+                  fontWeight: 600,
+                  textDecoration: off ? "line-through" : undefined,
+                  color: off ? "var(--muted)" : undefined,
+                }}
+                title={
+                  src.slice === "this-month" ? "billed × (1 − e)" : "billed × e (rolled forward)"
+                }
               >
                 {fmtUsd(effRecog)}
                 {part && effRecog !== rawRecog ? (
-                  <span className="muted" style={{ fontWeight: 400, fontSize: 11 }}> (was {fmtUsd(rawRecog)})</span>
+                  <span className="muted" style={{ fontWeight: 400, fontSize: 11 }}>
+                    {" "}
+                    (was {fmtUsd(rawRecog)})
+                  </span>
                 ) : null}
               </td>
               <td style={{ textAlign: "left" }}>{paymentsCell(src.payments)}</td>
@@ -354,7 +388,9 @@ export function PayoutLineDetailModal({
           <td colSpan={9} style={{ textAlign: "right", fontWeight: 600 }}>
             {label} subtotal{adjustedHere ? ` · ${adjustedHere} adjusted` : ""}
           </td>
-          <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(inclSubtotal)}</td>
+          <td className="num" style={{ fontWeight: 700 }}>
+            {fmtUsd(inclSubtotal)}
+          </td>
           <td colSpan={2} />
         </tr>
       </>
@@ -367,14 +403,20 @@ export function PayoutLineDetailModal({
         <div className="modal__head">
           <div>
             <h2>
-              {line.clientName} — invoices behind {monthLabel(ym)} <SectionId id="modal.payoutLineDetail" />
+              {line.clientName} — invoices behind {monthLabel(ym)}{" "}
+              <SectionId id="modal.payoutLineDetail" />
             </h2>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-              {coachName} · {line.tier} · every invoice (and payment date) whose two-month slice built this payout.
+              {coachName} · {line.tier} · every invoice (and payment date) whose two-month slice
+              built this payout.
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn--sm" onClick={exportCsv} title="Download this mentee's invoice detail as CSV">
+            <button
+              className="btn btn--sm"
+              onClick={exportCsv}
+              title="Download this mentee's invoice detail as CSV"
+            >
               Export CSV
             </button>
             <button className="btn btn--sm" onClick={onClose}>
@@ -410,13 +452,20 @@ export function PayoutLineDetailModal({
             <span>
               Earned <strong>{fmtUsd(adjEarned)}</strong>
             </span>
-            <span style={{ color: "var(--muted)" }}>× {fmtPct(splitOverride ?? line.splitPct)}{splitOverride != null && splitOverride !== line.splitPct ? " (set for this build)" : ""} =</span>
+            <span style={{ color: "var(--muted)" }}>
+              × {fmtPct(splitOverride ?? line.splitPct)}
+              {splitOverride != null && splitOverride !== line.splitPct
+                ? " (set for this build)"
+                : ""}{" "}
+              =
+            </span>
             <span>
               Payout <strong>{fmtUsd(adjPayout)}</strong>
             </span>
             {affectedCount > 0 && (
               <span className="muted" style={{ fontSize: 12 }}>
-                (engine {fmtUsd(line.payout)} before {affectedCount} adjusted invoice{affectedCount === 1 ? "" : "s"})
+                (engine {fmtUsd(line.payout)} before {affectedCount} adjusted invoice
+                {affectedCount === 1 ? "" : "s"})
               </span>
             )}
             {eff !== adjPayout && (
@@ -428,21 +477,27 @@ export function PayoutLineDetailModal({
           </div>
 
           <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>
-            Under the two-month split, each invoice pays its <em>remaining</em> fraction in its own month and rolls its{" "}
-            <em>elapsed</em> fraction (invoice day ÷ 30) into the next. So {monthLabel(ym)}'s payout blends{" "}
-            {monthLabel(ym)}'s new invoice slice with {monthLabel(prevYm)}'s rolled-in slice — which is why the earned
-            amount can differ from a single month's billed total.
+            Under the two-month split, each invoice pays its <em>remaining</em> fraction in its own
+            month and rolls its <em>elapsed</em> fraction (invoice day ÷ 30) into the next. So{" "}
+            {monthLabel(ym)}'s payout blends {monthLabel(ym)}'s new invoice slice with{" "}
+            {monthLabel(prevYm)}'s rolled-in slice — which is why the earned amount can differ from
+            a single month's billed total.
             {canEdit ? (
               <>
                 {" "}
-                <strong>Uncheck an invoice — or a single line item inside it</strong> — to drop it from this payout; check
-                a "not pay" line to count it. Lines matching the pay-eligible templates (Company options → Payment groups)
-                are selected automatically; <strong>credits and unmatched charges carry a "review" pill</strong> for human
-                judgment. The basis is the sum of the counted lines; earned and payout recompute live and save with the
-                build.
+                <strong>Uncheck an invoice — or a single line item inside it</strong> — to drop it
+                from this payout; check a "not pay" line to count it. Lines matching the
+                pay-eligible templates (Company options → Payment groups) are selected
+                automatically; <strong>credits and unmatched charges carry a "review" pill</strong>{" "}
+                for human judgment. The basis is the sum of the counted lines; earned and payout
+                recompute live and save with the build.
               </>
             ) : onChange ? (
-              <> This build is approved — reopen it to change which invoices or line items are included.</>
+              <>
+                {" "}
+                This build is approved — reopen it to change which invoices or line items are
+                included.
+              </>
             ) : null}
             {reviewCount > 0 ? (
               <>
@@ -452,14 +507,21 @@ export function PayoutLineDetailModal({
                 </strong>
               </>
             ) : null}
-            {s.note ? <> Review note: <strong>{s.note}</strong>.</> : null}
+            {s.note ? (
+              <>
+                {" "}
+                Review note: <strong>{s.note}</strong>.
+              </>
+            ) : null}
           </p>
 
           <div className="table-scroll">
             <table className="table table--center">
               <thead>
                 <tr>
-                  <th style={{ width: 40 }} title="Include this invoice in the payout?">Incl.</th>
+                  <th style={{ width: 40 }} title="Include this invoice in the payout?">
+                    Incl.
+                  </th>
                   <th>Slice</th>
                   <th>Invoice date</th>
                   <th>Day</th>
@@ -479,8 +541,8 @@ export function PayoutLineDetailModal({
                 {line.sources.length === 0 && (
                   <tr>
                     <td colSpan={12} className="muted">
-                      No invoice detail is attached to this line (it may predate the invoice sync that captures payment
-                      dates). Re-sync to populate it.
+                      No invoice detail is attached to this line (it may predate the invoice sync
+                      that captures payment dates). Re-sync to populate it.
                     </td>
                   </tr>
                 )}
@@ -498,11 +560,13 @@ export function PayoutLineDetailModal({
           </div>
 
           {/* Plain "when did he pay" list across all the invoices above */}
-          <h3 style={{ fontSize: 14, margin: "16px 0 6px" }}>Payments received ({allPayments.length})</h3>
+          <h3 style={{ fontSize: 14, margin: "16px 0 6px" }}>
+            Payments received ({allPayments.length})
+          </h3>
           {allPayments.length === 0 ? (
             <p className="muted" style={{ fontSize: 13 }}>
-              No payments are recorded against these invoices yet (billed but uncollected). The payout pays on{" "}
-              <strong>billed</strong> revenue, so it doesn't wait on collection.
+              No payments are recorded against these invoices yet (billed but uncollected). The
+              payout pays on <strong>billed</strong> revenue, so it doesn't wait on collection.
             </p>
           ) : (
             <div className="table-scroll">

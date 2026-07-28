@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useAuth } from "../auth";
 import { useChartTokens } from "../theme";
 import { HelpButton } from "../components/HelpDrawer";
@@ -91,8 +100,14 @@ function StaffHoursCell({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
       />
-      {saving && <span className="muted" style={{ fontSize: 11 }}>…</span>}
-      {flash && !saving && <span style={{ fontSize: 11, color: "var(--ok-text, #16a34a)" }}>✓</span>}
+      {saving && (
+        <span className="muted" style={{ fontSize: 11 }}>
+          …
+        </span>
+      )}
+      {flash && !saving && (
+        <span style={{ fontSize: 11, color: "var(--ok-text, #16a34a)" }}>✓</span>
+      )}
     </span>
   );
 }
@@ -100,7 +115,12 @@ function StaffHoursCell({
 export function MarginsView() {
   const { user } = useAuth();
   const ct = useChartTokens();
-  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  } as const;
 
   const [programKey, setProgramKey] = useState(PROGRAMS[0].key);
   const def = PROGRAMS.find((p) => p.key === programKey) ?? PROGRAMS[0];
@@ -137,15 +157,25 @@ export function MarginsView() {
   const delivered = useMemo(() => programMonthTotals(sessionsByMonth), [sessionsByMonth]);
   const staffMap = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of staffRows) if (r.program === programKey && r.staffHours != null) m.set(r.month, r.staffHours);
+    for (const r of staffRows)
+      if (r.program === programKey && r.staffHours != null) m.set(r.month, r.staffHours);
     return m;
   }, [staffRows, programKey]);
 
-  const rows = useMemo(() => mergeProgramMonths(delivered, staffMap, [currentYm()]), [delivered, staffMap]);
+  const rows = useMemo(
+    () => mergeProgramMonths(delivered, staffMap, [currentYm()]),
+    [delivered, staffMap],
+  );
   // Oldest -> newest for the time axis. `ym` rides along so a bar click can drill in.
   const chartData = useMemo(
-    () => [...rows].reverse().map((r) => ({ ym: r.month, month: monthLabel(r.month), Staff: r.staffHours ?? 0, Delivered: r.deliveredHours })),
-    [rows]
+    () =>
+      [...rows].reverse().map((r) => ({
+        ym: r.month,
+        month: monthLabel(r.month),
+        Staff: r.staffHours ?? 0,
+        Delivered: r.deliveredHours,
+      })),
+    [rows],
   );
 
   async function saveHours(month: string, hours: number | null) {
@@ -169,7 +199,13 @@ export function MarginsView() {
     downloadCsv(
       `margins-${programKey}`,
       ["Month", "Delivered sessions", "Delivered hours", "Staff hours", "Delivered ÷ staff"],
-      rows.map((r) => [r.month, r.sessions, r.deliveredHours, r.staffHours ?? "", r.ratio == null ? "" : Math.round(r.ratio * 100) / 100])
+      rows.map((r) => [
+        r.month,
+        r.sessions,
+        r.deliveredHours,
+        r.staffHours ?? "",
+        r.ratio == null ? "" : Math.round(r.ratio * 100) / 100,
+      ]),
     );
   }
 
@@ -182,7 +218,10 @@ export function MarginsView() {
   };
 
   // The meetings behind the clicked month's delivered bar.
-  const drillSessions = useMemo(() => (drillMonth ? sessionsByMonth.get(drillMonth) ?? [] : []), [drillMonth, sessionsByMonth]);
+  const drillSessions = useMemo(
+    () => (drillMonth ? (sessionsByMonth.get(drillMonth) ?? []) : []),
+    [drillMonth, sessionsByMonth],
+  );
   const drillTotals = useMemo(() => {
     let hours = 0;
     for (const s of drillSessions) hours += s.hours;
@@ -194,7 +233,15 @@ export function MarginsView() {
     downloadCsv(
       `margins-${programKey}-${drillMonth}`,
       ["Date", "Time", "Coach", "Meeting", "Attendees", "Hours", "Duration source"],
-      drillSessions.map((s) => [s.date, s.time ?? "", s.coachName, s.name, s.attendees, s.hours, s.realDuration ? "actual" : "fallback"])
+      drillSessions.map((s) => [
+        s.date,
+        s.time ?? "",
+        s.coachName,
+        s.name,
+        s.attendees,
+        s.hours,
+        s.realDuration ? "actual" : "fallback",
+      ]),
     );
   }
 
@@ -243,16 +290,17 @@ export function MarginsView() {
         }
       >
         <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
-          {def.blurb} Delivered hours use each meeting's <strong>actual duration</strong> (end − start) when recorded,
-          falling back to <strong>{PROGRAM_MEETING_HOURS} h/session</strong> otherwise. A session = a distinct coach +
-          start-time slot, so a group meeting counts once. Dollar figures come later.
+          {def.blurb} Delivered hours use each meeting's <strong>actual duration</strong> (end −
+          start) when recorded, falling back to <strong>{PROGRAM_MEETING_HOURS} h/session</strong>{" "}
+          otherwise. A session = a distinct coach + start-time slot, so a group meeting counts once.
+          Dollar figures come later.
         </div>
 
         {error && <div className="notice notice--warn">{error}</div>}
         {storageError && (
           <div className="notice notice--warn">
-            <strong>Staff-hours entry is unavailable:</strong> {storageError}. Numbers typed into the Staff hrs column
-            will not persist until this is fixed.
+            <strong>Staff-hours entry is unavailable:</strong> {storageError}. Numbers typed into
+            the Staff hrs column will not persist until this is fixed.
           </div>
         )}
 
@@ -270,12 +318,16 @@ export function MarginsView() {
                 <span className="stat__label">Delivered hours</span>
               </div>
               <div className="stat">
-                <span className="stat__value">{totals.staffMonths > 0 ? fmtHours(totals.staffHours) : "—"}</span>
+                <span className="stat__value">
+                  {totals.staffMonths > 0 ? fmtHours(totals.staffHours) : "—"}
+                </span>
                 <span className="stat__label">Staff hours entered ({totals.staffMonths} mo)</span>
               </div>
               <div className="stat">
                 <span className="stat__value">
-                  {totals.staffHours > 0 ? `${Math.round((totals.deliveredHours / totals.staffHours) * 100) / 100}×` : "—"}
+                  {totals.staffHours > 0
+                    ? `${Math.round((totals.deliveredHours / totals.staffHours) * 100) / 100}×`
+                    : "—"}
                 </span>
                 <span className="stat__label">Delivered ÷ staff (entered mo)</span>
               </div>
@@ -284,9 +336,18 @@ export function MarginsView() {
             <div className="chart-card__split chart-card__split--both">
               <div style={{ width: "100%", height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ left: 4, right: 8 }} onClick={onChartClick} style={{ cursor: "pointer" }}>
+                  <BarChart
+                    data={chartData}
+                    margin={{ left: 4, right: 8 }}
+                    onClick={onChartClick}
+                    style={{ cursor: "pointer" }}
+                  >
                     <CartesianGrid stroke={ct.grid} vertical={false} />
-                    <XAxis dataKey="month" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                    />
                     <YAxis tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} unit="h" />
                     <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -318,9 +379,14 @@ export function MarginsView() {
                         <td className="num">{r.sessions}</td>
                         <td className="num">{fmtHours(r.deliveredHours)}</td>
                         <td className="num" onClick={(e) => e.stopPropagation()}>
-                          <StaffHoursCell value={r.staffHours} onSave={(h) => saveHours(r.month, h)} />
+                          <StaffHoursCell
+                            value={r.staffHours}
+                            onSave={(h) => saveHours(r.month, h)}
+                          />
                         </td>
-                        <td className="num">{r.ratio == null ? "—" : `${Math.round(r.ratio * 100) / 100}×`}</td>
+                        <td className="num">
+                          {r.ratio == null ? "—" : `${Math.round(r.ratio * 100) / 100}×`}
+                        </td>
                       </tr>
                     ))}
                     {rows.length === 0 && (
@@ -335,11 +401,12 @@ export function MarginsView() {
               </div>
             </div>
             <p className="view__hint" style={{ marginTop: 10 }}>
-              <strong>Click a bar (or a table row)</strong> to see the meetings behind that month. Enter staff hours in the
-              table (saves on blur). Needs migration <code>9981_program_hours.sql</code> applied to persist, and a re-sync
-              after <code>9980_ca_appointments_end.sql</code> for real meeting durations (until then delivered hours use the
-              {" "}{PROGRAM_MEETING_HOURS} h/session fallback). “Delivered ÷ staff” is delivered hours per staff hour for
-              months where staff hours are entered.
+              <strong>Click a bar (or a table row)</strong> to see the meetings behind that month.
+              Enter staff hours in the table (saves on blur). Needs migration{" "}
+              <code>9981_program_hours.sql</code> applied to persist, and a re-sync after{" "}
+              <code>9980_ca_appointments_end.sql</code> for real meeting durations (until then
+              delivered hours use the {PROGRAM_MEETING_HOURS} h/session fallback). “Delivered ÷
+              staff” is delivered hours per staff hour for months where staff hours are entered.
             </p>
           </>
         )}
@@ -350,10 +417,15 @@ export function MarginsView() {
           <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal__head">
               <h2>
-                {def.label} — meetings in {monthLabel(drillMonth)} <SectionId id="modal.marginsDrill" />
+                {def.label} — meetings in {monthLabel(drillMonth)}{" "}
+                <SectionId id="modal.marginsDrill" />
               </h2>
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn--sm" onClick={exportDrillCsv} disabled={drillSessions.length === 0}>
+                <button
+                  className="btn btn--sm"
+                  onClick={exportDrillCsv}
+                  disabled={drillSessions.length === 0}
+                >
                   Export CSV
                 </button>
                 <button className="btn btn--sm" onClick={() => setDrillMonth(null)}>
@@ -363,7 +435,9 @@ export function MarginsView() {
             </div>
             <div className="modal__body">
               {drillSessions.length === 0 ? (
-                <p className="muted">No delivered {def.label} meetings recorded for {monthLabel(drillMonth)}.</p>
+                <p className="muted">
+                  No delivered {def.label} meetings recorded for {monthLabel(drillMonth)}.
+                </p>
               ) : (
                 <table className="table table--center">
                   <thead>
@@ -384,14 +458,22 @@ export function MarginsView() {
                         <td>{s.coachName}</td>
                         <td>
                           {s.name}
-                          {s.attendees > 1 && <span className="pill" style={{ marginLeft: 6 }}>group ×{s.attendees}</span>}
+                          {s.attendees > 1 && (
+                            <span className="pill" style={{ marginLeft: 6 }}>
+                              group ×{s.attendees}
+                            </span>
+                          )}
                         </td>
                         <td className="num">{s.attendees}</td>
                         <td className="num">
                           {Math.round(s.hours * 100) / 100}
                           {!s.realDuration && (
-                            <span className="muted" title="No end time recorded — using the per-session fallback">
-                              {" "}*
+                            <span
+                              className="muted"
+                              title="No end time recorded — using the per-session fallback"
+                            >
+                              {" "}
+                              *
                             </span>
                           )}
                         </td>
@@ -402,8 +484,11 @@ export function MarginsView() {
               )}
             </div>
             <div className="modal__foot muted">
-              {drillTotals.sessions} session{drillTotals.sessions === 1 ? "" : "s"} · {Math.round(drillTotals.hours * 100) / 100} delivered hours
-              {drillSessions.some((s) => !s.realDuration) && <> · * = fallback {PROGRAM_MEETING_HOURS} h (no end time recorded)</>}
+              {drillTotals.sessions} session{drillTotals.sessions === 1 ? "" : "s"} ·{" "}
+              {Math.round(drillTotals.hours * 100) / 100} delivered hours
+              {drillSessions.some((s) => !s.realDuration) && (
+                <> · * = fallback {PROGRAM_MEETING_HOURS} h (no end time recorded)</>
+              )}
             </div>
           </div>
         </div>

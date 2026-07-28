@@ -14,5 +14,5 @@ export const supabaseConfigured = Boolean(url && anonKey);
 // clearly and the UI surfaces a "not configured" message instead.
 export const supabase = createClient(
   url ?? "https://placeholder.supabase.co",
-  anonKey ?? "placeholder-anon-key"
+  anonKey ?? "placeholder-anon-key",
 );

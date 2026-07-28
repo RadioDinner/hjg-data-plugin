@@ -27,7 +27,9 @@ export function emptyStageDates(): Record<PipelineTier, string | null> {
 }
 
 // Earliest engagement start date per tier.
-export function stageDatesFromEngagements(engs: EngagementStageInput[]): Record<PipelineTier, string | null> {
+export function stageDatesFromEngagements(
+  engs: EngagementStageInput[],
+): Record<PipelineTier, string | null> {
   const out = emptyStageDates();
   for (const e of engs) {
     if (!e.startDate) continue;
@@ -42,7 +44,7 @@ export function stageDatesFromEngagements(engs: EngagementStageInput[]): Record<
 // qualifying meeting yet (so a tier never silently disappears).
 export function stageDatesFromFirstMeeting(
   engs: EngagementStageInput[],
-  meets: MeetingStageInput[]
+  meets: MeetingStageInput[],
 ): Record<PipelineTier, string | null> {
   const out = emptyStageDates();
   for (const m of meets) {
@@ -60,9 +62,11 @@ export function stageDatesFromFirstMeeting(
 export function computeStageDates(
   basis: StageBasis,
   engs: EngagementStageInput[],
-  meets: MeetingStageInput[]
+  meets: MeetingStageInput[],
 ): Record<PipelineTier, string | null> {
-  return basis === "first_meeting" ? stageDatesFromFirstMeeting(engs, meets) : stageDatesFromEngagements(engs);
+  return basis === "first_meeting"
+    ? stageDatesFromFirstMeeting(engs, meets)
+    : stageDatesFromEngagements(engs);
 }
 
 // Highest pipeline tier reached = the latest tier (in PIPELINE_TIERS order) that

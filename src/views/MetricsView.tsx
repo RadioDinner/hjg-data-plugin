@@ -58,8 +58,25 @@ type ChartCardCell = string | number;
 type ChartCardTable = { columns: string[]; rows: ChartCardCell[][] };
 type ChartCardView = "graph" | "table" | "both";
 
-const C = { phone: "#38bdf8", zoom: "#34d399", meetings: "#a78bfa", mentees: "#38bdf8", mentors: "#f59e0b", converted: "#34d399", rate: "#f472b6" };
-const PALETTE = ["#38bdf8", "#34d399", "#a78bfa", "#f59e0b", "#f472b6", "#22d3ee", "#fb7185", "#a3e635"];
+const C = {
+  phone: "#38bdf8",
+  zoom: "#34d399",
+  meetings: "#a78bfa",
+  mentees: "#38bdf8",
+  mentors: "#f59e0b",
+  converted: "#34d399",
+  rate: "#f472b6",
+};
+const PALETTE = [
+  "#38bdf8",
+  "#34d399",
+  "#a78bfa",
+  "#f59e0b",
+  "#f472b6",
+  "#22d3ee",
+  "#fb7185",
+  "#a3e635",
+];
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function shortType(name: string): string {
@@ -192,7 +209,7 @@ function reduceMonthRows(
   buckets: { key: string; label: string }[],
   byMonth: Map<string, RangeAppt[]>,
   selectedTypes: Set<string> | null,
-  isMentor: (coachId: number | null) => boolean
+  isMentor: (coachId: number | null) => boolean,
 ): MonthRow[] {
   return buckets.map((b) => {
     const items = byMonth.get(b.key) ?? [];
@@ -210,7 +227,14 @@ function reduceMonthRows(
         if (isMentor(a.coachId)) mentors.add(a.coachId ?? -1);
       }
     }
-    return { month: b.label, Phone: phone, Zoom: zoom, Meetings: meetings, Mentees: mentees.size, Mentors: mentors.size };
+    return {
+      month: b.label,
+      Phone: phone,
+      Zoom: zoom,
+      Meetings: meetings,
+      Mentees: mentees.size,
+      Mentors: mentors.size,
+    };
   });
 }
 
@@ -219,7 +243,7 @@ function reduceMonthRows(
 function reduceConvRate(
   buckets: { key: string; label: string }[],
   byMonth: Map<string, RangeAppt[]>,
-  outcomes: Map<number, ResolvedOutcome>
+  outcomes: Map<number, ResolvedOutcome>,
 ): { month: string; Rate: number }[] {
   return buckets.map((b) => {
     const items = (byMonth.get(b.key) ?? []).filter((a) => a.category !== "mentoring");
@@ -242,7 +266,7 @@ function buildCompareTable(
   label: string,
   aRows: { month: string; value: number }[],
   bRows: { month: string; value: number }[],
-  deltaFmt: (a: number, b: number) => string
+  deltaFmt: (a: number, b: number) => string,
 ): ChartCardTable {
   const n = Math.max(aRows.length, bRows.length);
   const rows: ChartCardCell[][] = [];
@@ -328,10 +352,14 @@ function ChartCard({
       }
     >
       {extra}
-      <div className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}>
+      <div
+        className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}
+      >
         {showGraph && (
           <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              {children}
+            </ResponsiveContainer>
           </div>
         )}
         {showTable && table && (
@@ -409,9 +437,11 @@ export function MetricsView() {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [explore, setExplore] = useState<{ title: string; columns: string[]; rows: (string | number)[][] } | null>(
-    null
-  );
+  const [explore, setExplore] = useState<{
+    title: string;
+    columns: string[];
+    rows: (string | number)[][];
+  } | null>(null);
 
   // --- Compare mode (period vs period). Period A is the primary from/to above;
   // Period B is derived from A by the active preset (or free in "custom"). B's
@@ -431,7 +461,12 @@ export function MetricsView() {
   const AXIS = ct.axis;
   const GRID = ct.grid;
   const CMP = ct.cmp;
-  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  } as const;
   const axisProps = { tick: { fill: AXIS, fontSize: 12 }, stroke: GRID } as const;
 
   // Effective Period B range: derived from A while a preset is active, otherwise
@@ -457,7 +492,9 @@ export function MetricsView() {
         if (cancelled) return;
         setAppts(rows);
         setOutcomes(out);
-        setSelectedTypes(new Set(rows.filter((a) => a.category === "mentoring").map((a) => a.name)));
+        setSelectedTypes(
+          new Set(rows.filter((a) => a.category === "mentoring").map((a) => a.name)),
+        );
         setReady(true);
       })
       .catch((e) => {
@@ -640,12 +677,14 @@ export function MetricsView() {
   const meetingTypes = useMemo(() => {
     const counts = new Map<string, number>();
     for (const a of mentoring) counts.set(a.name, (counts.get(a.name) ?? 0) + 1);
-    return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
   }, [mentoring]);
 
   const selectedMentoring = useMemo(
     () => mentoring.filter((a) => !selectedTypes || selectedTypes.has(a.name)),
-    [mentoring, selectedTypes]
+    [mentoring, selectedTypes],
   );
 
   const buckets = useMemo(() => monthBuckets(from, to), [from, to]);
@@ -660,21 +699,30 @@ export function MetricsView() {
 
   const data = useMemo(
     () => reduceMonthRows(buckets, byMonth, selectedTypes, isMentor),
-    [byMonth, buckets, selectedTypes, mentorIds]
+    [byMonth, buckets, selectedTypes, mentorIds],
   );
 
   // --- Period B equivalents (compare mode). Same reducers as A, fed B's data. ---
-  const bBuckets = useMemo(() => monthBuckets(periodB.from, periodB.to), [periodB.from, periodB.to]);
+  const bBuckets = useMemo(
+    () => monthBuckets(periodB.from, periodB.to),
+    [periodB.from, periodB.to],
+  );
   const bByMonth = useMemo(() => groupByMonth(apptsB), [apptsB]);
   const bData = useMemo(
     () => reduceMonthRows(bBuckets, bByMonth, selectedTypes, isMentor),
-    [bBuckets, bByMonth, selectedTypes, mentorIds]
+    [bBuckets, bByMonth, selectedTypes, mentorIds],
   );
-  const bConvRate = useMemo(() => reduceConvRate(bBuckets, bByMonth, outcomesB), [bBuckets, bByMonth, outcomesB]);
+  const bConvRate = useMemo(
+    () => reduceConvRate(bBuckets, bByMonth, outcomesB),
+    [bBuckets, bByMonth, outcomesB],
+  );
 
   const bSelectedMentoring = useMemo(
-    () => apptsB.filter((a) => a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name))),
-    [apptsB, selectedTypes]
+    () =>
+      apptsB.filter(
+        (a) => a.category === "mentoring" && (!selectedTypes || selectedTypes.has(a.name)),
+      ),
+    [apptsB, selectedTypes],
   );
   const bDiscovery = useMemo(() => apptsB.filter((a) => a.category !== "mentoring"), [apptsB]);
   const bKpis = useMemo(
@@ -682,9 +730,11 @@ export function MetricsView() {
       discoveryTotal: bDiscovery.length,
       meetingsTotal: bSelectedMentoring.length,
       mentees: new Set(bSelectedMentoring.map((a) => a.clientId ?? -1)).size,
-      mentors: new Set(bSelectedMentoring.filter((a) => isMentor(a.coachId)).map((a) => a.coachId ?? -1)).size,
+      mentors: new Set(
+        bSelectedMentoring.filter((a) => isMentor(a.coachId)).map((a) => a.coachId ?? -1),
+      ).size,
     }),
-    [bDiscovery, bSelectedMentoring, mentorIds]
+    [bDiscovery, bSelectedMentoring, mentorIds],
   );
   const bConvRateTotal = useMemo(() => {
     let converted = 0;
@@ -702,7 +752,7 @@ export function MetricsView() {
 
   const selectedTypeList = useMemo(
     () => meetingTypes.filter((t) => selectedTypes?.has(t.name)).map((t) => t.name),
-    [meetingTypes, selectedTypes]
+    [meetingTypes, selectedTypes],
   );
 
   const compareData = useMemo(
@@ -718,7 +768,7 @@ export function MetricsView() {
         }
         return row;
       }),
-    [byMonth, buckets, selectedTypeList, selectedTypes]
+    [byMonth, buckets, selectedTypeList, selectedTypes],
   );
 
   const manualByMonth = useMemo(() => {
@@ -743,7 +793,7 @@ export function MetricsView() {
         for (const def of MANUAL_METRICS) row[def.key] = inner?.get(def.key) ?? 0;
         return row;
       }),
-    [buckets, manualByMonth]
+    [buckets, manualByMonth],
   );
 
   const manualTotals = useMemo(() => {
@@ -757,7 +807,9 @@ export function MetricsView() {
     discoveryTotal: discovery.length,
     meetingsTotal: selectedMentoring.length,
     mentees: new Set(selectedMentoring.map((a) => a.clientId ?? -1)).size,
-    mentors: new Set(selectedMentoring.filter((a) => isMentor(a.coachId)).map((a) => a.coachId ?? -1)).size,
+    mentors: new Set(
+      selectedMentoring.filter((a) => isMentor(a.coachId)).map((a) => a.coachId ?? -1),
+    ).size,
   };
 
   // Per-mentor capacity utilization in the selected range. Rows include every
@@ -777,7 +829,7 @@ export function MetricsView() {
         clientId: a.clientId,
         isGroup: a.isGroup,
         slot: a.startRaw,
-      }))
+      })),
     );
     // Group-slot detection runs on the coach who actually ran each meeting (above),
     // then each surviving 1-on-1 mentee is bucketed under their OWNER (CA primary
@@ -839,7 +891,12 @@ export function MetricsView() {
   }
 
   const conv = useMemo(() => {
-    const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+    const counts: Record<DiscoveryOutcomeValue, number> = {
+      converted: 0,
+      not_converted: 0,
+      pending: 0,
+      no_show: 0,
+    };
     let manualCount = 0;
     let phone = 0;
     let zoom = 0;
@@ -853,7 +910,14 @@ export function MetricsView() {
       }
     }
     const total = discovery.length;
-    return { total, counts, manualCount, phone, zoom, rate: total > 0 ? counts.converted / total : null };
+    return {
+      total,
+      counts,
+      manualCount,
+      phone,
+      zoom,
+      rate: total > 0 ? counts.converted / total : null,
+    };
   }, [discovery, outcomes]);
 
   // Per-month conversion series for the Discovery → conversion ChartCard. Each
@@ -864,11 +928,26 @@ export function MetricsView() {
     () =>
       buckets.map((b) => {
         const items = (byMonth.get(b.key) ?? []).filter((a) => a.category !== "mentoring");
-        const counts: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+        const counts: Record<DiscoveryOutcomeValue, number> = {
+          converted: 0,
+          not_converted: 0,
+          pending: 0,
+          no_show: 0,
+        };
         // Per-outcome split by channel (phone vs zoom) so the bars can show both
         // the outcome (color) and the channel (phone = grid pattern, zoom = solid).
-        const phone: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
-        const zoom: Record<DiscoveryOutcomeValue, number> = { converted: 0, not_converted: 0, pending: 0, no_show: 0 };
+        const phone: Record<DiscoveryOutcomeValue, number> = {
+          converted: 0,
+          not_converted: 0,
+          pending: 0,
+          no_show: 0,
+        };
+        const zoom: Record<DiscoveryOutcomeValue, number> = {
+          converted: 0,
+          not_converted: 0,
+          pending: 0,
+          no_show: 0,
+        };
         // Channel totals across all outcomes — for the "no color coding, split by
         // channel" view (one Phone bar + one Zoom bar per month).
         let totalPhone = 0;
@@ -907,15 +986,23 @@ export function MetricsView() {
           Rate: total > 0 ? Math.round((counts.converted / total) * 100) : 0,
         };
       }),
-    [buckets, byMonth, outcomes]
+    [buckets, byMonth, outcomes],
   );
 
   const conversionTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Month", "Converted", "Pending", "Not converted", "No show", "Total", "Rate %"],
-      rows: convData.map((d) => [d.month, d.Converted, d.Pending, d["Not converted"], d["No show"], d.Total, d.Rate]),
+      rows: convData.map((d) => [
+        d.month,
+        d.Converted,
+        d.Pending,
+        d["Not converted"],
+        d["No show"],
+        d.Total,
+        d.Rate,
+      ]),
     }),
-    [convData]
+    [convData],
   );
 
   // Conversion-rate TREND line: a trailing-window rate (org-configured weeks/months)
@@ -924,34 +1011,54 @@ export function MetricsView() {
   // loaded for the range, so the earliest buckets warm up over a shorter window.
   const trendLabel = useMemo(() => trendWindowLabel(trendWindow), [trendWindow]);
   const convCalls = useMemo<TrendCall[]>(
-    () => discovery.filter((a) => a.date).map((a) => ({ date: a.date!, converted: outcomes.get(a.id)?.outcome === "converted" })),
-    [discovery, outcomes]
+    () =>
+      discovery
+        .filter((a) => a.date)
+        .map((a) => ({ date: a.date!, converted: outcomes.get(a.id)?.outcome === "converted" })),
+    [discovery, outcomes],
   );
-  const convTrend = useMemo(() => rollingConversionTrend(convCalls, buckets, trendWindow), [convCalls, buckets, trendWindow]);
+  const convTrend = useMemo(
+    () => rollingConversionTrend(convCalls, buckets, trendWindow),
+    [convCalls, buckets, trendWindow],
+  );
   const convChartData = useMemo(
     () => convData.map((d, i) => ({ ...d, RateTrend: convTrend[i]?.rate ?? null })),
-    [convData, convTrend]
+    [convData, convTrend],
   );
   // Period B's trend (compare mode), same window.
   const bConvCalls = useMemo<TrendCall[]>(
-    () => bDiscovery.filter((a) => a.date).map((a) => ({ date: a.date!, converted: outcomesB.get(a.id)?.outcome === "converted" })),
-    [bDiscovery, outcomesB]
+    () =>
+      bDiscovery
+        .filter((a) => a.date)
+        .map((a) => ({ date: a.date!, converted: outcomesB.get(a.id)?.outcome === "converted" })),
+    [bDiscovery, outcomesB],
   );
-  const bConvTrend = useMemo(() => rollingConversionTrend(bConvCalls, bBuckets, trendWindow), [bConvCalls, bBuckets, trendWindow]);
+  const bConvTrend = useMemo(
+    () => rollingConversionTrend(bConvCalls, bBuckets, trendWindow),
+    [bConvCalls, bBuckets, trendWindow],
+  );
 
   // "Meetings to Freedom!" — 1-on-1 mentoring sessions from JumpStart completion to
   // graduation, per graduated mentee. Computed in db.ts off the new mentees table
   // (all-history; test mentees dropped); loaded once into `freedomReport`.
   const freedomBars = useMemo(
-    () => (freedomReport ? freedomReport.rows.map((r) => ({ name: r.name, meetings: r.meetings })) : []),
-    [freedomReport]
+    () =>
+      freedomReport ? freedomReport.rows.map((r) => ({ name: r.name, meetings: r.meetings })) : [],
+    [freedomReport],
   );
   const freedomTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Mentee", "JumpStart completed", "Graduated", "1-on-1 sessions"],
-      rows: freedomReport ? freedomReport.rows.map((r) => [r.name, fmtDate(r.windowStart), fmtDate(r.graduationDate), r.meetings]) : [],
+      rows: freedomReport
+        ? freedomReport.rows.map((r) => [
+            r.name,
+            fmtDate(r.windowStart),
+            fmtDate(r.graduationDate),
+            r.meetings,
+          ])
+        : [],
     }),
-    [freedomReport]
+    [freedomReport],
   );
 
   // "JYF vs Active Mentoring" — two bars (distinct people per phase). The table
@@ -975,7 +1082,7 @@ export function MetricsView() {
             },
           ]
         : [],
-    [jyfVsMentoring]
+    [jyfVsMentoring],
   );
   const jyfTable = useMemo<ChartCardTable>(
     () => ({
@@ -991,7 +1098,7 @@ export function MetricsView() {
           ]
         : [],
     }),
-    [jyfVsMentoring]
+    [jyfVsMentoring],
   );
 
   // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
@@ -1004,7 +1111,7 @@ export function MetricsView() {
       { metric: "Mentees", A: kpis.mentees, B: bKpis.mentees },
       { metric: "Mentors", A: kpis.mentors, B: bKpis.mentors },
     ],
-    [kpis, bKpis]
+    [kpis, bKpis],
   );
 
   const scoreTable = useMemo<ChartCardTable>(() => {
@@ -1028,8 +1135,14 @@ export function MetricsView() {
 
   // Overlay datasets: A's per-month rows carry a `cmp` field = Period B's value
   // for the same metric at the same month index (presets keep spans equal).
-  const cmpMentees = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentees ?? 0 })), [data, bData]);
-  const cmpMentors = useMemo(() => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentors ?? 0 })), [data, bData]);
+  const cmpMentees = useMemo(
+    () => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentees ?? 0 })),
+    [data, bData],
+  );
+  const cmpMentors = useMemo(
+    () => data.map((d, i) => ({ ...d, cmp: bData[i]?.Mentors ?? 0 })),
+    [data, bData],
+  );
   const cmpConv = useMemo(
     () =>
       convChartData.map((d, i) => ({
@@ -1037,7 +1150,7 @@ export function MetricsView() {
         cmp: bConvRate[i]?.Rate ?? 0,
         cmpTrend: bConvTrend[i]?.rate ?? null,
       })),
-    [convChartData, bConvRate, bConvTrend]
+    [convChartData, bConvRate, bConvTrend],
   );
 
   // The conversion bars adapt to the two card toggles:
@@ -1089,7 +1202,14 @@ export function MetricsView() {
     if (convSplitByChannel) {
       // Channel split only — a neutral Zoom bar (solid) + Phone bar (grid).
       return [
-        <Bar key="total-zoom" yAxisId="left" stackId="calls" dataKey="Total_zoom" name="Zoom" fill={NEUTRAL} />,
+        <Bar
+          key="total-zoom"
+          yAxisId="left"
+          stackId="calls"
+          dataKey="Total_zoom"
+          name="Zoom"
+          fill={NEUTRAL}
+        />,
         <Bar
           key="total-phone"
           yAxisId="left"
@@ -1103,7 +1223,14 @@ export function MetricsView() {
     }
     // Neither — one neutral solid bar of total discovery calls.
     return [
-      <Bar key="total" yAxisId="left" dataKey="Total" name="Discovery calls" fill={NEUTRAL} radius={[4, 4, 0, 0]} />,
+      <Bar
+        key="total"
+        yAxisId="left"
+        dataKey="Total"
+        name="Discovery calls"
+        fill={NEUTRAL}
+        radius={[4, 4, 0, 0]}
+      />,
     ];
   }, [convColorByOutcome, convSplitByChannel, ct.accent]);
 
@@ -1113,9 +1240,9 @@ export function MetricsView() {
         "meetings",
         data.map((d) => ({ month: d.month, value: d.Meetings })),
         bData.map((d) => ({ month: d.month, value: d.Meetings })),
-        (a, b) => signed(a - b)
+        (a, b) => signed(a - b),
       ),
-    [data, bData]
+    [data, bData],
   );
   const menteesCompareTable = useMemo(
     () =>
@@ -1123,9 +1250,9 @@ export function MetricsView() {
         "mentees",
         data.map((d) => ({ month: d.month, value: d.Mentees })),
         bData.map((d) => ({ month: d.month, value: d.Mentees })),
-        (a, b) => signed(a - b)
+        (a, b) => signed(a - b),
       ),
-    [data, bData]
+    [data, bData],
   );
   const mentorsCompareTable = useMemo(
     () =>
@@ -1133,9 +1260,9 @@ export function MetricsView() {
         "mentors",
         data.map((d) => ({ month: d.month, value: d.Mentors })),
         bData.map((d) => ({ month: d.month, value: d.Mentors })),
-        (a, b) => signed(a - b)
+        (a, b) => signed(a - b),
       ),
-    [data, bData]
+    [data, bData],
   );
   const conversionCompareTable = useMemo(
     () =>
@@ -1143,9 +1270,9 @@ export function MetricsView() {
         "rate %",
         convData.map((d) => ({ month: d.month, value: d.Rate })),
         bConvRate.map((d) => ({ month: d.month, value: d.Rate })),
-        (a, b) => signedPp(a - b)
+        (a, b) => signedPp(a - b),
       ),
-    [convData, bConvRate]
+    [convData, bConvRate],
   );
 
   function toggleType(name: string) {
@@ -1164,34 +1291,40 @@ export function MetricsView() {
       meetingsMode === "compare"
         ? {
             columns: ["Month", ...selectedTypeList.map(shortType)],
-            rows: compareData.map((r) => [r.month as string, ...selectedTypeList.map((n) => (r[n] as number) ?? 0)]),
+            rows: compareData.map((r) => [
+              r.month as string,
+              ...selectedTypeList.map((n) => (r[n] as number) ?? 0),
+            ]),
           }
         : {
             columns: ["Month", "Meetings"],
             rows: data.map((d) => [d.month, d.Meetings]),
           },
-    [meetingsMode, data, compareData, selectedTypeList]
+    [meetingsMode, data, compareData, selectedTypeList],
   );
   const menteesTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Month", "Active mentees"],
       rows: data.map((d) => [d.month, d.Mentees]),
     }),
-    [data]
+    [data],
   );
   const mentorsTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Month", "Mentors"],
       rows: data.map((d) => [d.month, d.Mentors]),
     }),
-    [data]
+    [data],
   );
   const manualTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Month", ...MANUAL_METRICS.map((m) => m.label)],
-      rows: manualData.map((r) => [r.month as string, ...MANUAL_METRICS.map((m) => (r[m.key] as number) ?? 0)]),
+      rows: manualData.map((r) => [
+        r.month as string,
+        ...MANUAL_METRICS.map((m) => (r[m.key] as number) ?? 0),
+      ]),
     }),
-    [manualData]
+    [manualData],
   );
 
   // Explore = raw underlying data the chart was built from (a CA-style audit
@@ -1204,7 +1337,11 @@ export function MetricsView() {
         return [
           a.date ?? "",
           a.clientName,
-          a.category === "discoveryPhone" ? "phone" : a.category === "discoveryZoom" ? "zoom" : a.category,
+          a.category === "discoveryPhone"
+            ? "phone"
+            : a.category === "discoveryZoom"
+              ? "zoom"
+              : a.category,
           o ? `${OUTCOME_LABELS[o.outcome]} (${o.source})` : "—",
           o?.reason ?? "",
         ] as (string | number)[];
@@ -1228,7 +1365,11 @@ export function MetricsView() {
         return [
           a.date ?? "",
           a.clientName,
-          a.category === "discoveryPhone" ? "phone" : a.category === "discoveryZoom" ? "zoom" : a.category,
+          a.category === "discoveryPhone"
+            ? "phone"
+            : a.category === "discoveryZoom"
+              ? "zoom"
+              : a.category,
           o ? `${OUTCOME_LABELS[o.outcome]} (${o.source})` : "—",
           o?.reason ?? "",
         ] as (string | number)[];
@@ -1274,12 +1415,22 @@ export function MetricsView() {
   function exploreMentorsRaw() {
     // Group by coachId so we can pin the mentor flag accurately even when two
     // coaches share a name. Falls back to coachName for display.
-    const byCoach = new Map<number, { name: string; count: number; mentees: Set<string>; first: string; last: string }>();
+    const byCoach = new Map<
+      number,
+      { name: string; count: number; mentees: Set<string>; first: string; last: string }
+    >();
     for (const a of selectedMentoring) {
       const id = a.coachId ?? -1;
       const d = a.date ?? "";
       const cur = byCoach.get(id);
-      if (!cur) byCoach.set(id, { name: a.coachName, count: 1, mentees: new Set([a.clientName]), first: d, last: d });
+      if (!cur)
+        byCoach.set(id, {
+          name: a.coachName,
+          count: 1,
+          mentees: new Set([a.clientName]),
+          first: d,
+          last: d,
+        });
       else {
         cur.count++;
         cur.mentees.add(a.clientName);
@@ -1289,17 +1440,27 @@ export function MetricsView() {
     }
     const rows = [...byCoach.entries()]
       .sort((a, b) => b[1].count - a[1].count)
-      .map(([id, v]) => [
-        v.name,
-        mentorIds.size === 0 ? "—" : mentorIds.has(id) ? "Yes" : "No",
-        v.mentees.size,
-        v.count,
-        v.first,
-        v.last,
-      ] as (string | number)[]);
+      .map(
+        ([id, v]) =>
+          [
+            v.name,
+            mentorIds.size === 0 ? "—" : mentorIds.has(id) ? "Yes" : "No",
+            v.mentees.size,
+            v.count,
+            v.first,
+            v.last,
+          ] as (string | number)[],
+      );
     setExplore({
       title: "Mentors — source data",
-      columns: ["Mentor", "Flagged is_mentor?", "Mentees", "Meetings", "First meeting", "Last meeting"],
+      columns: [
+        "Mentor",
+        "Flagged is_mentor?",
+        "Mentees",
+        "Meetings",
+        "First meeting",
+        "Last meeting",
+      ],
       rows,
     });
   }
@@ -1307,12 +1468,15 @@ export function MetricsView() {
     const labelByKey = new Map(MANUAL_METRICS.map((m) => [m.key, m.label]));
     const rows = [...manual]
       .sort((a, b) => b.periodMonth.localeCompare(a.periodMonth))
-      .map((r) => [
-        r.periodMonth.slice(0, 7),
-        labelByKey.get(r.metric) ?? r.metric,
-        r.value,
-        r.notes ?? "",
-      ] as (string | number)[]);
+      .map(
+        (r) =>
+          [
+            r.periodMonth.slice(0, 7),
+            labelByKey.get(r.metric) ?? r.metric,
+            r.value,
+            r.notes ?? "",
+          ] as (string | number)[],
+      );
     setExplore({
       title: "Resource engagement — source data",
       columns: ["Month", "Metric", "Value", "Notes"],
@@ -1324,7 +1488,10 @@ export function MetricsView() {
     <div className="type-filter">
       <div className="type-filter__head">
         <span className="muted">Meeting types counted:</span>
-        <button className="linkbtn" onClick={() => setSelectedTypes(new Set(meetingTypes.map((t) => t.name)))}>
+        <button
+          className="linkbtn"
+          onClick={() => setSelectedTypes(new Set(meetingTypes.map((t) => t.name)))}
+        >
           All
         </button>
         <button className="linkbtn" onClick={() => setSelectedTypes(new Set())}>
@@ -1334,12 +1501,18 @@ export function MetricsView() {
       <div className="type-filter__items">
         {meetingTypes.map((t) => (
           <label key={t.name} className="type-filter__item">
-            <input type="checkbox" checked={selectedTypes?.has(t.name) ?? false} onChange={() => toggleType(t.name)} />
+            <input
+              type="checkbox"
+              checked={selectedTypes?.has(t.name) ?? false}
+              onChange={() => toggleType(t.name)}
+            />
             <span>{t.name}</span>
             <span className="muted">{t.count}</span>
           </label>
         ))}
-        {meetingTypes.length === 0 && <span className="muted">No mentoring appointments in this range.</span>}
+        {meetingTypes.length === 0 && (
+          <span className="muted">No mentoring appointments in this range.</span>
+        )}
       </div>
     </div>
   );
@@ -1371,7 +1544,9 @@ export function MetricsView() {
 
   const meetingsChart =
     meetingsMode === "total" ? (
-      <BarChart data={compareMode ? data.map((d, i) => ({ ...d, cmp: bData[i]?.Meetings ?? 0 })) : data}>
+      <BarChart
+        data={compareMode ? data.map((d, i) => ({ ...d, cmp: bData[i]?.Meetings ?? 0 })) : data}
+      >
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="month" {...axisProps} />
         <YAxis allowDecimals={false} width={28} {...axisProps} />
@@ -1388,7 +1563,13 @@ export function MetricsView() {
         <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {selectedTypeList.map((n, i) => (
-          <Bar key={n} dataKey={n} name={shortType(n)} fill={PALETTE[i % PALETTE.length]} radius={[4, 4, 0, 0]} />
+          <Bar
+            key={n}
+            dataKey={n}
+            name={shortType(n)}
+            fill={PALETTE[i % PALETTE.length]}
+            radius={[4, 4, 0, 0]}
+          />
         ))}
       </BarChart>
     );
@@ -1506,10 +1687,11 @@ export function MetricsView() {
                 table={scoreTable}
                 extra={
                   <p className="view__hint" style={{ marginTop: 0 }}>
-                    <strong>Period A</strong> {rangeLabel(from, to)} &nbsp;vs&nbsp; <strong>Period B</strong>{" "}
-                    {rangeLabel(periodB.from, periodB.to)}. Bars compare the four headline KPIs; the table covers
-                    every metric with Δ (absolute) and Δ% (change vs Period B). Conversion-rate Δ is in percentage
-                    points.{loadingB && <> · loading Period B…</>}
+                    <strong>Period A</strong> {rangeLabel(from, to)} &nbsp;vs&nbsp;{" "}
+                    <strong>Period B</strong> {rangeLabel(periodB.from, periodB.to)}. Bars compare
+                    the four headline KPIs; the table covers every metric with Δ (absolute) and Δ%
+                    (change vs Period B). Conversion-rate Δ is in percentage points.
+                    {loadingB && <> · loading Period B…</>}
                   </p>
                 }
               >
@@ -1534,16 +1716,34 @@ export function MetricsView() {
               extra={
                 <>
                   <p className="view__hint">
-                    Every discovery call and how it resolved. Auto-computed: a call converts when the prospect buys
-                    JumpStart Your Freedom (Waiting List) on or after the call. With no purchase it stays pending for 30
-                    days, then becomes not converted. Staff overrides on the Discovery tab take precedence. Overall
-                    conversion rate: <strong>{pct(conv.rate)}</strong>
+                    Every discovery call and how it resolved. Auto-computed: a call converts when
+                    the prospect buys JumpStart Your Freedom (Waiting List) on or after the call.
+                    With no purchase it stays pending for 30 days, then becomes not converted. Staff
+                    overrides on the Discovery tab take precedence. Overall conversion rate:{" "}
+                    <strong>{pct(conv.rate)}</strong>
                     {conv.manualCount > 0 && <> · {num(conv.manualCount)} set manually</>}
                     {convSplitByChannel && (
-                      <> · <span style={{ whiteSpace: "nowrap" }}>bars: solid = Zoom, grid = Phone</span></>
+                      <>
+                        {" "}
+                        ·{" "}
+                        <span style={{ whiteSpace: "nowrap" }}>
+                          bars: solid = Zoom, grid = Phone
+                        </span>
+                      </>
                     )}
-                    {!compareMode && <> · <em>click a bar to see that month's calls</em></>}
-                    <> · <span style={{ whiteSpace: "nowrap" }}>line = {trendLabel} trailing trend (set in Company options)</span></>
+                    {!compareMode && (
+                      <>
+                        {" "}
+                        · <em>click a bar to see that month's calls</em>
+                      </>
+                    )}
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span style={{ whiteSpace: "nowrap" }}>
+                        line = {trendLabel} trailing trend (set in Company options)
+                      </span>
+                    </>
                   </p>
                   <div className="type-filter__head" style={{ marginBottom: 10 }}>
                     <span className="muted">Bar coding:</span>
@@ -1579,7 +1779,9 @@ export function MetricsView() {
                     </div>
                     {(Object.keys(OUTCOME_LABELS) as DiscoveryOutcomeValue[]).map((k) => (
                       <div className="stat" key={k}>
-                        <span className="stat__value" style={{ color: OUTCOME_COLORS[k] }}>{num(conv.counts[k])}</span>
+                        <span className="stat__value" style={{ color: OUTCOME_COLORS[k] }}>
+                          {num(conv.counts[k])}
+                        </span>
                         <span className="stat__label">{OUTCOME_LABELS[k]}</span>
                       </div>
                     ))}
@@ -1597,7 +1799,8 @@ export function MetricsView() {
                     : // recharts' click state isn't cleanly typed; read the active row defensively.
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       (s: any) => {
-                        const p = s?.activePayload?.[0]?.payload as { _key?: string; month?: string } | undefined;
+                        const p = s?.activePayload?.[0]?.payload as
+                          { _key?: string; month?: string } | undefined;
                         if (p?._key) exploreConversionMonth(p._key, p.month ?? p._key);
                       }
                 }
@@ -1616,7 +1819,13 @@ export function MetricsView() {
                 />
                 <defs>
                   {OUTCOME_ORDER.map((k) => (
-                    <pattern key={k} id={`ptn-${k}`} width="6" height="6" patternUnits="userSpaceOnUse">
+                    <pattern
+                      key={k}
+                      id={`ptn-${k}`}
+                      width="6"
+                      height="6"
+                      patternUnits="userSpaceOnUse"
+                    >
                       <rect width="6" height="6" fill={OUTCOME_COLORS[k]} />
                       <path d="M6 0 V6 M0 6 H6" stroke="rgba(15,23,42,0.55)" strokeWidth="1" />
                     </pattern>
@@ -1669,8 +1878,9 @@ export function MetricsView() {
                 <>
                   <p className="view__hint">
                     1-on-1 mentoring sessions (4x / 2x / 1x) from the completion of{" "}
-                    <strong>JumpStart Your Freedom</strong> to <strong>graduation</strong>, per graduated mentee. Group
-                    sessions don't count. <em>All-time — not affected by the date range above.</em>
+                    <strong>JumpStart Your Freedom</strong> to <strong>graduation</strong>, per
+                    graduated mentee. Group sessions don't count.{" "}
+                    <em>All-time — not affected by the date range above.</em>
                   </p>
                   <div className="stat-row">
                     <div className="stat">
@@ -1694,8 +1904,9 @@ export function MetricsView() {
                   </div>
                   {(freedomReport?.unmeasured ?? 0) > 0 && (
                     <p className="view__hint" style={{ marginTop: 4 }}>
-                      {num(freedomReport?.unmeasured ?? 0)} graduated mentee{freedomReport?.unmeasured === 1 ? "" : "s"} omitted
-                      (missing a JumpStart-completion or graduation date).
+                      {num(freedomReport?.unmeasured ?? 0)} graduated mentee
+                      {freedomReport?.unmeasured === 1 ? "" : "s"} omitted (missing a
+                      JumpStart-completion or graduation date).
                     </p>
                   )}
                 </>
@@ -1703,10 +1914,22 @@ export function MetricsView() {
             >
               <BarChart data={freedomBars} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="name" {...axisProps} interval={0} angle={-25} textAnchor="end" height={72} />
+                <XAxis
+                  dataKey="name"
+                  {...axisProps}
+                  interval={0}
+                  angle={-25}
+                  textAnchor="end"
+                  height={72}
+                />
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                <Bar dataKey="meetings" name="1-on-1 sessions" fill={C.mentees} radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="meetings"
+                  name="1-on-1 sessions"
+                  fill={C.mentees}
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ChartCard>
           </div>
@@ -1726,11 +1949,13 @@ export function MetricsView() {
               extra={
                 <>
                   <p className="view__hint">
-                    People currently in an <strong>open JumpStart Your Freedom</strong> engagement, then{" "}
-                    <strong>Active Mentoring</strong> split into its <strong>4x / 2x / 1x</strong> tiers. The shaded
-                    <strong> master block behind the three tiers</strong> is the <em>distinct</em> Active-Mentoring total — smaller
-                    than 4x+2x+1x added up when someone is in more than one tier. Counts distinct people; completed or canceled
-                    engagements drop out. <em>All-time snapshot — not affected by the date range above.</em>
+                    People currently in an <strong>open JumpStart Your Freedom</strong> engagement,
+                    then <strong>Active Mentoring</strong> split into its{" "}
+                    <strong>4x / 2x / 1x</strong> tiers. The shaded
+                    <strong> master block behind the three tiers</strong> is the <em>distinct</em>{" "}
+                    Active-Mentoring total — smaller than 4x+2x+1x added up when someone is in more
+                    than one tier. Counts distinct people; completed or canceled engagements drop
+                    out. <em>All-time snapshot — not affected by the date range above.</em>
                   </p>
                   <div className="stat-row">
                     <div className="stat">
@@ -1746,22 +1971,32 @@ export function MetricsView() {
                       <span className="stat__label">In Active Mentoring</span>
                     </div>
                     <div className="stat">
-                      <span className="stat__value">{jyfVsMentoring ? num(jyfVsMentoring.byTier["4x"]) : "—"}</span>
+                      <span className="stat__value">
+                        {jyfVsMentoring ? num(jyfVsMentoring.byTier["4x"]) : "—"}
+                      </span>
                       <span className="stat__label">4x</span>
                     </div>
                     <div className="stat">
-                      <span className="stat__value">{jyfVsMentoring ? num(jyfVsMentoring.byTier["2x"]) : "—"}</span>
+                      <span className="stat__value">
+                        {jyfVsMentoring ? num(jyfVsMentoring.byTier["2x"]) : "—"}
+                      </span>
                       <span className="stat__label">2x</span>
                     </div>
                     <div className="stat">
-                      <span className="stat__value">{jyfVsMentoring ? num(jyfVsMentoring.byTier["1x"]) : "—"}</span>
+                      <span className="stat__value">
+                        {jyfVsMentoring ? num(jyfVsMentoring.byTier["1x"]) : "—"}
+                      </span>
                       <span className="stat__label">1x</span>
                     </div>
                   </div>
                 </>
               }
             >
-              <BarChart data={jyfBars} margin={{ top: 12, right: 12, bottom: 8, left: 8 }} barGap={2}>
+              <BarChart
+                data={jyfBars}
+                margin={{ top: 12, right: 12, bottom: 8, left: 8 }}
+                barGap={2}
+              >
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis dataKey="phase" xAxisId={0} {...axisProps} />
                 {/* hidden twin axis so the master/JYF backdrop overlaps the trio */}
@@ -1770,14 +2005,48 @@ export function MetricsView() {
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 {/* Backdrop: the JYF column (solid) + the Active-Mentoring "master" total
                     (faint), drawn BEHIND the trio via the hidden axis. */}
-                <Bar dataKey="back" name="Total" xAxisId={1} barSize={132} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                <Bar
+                  dataKey="back"
+                  name="Total"
+                  xAxisId={1}
+                  barSize={132}
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
+                >
                   <Cell fill={C.mentees} />
-                  <Cell fill={C.meetings} fillOpacity={0.18} stroke={C.meetings} strokeOpacity={0.55} strokeDasharray="4 3" />
+                  <Cell
+                    fill={C.meetings}
+                    fillOpacity={0.18}
+                    stroke={C.meetings}
+                    strokeOpacity={0.55}
+                    strokeDasharray="4 3"
+                  />
                 </Bar>
                 {/* The three tier divisions, grouped IN FRONT of the master. */}
-                <Bar dataKey="t4" name="4x" xAxisId={0} barSize={34} fill="#7c3aed" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="t2" name="2x" xAxisId={0} barSize={34} fill="#a78bfa" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="t1" name="1x" xAxisId={0} barSize={34} fill="#c4b5fd" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="t4"
+                  name="4x"
+                  xAxisId={0}
+                  barSize={34}
+                  fill="#7c3aed"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="t2"
+                  name="2x"
+                  xAxisId={0}
+                  barSize={34}
+                  fill="#a78bfa"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="t1"
+                  name="1x"
+                  xAxisId={0}
+                  barSize={34}
+                  fill="#c4b5fd"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ChartCard>
           </div>
@@ -1809,7 +2078,14 @@ export function MetricsView() {
                 <YAxis allowDecimals={false} width={28} {...axisProps} />
                 <Tooltip contentStyle={TOOLTIP} />
                 {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                <Line type="monotone" dataKey="Mentees" name="Period A" stroke={C.mentees} strokeWidth={2} dot={{ r: 3 }} />
+                <Line
+                  type="monotone"
+                  dataKey="Mentees"
+                  name="Period A"
+                  stroke={C.mentees}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
                 {compareMode && (
                   <Line
                     type="monotone"
@@ -1838,7 +2114,9 @@ export function MetricsView() {
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 {compareMode && <Legend wrapperStyle={{ fontSize: 12 }} />}
                 <Bar dataKey="Mentors" name="Period A" fill={C.mentors} radius={[4, 4, 0, 0]} />
-                {compareMode && <Bar dataKey="cmp" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />}
+                {compareMode && (
+                  <Bar dataKey="cmp" name="Period B" fill={CMP} radius={[4, 4, 0, 0]} />
+                )}
               </BarChart>
             </ChartCard>
           </div>
@@ -1862,7 +2140,7 @@ export function MetricsView() {
                         r.mentees,
                         r.capacity ?? "",
                         r.utilization != null ? Math.round(r.utilization * 100) : "",
-                      ])
+                      ]),
                     )
                   }
                   disabled={capacityRows.length === 0}
@@ -1881,13 +2159,14 @@ export function MetricsView() {
             }
           >
             <p className="view__hint" style={{ marginTop: -2 }}>
-              Active mentees per mentor in the selected range vs the capacity set on the Admin tab. Mark coaches as
-              mentors and set a capacity in <strong>Admin → Mentor capacity</strong>.
+              Active mentees per mentor in the selected range vs the capacity set on the Admin tab.
+              Mark coaches as mentors and set a capacity in <strong>Admin → Mentor capacity</strong>
+              .
             </p>
             {capacityRows.length === 0 ? (
               <p className="muted">
-                No coaches are flagged as mentors yet. Go to Admin → Mentor capacity to mark mentors and set
-                capacities.
+                No coaches are flagged as mentors yet. Go to Admin → Mentor capacity to mark mentors
+                and set capacities.
               </p>
             ) : (
               <>
@@ -1927,7 +2206,9 @@ export function MetricsView() {
                           <td>{r.name}</td>
                           <td className="num">{num(r.mentees)}</td>
                           <td className="num">{r.capacity == null ? "—" : num(r.capacity)}</td>
-                          <td className="num">{r.utilization == null ? "—" : pct(r.utilization)}</td>
+                          <td className="num">
+                            {r.utilization == null ? "—" : pct(r.utilization)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1962,7 +2243,13 @@ export function MetricsView() {
                 <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 {MANUAL_METRICS.map((m, i) => (
-                  <Bar key={m.key} dataKey={m.key} name={m.label} fill={PALETTE[i % PALETTE.length]} radius={[4, 4, 0, 0]} />
+                  <Bar
+                    key={m.key}
+                    dataKey={m.key}
+                    name={m.label}
+                    fill={PALETTE[i % PALETTE.length]}
+                    radius={[4, 4, 0, 0]}
+                  />
                 ))}
               </BarChart>
             </ChartCard>

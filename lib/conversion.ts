@@ -46,18 +46,36 @@ export function resolveDiscoveryOutcome(args: {
   const windowDays = args.windowDays ?? DISCOVERY_DECISION_WINDOW_DAYS;
 
   if (args.manual) {
-    return { outcome: args.manual, source: "manual", reason: "Set by staff (overrides automation)" };
+    return {
+      outcome: args.manual,
+      source: "manual",
+      reason: "Set by staff (overrides automation)",
+    };
   }
-  const purchase = args.callDate ? args.conversionPurchaseDates.find((d) => d >= args.callDate!) : undefined;
+  const purchase = args.callDate
+    ? args.conversionPurchaseDates.find((d) => d >= args.callDate!)
+    : undefined;
   if (purchase) {
-    return { outcome: "converted", source: "auto", reason: `Bought JumpStart (Waiting List) on ${purchase}` };
+    return {
+      outcome: "converted",
+      source: "auto",
+      reason: `Bought JumpStart (Waiting List) on ${purchase}`,
+    };
   }
   if (!args.callDate) {
     return { outcome: "pending", source: "auto", reason: "No call date on record yet" };
   }
   const age = daysBetween(args.callDate, today);
   if (age <= windowDays) {
-    return { outcome: "pending", source: "auto", reason: `Awaiting decision — day ${Math.max(age, 0)} of ${windowDays}` };
+    return {
+      outcome: "pending",
+      source: "auto",
+      reason: `Awaiting decision — day ${Math.max(age, 0)} of ${windowDays}`,
+    };
   }
-  return { outcome: "not_converted", source: "auto", reason: `No JumpStart purchase within ${windowDays} days of the call` };
+  return {
+    outcome: "not_converted",
+    source: "auto",
+    reason: `No JumpStart purchase within ${windowDays} days of the call`,
+  };
 }

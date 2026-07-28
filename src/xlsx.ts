@@ -30,7 +30,12 @@ function stamp(): string {
 }
 
 function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "export";
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "export"
+  );
 }
 
 // Sheet names must be unique and ≤31 chars; trim/dedupe defensively.

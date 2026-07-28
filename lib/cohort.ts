@@ -62,7 +62,11 @@ export function computeJyfVsMentoring(engagements: CohortEngagementInput[]): Jyf
   return {
     jyf: jyfClients.size,
     mentoring: mentoringClients.size,
-    byTier: { "4x": tierClients["4x"].size, "2x": tierClients["2x"].size, "1x": tierClients["1x"].size },
+    byTier: {
+      "4x": tierClients["4x"].size,
+      "2x": tierClients["2x"].size,
+      "1x": tierClients["1x"].size,
+    },
     total: new Set<number>([...jyfClients, ...mentoringClients]).size,
   };
 }

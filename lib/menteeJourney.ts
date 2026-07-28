@@ -13,7 +13,13 @@
 // No I/O, no React — unit-tested in scripts/verify-metrics.ts §20.
 
 import { PIPELINE_TIERS, type PipelineTier, engagementTier } from "./config.js";
-import { computeStageDates, highestTier, type StageBasis, type EngagementStageInput, type MeetingStageInput } from "./journey.js";
+import {
+  computeStageDates,
+  highestTier,
+  type StageBasis,
+  type EngagementStageInput,
+  type MeetingStageInput,
+} from "./journey.js";
 
 // A mentee with no activity for this many days (and no open engagement) is guessed
 // "inactive". Matches the legacy Journeys window so behavior doesn't shift.
@@ -157,7 +163,7 @@ export function deriveMenteeCaRecords(input: {
       const arr = meetsByClient.get(a.clientId) ?? [];
       arr.push({
         date: a.date,
-        tier: a.engagementId != null ? engTierById.get(a.engagementId) ?? null : null,
+        tier: a.engagementId != null ? (engTierById.get(a.engagementId) ?? null) : null,
         isGroup: a.category === "group",
         coachId: a.coachId,
       });
@@ -184,16 +190,28 @@ export function deriveMenteeCaRecords(input: {
   for (const clientId of candidates) {
     const client = clientMap.get(clientId);
     if (!client) continue;
-    const meets = (meetsByClient.get(clientId) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
-    const meetInputs: MeetingStageInput[] = meets.map((m) => ({ tier: m.tier, date: m.date, isGroup: m.isGroup }));
+    const meets = (meetsByClient.get(clientId) ?? [])
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const meetInputs: MeetingStageInput[] = meets.map((m) => ({
+      tier: m.tier,
+      date: m.date,
+      isGroup: m.isGroup,
+    }));
     const stageDates = computeStageDates(basis, engByClient.get(clientId) ?? [], meetInputs);
     const discoveryDate = discoveryByClient.get(clientId) ?? null;
     const firstMeeting = meets.length ? meets[0].date : null;
     const lastMeeting = meets.length ? meets[meets.length - 1].date : null;
     const open = hasOpen.get(clientId) ?? false;
-    const lastActivity = lastMeeting ?? maxDate([discoveryDate, ...PIPELINE_TIERS.map((t) => stageDates[t])]);
-    const active = (dayspan(lastActivity, input.today) ?? Infinity) <= MENTEE_ACTIVE_WINDOW_DAYS || open;
-    const status: CaMenteeStatus = stageDates.graduated ? "graduated" : active ? "active" : "inactive";
+    const lastActivity =
+      lastMeeting ?? maxDate([discoveryDate, ...PIPELINE_TIERS.map((t) => stageDates[t])]);
+    const active =
+      (dayspan(lastActivity, input.today) ?? Infinity) <= MENTEE_ACTIVE_WINDOW_DAYS || open;
+    const status: CaMenteeStatus = stageDates.graduated
+      ? "graduated"
+      : active
+        ? "active"
+        : "inactive";
     const currentTier = highestTier(stageDates);
 
     // Owner = CA primary coach; fall back to the most recent meeting's coach.
@@ -205,7 +223,9 @@ export function deriveMenteeCaRecords(input: {
       ownerSource = "primary";
     } else if (meets.length) {
       const lastCoachId = meets[meets.length - 1].coachId;
-      ownerCoachName = (lastCoachId != null ? coachMap.get(lastCoachId) : null) ?? (lastCoachId != null ? `#${lastCoachId}` : null);
+      ownerCoachName =
+        (lastCoachId != null ? coachMap.get(lastCoachId) : null) ??
+        (lastCoachId != null ? `#${lastCoachId}` : null);
       ownerSource = ownerCoachName ? "fallback" : "none";
     }
 

@@ -107,7 +107,8 @@ export function sectionNumber(key: string): string {
 if (import.meta.env?.DEV) {
   const seen = new Map<number, string>();
   for (const [key, n] of Object.entries(UI_SECTIONS)) {
-    if (seen.has(n)) console.warn(`[uiRegistry] duplicate section number ${n}: "${seen.get(n)}" and "${key}"`);
+    if (seen.has(n))
+      console.warn(`[uiRegistry] duplicate section number ${n}: "${seen.get(n)}" and "${key}"`);
     seen.set(n, key);
   }
 }

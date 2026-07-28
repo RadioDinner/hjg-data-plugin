@@ -86,7 +86,7 @@ const pct = (converted: number, total: number): number | null =>
 export function rollingConversionTrend(
   calls: TrendCall[],
   buckets: { key: string; label: string }[],
-  window: TrendWindow
+  window: TrendWindow,
 ): TrendPoint[] {
   const w = parseTrendWindow(serializeTrendWindow(window)); // normalize/clamp
 

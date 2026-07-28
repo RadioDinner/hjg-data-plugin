@@ -56,7 +56,10 @@ export async function getBudgetConfig(admin: SupabaseClient): Promise<BudgetConf
     .select("key,value")
     .in("key", ["ca_plan_daily_limit", "daily_cap_pct"]);
   const map = new Map<string, unknown>((data ?? []).map((r) => [r.key as string, r.value]));
-  const planDailyLimit = settingNumber(map.get("ca_plan_daily_limit"), numEnv("CA_PLAN_DAILY_LIMIT", 600));
+  const planDailyLimit = settingNumber(
+    map.get("ca_plan_daily_limit"),
+    numEnv("CA_PLAN_DAILY_LIMIT", 600),
+  );
   const capPct = settingNumber(map.get("daily_cap_pct"), numEnv("HJG_DAILY_CAP_PCT", 5));
   const capDaily = Math.max(1, Math.floor((planDailyLimit * capPct) / 100));
   return { planDailyLimit, capPct, capDaily };
@@ -94,7 +97,10 @@ export async function budgetStatus(admin: SupabaseClient): Promise<BudgetStatus>
 // today by prior runs) would be crossed, so a multi-call sync can't overshoot.
 export class BudgetTracker {
   private local = 0;
-  constructor(private capDaily: number, private usedAtStart: number) {}
+  constructor(
+    private capDaily: number,
+    private usedAtStart: number,
+  ) {}
 
   get callsMade(): number {
     return this.local;

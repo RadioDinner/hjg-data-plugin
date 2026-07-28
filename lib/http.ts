@@ -52,7 +52,7 @@ export function sendError(
   res: VercelResponse,
   status: number,
   message: string,
-  detail?: unknown
+  detail?: unknown,
 ): void {
   res.setHeader("Cache-Control", "no-store");
   res.status(status).json({ error: true, status, message, detail });
@@ -73,7 +73,8 @@ function mapError(e: unknown): { status: number; message: string; detail?: unkno
   }
   if (e instanceof CAError) {
     const c = e.caCode;
-    if (c >= 100 && c <= 199) return { status: 502, message: "CoachAccountable upstream error", detail: { caCode: c } };
+    if (c >= 100 && c <= 199)
+      return { status: 502, message: "CoachAccountable upstream error", detail: { caCode: c } };
     if (c >= 300 && c <= 499) return { status: 400, message: e.message, detail: { caCode: c } };
     return { status: 502, message: "CoachAccountable API error", detail: { caCode: c } };
   }
@@ -124,7 +125,7 @@ export function withApi(handler: Handler, opts: ApiOptions = {}) {
       if (opts.cacheTtl && opts.cacheTtl > 0) {
         res.setHeader(
           "Cache-Control",
-          `s-maxage=${opts.cacheTtl}, stale-while-revalidate=${opts.cacheTtl * 2}`
+          `s-maxage=${opts.cacheTtl}, stale-while-revalidate=${opts.cacheTtl * 2}`,
         );
       } else {
         res.setHeader("Cache-Control", "no-store");

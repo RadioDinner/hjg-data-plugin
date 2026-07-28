@@ -75,7 +75,13 @@ export function summarizeCohort(journeys: CohortJourneyInput[]): CohortStats {
   const total = inScope.length;
   let active = 0;
   let graduated = 0;
-  const tierMix: Record<CohortTier, number> = { jumpstart: 0, "4x": 0, "2x": 0, "1x": 0, graduated: 0 };
+  const tierMix: Record<CohortTier, number> = {
+    jumpstart: 0,
+    "4x": 0,
+    "2x": 0,
+    "1x": 0,
+    graduated: 0,
+  };
   const dis: number[] = [];
   for (const j of inScope) {
     if (j.resolvedStatus === "active") active++;
@@ -85,7 +91,9 @@ export function summarizeCohort(journeys: CohortJourneyInput[]): CohortStats {
     }
     if (j.daysInSystem != null && j.daysInSystem >= 0) dis.push(j.daysInSystem);
   }
-  const avgDaysInSystem = dis.length ? Math.round(dis.reduce((s, v) => s + v, 0) / dis.length) : null;
+  const avgDaysInSystem = dis.length
+    ? Math.round(dis.reduce((s, v) => s + v, 0) / dis.length)
+    : null;
   const pctGraduated = total ? graduated / total : null;
   return { total, active, graduated, pctGraduated, avgDaysInSystem, tierMix };
 }

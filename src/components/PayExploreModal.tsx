@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { engagementTier, type PayLedgerRow, type PayInvoiceInput, type PayEngagementInput } from "../db";
+import {
+  engagementTier,
+  type PayLedgerRow,
+  type PayInvoiceInput,
+  type PayEngagementInput,
+} from "../db";
 import { SortableTable, type Row, type SortColumn } from "./SortableTable";
 import { SectionId } from "./SectionId";
 import { fmtDate } from "../format";
@@ -44,7 +49,16 @@ interface Props {
 // compiled payout ledger (one row per mentee per month) plus the raw invoice and
 // engagement inputs that fed it — each sortable (click a header) and filterable
 // by month range, coach, tier, and free text.
-export function PayExploreModal({ ledger, invoices, engagements, coachName, clientName, months, initialMonth, onClose }: Props) {
+export function PayExploreModal({
+  ledger,
+  invoices,
+  engagements,
+  coachName,
+  clientName,
+  months,
+  initialMonth,
+  onClose,
+}: Props) {
   const [view, setView] = useState<ViewKey>("ledger");
   const oldest = months.length ? months[months.length - 1] : "";
   const newest = months.length ? months[0] : "";
@@ -83,7 +97,8 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
   // coach an invoice's revenue is paid to.
   const coachByClientMonth = useMemo(() => {
     const m = new Map<string, { coachId: number | null; coachName: string }>();
-    for (const r of ledger) m.set(`${r.ym}|${r.clientId}`, { coachId: r.coachId, coachName: r.coachName });
+    for (const r of ledger)
+      m.set(`${r.ym}|${r.clientId}`, { coachId: r.coachId, coachName: r.coachName });
     return m;
   }, [ledger]);
 
@@ -116,14 +131,31 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
         if (tier !== "all" && engagementTier(e.name) !== tier) continue;
         if (e.coachId == null) continue;
         const cName = coachName(e.coachId);
-        if (q && !`${cName} ${clientName(e.clientId)} ${e.name ?? "—"} ${engagementTier(e.name)}`.toLowerCase().includes(q))
+        if (
+          q &&
+          !`${cName} ${clientName(e.clientId)} ${e.name ?? "—"} ${engagementTier(e.name)}`
+            .toLowerCase()
+            .includes(q)
+        )
           continue;
         m.set(e.coachId, cName);
       }
     }
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, ledger, invoices, engagements, lo, hi, tier, q, coachByClientMonth, coachName, clientName]);
+  }, [
+    view,
+    ledger,
+    invoices,
+    engagements,
+    lo,
+    hi,
+    tier,
+    q,
+    coachByClientMonth,
+    coachName,
+    clientName,
+  ]);
 
   // If the selected coach falls out of the available options (e.g. after
   // narrowing the month range or switching views), fall back to All coaches so
@@ -164,10 +196,25 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       { key: "billed", label: "Billed (this mo)", numeric: true, format: (r) => fmtUsd(r.billed) },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
       { key: "invoiceDay", label: "Inv. day", numeric: true },
-      { key: "recognizedThis", label: "This-mo slice", numeric: true, format: (r) => fmtUsd(r.recognizedThis) },
-      { key: "rolloverPrev", label: "Rolled-in", numeric: true, format: (r) => fmtUsd(r.rolloverPrev) },
+      {
+        key: "recognizedThis",
+        label: "This-mo slice",
+        numeric: true,
+        format: (r) => fmtUsd(r.recognizedThis),
+      },
+      {
+        key: "rolloverPrev",
+        label: "Rolled-in",
+        numeric: true,
+        format: (r) => fmtUsd(r.rolloverPrev),
+      },
       { key: "splitPct", label: "Split", numeric: true, format: (r) => fmtPct(r.splitPct) },
-      { key: "earned", label: "Earned (this + rolled)", numeric: true, format: (r) => fmtUsd(r.earned) },
+      {
+        key: "earned",
+        label: "Earned (this + rolled)",
+        numeric: true,
+        format: (r) => fmtUsd(r.earned),
+      },
       { key: "payout", label: "Payout", numeric: true, format: (r) => fmtUsd(r.payout) },
       { key: "assigned", label: "Status", format: (r) => (r.assigned ? "assigned" : "unassigned") },
     ];
@@ -197,16 +244,23 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
           billed: inv.billed,
           collected: inv.collected,
           // ISO for CSV/sort; the column's `format` renders MM-DD-YYYY.
-          paymentDatesIso: payments.map((p) => isoDate(p.datePaid)).filter(Boolean).join("; "),
+          paymentDatesIso: payments
+            .map((p) => isoDate(p.datePaid))
+            .filter(Boolean)
+            .join("; "),
           paymentMethods: payments
-            .map((p) => [p.method ?? "", p.checkNumber ? `#${p.checkNumber}` : ""].filter(Boolean).join(" "))
+            .map((p) =>
+              [p.method ?? "", p.checkNumber ? `#${p.checkNumber}` : ""].filter(Boolean).join(" "),
+            )
             .filter(Boolean)
             .join("; "),
           lineItems: lineItems.map((li) => `${li.item ?? "—"} ($${li.amount})`).join("; "),
         };
       })
       .filter((r) => coachId == null || r.coachId === coachId)
-      .filter((r) => !q || `${r.clientName} ${r.coachName} ${r.invoiceNumber}`.toLowerCase().includes(q));
+      .filter(
+        (r) => !q || `${r.clientName} ${r.coachName} ${r.invoiceNumber}`.toLowerCase().includes(q),
+      );
     const columns: SortColumn[] = [
       { key: "serviceYm", label: "Service month", format: (r) => monthLabel(String(r.serviceYm)) },
       { key: "serviceDay", label: "Inv. day", numeric: true },
@@ -216,7 +270,11 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       { key: "clientId", label: "Client ID", numeric: true },
       { key: "billed", label: "Billed", numeric: true, format: (r) => fmtUsd(r.billed) },
       { key: "collected", label: "Collected", numeric: true, format: (r) => fmtUsd(r.collected) },
-      { key: "paymentDatesIso", label: "Payment dates", format: (r) => displayDatesJoined(String(r.paymentDatesIso ?? "")) || "—" },
+      {
+        key: "paymentDatesIso",
+        label: "Payment dates",
+        format: (r) => displayDatesJoined(String(r.paymentDatesIso ?? "")) || "—",
+      },
       { key: "paymentMethods", label: "Payment methods" },
       { key: "lineItems", label: "Line items" },
     ];
@@ -239,21 +297,28 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
         endDate: e.endDate ?? "",
         isCanceled: e.isCanceled,
       }))
-      .filter((r) => !q || `${r.coachName} ${r.clientName} ${r.name} ${r.tier}`.toLowerCase().includes(q));
+      .filter(
+        (r) => !q || `${r.coachName} ${r.clientName} ${r.name} ${r.tier}`.toLowerCase().includes(q),
+      );
     const columns: SortColumn[] = [
       { key: "clientName", label: "Mentee" },
       { key: "coachName", label: "Coach" },
       { key: "tier", label: "Tier" },
       { key: "name", label: "Engagement" },
       { key: "startDate", label: "Start" },
-      { key: "endDate", label: "End", format: (r) => (r.endDate ? fmtDate(String(r.endDate)) : "ongoing") },
+      {
+        key: "endDate",
+        label: "End",
+        format: (r) => (r.endDate ? fmtDate(String(r.endDate)) : "ongoing"),
+      },
       { key: "isCanceled", label: "Canceled", format: (r) => (r.isCanceled ? "yes" : "no") },
     ];
     return { columns, rows };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engagements, lo, hi, coachId, tier, q, coachName, clientName]);
 
-  const active = view === "ledger" ? ledgerData : view === "invoices" ? invoiceData : engagementData;
+  const active =
+    view === "ledger" ? ledgerData : view === "invoices" ? invoiceData : engagementData;
   const showTier = view !== "invoices"; // raw invoices carry no tier
   const exportName = `pay-${view}`;
 
@@ -262,9 +327,12 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
       <div className="modal__card modal__card--wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
           <div>
-            <h2>Explore source data <SectionId id="modal.payExplore" /></h2>
+            <h2>
+              Explore source data <SectionId id="modal.payExplore" />
+            </h2>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-              The compiled payout ledger and the raw invoice/engagement inputs behind it. Click a column to sort.
+              The compiled payout ledger and the raw invoice/engagement inputs behind it. Click a
+              column to sort.
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -290,7 +358,12 @@ export function PayExploreModal({ ledger, invoices, engagements, coachName, clie
         <div className="filter-bar">
           <label className="filter">
             <span>Search</span>
-            <input type="text" value={text} placeholder="coach or mentee…" onChange={(e) => setText(e.target.value)} />
+            <input
+              type="text"
+              value={text}
+              placeholder="coach or mentee…"
+              onChange={(e) => setText(e.target.value)}
+            />
           </label>
           {months.length > 0 && (
             <>

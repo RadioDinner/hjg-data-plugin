@@ -8,7 +8,10 @@ export function SectionId({ id, corner = false }: { id: string; corner?: boolean
   const n = sectionNumber(id);
   if (!n) return null;
   return (
-    <span className={`section-id${corner ? " section-id--corner" : ""}`} title={`Section ${n} · ${id}`}>
+    <span
+      className={`section-id${corner ? " section-id--corner" : ""}`}
+      title={`Section ${n} · ${id}`}
+    >
       {n}
     </span>
   );

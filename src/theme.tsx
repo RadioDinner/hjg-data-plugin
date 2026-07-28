@@ -13,7 +13,11 @@ interface ThemeState {
   toggle: () => void;
 }
 
-const ThemeContext = createContext<ThemeState>({ theme: "light", setTheme: () => {}, toggle: () => {} });
+const ThemeContext = createContext<ThemeState>({
+  theme: "light",
+  setTheme: () => {},
+  toggle: () => {},
+});
 const STORAGE_KEY = "hjg.theme";
 
 function initialTheme(): Theme {
@@ -35,7 +39,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
   return (
     <ThemeContext.Provider
-      value={{ theme, setTheme: setThemeState, toggle: () => setThemeState((t) => (t === "dark" ? "light" : "dark")) }}
+      value={{
+        theme,
+        setTheme: setThemeState,
+        toggle: () => setThemeState((t) => (t === "dark" ? "light" : "dark")),
+      }}
     >
       {children}
     </ThemeContext.Provider>
@@ -58,8 +66,24 @@ export interface ChartTokens {
 }
 
 const CHART_TOKENS: Record<Theme, ChartTokens> = {
-  light: { axis: "#64748b", grid: "#e5e8ee", tooltipBg: "#ffffff", tooltipBorder: "#cbd5e1", tooltipText: "#1e293b", accent: "#2563eb", cmp: "#94a3b8" },
-  dark: { axis: "#94a3b8", grid: "#1e293b", tooltipBg: "#1e293b", tooltipBorder: "#334155", tooltipText: "#e2e8f0", accent: "#38bdf8", cmp: "#cbd5e1" },
+  light: {
+    axis: "#64748b",
+    grid: "#e5e8ee",
+    tooltipBg: "#ffffff",
+    tooltipBorder: "#cbd5e1",
+    tooltipText: "#1e293b",
+    accent: "#2563eb",
+    cmp: "#94a3b8",
+  },
+  dark: {
+    axis: "#94a3b8",
+    grid: "#1e293b",
+    tooltipBg: "#1e293b",
+    tooltipBorder: "#334155",
+    tooltipText: "#e2e8f0",
+    accent: "#38bdf8",
+    cmp: "#cbd5e1",
+  },
 };
 
 export function useChartTokens(): ChartTokens {

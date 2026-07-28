@@ -10,7 +10,10 @@ import { readFileSync } from "node:fs";
 // back to git for local builds, then "dev".
 const APP_SEMVER = (() => {
   try {
-    return String(JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version || "0.0.0");
+    return String(
+      JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version ||
+        "0.0.0",
+    );
   } catch {
     return "0.0.0";
   }
@@ -19,7 +22,9 @@ function resolveCommit(): string {
   const sha = process.env.VERCEL_GIT_COMMIT_SHA;
   if (sha) return sha.slice(0, 7);
   try {
-    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
   } catch {
     return "dev";
   }

@@ -10,5 +10,5 @@ export default withApi(
     const result = await syncEngagementTemplates();
     res.status(200).json(result);
   },
-  { methods: ["POST"], auth: "user", cacheTtl: 0 }
+  { methods: ["POST"], auth: "user", cacheTtl: 0 },
 );

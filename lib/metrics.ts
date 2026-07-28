@@ -5,12 +5,32 @@ import { categorizeAppointmentName, isExcludedClientName } from "./config.js";
 import type { CAAppointment, CAClient, MonthlyMetrics } from "./types.js";
 
 export const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 export const SHORT_MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 // Extract calendar parts from a CA date string WITHOUT constructing a JS Date.
@@ -39,7 +59,7 @@ export interface ComputeOptions {
 export function computeMonthlyMetrics(
   appointments: CAAppointment[],
   clients: Map<number, CAClient>,
-  opts: ComputeOptions
+  opts: ComputeOptions,
 ): MonthlyMetrics {
   const { year, endMonth } = opts;
   const zero = () => Array<number>(12).fill(0);

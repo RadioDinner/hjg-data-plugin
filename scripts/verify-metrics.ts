@@ -12,7 +12,12 @@ import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
 import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
-import { computeStageDates, highestTier, type EngagementStageInput, type MeetingStageInput } from "../lib/journey.js";
+import {
+  computeStageDates,
+  highestTier,
+  type EngagementStageInput,
+  type MeetingStageInput,
+} from "../lib/journey.js";
 import { computeMeetingsToFreedom, type FreedomMenteeInput } from "../lib/freedom.js";
 import { computeJyfVsMentoring, type CohortEngagementInput } from "../lib/cohort.js";
 import {
@@ -23,7 +28,12 @@ import {
   type CohortJourneyInput,
 } from "../lib/cohortCompare.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney.js";
-import { toEffectiveMentee, aggregateLegDurations, reachedStage, type MenteeRowLike } from "../lib/menteeView.js";
+import {
+  toEffectiveMentee,
+  aggregateLegDurations,
+  reachedStage,
+  type MenteeRowLike,
+} from "../lib/menteeView.js";
 import { computeFunnel } from "../lib/menteeFunnel.js";
 import {
   parseCsv,
@@ -81,8 +91,25 @@ import {
 } from "../lib/payBuild.js";
 import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
 import { buildPayStubModel, payStubHtml } from "../lib/payStub.js";
-import { normalizeEntries, hoursTotal, hourlyTotal, laborTotal, entryRate, entryAmount, hasCustomRates, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay.js";
-import { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces } from "../lib/pieceWork.js";
+import {
+  normalizeEntries,
+  hoursTotal,
+  hourlyTotal,
+  laborTotal,
+  entryRate,
+  entryAmount,
+  hasCustomRates,
+  parseEntries,
+  buildHourlyStubModel,
+  hourlyStubHtml,
+} from "../lib/hourlyPay.js";
+import {
+  normalizePieces,
+  pieceAmount,
+  piecesTotal,
+  piecesQty,
+  parsePieces,
+} from "../lib/pieceWork.js";
 import {
   parsePayGroupsConfig,
   serializePayGroupsConfig,
@@ -102,8 +129,17 @@ import {
   type TrendCall,
 } from "../lib/conversionTrend.js";
 import { prevYm, defaultServiceMonth, monthPayProgress } from "../lib/paySchedule.js";
-import { APP_TAB_KEYS, resolveAllowedTabs, normalizeRole, DEFAULT_ROLE_TABS } from "../lib/permissions.js";
-import { parseTransitionOptions, serializeTransitionOptions, DEFAULT_TRANSITION_OPTIONS } from "../lib/transitionOptions.js";
+import {
+  APP_TAB_KEYS,
+  resolveAllowedTabs,
+  normalizeRole,
+  DEFAULT_ROLE_TABS,
+} from "../lib/permissions.js";
+import {
+  parseTransitionOptions,
+  serializeTransitionOptions,
+  DEFAULT_TRANSITION_OPTIONS,
+} from "../lib/transitionOptions.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -189,17 +225,62 @@ const edgeClients = new Map<number, CAClient>();
 edgeClients.set(1, { ID: 1, name: "Real Mentee" });
 edgeClients.set(2, { ID: 2, name: "Gain Momentum Group 1" }); // excluded client
 const edge: CAAppointment[] = [
-  { ID: 1, CoachID: 1, ClientID: 1, name: "Weekly Mentoring Call", startDate: "2026-01-15 10:00:00", status: "A" },
-  { ID: 2, CoachID: 1, ClientID: 1, name: "Mentor Training Extra Teaching, Q & A, and Checkup", startDate: "2026-01-15 11:00:00", status: "A" }, // excluded type
-  { ID: 3, CoachID: 1, ClientID: 1, name: "Totally Unknown Session", startDate: "2026-01-15 12:00:00", status: "A" }, // other
-  { ID: 4, CoachID: 1, ClientID: 2, name: "Weekly Mentoring Call", startDate: "2026-01-16 10:00:00", status: "A" }, // excluded client
-  { ID: 5, CoachID: 1, ClientID: 1, name: "Weekly Mentoring Call", startDate: "2026-01-15 10:00:00", status: "C" }, // canceled
-  { ID: 6, CoachID: 1, ClientID: 1, name: "Weekly Mentoring Call", startDate: "2026-01-31 23:30:00", status: "A" }, // near-midnight, stays in Jan
+  {
+    ID: 1,
+    CoachID: 1,
+    ClientID: 1,
+    name: "Weekly Mentoring Call",
+    startDate: "2026-01-15 10:00:00",
+    status: "A",
+  },
+  {
+    ID: 2,
+    CoachID: 1,
+    ClientID: 1,
+    name: "Mentor Training Extra Teaching, Q & A, and Checkup",
+    startDate: "2026-01-15 11:00:00",
+    status: "A",
+  }, // excluded type
+  {
+    ID: 3,
+    CoachID: 1,
+    ClientID: 1,
+    name: "Totally Unknown Session",
+    startDate: "2026-01-15 12:00:00",
+    status: "A",
+  }, // other
+  {
+    ID: 4,
+    CoachID: 1,
+    ClientID: 2,
+    name: "Weekly Mentoring Call",
+    startDate: "2026-01-16 10:00:00",
+    status: "A",
+  }, // excluded client
+  {
+    ID: 5,
+    CoachID: 1,
+    ClientID: 1,
+    name: "Weekly Mentoring Call",
+    startDate: "2026-01-15 10:00:00",
+    status: "C",
+  }, // canceled
+  {
+    ID: 6,
+    CoachID: 1,
+    ClientID: 1,
+    name: "Weekly Mentoring Call",
+    startDate: "2026-01-31 23:30:00",
+    status: "A",
+  }, // near-midnight, stays in Jan
 ];
 const em = computeMonthlyMetrics(edge, edgeClients, { year: 2026, endMonth: 12 });
 eq(em.menteeMeetings[0], 2, "Jan counts only the 2 valid mentoring appts (IDs 1 & 6)");
 eq(em.activeMentees[0], 1, "excluded client not counted as a mentee");
-assert(em.meta.uncategorizedAppointmentNames.includes("Totally Unknown Session"), "uncategorized type recorded");
+assert(
+  em.meta.uncategorizedAppointmentNames.includes("Totally Unknown Session"),
+  "uncategorized type recorded",
+);
 assert(em.meta.excludedClients.includes("Gain Momentum Group 1"), "excluded client recorded");
 eq(em.menteeMeetings[1], 0, "near-midnight Jan 31 appt did NOT leak into February");
 
@@ -216,9 +297,30 @@ const fAppts: CAAppointment[] = [
 ];
 fAppts.forEach((a) => fClients.set(a.ClientID, fClients.get(a.ClientID)!));
 const submissions: CAOfferingSubmission[] = [
-  { ID: 1, OfferingID: 100, ClientID: 10, offeringName: "12-Week Mentoring", amountPaid: 1200, dateAdded: "2026-03-02 09:00:00" },
-  { ID: 2, OfferingID: 100, ClientID: 11, offeringName: "12-Week Mentoring", amountPaid: 1200, dateAdded: "2026-03-05 09:00:00" },
-  { ID: 3, OfferingID: 200, ClientID: 20, offeringName: "Intro Package", amountPaid: 300, dateAdded: "2026-04-01 09:00:00" },
+  {
+    ID: 1,
+    OfferingID: 100,
+    ClientID: 10,
+    offeringName: "12-Week Mentoring",
+    amountPaid: 1200,
+    dateAdded: "2026-03-02 09:00:00",
+  },
+  {
+    ID: 2,
+    OfferingID: 100,
+    ClientID: 11,
+    offeringName: "12-Week Mentoring",
+    amountPaid: 1200,
+    dateAdded: "2026-03-05 09:00:00",
+  },
+  {
+    ID: 3,
+    OfferingID: 200,
+    ClientID: 20,
+    offeringName: "Intro Package",
+    amountPaid: 300,
+    dateAdded: "2026-04-01 09:00:00",
+  },
 ];
 const report = computeFunnelReport(fAppts, fClients, submissions, { year: 2026, endMonth: 12 });
 const stage = (k: string) => report.funnel.find((s) => s.key === k)!;
@@ -262,15 +364,42 @@ console.log("[5] discovery conversion resolver");
 {
   const call = "2026-03-01";
   const r = (over: Partial<Parameters<typeof resolveDiscoveryOutcome>[0]>) =>
-    resolveDiscoveryOutcome({ callDate: call, manual: null, conversionPurchaseDates: [], today: "2026-03-15", windowDays: 30, ...over });
+    resolveDiscoveryOutcome({
+      callDate: call,
+      manual: null,
+      conversionPurchaseDates: [],
+      today: "2026-03-15",
+      windowDays: 30,
+      ...over,
+    });
 
-  eq(r({ conversionPurchaseDates: ["2026-03-10"] }).outcome, "converted", "purchase on/after the call -> converted");
-  eq(r({ conversionPurchaseDates: ["2026-03-01"], today: "2026-03-02" }).outcome, "converted", "same-day purchase counts (inclusive)");
-  eq(r({ conversionPurchaseDates: ["2026-02-20"] }).outcome, "pending", "purchase BEFORE the call is ignored");
+  eq(
+    r({ conversionPurchaseDates: ["2026-03-10"] }).outcome,
+    "converted",
+    "purchase on/after the call -> converted",
+  );
+  eq(
+    r({ conversionPurchaseDates: ["2026-03-01"], today: "2026-03-02" }).outcome,
+    "converted",
+    "same-day purchase counts (inclusive)",
+  );
+  eq(
+    r({ conversionPurchaseDates: ["2026-02-20"] }).outcome,
+    "pending",
+    "purchase BEFORE the call is ignored",
+  );
   eq(r({ today: "2026-03-31" }).outcome, "pending", "day 30, no purchase -> pending (boundary)");
-  eq(r({ today: "2026-04-01" }).outcome, "not_converted", "day 31, no purchase -> not_converted (boundary)");
+  eq(
+    r({ today: "2026-04-01" }).outcome,
+    "not_converted",
+    "day 31, no purchase -> not_converted (boundary)",
+  );
   eq(r({ callDate: null }).outcome, "pending", "missing call date -> pending");
-  eq(r({ conversionPurchaseDates: ["2026-03-10"] }).source, "auto", "purchase-derived outcome flagged auto");
+  eq(
+    r({ conversionPurchaseDates: ["2026-03-10"] }).source,
+    "auto",
+    "purchase-derived outcome flagged auto",
+  );
 
   const overridden = r({ manual: "no_show", conversionPurchaseDates: ["2026-03-10"] });
   eq(overridden.outcome, "no_show", "manual override wins over a purchase");
@@ -280,19 +409,47 @@ console.log("[5] discovery conversion resolver");
 console.log("[6] engagement → pipeline tier");
 {
   const t = (name: string) => engagementTier(name);
-  eq(t("MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress"), "jumpstart", "modern JumpStart (0x)");
+  eq(
+    t("MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress"),
+    "jumpstart",
+    "modern JumpStart (0x)",
+  );
   eq(t("MN Subscription | (4x Month) Zoom Meetings"), "4x", "modern 4x");
   eq(t("MN Subscription | (2x Month) Zoom Meetings"), "2x", "modern 2x");
   eq(t("MN Subscription | (1x Month) Zoom Meetings"), "1x", "modern 1x");
   eq(t("MN Subscription | After Graduation Care"), "graduated", "after-graduation care");
-  eq(t("MT Engagement | Mentor Training Program"), "mentor_training", "mentor training excluded from pipeline");
+  eq(
+    t("MT Engagement | Mentor Training Program"),
+    "mentor_training",
+    "mentor training excluded from pipeline",
+  );
   // Legacy names carry a "60 minute weekly Zoom call" description regardless of
   // cadence — the explicit frequency must win over the word "weekly".
-  eq(t("ONE appointment per Month Mentoring Subscription -- 60 minute weekly Zoom call"), "1x", "legacy ONE/month is 1x, not 4x");
-  eq(t("TWO appointments per Month Mentoring Subscription -- 60 minute weekly Zoom call"), "2x", "legacy TWO/month is 2x");
-  eq(t("WEEKLY appointments Monthly Mentoring Subscription -- 60 minute weekly Zoom call"), "4x", "legacy WEEKLY appointments is 4x");
-  eq(t("60 Minute WEEKLY Mentoring Sessions - Pay in Advance Every 4 Appointments"), "4x", "legacy every-4-appointments is 4x");
-  eq(t("60 Minute BIWEEKLY Coaching Sessions - Pay in Advance Every 2 Appointments"), "2x", "legacy biweekly/every-2 is 2x");
+  eq(
+    t("ONE appointment per Month Mentoring Subscription -- 60 minute weekly Zoom call"),
+    "1x",
+    "legacy ONE/month is 1x, not 4x",
+  );
+  eq(
+    t("TWO appointments per Month Mentoring Subscription -- 60 minute weekly Zoom call"),
+    "2x",
+    "legacy TWO/month is 2x",
+  );
+  eq(
+    t("WEEKLY appointments Monthly Mentoring Subscription -- 60 minute weekly Zoom call"),
+    "4x",
+    "legacy WEEKLY appointments is 4x",
+  );
+  eq(
+    t("60 Minute WEEKLY Mentoring Sessions - Pay in Advance Every 4 Appointments"),
+    "4x",
+    "legacy every-4-appointments is 4x",
+  );
+  eq(
+    t("60 Minute BIWEEKLY Coaching Sessions - Pay in Advance Every 2 Appointments"),
+    "2x",
+    "legacy biweekly/every-2 is 2x",
+  );
   eq(t("Gain Momentum Group"), "group", "gain momentum group");
   eq(t(""), "other", "empty name");
 }
@@ -311,7 +468,9 @@ console.log("[7] appointment categorization (group sessions vs 1-on-1)");
   eq(c("Mentor Training Extra Teaching"), "excluded", "excluded type unaffected");
 }
 
-console.log("[8] staff payment engine — Clayton split (invoice-date proration, two-month roll, per-mentor ramp)");
+console.log(
+  "[8] staff payment engine — Clayton split (invoice-date proration, two-month roll, per-mentor ramp)",
+);
 {
   // Default ramp: month 1 = 35%, month 2 = 50%, month 3+ = 60% (by MENTOR tenure).
   eq(splitForTenureMonth(1), 0.35, "tenure month 1 -> 35%");
@@ -325,8 +484,16 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   eq(splitForTenureMonth(9, [0.5, 0.6, 0.6]), 0.6, "custom ramp holds at final -> 60%");
   eq(splitForTenureMonth(0, [0.5, 0.6, 0.6]), 0.5, "pre-tenure uses the first ramp value");
   // Ramp spec parse/format: "50/60/60" and "0.5,0.6,0.6" both mean 50/60/60.
-  eq(JSON.stringify(parseRampSpec("50/60/60")), JSON.stringify([0.5, 0.6, 0.6]), "parse '50/60/60'");
-  eq(JSON.stringify(parseRampSpec("0.5,0.6,0.6")), JSON.stringify([0.5, 0.6, 0.6]), "parse '0.5,0.6,0.6'");
+  eq(
+    JSON.stringify(parseRampSpec("50/60/60")),
+    JSON.stringify([0.5, 0.6, 0.6]),
+    "parse '50/60/60'",
+  );
+  eq(
+    JSON.stringify(parseRampSpec("0.5,0.6,0.6")),
+    JSON.stringify([0.5, 0.6, 0.6]),
+    "parse '0.5,0.6,0.6'",
+  );
   eq(parseRampSpec(""), null, "blank ramp -> null (falls back to default)");
   eq(parseRampSpec("  "), null, "whitespace ramp -> null");
   eq(formatRampSpec([0.5, 0.6, 0.6]), "50/60/60", "format [0.5,0.6,0.6] -> '50/60/60'");
@@ -351,7 +518,14 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   // 60% is split across two calendar months by where its day falls, over the REAL
   // length of that invoice's month (Mar 31, Apr 30, May 31).
   const harry: PayEngagementInput[] = [
-    { clientId: 1, coachId: 29074, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+    {
+      clientId: 1,
+      coachId: 29074,
+      startDate: "2026-01-01",
+      endDate: null,
+      isCanceled: false,
+      name: "MN Subscription | (4x Month)",
+    },
   ];
   const alex: PayInvoiceInput[] = [
     { clientId: 1, serviceDate: "2026-03-12", billed: 425, collected: 425 },
@@ -359,22 +533,54 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     { clientId: 1, serviceDate: "2026-05-19", billed: 425, collected: 425 },
   ];
 
-  const mar = computePayReport({ ym: "2026-03", invoices: alex, engagements: harry, coachName, clientName });
+  const mar = computePayReport({
+    ym: "2026-03",
+    invoices: alex,
+    engagements: harry,
+    coachName,
+    clientName,
+  });
   eq(mar.mentors[0].splitPct, 0.6, "Harry established -> 60%");
-  eq(mar.mentors[0].lines[0].recognizedThis, 260.48, "March: recognized this month = 425*(1-12/31) = $260.48");
+  eq(
+    mar.mentors[0].lines[0].recognizedThis,
+    260.48,
+    "March: recognized this month = 425*(1-12/31) = $260.48",
+  );
   eq(mar.mentors[0].lines[0].rolloverPrev, 0, "no rollover into the first month");
   eq(mar.mentors[0].payout, 156.29, "March payout = 425*(19/31)*0.6 = $156.29");
 
-  const apr = computePayReport({ ym: "2026-04", invoices: alex, engagements: harry, coachName, clientName });
-  eq(apr.mentors[0].lines[0].rolloverPrev, 164.52, "March's elapsed slice rolls into April = 425*12/31 = $164.52");
+  const apr = computePayReport({
+    ym: "2026-04",
+    invoices: alex,
+    engagements: harry,
+    coachName,
+    clientName,
+  });
+  eq(
+    apr.mentors[0].lines[0].rolloverPrev,
+    164.52,
+    "March's elapsed slice rolls into April = 425*12/31 = $164.52",
+  );
   eq(apr.mentors[0].payout, 251.71, "April payout = (425*(1-12/30) + 425*(12/31)) * 0.6 = $251.71");
 
-  const may = computePayReport({ ym: "2026-05", invoices: alex, engagements: harry, coachName, clientName });
+  const may = computePayReport({
+    ym: "2026-05",
+    invoices: alex,
+    engagements: harry,
+    coachName,
+    clientName,
+  });
   eq(may.mentors[0].payout, 200.71, "May payout = (425*(1-19/31) + 425*(12/30)) * 0.6 = $200.71");
 
   // June has NO invoice, but May's elapsed slice still rolls forward — the mentor
   // gets the tail.
-  const jun = computePayReport({ ym: "2026-06", invoices: alex, engagements: harry, coachName, clientName });
+  const jun = computePayReport({
+    ym: "2026-06",
+    invoices: alex,
+    engagements: harry,
+    coachName,
+    clientName,
+  });
   eq(jun.mentors[0].lines[0].billed, 0, "no invoice billed in June (rollover-only line)");
   eq(jun.mentors[0].payout, 156.29, "June payout = 425*(19/31)*0.6 = $156.29 (May's tail)");
 
@@ -382,7 +588,11 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   // run pays exactly 60% of all billed.
   const tlAlex = computePayTimeline({ invoices: alex, engagements: harry, coachName, clientName });
   eq(tlAlex.totals.payout, 765, "total = 0.6 * (3 * 425) = $765 across the four payout months");
-  eq(tlAlex.months.map((m) => m.ym).join(","), "2026-06,2026-05,2026-04,2026-03", "payout months include the June rollover tail");
+  eq(
+    tlAlex.months.map((m) => m.ym).join(","),
+    "2026-06,2026-05,2026-04,2026-03",
+    "payout months include the June rollover tail",
+  );
 
   // ---- Pay on BILLED: partial collection doesn't change the payout ----
   const partial = computePayReport({
@@ -394,7 +604,11 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   });
   // Day 1 -> elapsed 1/30 -> recognized this month = 425*(29/30); rollover next month.
   eq(partial.mentors[0].collected, 200, "collected ($200) carried for reference");
-  eq(partial.mentors[0].lines[0].recognizedThis, round2(425 * (29 / 30)), "billed basis: recognized off $425 not $200");
+  eq(
+    partial.mentors[0].lines[0].recognizedThis,
+    round2(425 * (29 / 30)),
+    "billed basis: recognized off $425 not $200",
+  );
 
   // ---- Per-MENTOR ramp: a mentor's 1st month pays 35% across ALL their mentees ----
   const newMentor = computePayReport({
@@ -404,8 +618,22 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
       { clientId: 11, serviceDate: "2026-03-01", billed: 425, collected: 425 },
     ],
     engagements: [
-      { clientId: 10, coachId: 60000, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "(4x Month)" },
-      { clientId: 11, coachId: 60000, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "(2x Month)" },
+      {
+        clientId: 10,
+        coachId: 60000,
+        startDate: "2026-03-01",
+        endDate: null,
+        isCanceled: false,
+        name: "(4x Month)",
+      },
+      {
+        clientId: 11,
+        coachId: 60000,
+        startDate: "2026-03-01",
+        endDate: null,
+        isCanceled: false,
+        name: "(2x Month)",
+      },
     ],
     coachName: (id) => `#${id}`,
     clientName,
@@ -414,7 +642,11 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   eq(newMentor.mentors[0].splitPct, 0.35, "mentor's 1st month -> 35% across ALL mentees");
   // March has 31 days, so day 1 -> recognized this month = 425*(30/31) each. Each
   // line rounds before the split, then the mentor total rounds again: 143.95 x 2.
-  eq(newMentor.mentors[0].payout, 287.9, "35% across both mentees, day-1 proration in a 31-day month");
+  eq(
+    newMentor.mentors[0].payout,
+    287.9,
+    "35% across both mentees, day-1 proration in a 31-day month",
+  );
 
   // ---- No mentoring coverage: revenue is EXCLUDED from pay (surfaced, not dropped).
   //      An invoice with no engagement covering any day of its month has tier
@@ -422,13 +654,26 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   const noEng = computePayReport({
     ym: "2026-04",
     invoices: [{ clientId: 1, serviceDate: "2026-04-12", billed: 425, collected: 425 }],
-    engagements: [{ clientId: 1, coachId: 29074, startDate: "2026-09-01", endDate: null, isCanceled: false, name: "(4x)" }],
+    engagements: [
+      {
+        clientId: 1,
+        coachId: 29074,
+        startDate: "2026-09-01",
+        endDate: null,
+        isCanceled: false,
+        name: "(4x)",
+      },
+    ],
     coachName,
     clientName,
   });
   eq(noEng.mentors.length, 0, "no mentor paid when no engagement overlaps the invoice month");
   eq(noEng.unassigned.length, 0, "no-coverage revenue is not a paid line");
-  eq(noEng.excludedBilled, 425, "no-coverage (non-mentoring) revenue surfaced as excludedBilled, not dropped");
+  eq(
+    noEng.excludedBilled,
+    425,
+    "no-coverage (non-mentoring) revenue surfaced as excludedBilled, not dropped",
+  );
 
   // ---- JYF / JumpStart is excluded; only 4x/2x/1x mentoring is mentor pay ----
   // Decided with the user 2026-07-09. A JumpStart-covered invoice pays nothing and
@@ -440,8 +685,22 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
       { clientId: 2, serviceDate: "2026-05-02", billed: 425, collected: 425 }, // 4x -> paid
     ],
     engagements: [
-      { clientId: 1, coachId: 500, startDate: "2026-04-01", endDate: "2026-05-29", isCanceled: false, name: "MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress" },
-      { clientId: 2, coachId: 500, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+      {
+        clientId: 1,
+        coachId: 500,
+        startDate: "2026-04-01",
+        endDate: "2026-05-29",
+        isCanceled: false,
+        name: "MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress",
+      },
+      {
+        clientId: 2,
+        coachId: 500,
+        startDate: "2026-03-01",
+        endDate: null,
+        isCanceled: false,
+        name: "MN Subscription | (4x Month) Zoom Meetings",
+      },
     ],
     coachName: (id) => `#${id}`,
     clientName,
@@ -449,7 +708,11 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   });
   eq(jyfExcl.excludedBilled, 175, "JumpStart/JYF invoice ($175) excluded from pay and surfaced");
   eq(jyfExcl.mentors[0]?.menteeCount, 1, "only the 4x mentee is paid (JYF mentee dropped)");
-  eq(jyfExcl.mentors[0]?.lines.every((l) => l.tier === "4x"), true, "the only paid line is the 4x mentee");
+  eq(
+    jyfExcl.mentors[0]?.lines.every((l) => l.tier === "4x"),
+    true,
+    "the only paid line is the 4x mentee",
+  );
 
   // ---- Overlap guard (post-review 2026-07-09): a still-open 4x engagement PLUS a
   //      later-starting NON-mentoring engagement (After Graduation Care) must not
@@ -459,34 +722,84 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     ym: "2026-06",
     invoices: [{ clientId: 1, serviceDate: "2026-06-15", billed: 425, collected: 425 }],
     engagements: [
-      { clientId: 1, coachId: 600, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
-      { clientId: 1, coachId: 600, startDate: "2026-06-01", endDate: null, isCanceled: false, name: "After Graduation Care Tune-Up" }, // starts LATER, tier "graduated"
+      {
+        clientId: 1,
+        coachId: 600,
+        startDate: "2026-01-01",
+        endDate: null,
+        isCanceled: false,
+        name: "MN Subscription | (4x Month) Zoom Meetings",
+      },
+      {
+        clientId: 1,
+        coachId: 600,
+        startDate: "2026-06-01",
+        endDate: null,
+        isCanceled: false,
+        name: "After Graduation Care Tune-Up",
+      }, // starts LATER, tier "graduated"
     ],
     coachName: (id) => `#${id}`,
     clientName,
     startMonthOverride: new Map([[600, "2026-01"]]),
   });
-  eq(overlap.mentors[0]?.lines[0]?.tier, "4x", "later-starting graduation engagement does not hijack the 4x tier");
-  eq(overlap.mentors[0]?.payout, round2(425 * (1 - 15 / 30) * 0.6), "the legit 4x invoice is still paid, not excluded");
+  eq(
+    overlap.mentors[0]?.lines[0]?.tier,
+    "4x",
+    "later-starting graduation engagement does not hijack the 4x tier",
+  );
+  eq(
+    overlap.mentors[0]?.payout,
+    round2(425 * (1 - 15 / 30) * 0.6),
+    "the legit 4x invoice is still paid, not excluded",
+  );
   eq(overlap.excludedBilled, 0, "nothing excluded — a mentoring engagement is active");
 
   // Empty ramp override must not NaN-poison the payout (guarded fallback to PAY_RAMP).
   const emptyRamp = computePayReport({
     ym: "2026-06",
     invoices: [{ clientId: 1, serviceDate: "2026-06-15", billed: 425, collected: 425 }],
-    engagements: [{ clientId: 1, coachId: 601, startDate: null, endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" }],
+    engagements: [
+      {
+        clientId: 1,
+        coachId: 601,
+        startDate: null,
+        endDate: null,
+        isCanceled: false,
+        name: "MN Subscription | (4x Month)",
+      },
+    ],
     coachName: (id) => `#${id}`,
     clientName,
     rampOverride: new Map([[601, []]]),
   });
-  eq(Number.isFinite(emptyRamp.totals.payout), true, "empty ramp override falls back to PAY_RAMP (no NaN)");
+  eq(
+    Number.isFinite(emptyRamp.totals.payout),
+    true,
+    "empty ramp override falls back to PAY_RAMP (no NaN)",
+  );
 
   // ---- Mentor-start override pins tenure (a late-synced veteran isn't "new") ----
-  const lateSync: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 }];
-  const lateEng: PayEngagementInput[] = [
-    { clientId: 1, coachId: 70000, startDate: "2026-04-01", endDate: null, isCanceled: false, name: "(4x)" },
+  const lateSync: PayInvoiceInput[] = [
+    { clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 },
   ];
-  const noOv = computePayReport({ ym: "2026-04", invoices: lateSync, engagements: lateEng, coachName: (id) => `#${id}`, clientName });
+  const lateEng: PayEngagementInput[] = [
+    {
+      clientId: 1,
+      coachId: 70000,
+      startDate: "2026-04-01",
+      endDate: null,
+      isCanceled: false,
+      name: "(4x)",
+    },
+  ];
+  const noOv = computePayReport({
+    ym: "2026-04",
+    invoices: lateSync,
+    engagements: lateEng,
+    coachName: (id) => `#${id}`,
+    clientName,
+  });
   eq(noOv.mentors[0].splitPct, 0.35, "without override an April-start mentor looks new -> 35%");
   const ov = computePayReport({
     ym: "2026-04",
@@ -503,17 +816,57 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   //      JumpStart coach held most of May, but the 4x subscription dated 5/30 (the
   //      new engagement) must pay the 4x coach. ----
   const handoffEng: PayEngagementInput[] = [
-    { clientId: 1, coachId: 111, startDate: "2026-05-01", endDate: "2026-05-29", isCanceled: false, name: "MN Subscription | (0x Month) JumpStart" },
-    { clientId: 1, coachId: 222, startDate: "2026-05-29", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+    {
+      clientId: 1,
+      coachId: 111,
+      startDate: "2026-05-01",
+      endDate: "2026-05-29",
+      isCanceled: false,
+      name: "MN Subscription | (0x Month) JumpStart",
+    },
+    {
+      clientId: 1,
+      coachId: 222,
+      startDate: "2026-05-29",
+      endDate: null,
+      isCanceled: false,
+      name: "MN Subscription | (4x Month)",
+    },
   ];
-  const handoffInv: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-05-30", billed: 425, collected: 425 }];
-  const hMay = computePayReport({ ym: "2026-05", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
-  eq(hMay.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0, 425, "day-30 4x invoice is billed to the NEW 4x coach (222), not the outgoing JumpStart coach");
-  const hJun = computePayReport({ ym: "2026-06", invoices: handoffInv, engagements: handoffEng, coachName: (id) => `#${id}`, clientName });
+  const handoffInv: PayInvoiceInput[] = [
+    { clientId: 1, serviceDate: "2026-05-30", billed: 425, collected: 425 },
+  ];
+  const hMay = computePayReport({
+    ym: "2026-05",
+    invoices: handoffInv,
+    engagements: handoffEng,
+    coachName: (id) => `#${id}`,
+    clientName,
+  });
+  eq(
+    hMay.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0,
+    425,
+    "day-30 4x invoice is billed to the NEW 4x coach (222), not the outgoing JumpStart coach",
+  );
+  const hJun = computePayReport({
+    ym: "2026-06",
+    invoices: handoffInv,
+    engagements: handoffEng,
+    coachName: (id) => `#${id}`,
+    clientName,
+  });
   // May has 31 days, so a 5/30 invoice is 30/31 elapsed — that slice rolls to June
   // under the NEW 4x coach (the point of the test is the attribution, not the size).
-  eq(round2(hJun.mentors.find((m) => m.coachId === 222)?.earned ?? 0), 411.29, "day-30 rollover (30/31 of May) lands under the new 4x coach in June");
-  eq(hJun.mentors.find((m) => m.coachId === 111)?.earned ?? 0, 0, "the outgoing JumpStart coach gets none of the 4x invoice");
+  eq(
+    round2(hJun.mentors.find((m) => m.coachId === 222)?.earned ?? 0),
+    411.29,
+    "day-30 rollover (30/31 of May) lands under the new 4x coach in June",
+  );
+  eq(
+    hJun.mentors.find((m) => m.coachId === 111)?.earned ?? 0,
+    0,
+    "the outgoing JumpStart coach gets none of the 4x invoice",
+  );
 
   // ---- Owner override (session 009: owner = CA primary coach, everywhere incl.
   //      pay). When primaryCoachOf returns a coach, that owner is credited instead
@@ -526,12 +879,20 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     clientName,
     primaryCoachOf: () => 999,
   });
-  eq(owned.mentors.find((m) => m.coachId === 999)?.lines[0]?.billed ?? 0, 425, "owner (primary coach 999) is credited the invoice, not the engagement coach");
-  eq(owned.mentors.find((m) => m.coachId === 222)?.billed ?? 0, 0, "the engagement-coverage coach gets nothing once an owner is set");
+  eq(
+    owned.mentors.find((m) => m.coachId === 999)?.lines[0]?.billed ?? 0,
+    425,
+    "owner (primary coach 999) is credited the invoice, not the engagement coach",
+  );
+  eq(
+    owned.mentors.find((m) => m.coachId === 222)?.billed ?? 0,
+    0,
+    "the engagement-coverage coach gets nothing once an owner is set",
+  );
   eq(
     owned.mentors.find((m) => m.coachId === 999)?.lines[0]?.tier ?? "",
     hMay.mentors.find((m) => m.coachId === 222)?.lines[0]?.tier ?? "x",
-    "tier still comes from engagement coverage, not the owner"
+    "tier still comes from engagement coverage, not the owner",
   );
   const ownedNull = computePayReport({
     ym: "2026-05",
@@ -541,21 +902,46 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
     clientName,
     primaryCoachOf: () => null,
   });
-  eq(ownedNull.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0, 425, "null owner falls back to the engagement-coverage coach (222)");
+  eq(
+    ownedNull.mentors.find((m) => m.coachId === 222)?.lines[0]?.billed ?? 0,
+    425,
+    "null owner falls back to the engagement-coverage coach (222)",
+  );
 
   // ---- Per-mentor ramp override credits the mentor's custom rate ----
   // A fast-tracked mentor (ramp 50/60/60) starting March: April is tenure month 2,
   // which pays 60% under 50/60/60 (vs 50% under the default 35/50/60).
-  const rampInv: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 }];
-  const rampEng: PayEngagementInput[] = [
-    { clientId: 1, coachId: 800, startDate: "2026-03-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month)" },
+  const rampInv: PayInvoiceInput[] = [
+    { clientId: 1, serviceDate: "2026-04-01", billed: 425, collected: 425 },
   ];
-  const rampBase = { ym: "2026-04", invoices: rampInv, engagements: rampEng, coachName: (id: number) => `#${id}`, clientName, startMonthOverride: new Map([[800, "2026-03"]]) };
-  eq(computePayReport(rampBase).mentors[0].splitPct, 0.5, "default ramp: April (tenure month 2) -> 50%");
+  const rampEng: PayEngagementInput[] = [
+    {
+      clientId: 1,
+      coachId: 800,
+      startDate: "2026-03-01",
+      endDate: null,
+      isCanceled: false,
+      name: "MN Subscription | (4x Month)",
+    },
+  ];
+  const rampBase = {
+    ym: "2026-04",
+    invoices: rampInv,
+    engagements: rampEng,
+    coachName: (id: number) => `#${id}`,
+    clientName,
+    startMonthOverride: new Map([[800, "2026-03"]]),
+  };
   eq(
-    computePayReport({ ...rampBase, rampOverride: new Map([[800, [0.5, 0.6, 0.6]]]) }).mentors[0].splitPct,
+    computePayReport(rampBase).mentors[0].splitPct,
+    0.5,
+    "default ramp: April (tenure month 2) -> 50%",
+  );
+  eq(
+    computePayReport({ ...rampBase, rampOverride: new Map([[800, [0.5, 0.6, 0.6]]]) }).mentors[0]
+      .splitPct,
     0.6,
-    "fast-track ramp 50/60/60: April (tenure month 2) -> 60%"
+    "fast-track ramp 50/60/60: April (tenure month 2) -> 60%",
   );
 
   // ---- Caleb Otto, June 2026 (real-data replica, decided with the user 2026-07-09).
@@ -589,9 +975,17 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   };
   const calebJun = computePayReport({ ym: "2026-06", ...calebArgs });
   eq(calebJun.mentors[0].coachId, CALEB, "Caleb is the credited mentor");
-  eq(calebJun.mentors[0].splitPct, 0.6, "Caleb's ramp resolves to 60% in June (tenure month 4 of 50/60/60)");
+  eq(
+    calebJun.mentors[0].splitPct,
+    0.6,
+    "Caleb's ramp resolves to 60% in June (tenure month 4 of 50/60/60)",
+  );
   eq(calebJun.mentors[0].menteeCount, 3, "three paying 4x mentees in June");
-  eq(calebJun.mentors[0].payout, 752.67, "Caleb June payout = 3 x $250.89 = $752.67 (15/30 this month + 15/31 rolled in)");
+  eq(
+    calebJun.mentors[0].payout,
+    752.67,
+    "Caleb June payout = 3 x $250.89 = $752.67 (15/30 this month + 15/31 rolled in)",
+  );
 
   // Reconciliation invariant: running total (through June) + remaining tail = the
   // full 4x value billed through June. All 6 4x invoices are billed by June; the
@@ -600,10 +994,16 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   const junYm = "2026-06";
   const rows = calebTl.ledger.filter((r) => r.assigned && r.coachId === CALEB);
   const running = round2(rows.filter((r) => r.ym <= junYm).reduce((s, r) => s + r.payout, 0));
-  const remaining = round2(rows.filter((r) => r.ym === "2026-07").reduce((s, r) => s + r.rolloverPrev * r.splitPct, 0));
+  const remaining = round2(
+    rows.filter((r) => r.ym === "2026-07").reduce((s, r) => s + r.rolloverPrev * r.splitPct, 0),
+  );
   eq(running, 1147.5, "running total through June = May $394.83 + June $752.67");
   eq(remaining, 382.5, "remaining tail = the June invoices' July rollover at 60%");
-  eq(round2(running + remaining), 1530, "running + remaining = full 4x value billed through June (6 x $425 x 60%)");
+  eq(
+    round2(running + remaining),
+    1530,
+    "running + remaining = full 4x value billed through June (6 x $425 x 60%)",
+  );
 
   // ---- Ty Miller replica. June's own $425 invoice is dated the 30th — the last day
   //      of a 30-day June — so it is fully elapsed and recognizes $0 in June; June's
@@ -613,12 +1013,46 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   //      built the number. (Under the old fixed-30 denominator this case reported
   //      $430.83 / $258.50; real month lengths recut it to $416.94 / $250.16.) ----
   const tyEng: PayEngagementInput[] = [
-    { clientId: 1, coachId: CALEB, startDate: "2026-03-31", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+    {
+      clientId: 1,
+      coachId: CALEB,
+      startDate: "2026-03-31",
+      endDate: null,
+      isCanceled: false,
+      name: "MN Subscription | (4x Month) Zoom Meetings",
+    },
   ];
   const tyInv: PayInvoiceInput[] = [
-    { clientId: 1, serviceDate: "2026-05-29", billed: 425, collected: 425, invoiceId: 101, invoiceNumber: "A101", payments: [{ datePaid: "2026-05-29", amount: 425, method: "Credit Card", checkNumber: null }], lineItems: [{ item: "4x Month", amount: 425 }] },
-    { clientId: 1, serviceDate: "2026-05-30", billed: 20, collected: 20, invoiceId: 102, invoiceNumber: "A102", payments: [{ datePaid: "2026-06-01", amount: 20, method: "Check", checkNumber: "555" }], lineItems: [] },
-    { clientId: 1, serviceDate: "2026-06-30", billed: 425, collected: 0, invoiceId: 103, invoiceNumber: "A103", payments: [], lineItems: [{ item: "4x Month", amount: 425 }] },
+    {
+      clientId: 1,
+      serviceDate: "2026-05-29",
+      billed: 425,
+      collected: 425,
+      invoiceId: 101,
+      invoiceNumber: "A101",
+      payments: [{ datePaid: "2026-05-29", amount: 425, method: "Credit Card", checkNumber: null }],
+      lineItems: [{ item: "4x Month", amount: 425 }],
+    },
+    {
+      clientId: 1,
+      serviceDate: "2026-05-30",
+      billed: 20,
+      collected: 20,
+      invoiceId: 102,
+      invoiceNumber: "A102",
+      payments: [{ datePaid: "2026-06-01", amount: 20, method: "Check", checkNumber: "555" }],
+      lineItems: [],
+    },
+    {
+      clientId: 1,
+      serviceDate: "2026-06-30",
+      billed: 425,
+      collected: 0,
+      invoiceId: 103,
+      invoiceNumber: "A103",
+      payments: [],
+      lineItems: [{ item: "4x Month", amount: 425 }],
+    },
   ];
   const tyArgs = {
     invoices: tyInv,
@@ -631,22 +1065,56 @@ console.log("[8] staff payment engine — Clayton split (invoice-date proration,
   };
   const tyJun = computePayReport({ ym: "2026-06", ...tyArgs });
   const tyLine = tyJun.mentors[0].lines[0];
-  eq(tyLine.recognizedThis, 0, "Ty's June invoice (day 30) recognizes $0 in June — all of it rolls to July");
+  eq(
+    tyLine.recognizedThis,
+    0,
+    "Ty's June invoice (day 30) recognizes $0 in June — all of it rolls to July",
+  );
   eq(tyLine.rolloverPrev, 416.94, "May's two 4x invoices roll $416.94 into June (397.58 + 19.35)");
-  eq(tyLine.earned, 416.94, "Ty's June earned = $416.94, entirely rolled in from May's two invoices");
+  eq(
+    tyLine.earned,
+    416.94,
+    "Ty's June earned = $416.94, entirely rolled in from May's two invoices",
+  );
   eq(tyJun.mentors[0].payout, 250.16, "Ty's June payout = $416.94 x 60% = $250.16");
   // The sources ARE the audit: 2 rolled-in (May) + 1 this-month (June), oldest first.
   eq(tyLine.sources.length, 3, "three contributing invoices behind the June line");
   eq(tyLine.sources.filter((s) => s.slice === "rollover").length, 2, "two May invoices rolled in");
-  eq(tyLine.sources.filter((s) => s.slice === "this-month").length, 1, "one June invoice this month");
-  eq(round2(tyLine.sources.filter((s) => s.slice === "rollover").reduce((t, s) => t + s.recognized, 0)), 416.94, "rolled-in slices sum to $416.94");
-  eq(tyLine.sources.find((s) => s.slice === "this-month")?.recognized ?? -1, 0, "the June (day-30) source recognizes $0 this month");
+  eq(
+    tyLine.sources.filter((s) => s.slice === "this-month").length,
+    1,
+    "one June invoice this month",
+  );
+  eq(
+    round2(
+      tyLine.sources.filter((s) => s.slice === "rollover").reduce((t, s) => t + s.recognized, 0),
+    ),
+    416.94,
+    "rolled-in slices sum to $416.94",
+  );
+  eq(
+    tyLine.sources.find((s) => s.slice === "this-month")?.recognized ?? -1,
+    0,
+    "the June (day-30) source recognizes $0 this month",
+  );
   eq(tyLine.sources[0].serviceDate, "2026-05-29", "sources ordered oldest service date first");
   // Payment dates thread through untouched (the answer to 'when did he pay?').
-  eq(tyLine.sources[0].payments[0]?.datePaid ?? "", "2026-05-29", "invoice A101's payment date carried onto the source");
-  eq(tyLine.sources[1].payments[0]?.method ?? "", "Check", "invoice A102's payment method carried onto the source");
+  eq(
+    tyLine.sources[0].payments[0]?.datePaid ?? "",
+    "2026-05-29",
+    "invoice A101's payment date carried onto the source",
+  );
+  eq(
+    tyLine.sources[1].payments[0]?.method ?? "",
+    "Check",
+    "invoice A102's payment method carried onto the source",
+  );
   // Nothing double-counts: summing every source's recognized == the line's earned.
-  eq(round2(tyLine.sources.reduce((t, s) => t + s.recognized, 0)), tyLine.earned, "Σ source.recognized == line earned (audit foots)");
+  eq(
+    round2(tyLine.sources.reduce((t, s) => t + s.recognized, 0)),
+    tyLine.earned,
+    "Σ source.recognized == line earned (audit foots)",
+  );
 }
 
 console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned, scoping)");
@@ -661,26 +1129,59 @@ console.log("[9] staff payment timeline + flat ledger (Clayton roll, unassigned,
     { clientId: 2, serviceDate: "2026-05-05", billed: 100, collected: 100 },
   ];
   const engagements: PayEngagementInput[] = [
-    { clientId: 1, coachId: 29074, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "(4x Month)" },
+    {
+      clientId: 1,
+      coachId: 29074,
+      startDate: "2026-01-01",
+      endDate: null,
+      isCanceled: false,
+      name: "(4x Month)",
+    },
   ];
 
-  eq(distinctServiceMonths(invoices).join(","), "2026-05,2026-04", "distinct service months newest-first");
-  eq(payoutMonths(invoices).join(","), "2026-06,2026-05,2026-04", "payout months = service months + rollover tails");
+  eq(
+    distinctServiceMonths(invoices).join(","),
+    "2026-05,2026-04",
+    "distinct service months newest-first",
+  );
+  eq(
+    payoutMonths(invoices).join(","),
+    "2026-06,2026-05,2026-04",
+    "payout months = service months + rollover tails",
+  );
 
   const tl = computePayTimeline({ invoices, engagements, coachName, clientName });
   // Harry: Apr slice (425*(1-10/30)*0.6=170) + May rollover (425*(10/30)*0.6=85) = 255.
   const harryRows = tl.ledger.filter((r) => r.coachName === "Harry Shenk");
-  eq(round2(harryRows.reduce((s, r) => s + r.payout, 0)), 255, "Harry's split payouts sum to 60% of $425 = $255");
+  eq(
+    round2(harryRows.reduce((s, r) => s + r.payout, 0)),
+    255,
+    "Harry's split payouts sum to 60% of $425 = $255",
+  );
   eq(tl.totals.payout, 255, "only the assigned mentee is paid");
 
   // Mentee 2 has no covering (mentoring) engagement -> excluded from pay, surfaced
   // via excludedBilled rather than dropped. The unassigned bucket stays empty (a
   // mentoring tier always implies a covering engagement with a coach).
-  eq(tl.totals.excludedBilled, 100, "mentee 2 ($100, no engagement) is excluded from pay, not paid");
-  eq(tl.ledger.some((r) => !r.assigned), false, "no unassigned paid lines once non-mentoring revenue is excluded");
+  eq(
+    tl.totals.excludedBilled,
+    100,
+    "mentee 2 ($100, no engagement) is excluded from pay, not paid",
+  );
+  eq(
+    tl.ledger.some((r) => !r.assigned),
+    false,
+    "no unassigned paid lines once non-mentoring revenue is excluded",
+  );
 
   // An explicit months list scopes the timeline (e.g. a single-month explore).
-  const one = computePayTimeline({ invoices, engagements, coachName, clientName, months: ["2026-04"] });
+  const one = computePayTimeline({
+    invoices,
+    engagements,
+    coachName,
+    clientName,
+    months: ["2026-04"],
+  });
   eq(one.months.length, 1, "explicit months list scopes the timeline");
 }
 
@@ -689,32 +1190,94 @@ console.log("[9b] payment groups — engagement-template gating (Company options
   const clientName = (id: number) => `Mentee ${id}`;
 
   // parse/serialize + defaults
-  eq(groupHasTemplates(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID), false, "default Mentors group has no templates (falls back to legacy)");
-  eq(payEligibleForGroup(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID), null, "empty group -> null predicate (legacy fallback)");
-  eq(parsePayGroupsConfig("not json").groups[0].id, MENTORS_GROUP_ID, "garbage config -> default (Mentors)");
+  eq(
+    groupHasTemplates(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID),
+    false,
+    "default Mentors group has no templates (falls back to legacy)",
+  );
+  eq(
+    payEligibleForGroup(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID),
+    null,
+    "empty group -> null predicate (legacy fallback)",
+  );
+  eq(
+    parsePayGroupsConfig("not json").groups[0].id,
+    MENTORS_GROUP_ID,
+    "garbage config -> default (Mentors)",
+  );
   eq(parsePayGroupsConfig("").groups.length, 1, "blank config -> default one-group");
   const rt = parsePayGroupsConfig(
-    serializePayGroupsConfig({ groups: [{ id: "mentors", name: "Mentors", templateNames: ["MN Subscription | (4x Month) Zoom Meetings"], coachIds: [40711] }] })
+    serializePayGroupsConfig({
+      groups: [
+        {
+          id: "mentors",
+          name: "Mentors",
+          templateNames: ["MN Subscription | (4x Month) Zoom Meetings"],
+          coachIds: [40711],
+        },
+      ],
+    }),
   );
-  eq(rt.groups[0].templateNames[0], "MN Subscription | (4x Month) Zoom Meetings", "round-trips template names");
+  eq(
+    rt.groups[0].templateNames[0],
+    "MN Subscription | (4x Month) Zoom Meetings",
+    "round-trips template names",
+  );
   eq(rt.groups[0].coachIds[0], 40711, "round-trips coach ids");
 
   // Predicate matches by NORMALIZED name (tolerates whitespace/case drift).
   const cfg4x = parsePayGroupsConfig(
-    serializePayGroupsConfig({ groups: [{ id: "mentors", name: "Mentors", templateNames: ["MN Subscription | (4x Month) Zoom Meetings"], coachIds: [] }] })
+    serializePayGroupsConfig({
+      groups: [
+        {
+          id: "mentors",
+          name: "Mentors",
+          templateNames: ["MN Subscription | (4x Month) Zoom Meetings"],
+          coachIds: [],
+        },
+      ],
+    }),
   );
   const pred = payEligibleForGroup(cfg4x, MENTORS_GROUP_ID)!;
   eq(pred("MN Subscription | (4x Month) Zoom Meetings"), true, "exact template name is eligible");
-  eq(pred("MN Subscription  |  (4x Month) Zoom Meetings"), true, "whitespace-drifted name still matches (normalized)");
-  eq(pred("MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress"), false, "an unchecked JYF template is NOT eligible");
-  eq(normalizeTemplateName("  Foo   Bar "), "foo bar", "normalizeTemplateName collapses whitespace + lowercases");
+  eq(
+    pred("MN Subscription  |  (4x Month) Zoom Meetings"),
+    true,
+    "whitespace-drifted name still matches (normalized)",
+  );
+  eq(
+    pred("MN Subscription | (0x Month) JumpStart Your Freedom Supervised Progress"),
+    false,
+    "an unchecked JYF template is NOT eligible",
+  );
+  eq(
+    normalizeTemplateName("  Foo   Bar "),
+    "foo bar",
+    "normalizeTemplateName collapses whitespace + lowercases",
+  );
 
   // Engine gating: the grid OVERRIDES the legacy 4x/2x/1x detection.
   const eng4x: PayEngagementInput[] = [
-    { clientId: 1, coachId: 500, startDate: "2026-01-01", endDate: null, isCanceled: false, name: "MN Subscription | (4x Month) Zoom Meetings" },
+    {
+      clientId: 1,
+      coachId: 500,
+      startDate: "2026-01-01",
+      endDate: null,
+      isCanceled: false,
+      name: "MN Subscription | (4x Month) Zoom Meetings",
+    },
   ];
-  const inv: PayInvoiceInput[] = [{ clientId: 1, serviceDate: "2026-05-15", billed: 425, collected: 425 }];
-  const base = { ym: "2026-05", invoices: inv, engagements: eng4x, coachName: (id: number) => `#${id}`, clientName, startMonthOverride: new Map([[500, "2026-01"]]) };
+  const inv: PayInvoiceInput[] = [
+    { clientId: 1, serviceDate: "2026-05-15", billed: 425, collected: 425 },
+  ];
+  const base = {
+    ym: "2026-05",
+    invoices: inv,
+    engagements: eng4x,
+    coachName: (id: number) => `#${id}`,
+    clientName,
+    startMonthOverride: new Map([[500, "2026-01"]]),
+  };
 
   // (a) No predicate -> legacy: the (4x) engagement is paid.
   const legacy = computePayReport(base);
@@ -722,14 +1285,37 @@ console.log("[9b] payment groups — engagement-template gating (Company options
 
   // (b) Grid checks ONLY a different template -> the same 4x invoice is now EXCLUDED.
   const otherCfg = parsePayGroupsConfig(
-    serializePayGroupsConfig({ groups: [{ id: "mentors", name: "Mentors", templateNames: ["MN Subscription | Fortify Group"], coachIds: [] }] })
+    serializePayGroupsConfig({
+      groups: [
+        {
+          id: "mentors",
+          name: "Mentors",
+          templateNames: ["MN Subscription | Fortify Group"],
+          coachIds: [],
+        },
+      ],
+    }),
   );
-  const gatedOut = computePayReport({ ...base, payEligible: payEligibleForGroup(otherCfg, MENTORS_GROUP_ID)! });
-  eq(gatedOut.mentors.length, 0, "grid decides: a 4x engagement whose template is UNCHECKED is not paid");
-  eq(gatedOut.excludedBilled, 425, "the unchecked 4x revenue is surfaced as excludedBilled, not silently dropped");
+  const gatedOut = computePayReport({
+    ...base,
+    payEligible: payEligibleForGroup(otherCfg, MENTORS_GROUP_ID)!,
+  });
+  eq(
+    gatedOut.mentors.length,
+    0,
+    "grid decides: a 4x engagement whose template is UNCHECKED is not paid",
+  );
+  eq(
+    gatedOut.excludedBilled,
+    425,
+    "the unchecked 4x revenue is surfaced as excludedBilled, not silently dropped",
+  );
 
   // (c) Grid checks the 4x template -> paid again (grid authoritative, positive case).
-  const gatedIn = computePayReport({ ...base, payEligible: payEligibleForGroup(cfg4x, MENTORS_GROUP_ID)! });
+  const gatedIn = computePayReport({
+    ...base,
+    payEligible: payEligibleForGroup(cfg4x, MENTORS_GROUP_ID)!,
+  });
   eq(gatedIn.mentors[0]?.billed ?? 0, 425, "grid decides: a checked (4x) template is paid");
   eq(gatedIn.mentors[0]?.lines[0]?.tier, "4x", "tier label still derived from the engagement name");
 }
@@ -748,7 +1334,11 @@ console.log("[10] compare-mode period math (shiftMonths, presets, delta)");
   const b = derivePeriodB("yoy", { from: "2026-01-01", to: "2026-06-22" });
   eq(b?.from, "2025-01-01", "YoY Period B from = same day last year");
   eq(b?.to, "2025-06-22", "YoY Period B to = same day last year (year-to-date aligned)");
-  eq(derivePeriodB("custom", { from: "2026-01-01", to: "2026-06-22" }), null, "custom derives no Period B");
+  eq(
+    derivePeriodB("custom", { from: "2026-01-01", to: "2026-06-22" }),
+    null,
+    "custom derives no Period B",
+  );
 
   // Δ against a baseline (Period B).
   const up = delta(120, 100);
@@ -772,7 +1362,11 @@ console.log("[11] mentor capacity — 1-on-1 vs group slots (weekly-slot fix)");
     { coachId: 3, clientId: 30, isGroup: false, slot: "2026-02-18 09:00:00" }, // ...twice in a slot
   ];
   const groups = groupSlotKeys(appts);
-  eq(groups.has("1|2026-02-15 10:00:00"), true, "coach1 10:00 slot is a group (2 distinct clients)");
+  eq(
+    groups.has("1|2026-02-15 10:00:00"),
+    true,
+    "coach1 10:00 slot is a group (2 distinct clients)",
+  );
   eq(groups.has("3|2026-02-18 09:00:00"), false, "same client booked twice is NOT a group");
   eq(groups.size, 1, "exactly one group slot detected");
 
@@ -786,13 +1380,21 @@ console.log("[11] mentor capacity — 1-on-1 vs group slots (weekly-slot fix)");
     { coachId: 9, clientId: 90, isGroup: false, slot: "2026-03-01 12:00:00" },
     { coachId: 9, clientId: 91, isGroup: false, slot: "2026-03-01 12:00:00" },
   ];
-  eq(oneOnOneMenteesByCoach(groupOnly).get(9)?.size ?? 0, 0, "all-group coach has 0 capacity mentees");
+  eq(
+    oneOnOneMenteesByCoach(groupOnly).get(9)?.size ?? 0,
+    0,
+    "all-group coach has 0 capacity mentees",
+  );
 
   const nullSlots: CapacityAppt[] = [
     { coachId: 5, clientId: 50, isGroup: false, slot: null },
     { coachId: 5, clientId: 51, isGroup: false, slot: null },
   ];
-  eq(oneOnOneMenteesByCoach(nullSlots).get(5)?.size ?? 0, 2, "null-slot appts counted individually (no merge)");
+  eq(
+    oneOnOneMenteesByCoach(nullSlots).get(5)?.size ?? 0,
+    2,
+    "null-slot appts counted individually (no merge)",
+  );
 }
 
 console.log("[12] journey stage-date basis (engagement start vs first 1-on-1 meeting)");
@@ -815,18 +1417,26 @@ console.log("[12] journey stage-date basis (engagement start vs first 1-on-1 mee
 
   const fm = computeStageDates("first_meeting", engs, meets);
   eq(fm["4x"], "2026-07-03", "first_meeting: 4x = first 1-on-1 meeting (7/2 group ignored)");
-  eq(fm.jumpstart, "2026-05-15", "first_meeting: jumpstart falls back to engagement start (no meeting)");
+  eq(
+    fm.jumpstart,
+    "2026-05-15",
+    "first_meeting: jumpstart falls back to engagement start (no meeting)",
+  );
 
   // A tier whose only meeting is a group session falls back to the engagement start.
   const fm2 = computeStageDates(
     "first_meeting",
     [{ tier: "2x", startDate: "2026-08-01" }],
-    [{ tier: "2x", date: "2026-08-01", isGroup: true }]
+    [{ tier: "2x", date: "2026-08-01", isGroup: true }],
   );
   eq(fm2["2x"], "2026-08-01", "first_meeting: group-only tier falls back to engagement start");
 
   eq(highestTier(es), "4x", "highest tier reached = 4x");
-  eq(highestTier(computeStageDates("first_meeting", engs, meets)), "4x", "highest tier stable across bases");
+  eq(
+    highestTier(computeStageDates("first_meeting", engs, meets)),
+    "4x",
+    "highest tier stable across bases",
+  );
 }
 
 console.log("[13] build-payout reviewer math (include/exclude, override, totals)");
@@ -847,7 +1457,11 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   eq(effectiveLinePayout(100, DEFAULT_LINE_STATE), 100, "default state -> engine payout");
   eq(effectiveLinePayout(50, states.get(2)), 0, "excluded line contributes 0");
   eq(effectiveLinePayout(200, states.get(3)), 150, "override wins over engine number");
-  eq(effectiveLinePayout(200, { included: true, override: 0, note: null }), 0, "override of 0 zeroes an included line");
+  eq(
+    effectiveLinePayout(200, { included: true, override: 0, note: null }),
+    0,
+    "override of 0 zeroes an included line",
+  );
 
   const s = summarizeBuild(lines, states);
   eq(s.computedTotal, 350, "computed total = Σ engine payout over ALL lines");
@@ -874,18 +1488,36 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
   eq(withPieces.builtTotal, round2(clean.builtTotal + 200), "piece work adds to the built total");
   eq(withPieces.computedTotal, clean.computedTotal, "piece work never touches the engine total");
   eq(withPieces.delta, 200, "piece work shows up as review drift");
-  eq(summarizeBuild(lines, new Map(), null, []).builtTotal, clean.builtTotal, "empty piece list is a no-op");
+  eq(
+    summarizeBuild(lines, new Map(), null, []).builtTotal,
+    clean.builtTotal,
+    "empty piece list is a no-op",
+  );
 
   // isDefaultLineState: only the untouched line is default (compact persistence).
   eq(isDefaultLineState(DEFAULT_LINE_STATE), true, "default state is default");
-  eq(isDefaultLineState({ included: false, override: null, note: null }), false, "excluded is not default");
-  eq(isDefaultLineState({ included: true, override: 0, note: null }), false, "override (even 0) is not default");
-  eq(isDefaultLineState({ included: true, override: null, note: "checked" }), false, "noted line is not default");
+  eq(
+    isDefaultLineState({ included: false, override: null, note: null }),
+    false,
+    "excluded is not default",
+  );
+  eq(
+    isDefaultLineState({ included: true, override: 0, note: null }),
+    false,
+    "override (even 0) is not default",
+  );
+  eq(
+    isDefaultLineState({ included: true, override: null, note: "checked" }),
+    false,
+    "noted line is not default",
+  );
 
   // ---- payoutDetailCsvRows: the "data used to build the payout" export. One row
   //      per contributing invoice; mentee-level payout columns only on the FIRST
   //      row of each mentee so a column sum never double-counts. ----
-  const mkSource = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => {
+  const mkSource = (
+    over: Partial<import("../lib/pay.js").PayLineSource>,
+  ): import("../lib/pay.js").PayLineSource => {
     const base = {
       invoiceId: 1,
       invoiceNumber: "N1",
@@ -911,16 +1543,41 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
       tier: "4x",
       splitPct: 0.6,
       payout: 258.5,
-      sources: [mkSource({}), mkSource({ invoiceNumber: "N2", serviceDate: "2026-06-30", serviceMonth: "2026-06", invoiceDay: 30, slice: "this-month", recognized: 0, payments: [] })],
+      sources: [
+        mkSource({}),
+        mkSource({
+          invoiceNumber: "N2",
+          serviceDate: "2026-06-30",
+          serviceMonth: "2026-06",
+          invoiceDay: 30,
+          slice: "this-month",
+          recognized: 0,
+          payments: [],
+        }),
+      ],
     },
-    { clientId: 2, clientName: "Joash", tier: "4x", splitPct: 0.6, payout: 255, sources: [mkSource({ invoiceNumber: "N3" })] },
+    {
+      clientId: 2,
+      clientName: "Joash",
+      tier: "4x",
+      splitPct: 0.6,
+      payout: 255,
+      sources: [mkSource({ invoiceNumber: "N3" })],
+    },
   ];
-  const detailStates = new Map<number, BuildLineState>([[2, { included: false, override: null, note: "drop" }]]);
+  const detailStates = new Map<number, BuildLineState>([
+    [2, { included: false, override: null, note: "drop" }],
+  ]);
   const detailRows = payoutDetailCsvRows(detailLines, detailStates);
   const cols = PAYOUT_DETAIL_CSV_COLUMNS;
-  const col = (row: (string | number)[], label: string) => row[cols.indexOf(label as (typeof cols)[number])];
+  const col = (row: (string | number)[], label: string) =>
+    row[cols.indexOf(label as (typeof cols)[number])];
   eq(detailRows.length, 3, "one CSV row per contributing invoice (2 + 1)");
-  eq(col(detailRows[0], "Payment dates"), "2026-05-29", "payment date exported (ISO, machine-sortable)");
+  eq(
+    col(detailRows[0], "Payment dates"),
+    "2026-05-29",
+    "payment date exported (ISO, machine-sortable)",
+  );
   eq(col(detailRows[0], "Engine payout"), 258.5, "mentee payout on the FIRST invoice row");
   eq(col(detailRows[1], "Engine payout"), "", "blank on the SECOND invoice row (no double-count)");
   eq(col(detailRows[0], "Effective payout"), 258.5, "included line: effective == engine");
@@ -931,7 +1588,9 @@ console.log("[13] build-payout reviewer math (include/exclude, override, totals)
 
 console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
 {
-  const mk = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => {
+  const mk = (
+    over: Partial<import("../lib/pay.js").PayLineSource>,
+  ): import("../lib/pay.js").PayLineSource => {
     const base = {
       invoiceId: 0,
       invoiceNumber: null,
@@ -951,43 +1610,146 @@ console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
     return { ...base, eligibleBilled: over.eligibleBilled ?? base.billed };
   };
   const cc = PAYOUT_DETAIL_CSV_COLUMNS;
-  const cget = (row: (string | number)[], label: string) => row[cc.indexOf(label as (typeof cc)[number])];
+  const cget = (row: (string | number)[], label: string) =>
+    row[cc.indexOf(label as (typeof cc)[number])];
 
   // --- Whole-invoice drop: Ty Miller's June payout (user CSV). A JumpStart/JYF
   // "Supervised Progress" rollover ($5.83) rides alongside two MN 4x slices ($425
   // rolled-in + $0 this-month). Earned 430.83 × 60% = $258.50; drop JYF -> $255.00.
-  const jyf = mk({ invoiceId: 4061, invoiceNumber: "4061", billed: 175, collected: 175, elapsedFraction: 1 / 30, recognized: 175 * (1 / 30), lineItems: [{ item: "JYF Supervised Progress", amount: 175 }] });
-  const mn1 = mk({ invoiceId: 4126, invoiceNumber: "4126", serviceDate: "2026-05-30", invoiceDay: 30, billed: 425, collected: 425, elapsedFraction: 1, recognized: 425, lineItems: [{ item: "MN Subscription | (4x Month)", amount: 425 }] });
-  const mn2 = mk({ invoiceId: 4187, invoiceNumber: "4187", serviceDate: "2026-06-30", serviceMonth: "2026-06", invoiceDay: 30, slice: "this-month", billed: 425, collected: 425, elapsedFraction: 1, recognized: 0, lineItems: [{ item: "MN Subscription | (4x Month)", amount: 425 }] });
+  const jyf = mk({
+    invoiceId: 4061,
+    invoiceNumber: "4061",
+    billed: 175,
+    collected: 175,
+    elapsedFraction: 1 / 30,
+    recognized: 175 * (1 / 30),
+    lineItems: [{ item: "JYF Supervised Progress", amount: 175 }],
+  });
+  const mn1 = mk({
+    invoiceId: 4126,
+    invoiceNumber: "4126",
+    serviceDate: "2026-05-30",
+    invoiceDay: 30,
+    billed: 425,
+    collected: 425,
+    elapsedFraction: 1,
+    recognized: 425,
+    lineItems: [{ item: "MN Subscription | (4x Month)", amount: 425 }],
+  });
+  const mn2 = mk({
+    invoiceId: 4187,
+    invoiceNumber: "4187",
+    serviceDate: "2026-06-30",
+    serviceMonth: "2026-06",
+    invoiceDay: 30,
+    slice: "this-month",
+    billed: 425,
+    collected: 425,
+    elapsedFraction: 1,
+    recognized: 0,
+    lineItems: [{ item: "MN Subscription | (4x Month)", amount: 425 }],
+  });
   const ty = { clientId: 294592, payout: 258.5, splitPct: 0.6, sources: [jyf, mn1, mn2] };
 
   eq(payLineSourceKey(jyf), "id:4061", "source key prefers the CA invoice id");
-  eq(payLineSourceKey(mk({ invoiceId: null, invoiceNumber: "X9" })), "no:X9", "source key falls back to invoice number");
+  eq(
+    payLineSourceKey(mk({ invoiceId: null, invoiceNumber: "X9" })),
+    "no:X9",
+    "source key falls back to invoice number",
+  );
 
-  const dropJyfInv: BuildLineState = { included: true, override: null, note: null, excludedInvoices: ["id:4061"] };
-  const dropJyfLI: BuildLineState = { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(jyf, 0)] };
-  eq(payoutAfterExclusions(ty, DEFAULT_LINE_STATE), 258.5, "no exclusions == engine payout, to the penny");
-  eq(payoutAfterExclusions(ty, dropJyfInv), 255, "dropping the whole JYF invoice -> earned 425 x 60% = $255.00");
-  eq(payoutAfterExclusions(ty, dropJyfLI), 255, "dropping the JYF via its single line item -> same $255.00");
-  eq(payoutAfterExclusions(ty, { included: true, override: null, note: null, excludedInvoices: ["id:9999"] }), 258.5, "a non-matching drop is a no-op");
-  eq(payoutAfterExclusions(ty, { included: true, override: null, note: null, excludedInvoices: ["id:4061", "id:4126", "id:4187"] }), 0, "dropping every invoice -> $0");
+  const dropJyfInv: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    excludedInvoices: ["id:4061"],
+  };
+  const dropJyfLI: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    excludedLineItems: [payLineItemKey(jyf, 0)],
+  };
+  eq(
+    payoutAfterExclusions(ty, DEFAULT_LINE_STATE),
+    258.5,
+    "no exclusions == engine payout, to the penny",
+  );
+  eq(
+    payoutAfterExclusions(ty, dropJyfInv),
+    255,
+    "dropping the whole JYF invoice -> earned 425 x 60% = $255.00",
+  );
+  eq(
+    payoutAfterExclusions(ty, dropJyfLI),
+    255,
+    "dropping the JYF via its single line item -> same $255.00",
+  );
+  eq(
+    payoutAfterExclusions(ty, {
+      included: true,
+      override: null,
+      note: null,
+      excludedInvoices: ["id:9999"],
+    }),
+    258.5,
+    "a non-matching drop is a no-op",
+  );
+  eq(
+    payoutAfterExclusions(ty, {
+      included: true,
+      override: null,
+      note: null,
+      excludedInvoices: ["id:4061", "id:4126", "id:4187"],
+    }),
+    0,
+    "dropping every invoice -> $0",
+  );
 
   // Precedence in effectiveLineTotal: line-exclude > manual override > invoice/line-item drops.
   eq(effectiveLineTotal(ty, dropJyfInv), 255, "invoice drop flows through effectiveLineTotal");
-  eq(effectiveLineTotal(ty, { ...dropJyfInv, override: 250 }), 250, "a manual override wins over invoice/line-item drops");
-  eq(effectiveLineTotal(ty, { ...dropJyfInv, included: false }), 0, "a line-level exclusion zeroes it regardless");
+  eq(
+    effectiveLineTotal(ty, { ...dropJyfInv, override: 250 }),
+    250,
+    "a manual override wins over invoice/line-item drops",
+  );
+  eq(
+    effectiveLineTotal(ty, { ...dropJyfInv, included: false }),
+    0,
+    "a line-level exclusion zeroes it regardless",
+  );
   eq(effectiveLineTotal(ty, DEFAULT_LINE_STATE), 258.5, "default state -> engine payout");
 
   // isDefaultLineState: a line carrying only invoice OR line-item drops isn't default.
   eq(isDefaultLineState(dropJyfInv), false, "an invoice-dropped line is not default (persists)");
   eq(isDefaultLineState(dropJyfLI), false, "a line-item-dropped line is not default (persists)");
-  eq(isDefaultLineState({ included: true, override: null, note: null, excludedInvoices: [], excludedLineItems: [] }), true, "empty drop lists are default");
+  eq(
+    isDefaultLineState({
+      included: true,
+      override: null,
+      note: null,
+      excludedInvoices: [],
+      excludedLineItems: [],
+    }),
+    true,
+    "empty drop lists are default",
+  );
   eq(excludedInvoiceSet(dropJyfInv).has("id:4061"), true, "excludedInvoiceSet reads the state");
 
   // summarizeBuild: builtTotal honors drops; computedTotal stays raw engine.
   const others = [
-    { clientId: 287546, payout: 255, splitPct: 0.6, sources: [mk({ invoiceId: 1, recognized: 425 })] },
-    { clientId: 280993, payout: 255, splitPct: 0.6, sources: [mk({ invoiceId: 2, recognized: 425 })] },
+    {
+      clientId: 287546,
+      payout: 255,
+      splitPct: 0.6,
+      sources: [mk({ invoiceId: 1, recognized: 425 })],
+    },
+    {
+      clientId: 280993,
+      payout: 255,
+      splitPct: 0.6,
+      sources: [mk({ invoiceId: 2, recognized: 425 })],
+    },
   ];
   const sm = summarizeBuild([ty, ...others], new Map([[294592, dropJyfInv]]));
   eq(sm.computedTotal, 768.5, "computed total = raw engine (258.5 + 255 + 255)");
@@ -996,11 +1758,34 @@ console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
   eq(sm.overriddenCount, 0, "a drop is not counted as an override");
 
   const csvRows = payoutDetailCsvRows(
-    [{ clientId: 294592, clientName: "Ty Miller", tier: "4x", splitPct: 0.6, payout: 258.5, sources: [jyf, mn1, mn2] }],
-    new Map([[294592, dropJyfInv]])
+    [
+      {
+        clientId: 294592,
+        clientName: "Ty Miller",
+        tier: "4x",
+        splitPct: 0.6,
+        payout: 258.5,
+        sources: [jyf, mn1, mn2],
+      },
+    ],
+    new Map([[294592, dropJyfInv]]),
   );
-  eq(cget(csvRows.find((r) => cget(r, "Invoice #") === "4061")!, "Invoice incl."), "no", "the JYF invoice row is flagged excluded");
-  eq(cget(csvRows.find((r) => cget(r, "Invoice #") === "4126")!, "Invoice incl."), "yes", "the MN Subscription invoice stays included");
+  eq(
+    cget(
+      csvRows.find((r) => cget(r, "Invoice #") === "4061")!,
+      "Invoice incl.",
+    ),
+    "no",
+    "the JYF invoice row is flagged excluded",
+  );
+  eq(
+    cget(
+      csvRows.find((r) => cget(r, "Invoice #") === "4126")!,
+      "Invoice incl.",
+    ),
+    "yes",
+    "the MN Subscription invoice stays included",
+  );
   eq(cget(csvRows[0], "Engine payout"), 258.5, "engine payout stays the raw number");
   eq(cget(csvRows[0], "Effective payout"), 255, "effective payout reflects the dropped invoice");
 
@@ -1027,29 +1812,96 @@ console.log("[13b] per-invoice + per-line-item exclusions in a payout line");
   const josh = { clientId: 289870, payout: 237.5, splitPct: 0.6, sources: [inv4109] };
 
   eq(lineItemsSplittable(inv4109), true, "line items reconcile to the $625 total -> splittable");
-  eq(payLineItemKey(inv4109, 2).startsWith("id:4109#2:"), true, "line-item key = sourceKey#index:item-slug");
-  eq(sourceIncludedBilled(inv4109, { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)] }), 850, "dropping both credits -> basis = 425 + 425 = 850");
+  eq(
+    payLineItemKey(inv4109, 2).startsWith("id:4109#2:"),
+    true,
+    "line-item key = sourceKey#index:item-slug",
+  );
+  eq(
+    sourceIncludedBilled(inv4109, {
+      included: true,
+      override: null,
+      note: null,
+      excludedLineItems: [payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)],
+    }),
+    850,
+    "dropping both credits -> basis = 425 + 425 = 850",
+  );
 
   eq(payoutAfterExclusions(josh, DEFAULT_LINE_STATE), 237.5, "no drops -> engine payout $237.50");
-  eq(payoutAfterExclusions(josh, { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)] }), 323, "drop the two credits -> 850 × 19/30 × 60% = $323.00");
-  eq(payoutAfterExclusions(josh, { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(inv4109, 0)] }), 76, "drop one $425 line -> 200 × 19/30 × 60% = $76.00");
-  eq(payoutAfterExclusions(josh, { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(inv4109, 0), payLineItemKey(inv4109, 1), payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)] }), 0, "drop every line item -> $0");
+  eq(
+    payoutAfterExclusions(josh, {
+      included: true,
+      override: null,
+      note: null,
+      excludedLineItems: [payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)],
+    }),
+    323,
+    "drop the two credits -> 850 × 19/30 × 60% = $323.00",
+  );
+  eq(
+    payoutAfterExclusions(josh, {
+      included: true,
+      override: null,
+      note: null,
+      excludedLineItems: [payLineItemKey(inv4109, 0)],
+    }),
+    76,
+    "drop one $425 line -> 200 × 19/30 × 60% = $76.00",
+  );
+  eq(
+    payoutAfterExclusions(josh, {
+      included: true,
+      override: null,
+      note: null,
+      excludedLineItems: [
+        payLineItemKey(inv4109, 0),
+        payLineItemKey(inv4109, 1),
+        payLineItemKey(inv4109, 2),
+        payLineItemKey(inv4109, 3),
+      ],
+    }),
+    0,
+    "drop every line item -> $0",
+  );
 
-  const joshState: BuildLineState = { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)] };
+  const joshState: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    excludedLineItems: [payLineItemKey(inv4109, 2), payLineItemKey(inv4109, 3)],
+  };
   const smJ = summarizeBuild([josh], new Map([[289870, joshState]]));
   eq(smJ.computedTotal, 237.5, "computed total = raw engine payout");
   eq(smJ.builtTotal, 323, "built total reflects the dropped credit lines");
   eq(smJ.invoiceAdjustedCount, 1, "line-item drop counts as an adjusted line");
 
   const csvJ = payoutDetailCsvRows(
-    [{ clientId: 289870, clientName: "Josh Lehman", tier: "4x", splitPct: 0.6, payout: 237.5, sources: [inv4109] }],
-    new Map([[289870, joshState]])
+    [
+      {
+        clientId: 289870,
+        clientName: "Josh Lehman",
+        tier: "4x",
+        splitPct: 0.6,
+        payout: 237.5,
+        sources: [inv4109],
+      },
+    ],
+    new Map([[289870, joshState]]),
   );
   const row4109 = csvJ.find((r) => cget(r, "Invoice #") === "4109")!;
   eq(cget(row4109, "Invoice incl."), "partial", "a partially-dropped invoice reads 'partial'");
   eq(cget(row4109, "Effective payout"), 323, "line-item drop reflected in effective payout");
-  eq(String(cget(row4109, "Line items")).includes("[removed by review]"), true, "reviewer-dropped line items are tagged in the CSV");
-  eq(cget(row4109, "Recognized into month"), 538.33, "recognized scales to the surviving $850 basis");
+  eq(
+    String(cget(row4109, "Line items")).includes("[removed by review]"),
+    true,
+    "reviewer-dropped line items are tagged in the CSV",
+  );
+  eq(
+    cget(row4109, "Recognized into month"),
+    538.33,
+    "recognized scales to the surviving $850 basis",
+  );
 }
 
 console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
@@ -1062,39 +1914,86 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
   const TPL_2X = "MN Subscription | (2x Month) Zoom Meetings";
   const TPL_1X = "MN Subscription | (1x Month) Zoom Meetings";
   const cfg = parsePayGroupsConfig(
-    JSON.stringify({ groups: [{ id: "mentors", name: "Mentors", templateNames: [TPL_4X, TPL_2X, TPL_1X], coachIds: [] }] })
+    JSON.stringify({
+      groups: [
+        { id: "mentors", name: "Mentors", templateNames: [TPL_4X, TPL_2X, TPL_1X], coachIds: [] },
+      ],
+    }),
   );
   const liPred = lineItemEligibleForGroup(cfg, MENTORS_GROUP_ID)!;
 
   // --- the matcher itself ---
-  eq(liPred("MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)"), true, "line item matches template by prefix");
-  eq(liPred("MN Subscription | (2x Month) Zoom Meetings (Harry Shank) ($265)"), true, "coach-name typo in the suffix doesn't matter");
+  eq(
+    liPred("MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)"),
+    true,
+    "line item matches template by prefix",
+  );
+  eq(
+    liPred("MN Subscription | (2x Month) Zoom Meetings (Harry Shank) ($265)"),
+    true,
+    "coach-name typo in the suffix doesn't matter",
+  );
   eq(liPred("mn subscription | (4x month)  zoom meetings (X)"), true, "case/whitespace lenient");
   eq(liPred("JYF Supervised Progress (w/ Dave Troyer) ($175)"), false, "JYF fee doesn't match");
-  eq(liPred("MT Engagement | One-Year Mentor Training Program (1 of 3 payments) ($550)"), false, "MT tuition doesn't match");
+  eq(
+    liPred("MT Engagement | One-Year Mentor Training Program (1 of 3 payments) ($550)"),
+    false,
+    "MT tuition doesn't match",
+  );
   eq(liPred("Credit for the JYF Fee ($-175)"), false, "credits never match a template");
-  eq(lineItemEligibleForGroup(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID), null, "unconfigured group -> null (legacy fallback)");
+  eq(
+    lineItemEligibleForGroup(DEFAULT_PAY_GROUPS_CONFIG, MENTORS_GROUP_ID),
+    null,
+    "unconfigured group -> null (legacy fallback)",
+  );
 
   // --- the engine in invoice-truth mode ---
   const li = (item: string, amount: number) => ({ item, amount });
-  const MN4 = (coach = "Harry Shenk") => `MN Subscription | (4x Month) Zoom Meetings (${coach}) ($425)`;
+  const MN4 = (coach = "Harry Shenk") =>
+    `MN Subscription | (4x Month) Zoom Meetings (${coach}) ($425)`;
   const inv = (
     clientId: number,
     serviceDate: string,
     billed: number,
     items: { item: string; amount: number }[],
-    id: number
-  ): PayInvoiceInput => ({ clientId, serviceDate, billed, collected: billed, invoiceId: id, invoiceNumber: String(id), lineItems: items });
+    id: number,
+  ): PayInvoiceInput => ({
+    clientId,
+    serviceDate,
+    billed,
+    collected: billed,
+    invoiceId: id,
+    invoiceNumber: String(id),
+    lineItems: items,
+  });
   const invoices: PayInvoiceInput[] = [
     // Brett (1): 4x engagement is CANCELED in CA but bills $425 MN monthly.
     inv(1, "2026-03-19", 425, [li(MN4(), 425)], 101),
     inv(1, "2026-04-19", 425, [li(MN4(), 425)], 102),
     // Wynn (2): canceled 2x engagement still billing $265 monthly, day 21.
-    inv(2, "2026-03-21", 265, [li("MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", 265)], 201),
-    inv(2, "2026-04-21", 265, [li("MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", 265)], 202),
+    inv(
+      2,
+      "2026-03-21",
+      265,
+      [li("MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", 265)],
+      201,
+    ),
+    inv(
+      2,
+      "2026-04-21",
+      265,
+      [li("MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", 265)],
+      202,
+    ),
     // Nelson (3): March MN + April MT tuition (must NOT be paid).
     inv(3, "2026-03-09", 425, [li(MN4(), 425)], 301),
-    inv(3, "2026-04-14", 550, [li("MT Engagement | One-Year Mentor Training Program (1 of 3 payments) ($550)", 550)], 302),
+    inv(
+      3,
+      "2026-04-14",
+      550,
+      [li("MT Engagement | One-Year Mentor Training Program (1 of 3 payments) ($550)", 550)],
+      302,
+    ),
     // Cade (4): JYF-only both months (must produce NO pay line, only excludedBilled).
     inv(4, "2026-03-21", 175, [li("JYF Supervised Progress (w/ Dave Troyer) ($175)", 175)], 401),
     inv(4, "2026-04-21", 175, [li("JYF Supervised Progress (w/ Dave Troyer) ($175)", 175)], 402),
@@ -1105,13 +2004,47 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
   ];
   // Engagements: Brett/Wynn CANCELED (the trap — must not matter); Nelson live 4x.
   const engagements: PayEngagementInput[] = [
-    { clientId: 1, coachId: 900, startDate: "2025-09-15", endDate: null, isCanceled: true, name: TPL_4X },
-    { clientId: 2, coachId: 900, startDate: "2025-11-19", endDate: null, isCanceled: true, name: TPL_2X },
-    { clientId: 3, coachId: 900, startDate: "2026-01-05", endDate: "2026-06-05", isCanceled: false, name: TPL_4X },
+    {
+      clientId: 1,
+      coachId: 900,
+      startDate: "2025-09-15",
+      endDate: null,
+      isCanceled: true,
+      name: TPL_4X,
+    },
+    {
+      clientId: 2,
+      coachId: 900,
+      startDate: "2025-11-19",
+      endDate: null,
+      isCanceled: true,
+      name: TPL_2X,
+    },
+    {
+      clientId: 3,
+      coachId: 900,
+      startDate: "2026-01-05",
+      endDate: "2026-06-05",
+      isCanceled: false,
+      name: TPL_4X,
+    },
     // Tenure anchor way back so the mentor is at the 60% rate.
-    { clientId: 99, coachId: 900, startDate: "2024-01-01", endDate: "2024-06-01", isCanceled: false, name: TPL_4X },
+    {
+      clientId: 99,
+      coachId: 900,
+      startDate: "2024-01-01",
+      endDate: "2024-06-01",
+      isCanceled: false,
+      name: TPL_4X,
+    },
   ];
-  const owner = new Map<number, number>([[1, 900], [2, 900], [3, 900], [4, 900], [5, 900]]); // 6 unowned
+  const owner = new Map<number, number>([
+    [1, 900],
+    [2, 900],
+    [3, 900],
+    [4, 900],
+    [5, 900],
+  ]); // 6 unowned
   const rpt = computePayReport({
     ym: "2026-04",
     invoices,
@@ -1137,7 +2070,11 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
   eq(lineOf(3).earned, 123.39, "Nelson April = March rollover only (425×9/31)");
   eq(lineOf(3).payout, 74.03, "Nelson pays $74.03 — MT tuition NOT swept in");
   // Cade: no pay line at all.
-  eq(harry.lines.some((l) => l.clientId === 4), false, "JYF-only mentee has NO pay line");
+  eq(
+    harry.lines.some((l) => l.clientId === 4),
+    false,
+    "JYF-only mentee has NO pay line",
+  );
   // Kendrick: basis = 425 − 70 = 355 (credit auto-included as reduction).
   eq(lineOf(5).billed, 355, "discount credit reduces the basis (425−70)");
   const kSrc = lineOf(5).sources[0];
@@ -1147,7 +2084,11 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
   // excludedBilled picks up the MT tuition + Cade's April JYF fee.
   eq(rpt.excludedBilled, 550 + 175, "MT tuition + JYF fee land in excludedBilled");
   // The unowned/uncovered eligible invoice surfaces as unassigned, not dropped.
-  eq(rpt.unassigned.some((u) => u.clientId === 6), true, "eligible line with no coach -> unassigned bucket");
+  eq(
+    rpt.unassigned.some((u) => u.clientId === 6),
+    true,
+    "eligible line with no coach -> unassigned bucket",
+  );
 
   // Legacy mode is untouched: same inputs WITHOUT the line-item predicate drops
   // Brett/Wynn (canceled) and pays Nelson's MT invoice — the old (wrong) behavior,
@@ -1161,8 +2102,16 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
     primaryCoachOf: (cid) => owner.get(cid) ?? null,
   });
   const lHarry = legacy.mentors.find((m) => m.coachId === 900);
-  eq(lHarry?.lines.some((l) => l.clientId === 1) ?? false, false, "legacy still drops the canceled-engagement mentee");
-  eq(lHarry?.lines.find((l) => l.clientId === 3)?.billed ?? 0, 550, "legacy still sweeps the MT tuition (the bug, preserved until configured)");
+  eq(
+    lHarry?.lines.some((l) => l.clientId === 1) ?? false,
+    false,
+    "legacy still drops the canceled-engagement mentee",
+  );
+  eq(
+    lHarry?.lines.find((l) => l.clientId === 3)?.billed ?? 0,
+    550,
+    "legacy still sweeps the MT tuition (the bug, preserved until configured)",
+  );
 
   // --- review flow on classified sources ---
   const bLine = lineOf(3); // Nelson: rollover MN (included) + this-month MT (…wait, MT invoice produced no source)
@@ -1171,14 +2120,36 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
   eq(sourceIsClassified(kLine.sources[0]), true, "engine-classified source detected");
   eq(sourceAutoBasis(kLine.sources[0]), 355, "auto basis = eligible net");
   // Exclude the credit -> basis rises to 425; payout = 425×(17/30)×0.6.
-  const noCredit: BuildLineState = { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(kLine.sources[0], 1)] };
+  const noCredit: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    excludedLineItems: [payLineItemKey(kLine.sources[0], 1)],
+  };
   eq(lineItemCounts(kLine.sources[0], 1, noCredit), false, "excluded credit no longer counts");
   eq(sourceIncludedBilled(kLine.sources[0], noCredit), 425, "basis without the credit = 425");
-  eq(payoutAfterExclusions(kLine, noCredit), round2(round2(425 * (17 / 30)) * 0.6), "payout recomputes with credit excluded");
+  eq(
+    payoutAfterExclusions(kLine, noCredit),
+    round2(round2(425 * (17 / 30)) * 0.6),
+    "payout recomputes with credit excluded",
+  );
   // Exclude the MN line, keep the credit -> clamped at 0, not negative.
-  const onlyCredit: BuildLineState = { included: true, override: null, note: null, excludedLineItems: [payLineItemKey(kLine.sources[0], 0)] };
-  eq(sourceIncludedBilled(kLine.sources[0], onlyCredit), -70, "credit-only basis stays raw per source (negative)");
-  eq(payoutAfterExclusions(kLine, onlyCredit), 0, "…and the LINE clamps the payout at $0 (never negative)");
+  const onlyCredit: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    excludedLineItems: [payLineItemKey(kLine.sources[0], 0)],
+  };
+  eq(
+    sourceIncludedBilled(kLine.sources[0], onlyCredit),
+    -70,
+    "credit-only basis stays raw per source (negative)",
+  );
+  eq(
+    payoutAfterExclusions(kLine, onlyCredit),
+    0,
+    "…and the LINE clamps the payout at $0 (never negative)",
+  );
   // Opt IN an auto-excluded line: give Nelson's MT invoice a hand-inclusion…
   // (MT invoice creates no source, so opt-in applies to lines on eligible invoices —
   // exercise via a synthetic classified source with an excluded JYF line.)
@@ -1201,33 +2172,91 @@ console.log("[13c] INVOICE-TRUTH mode: line-item basis engine + review flow");
       { item: "JYF Supervised Progress ($175)", amount: 175, status: "excluded" },
     ],
   };
-  const mixedLine = { payout: round2(round2(425 * (2 / 3)) * 0.6), splitPct: 0.6, sources: [mixed] };
-  const optIn: BuildLineState = { included: true, override: null, note: null, includedLineItems: [payLineItemKey(mixed, 1)] };
-  eq(lineItemCounts(mixed, 1, DEFAULT_LINE_STATE), false, "auto-excluded line doesn't count by default");
+  const mixedLine = {
+    payout: round2(round2(425 * (2 / 3)) * 0.6),
+    splitPct: 0.6,
+    sources: [mixed],
+  };
+  const optIn: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    includedLineItems: [payLineItemKey(mixed, 1)],
+  };
+  eq(
+    lineItemCounts(mixed, 1, DEFAULT_LINE_STATE),
+    false,
+    "auto-excluded line doesn't count by default",
+  );
   eq(lineItemCounts(mixed, 1, optIn), true, "…until the reviewer opts it in");
   eq(sourceIncludedBilled(mixed, optIn), 600, "opt-in raises the basis to 600");
-  eq(payoutAfterExclusions(mixedLine, optIn), round2(round2(600 * (2 / 3)) * 0.6), "payout recomputes with the opt-in");
-  eq(isDefaultLineState({ included: true, override: null, note: null, includedLineItems: ["x"] }), false, "an opt-in persists (not default)");
-  eq(includedLineItemSet(optIn).has(payLineItemKey(mixed, 1)), true, "includedLineItemSet reads the state");
+  eq(
+    payoutAfterExclusions(mixedLine, optIn),
+    round2(round2(600 * (2 / 3)) * 0.6),
+    "payout recomputes with the opt-in",
+  );
+  eq(
+    isDefaultLineState({ included: true, override: null, note: null, includedLineItems: ["x"] }),
+    false,
+    "an opt-in persists (not default)",
+  );
+  eq(
+    includedLineItemSet(optIn).has(payLineItemKey(mixed, 1)),
+    true,
+    "includedLineItemSet reads the state",
+  );
   // CSV: partial flag + tags for the mixed invoice.
   const mixedRows = payoutDetailCsvRows(
-    [{ clientId: 9, clientName: "Mixed", tier: "4x", splitPct: 0.6, payout: mixedLine.payout, sources: [mixed] }],
-    new Map()
+    [
+      {
+        clientId: 9,
+        clientName: "Mixed",
+        tier: "4x",
+        splitPct: 0.6,
+        payout: mixedLine.payout,
+        sources: [mixed],
+      },
+    ],
+    new Map(),
   );
   const mcols = PAYOUT_DETAIL_CSV_COLUMNS;
-  const mget = (row: (string | number)[], label: string) => row[mcols.indexOf(label as (typeof mcols)[number])];
-  eq(mget(mixedRows[0], "Invoice incl."), "partial", "auto-partial invoice (excluded JYF line) reads 'partial'");
-  eq(String(mget(mixedRows[0], "Line items")).includes("[not in pay]"), true, "auto-excluded line tagged in CSV");
-  const kRows = payoutDetailCsvRows(
-    [{ clientId: 5, clientName: "Kendrick", tier: "4x", splitPct: 0.6, payout: kLine.payout, sources: kLine.sources }],
-    new Map()
+  const mget = (row: (string | number)[], label: string) =>
+    row[mcols.indexOf(label as (typeof mcols)[number])];
+  eq(
+    mget(mixedRows[0], "Invoice incl."),
+    "partial",
+    "auto-partial invoice (excluded JYF line) reads 'partial'",
   );
-  eq(String(mget(kRows[0], "Line items")).includes("[credit]"), true, "counted credit line tagged [credit] in CSV");
+  eq(
+    String(mget(mixedRows[0], "Line items")).includes("[not in pay]"),
+    true,
+    "auto-excluded line tagged in CSV",
+  );
+  const kRows = payoutDetailCsvRows(
+    [
+      {
+        clientId: 5,
+        clientName: "Kendrick",
+        tier: "4x",
+        splitPct: 0.6,
+        payout: kLine.payout,
+        sources: kLine.sources,
+      },
+    ],
+    new Map(),
+  );
+  eq(
+    String(mget(kRows[0], "Line items")).includes("[credit]"),
+    true,
+    "counted credit line tagged [credit] in CSV",
+  );
 }
 
 console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
 {
-  const src = (over: Partial<import("../lib/pay.js").PayLineSource>): import("../lib/pay.js").PayLineSource => {
+  const src = (
+    over: Partial<import("../lib/pay.js").PayLineSource>,
+  ): import("../lib/pay.js").PayLineSource => {
     const base = {
       invoiceId: 4147,
       invoiceNumber: "4147",
@@ -1241,7 +2270,13 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
       recognized: 425 * (2 / 3),
       tier: "4x",
       payments: [],
-      lineItems: [{ item: "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)", amount: 425, status: "included" as const }],
+      lineItems: [
+        {
+          item: "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)",
+          amount: 425,
+          status: "included" as const,
+        },
+      ],
       ...over,
     };
     return { ...base, eligibleBilled: over.eligibleBilled ?? base.billed };
@@ -1255,11 +2290,17 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
     eligibleBilled: 250,
     recognized: 250 * (2 / 3),
     lineItems: [
-      { item: "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)", amount: 425, status: "included" },
+      {
+        item: "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)",
+        amount: 425,
+        status: "included",
+      },
       { item: "Credit for previous payment", amount: -175, status: "credit" },
     ],
   });
-  const mkLine = (over: Partial<import("../lib/pay.js").PayMenteeLine>): import("../lib/pay.js").PayMenteeLine => ({
+  const mkLine = (
+    over: Partial<import("../lib/pay.js").PayMenteeLine>,
+  ): import("../lib/pay.js").PayMenteeLine => ({
     clientId: 1,
     clientName: "Josh Lehman",
     coachId: 900,
@@ -1276,8 +2317,21 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
     ...over,
   });
   const josh = mkLine({});
-  const plain = mkLine({ clientId: 2, clientName: "Myles Miller", sources: [src({ invoiceId: 4135, invoiceNumber: "4135" })], billed: 425, earned: round2(425 * (2 / 3)), recognizedThis: round2(425 * (2 / 3)), payout: round2(round2(425 * (2 / 3)) * 0.6) });
-  const creditOut: BuildLineState = { included: true, override: null, note: "refund shouldn't hit Harry", excludedLineItems: [payLineItemKey(joshSrc, 1)] };
+  const plain = mkLine({
+    clientId: 2,
+    clientName: "Myles Miller",
+    sources: [src({ invoiceId: 4135, invoiceNumber: "4135" })],
+    billed: 425,
+    earned: round2(425 * (2 / 3)),
+    recognizedThis: round2(425 * (2 / 3)),
+    payout: round2(round2(425 * (2 / 3)) * 0.6),
+  });
+  const creditOut: BuildLineState = {
+    included: true,
+    override: null,
+    note: "refund shouldn't hit Harry",
+    excludedLineItems: [payLineItemKey(joshSrc, 1)],
+  };
   const model = buildPayStubModel({
     coachName: "Harry Shenk",
     ym: "2026-06",
@@ -1291,7 +2345,11 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
   eq(model.approved, false, "draft build -> review copy");
   eq(model.monthLabel, "June 2026", "long month label");
   const jr = model.rows.find((r) => r.name === "Josh Lehman")!;
-  eq(jr.invoices[0].items[1].disposition, "credit-out", "reviewer-excluded credit reads credit-out (does NOT reduce pay)");
+  eq(
+    jr.invoices[0].items[1].disposition,
+    "credit-out",
+    "reviewer-excluded credit reads credit-out (does NOT reduce pay)",
+  );
   eq(jr.invoices[0].items[0].disposition, "counted", "MN line reads counted");
   eq(jr.invoices[0].counts, 425, "invoice counts $425 once the credit is kicked out");
   eq(jr.earned, round2(425 * (2 / 3)), "earned recomputed from the surviving basis");
@@ -1300,54 +2358,103 @@ console.log("[13d] pay stub model (mentor-facing dispositions + totals)");
   const mr = model.rows.find((r) => r.name === "Myles Miller")!;
   eq(mr.adjusted, false, "untouched line is not flagged");
   eq(model.totals.payout, round2(jr.payout + mr.payout), "stub total = Σ effective payouts");
-  eq(model.totals.delta, round2(model.totals.payout - model.totals.enginePayout), "delta = effective − engine");
+  eq(
+    model.totals.delta,
+    round2(model.totals.payout - model.totals.enginePayout),
+    "delta = effective − engine",
+  );
   eq(model.totals.adjustedCount, 1, "one adjusted line counted");
   // credit COUNTED (default) reads credit-counted; excluded line-level states.
   const model2 = buildPayStubModel({
-    coachName: "Harry Shenk", ym: "2026-06", splitPct: 0.6, status: "approved",
+    coachName: "Harry Shenk",
+    ym: "2026-06",
+    splitPct: 0.6,
+    status: "approved",
     lines: [josh, plain],
     states: new Map([[2, { included: false, override: null, note: "no-show month" }]]),
     generatedOn: "2026-07-17",
   });
   eq(model2.approved, true, "approved build -> final stub");
-  eq(model2.rows.find((r) => r.name === "Josh Lehman")!.invoices[0].items[1].disposition, "credit-counted", "default credit reads credit-counted");
+  eq(
+    model2.rows.find((r) => r.name === "Josh Lehman")!.invoices[0].items[1].disposition,
+    "credit-counted",
+    "default credit reads credit-counted",
+  );
   const mx = model2.rows.find((r) => r.name === "Myles Miller")!;
   eq(mx.excluded, true, "line-level exclusion surfaces");
   eq(mx.payout, 0, "excluded line pays 0 on the stub");
   eq(model2.totals.menteeCount, 1, "excluded mentee not counted");
   // HTML smoke: renders, carries the key transparency string + watermark rules.
   const html = payStubHtml(model);
-  eq(html.includes("does not reduce your pay"), true, "stub HTML carries the credit-out explanation");
+  eq(
+    html.includes("does not reduce your pay"),
+    true,
+    "stub HTML carries the credit-out explanation",
+  );
   eq(html.includes("REVIEW COPY"), true, "draft stub is watermarked/badged");
   eq(payStubHtml(model2).includes("APPROVED PAY STUB"), true, "approved stub badged");
   eq(html.includes("<script"), false, "no scripts in the stub document");
   eq(model.pieces.length, 0, "no piece work on the stub by default");
-  eq(model.totals.payout, model.totals.linePayout, "without piece work, payout == mentee-line payout");
+  eq(
+    model.totals.payout,
+    model.totals.linePayout,
+    "without piece work, payout == mentee-line payout",
+  );
 
   // Piece work on a MENTOR stub: adds to the check and prints its own row.
   const pieceModel = buildPayStubModel({
-    coachName: "Harry Shenk", ym: "2026-06", splitPct: 0.6, status: "approved",
-    lines: [josh, plain], states: new Map(), generatedOn: "2026-07-25",
+    coachName: "Harry Shenk",
+    ym: "2026-06",
+    splitPct: 0.6,
+    status: "approved",
+    lines: [josh, plain],
+    states: new Map(),
+    generatedOn: "2026-07-25",
     pieces: [{ date: null, label: "New mentee onboarded", qty: 8, unitRate: 25 }],
   });
   eq(pieceModel.piecesTotal, 200, "mentor stub carries the piece-work total");
-  eq(pieceModel.totals.payout, round2(pieceModel.totals.linePayout + 200), "piece work is added to the mentor's check");
+  eq(
+    pieceModel.totals.payout,
+    round2(pieceModel.totals.linePayout + 200),
+    "piece work is added to the mentor's check",
+  );
   const pieceHtml = payStubHtml(pieceModel);
-  eq(pieceHtml.includes("New mentee onboarded"), true, "piece-work item printed on the mentor stub");
+  eq(
+    pieceHtml.includes("New mentee onboarded"),
+    true,
+    "piece-work item printed on the mentor stub",
+  );
   eq(pieceHtml.includes("piece work"), true, "piece-work row tagged on the mentor stub");
   eq(pieceHtml.includes("<script"), false, "no scripts in the piece-work mentor stub");
 }
 
-console.log("[13e] adversarial-review regressions (empty line items, refunds, tier stability, canceled attribution)");
+console.log(
+  "[13e] adversarial-review regressions (empty line items, refunds, tier stability, canceled attribution)",
+);
 {
   const TPL_4X = "MN Subscription | (4x Month) Zoom Meetings";
   const cfg = parsePayGroupsConfig(
-    JSON.stringify({ groups: [{ id: "mentors", name: "Mentors", templateNames: [TPL_4X], coachIds: [] }] })
+    JSON.stringify({
+      groups: [{ id: "mentors", name: "Mentors", templateNames: [TPL_4X], coachIds: [] }],
+    }),
   );
   const liPred = lineItemEligibleForGroup(cfg, MENTORS_GROUP_ID)!;
   const MN = "MN Subscription | (4x Month) Zoom Meetings (Harry Shenk) ($425)";
-  const inv = (clientId: number, serviceDate: string, billed: number, items: { item: string; amount: number }[], id: number): PayInvoiceInput =>
-    ({ clientId, serviceDate, billed, collected: billed, invoiceId: id, invoiceNumber: String(id), lineItems: items });
+  const inv = (
+    clientId: number,
+    serviceDate: string,
+    billed: number,
+    items: { item: string; amount: number }[],
+    id: number,
+  ): PayInvoiceInput => ({
+    clientId,
+    serviceDate,
+    billed,
+    collected: billed,
+    invoiceId: id,
+    invoiceNumber: String(id),
+    lineItems: items,
+  });
   const baseIn = {
     coachName: () => "Harry",
     clientName: (id: number) => `C${id}`,
@@ -1355,13 +2462,22 @@ console.log("[13e] adversarial-review regressions (empty line items, refunds, ti
     payEligibleLineItem: liPred,
   };
   const engLive: PayEngagementInput[] = [
-    { clientId: 1, coachId: 900, startDate: "2024-01-01", endDate: null, isCanceled: false, name: TPL_4X },
+    {
+      clientId: 1,
+      coachId: 900,
+      startDate: "2024-01-01",
+      endDate: null,
+      isCanceled: false,
+      name: TPL_4X,
+    },
   ];
 
   // (1) EMPTY line items in liMode -> legacy per-invoice fallback (engagement-
   //     gated, full billed basis) instead of silently dropping real revenue.
   const rEmpty = computePayReport({
-    ym: "2026-04", ...baseIn, engagements: engLive,
+    ym: "2026-04",
+    ...baseIn,
+    engagements: engLive,
     invoices: [inv(1, "2026-04-10", 425, [], 1)],
     primaryCoachOf: () => 900,
   });
@@ -1370,11 +2486,17 @@ console.log("[13e] adversarial-review regressions (empty line items, refunds, ti
   eq(rEmpty.excludedBilled, 0, "…and is NOT dumped into excludedBilled");
   // Without engagement coverage it stays excluded (auditable), as legacy did.
   const rEmptyNoCov = computePayReport({
-    ym: "2026-04", ...baseIn, engagements: [],
+    ym: "2026-04",
+    ...baseIn,
+    engagements: [],
     invoices: [inv(1, "2026-04-10", 425, [], 1)],
     primaryCoachOf: () => 900,
   });
-  eq(rEmptyNoCov.excludedBilled, 425, "no-line-items + no coverage -> excludedBilled (unchanged from legacy)");
+  eq(
+    rEmptyNoCov.excludedBilled,
+    425,
+    "no-line-items + no coverage -> excludedBilled (unchanged from legacy)",
+  );
 
   // (2) A matched REFUND invoice nets against the month; the line clamps at $0.
   //     Charge +425 day 10 (recognizes 283.33) + refund −425 day 20 (recognizes
@@ -1384,13 +2506,29 @@ console.log("[13e] adversarial-review regressions (empty line items, refunds, ti
     inv(1, "2026-04-10", 425, [{ item: MN, amount: 425 }], 11),
     inv(1, "2026-04-20", -425, [{ item: MN, amount: -425 }], 12),
   ];
-  const rApr = computePayReport({ ym: "2026-04", ...baseIn, engagements: engLive, invoices: refundInvs, primaryCoachOf: () => 900 });
-  const rMay = computePayReport({ ym: "2026-05", ...baseIn, engagements: engLive, invoices: refundInvs, primaryCoachOf: () => 900 });
+  const rApr = computePayReport({
+    ym: "2026-04",
+    ...baseIn,
+    engagements: engLive,
+    invoices: refundInvs,
+    primaryCoachOf: () => 900,
+  });
+  const rMay = computePayReport({
+    ym: "2026-05",
+    ...baseIn,
+    engagements: engLive,
+    invoices: refundInvs,
+    primaryCoachOf: () => 900,
+  });
   const aprLine = rApr.mentors[0].lines[0];
   eq(aprLine.sources.length, 2, "the refund invoice EMITS a source (visible + reviewable)");
   eq(aprLine.earned, round2(425 * (2 / 3) - 425 * (1 / 3)), "April nets charge minus refund");
   const mayLine = rMay.mentors[0]?.lines[0];
-  eq(mayLine?.earned ?? 0, round2(425 * (1 / 3) - 425 * (2 / 3)), "May nets negative (refund rollover exceeds charge rollover)");
+  eq(
+    mayLine?.earned ?? 0,
+    round2(425 * (1 / 3) - 425 * (2 / 3)),
+    "May nets negative (refund rollover exceeds charge rollover)",
+  );
   eq(mayLine?.payout ?? 0, 0, "…and pays $0, never negative");
   const life = round2((rApr.mentors[0]?.payout ?? 0) + (rMay.mentors[0]?.payout ?? 0));
   eq(life, 85, "lifetime payout = 60% x April's net recognized (no phantom $255)");
@@ -1399,21 +2537,64 @@ console.log("[13e] adversarial-review regressions (empty line items, refunds, ti
   //     diff); invoice-truth still relabels to the LATEST invoice's tier.
   const tierInvs = [
     inv(1, "2026-03-09", 425, [{ item: MN, amount: 425 }], 21),
-    inv(1, "2026-04-09", 265, [{ item: "MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", amount: 265 }], 22),
+    inv(
+      1,
+      "2026-04-09",
+      265,
+      [{ item: "MN Subscription | (2x Month) Zoom Meetings (Harry Shenk) ($265)", amount: 265 }],
+      22,
+    ),
   ];
   const tierEngs: PayEngagementInput[] = [
-    { clientId: 1, coachId: 900, startDate: "2024-01-01", endDate: "2026-04-01", isCanceled: false, name: TPL_4X },
-    { clientId: 1, coachId: 900, startDate: "2026-04-01", endDate: null, isCanceled: false, name: "MN Subscription | (2x Month) Zoom Meetings" },
+    {
+      clientId: 1,
+      coachId: 900,
+      startDate: "2024-01-01",
+      endDate: "2026-04-01",
+      isCanceled: false,
+      name: TPL_4X,
+    },
+    {
+      clientId: 1,
+      coachId: 900,
+      startDate: "2026-04-01",
+      endDate: null,
+      isCanceled: false,
+      name: "MN Subscription | (2x Month) Zoom Meetings",
+    },
   ];
   const legacyTier = computePayReport({
-    ym: "2026-04", invoices: tierInvs, engagements: tierEngs,
-    coachName: () => "Harry", clientName: (id) => `C${id}`, primaryCoachOf: () => 900,
+    ym: "2026-04",
+    invoices: tierInvs,
+    engagements: tierEngs,
+    coachName: () => "Harry",
+    clientName: (id) => `C${id}`,
+    primaryCoachOf: () => 900,
   });
-  eq(legacyTier.mentors[0].lines[0].tier, "4x", "legacy keeps the FIRST-processed tier (pre-diff behavior)");
-  const cfg2 = parsePayGroupsConfig(JSON.stringify({ groups: [{ id: "mentors", name: "Mentors", templateNames: [TPL_4X, "MN Subscription | (2x Month) Zoom Meetings"], coachIds: [] }] }));
+  eq(
+    legacyTier.mentors[0].lines[0].tier,
+    "4x",
+    "legacy keeps the FIRST-processed tier (pre-diff behavior)",
+  );
+  const cfg2 = parsePayGroupsConfig(
+    JSON.stringify({
+      groups: [
+        {
+          id: "mentors",
+          name: "Mentors",
+          templateNames: [TPL_4X, "MN Subscription | (2x Month) Zoom Meetings"],
+          coachIds: [],
+        },
+      ],
+    }),
+  );
   const liTier = computePayReport({
-    ym: "2026-04", invoices: tierInvs, engagements: tierEngs,
-    coachName: () => "Harry", clientName: (id) => `C${id}`, primaryCoachOf: () => 900,
+    ym: "2026-04",
+    invoices: tierInvs,
+    engagements: tierEngs,
+    coachName: () => "Harry",
+    clientName: (id) => `C${id}`,
+    primaryCoachOf: () => 900,
     payEligible: payEligibleForGroup(cfg2, MENTORS_GROUP_ID)!,
     payEligibleLineItem: lineItemEligibleForGroup(cfg2, MENTORS_GROUP_ID)!,
   });
@@ -1422,35 +2603,92 @@ console.log("[13e] adversarial-review regressions (empty line items, refunds, ti
   // (4) liMode attribution fallback tolerates CANCELED engagements when no owner
   //     is synced (the Brett/Wynn record shape).
   const rCanc = computePayReport({
-    ym: "2026-04", ...baseIn,
-    engagements: [{ clientId: 1, coachId: 900, startDate: "2025-09-15", endDate: null, isCanceled: true, name: TPL_4X }],
+    ym: "2026-04",
+    ...baseIn,
+    engagements: [
+      {
+        clientId: 1,
+        coachId: 900,
+        startDate: "2025-09-15",
+        endDate: null,
+        isCanceled: true,
+        name: TPL_4X,
+      },
+    ],
     invoices: [inv(1, "2026-04-19", 425, [{ item: MN, amount: 425 }], 31)],
     primaryCoachOf: () => null,
   });
-  eq(rCanc.mentors[0]?.coachId ?? null, 900, "no owner + canceled-but-billing engagement still credits its coach");
+  eq(
+    rCanc.mentors[0]?.coachId ?? null,
+    900,
+    "no owner + canceled-but-billing engagement still credits its coach",
+  );
   eq(rCanc.unassigned.length, 0, "…instead of landing unassigned");
 }
 
 console.log("[13f] build-level Split % override (review layer + stub)");
 {
   const mkSrc = (): import("../lib/pay.js").PayLineSource => ({
-    invoiceId: 1, invoiceNumber: "1", serviceDate: "2026-06-10", serviceMonth: "2026-06",
-    invoiceDay: 10, slice: "this-month", billed: 425, eligibleBilled: 425, collected: 425,
-    elapsedFraction: 1 / 3, recognized: 425 * (2 / 3), tier: "4x", payments: [],
-    lineItems: [{ item: "MN Subscription | (4x Month) Zoom Meetings (X) ($425)", amount: 425, status: "included" }],
+    invoiceId: 1,
+    invoiceNumber: "1",
+    serviceDate: "2026-06-10",
+    serviceMonth: "2026-06",
+    invoiceDay: 10,
+    slice: "this-month",
+    billed: 425,
+    eligibleBilled: 425,
+    collected: 425,
+    elapsedFraction: 1 / 3,
+    recognized: 425 * (2 / 3),
+    tier: "4x",
+    payments: [],
+    lineItems: [
+      {
+        item: "MN Subscription | (4x Month) Zoom Meetings (X) ($425)",
+        amount: 425,
+        status: "included",
+      },
+    ],
   });
   const line = {
-    clientId: 1, clientName: "A", coachId: 9, billed: 425, collected: 425, invoiceDay: 10,
-    recognizedThis: round2(425 * (2 / 3)), rolloverPrev: 0, earned: round2(425 * (2 / 3)),
-    splitPct: 0.6, payout: round2(round2(425 * (2 / 3)) * 0.6), tier: "4x", sources: [mkSrc()],
+    clientId: 1,
+    clientName: "A",
+    coachId: 9,
+    billed: 425,
+    collected: 425,
+    invoiceDay: 10,
+    recognizedThis: round2(425 * (2 / 3)),
+    rolloverPrev: 0,
+    earned: round2(425 * (2 / 3)),
+    splitPct: 0.6,
+    payout: round2(round2(425 * (2 / 3)) * 0.6),
+    tier: "4x",
+    sources: [mkSrc()],
   } as import("../lib/pay.js").PayMenteeLine;
 
   eq(effectiveLineTotal(line, DEFAULT_LINE_STATE), line.payout, "no override -> engine payout");
-  eq(effectiveLineTotal(line, DEFAULT_LINE_STATE, 0.5), round2(round2(425 * (2 / 3)) * 0.5), "split override reprices the line (engine earned x 50%)");
-  eq(effectiveLineTotal(line, { included: true, override: 100, note: null }, 0.5), 100, "a per-line $ override still beats the split override");
-  eq(effectiveLineTotal(line, { included: false, override: null, note: null }, 0.5), 0, "a line exclusion still zeroes it");
+  eq(
+    effectiveLineTotal(line, DEFAULT_LINE_STATE, 0.5),
+    round2(round2(425 * (2 / 3)) * 0.5),
+    "split override reprices the line (engine earned x 50%)",
+  );
+  eq(
+    effectiveLineTotal(line, { included: true, override: 100, note: null }, 0.5),
+    100,
+    "a per-line $ override still beats the split override",
+  );
+  eq(
+    effectiveLineTotal(line, { included: false, override: null, note: null }, 0.5),
+    0,
+    "a line exclusion still zeroes it",
+  );
   // Split override composes with line-item flips (recompute basis, then x split).
-  const drop: BuildLineState = { included: true, override: null, note: null, excludedInvoices: ["id:1"] };
+  const drop: BuildLineState = {
+    included: true,
+    override: null,
+    note: null,
+    excludedInvoices: ["id:1"],
+  };
   eq(payoutAfterExclusions(line, drop, 0.5), 0, "override + whole-invoice drop -> $0");
   const sm = summarizeBuild([line], new Map(), 0.5);
   eq(sm.builtTotal, round2(round2(425 * (2 / 3)) * 0.5), "builtTotal honors the split override");
@@ -1458,18 +2696,33 @@ console.log("[13f] build-level Split % override (review layer + stub)");
   // CSV: Split cell discloses both; effective payout uses the override.
   const rows = payoutDetailCsvRows([line], new Map(), 0.5);
   const cc = PAYOUT_DETAIL_CSV_COLUMNS;
-  const g = (row: (string | number)[], label: string) => row[cc.indexOf(label as (typeof cc)[number])];
+  const g = (row: (string | number)[], label: string) =>
+    row[cc.indexOf(label as (typeof cc)[number])];
   eq(g(rows[0], "Split"), "50% (engine 60%)", "CSV Split cell discloses the override");
-  eq(g(rows[0], "Effective payout"), round2(round2(425 * (2 / 3)) * 0.5), "CSV effective payout uses the override");
+  eq(
+    g(rows[0], "Effective payout"),
+    round2(round2(425 * (2 / 3)) * 0.5),
+    "CSV effective payout uses the override",
+  );
   // Stub: effective rate + disclosure flag; totals reprice.
   const model = buildPayStubModel({
-    coachName: "H", ym: "2026-06", splitPct: 0.6, splitOverride: 0.5, status: "approved",
-    lines: [line], states: new Map(), generatedOn: "2026-07-20",
+    coachName: "H",
+    ym: "2026-06",
+    splitPct: 0.6,
+    splitOverride: 0.5,
+    status: "approved",
+    lines: [line],
+    states: new Map(),
+    generatedOn: "2026-07-20",
   });
   eq(model.splitPct, 0.5, "stub shows the effective rate");
   eq(model.splitAdjusted, true, "stub flags the adjustment");
   eq(model.totals.payout, round2(round2(425 * (2 / 3)) * 0.5), "stub total repriced");
-  eq(payStubHtml(model).includes("set by HJG for this month"), true, "stub HTML discloses the adjusted rate");
+  eq(
+    payStubHtml(model).includes("set by HJG for this month"),
+    true,
+    "stub HTML discloses the adjusted rate",
+  );
 }
 
 console.log("[13g] hourly (timesheet) staff pay math + stub");
@@ -1488,14 +2741,24 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
   eq(hourlyTotal(clean, 22, -47), 250, "negative adjustment subtracts");
   eq(hourlyTotal([], 22), 0, "empty sheet pays $0");
   // jsonb parse defensiveness
-  eq(parseEntries('[{"date":"2026-07-02","label":"A","hours":"2.5"}]')[0].hours, 2.5, "string hours coerced");
+  eq(
+    parseEntries('[{"date":"2026-07-02","label":"A","hours":"2.5"}]')[0].hours,
+    2.5,
+    "string hours coerced",
+  );
   eq(parseEntries("garbage").length, 0, "garbage json -> empty");
   eq(parseEntries(null).length, 0, "null -> empty");
   // stub model + html
   const model = buildHourlyStubModel({
-    staffName: "Dave Troyer", ym: "2026-07", rate: 22, entries,
-    adjustment: 25, adjustmentNote: "July bonus", notes: "Thanks for covering the extra JYF calls.",
-    status: "draft", generatedOn: "2026-07-21",
+    staffName: "Dave Troyer",
+    ym: "2026-07",
+    rate: 22,
+    entries,
+    adjustment: 25,
+    adjustmentNote: "July bonus",
+    notes: "Thanks for covering the extra JYF calls.",
+    status: "draft",
+    generatedOn: "2026-07-21",
   });
   eq(model.hours, 13.5, "model hours");
   eq(model.base, 297, "model base = hours x rate");
@@ -1506,20 +2769,45 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
   eq(html.includes("July bonus"), true, "adjustment note printed");
   eq(html.includes("Dave Troyer"), true, "staff name printed");
   eq(html.includes("<script"), false, "no scripts in the stub document");
-  const finalHtml = hourlyStubHtml(buildHourlyStubModel({ ...{
-    staffName: "Dave Troyer", ym: "2026-07", rate: 22, entries, generatedOn: "2026-07-21",
-  }, status: "approved" }));
+  const finalHtml = hourlyStubHtml(
+    buildHourlyStubModel({
+      ...{
+        staffName: "Dave Troyer",
+        ym: "2026-07",
+        rate: 22,
+        entries,
+        generatedOn: "2026-07-21",
+      },
+      status: "approved",
+    }),
+  );
   eq(finalHtml.includes("APPROVED PAY STUB"), true, "approved hourly stub badged");
 
   // ---- PER-LINE RATE (2026-07-25): some work bills above the standing rate ----
-  eq(entryRate({ date: null, label: "a", hours: 1 }, 22), 22, "no per-line rate -> the period default");
-  eq(entryRate({ date: null, label: "a", hours: 1, rate: null }, 22), 22, "explicit null -> the period default");
+  eq(
+    entryRate({ date: null, label: "a", hours: 1 }, 22),
+    22,
+    "no per-line rate -> the period default",
+  );
+  eq(
+    entryRate({ date: null, label: "a", hours: 1, rate: null }, 22),
+    22,
+    "explicit null -> the period default",
+  );
   eq(entryRate({ date: null, label: "a", hours: 1, rate: 40 }, 22), 40, "per-line rate wins");
-  eq(entryRate({ date: null, label: "a", hours: 1, rate: 0 }, 22), 0, "an explicit $0 line rate is honored");
-  eq(entryRate({ date: null, label: "a", hours: 1, rate: -5 }, 22), 22, "a negative line rate falls back to the default");
+  eq(
+    entryRate({ date: null, label: "a", hours: 1, rate: 0 }, 22),
+    0,
+    "an explicit $0 line rate is honored",
+  );
+  eq(
+    entryRate({ date: null, label: "a", hours: 1, rate: -5 }, 22),
+    22,
+    "a negative line rate falls back to the default",
+  );
   eq(entryAmount({ date: null, label: "a", hours: 2.5, rate: 40 }, 22), 100, "2.5h x $40 = $100");
   const mixed = [
-    { date: null, label: "Admin", hours: 10 },                 // default $22 -> 220
+    { date: null, label: "Admin", hours: 10 }, // default $22 -> 220
     { date: null, label: "Training delivery", hours: 5, rate: 40 }, // 200
   ];
   eq(laborTotal(mixed, 22), 420, "mixed-rate sheet: 10h@22 + 5h@40 = $420");
@@ -1528,8 +2816,16 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
   eq(hasCustomRates(clean, 22), false, "single-rate sheet is not flagged");
   // Back-compat: a sheet with no per-line rates pays exactly what it always did.
   eq(laborTotal(clean, 22), 297, "no per-line rates -> identical to hours x rate");
-  eq(parseEntries('[{"label":"A","hours":2}]')[0].rate, null, "pre-2026-07-25 rows read back with rate null");
-  eq(parseEntries('[{"label":"A","hours":2,"rate":"37.5"}]')[0].rate, 37.5, "string per-line rate coerced");
+  eq(
+    parseEntries('[{"label":"A","hours":2}]')[0].rate,
+    null,
+    "pre-2026-07-25 rows read back with rate null",
+  );
+  eq(
+    parseEntries('[{"label":"A","hours":2,"rate":"37.5"}]')[0].rate,
+    37.5,
+    "string per-line rate coerced",
+  );
 
   // ---- PIECE WORK: Dave Troyer's real case — $25 per new mentee, 8 in June ----
   const dave = [{ date: null, label: "New mentee onboarded", qty: 8, unitRate: 25 }];
@@ -1540,16 +2836,24 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
   eq(
     normalizePieces([{ date: null, label: "", qty: 0, unitRate: 0 }, ...dave]).length,
     1,
-    "blank piece rows dropped"
+    "blank piece rows dropped",
   );
   eq(
     normalizePieces([{ date: null, label: "0 new mentees", qty: 0, unitRate: 25 }]).length,
     1,
-    "a deliberate zero-quantity noted line is kept"
+    "a deliberate zero-quantity noted line is kept",
   );
-  eq(piecesTotal([{ date: null, label: "Clawback", qty: -2, unitRate: 25 }]), -50, "negative quantity claws back");
+  eq(
+    piecesTotal([{ date: null, label: "Clawback", qty: -2, unitRate: 25 }]),
+    -50,
+    "negative quantity claws back",
+  );
   eq(parsePieces('[{"label":"X","qty":"3","unitRate":"10"}]')[0].qty, 3, "string qty coerced");
-  eq(parsePieces('[{"label":"X","qty":3,"unit_rate":10}]')[0].unitRate, 10, "snake_case unit_rate tolerated");
+  eq(
+    parsePieces('[{"label":"X","qty":3,"unit_rate":10}]')[0].unitRate,
+    10,
+    "snake_case unit_rate tolerated",
+  );
   eq(parsePieces("garbage").length, 0, "garbage piece json -> empty");
   eq(parsePieces(null).length, 0, "null piece json -> empty");
   // Piece work rides on top of hours and the adjustment.
@@ -1558,8 +2862,13 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
   eq(hourlyTotal([], 0, 0, dave), 200, "piece-work-only period still pays");
 
   const daveModel = buildHourlyStubModel({
-    staffName: "Dave Troyer", ym: "2026-06", rate: 22, entries: mixed, pieces: dave,
-    status: "approved", generatedOn: "2026-07-25",
+    staffName: "Dave Troyer",
+    ym: "2026-06",
+    rate: 22,
+    entries: mixed,
+    pieces: dave,
+    status: "approved",
+    generatedOn: "2026-07-25",
   });
   eq(daveModel.base, 420, "stub base uses per-line rates");
   eq(daveModel.piecesTotal, 200, "stub carries the piece-work total");
@@ -1570,7 +2879,11 @@ console.log("[13g] hourly (timesheet) staff pay math + stub");
   eq(daveHtml.includes("New mentee onboarded"), true, "piece-work item printed on the stub");
   eq(daveHtml.includes("Piece work"), true, "piece-work section labelled");
   eq(daveHtml.includes("<th>Rate</th>"), true, "Rate column appears when rates vary");
-  eq(hourlyStubHtml(model).includes("<th>Rate</th>"), false, "no Rate column on a single-rate stub");
+  eq(
+    hourlyStubHtml(model).includes("<th>Rate</th>"),
+    false,
+    "no Rate column on a single-rate stub",
+  );
   eq(daveHtml.includes("<script"), false, "no scripts in the piece-work stub");
 }
 
@@ -1613,36 +2926,78 @@ console.log("[25] user permissions — tab resolution (lib/permissions)");
   eq(
     resolveAllowedTabs({ role: "admin", allowedTabs: ["metrics"], isActive: true }).size,
     all,
-    "admin always sees everything, whatever the list says"
+    "admin always sees everything, whatever the list says",
   );
   eq(
     resolveAllowedTabs({ role: "admin", allowedTabs: null, isActive: false }).size,
     all,
-    "even an inactive admin keeps access (can't lock the owner out)"
+    "even an inactive admin keeps access (can't lock the owner out)",
   );
-  const staffPick = resolveAllowedTabs({ role: "staff", allowedTabs: ["paystaff", "timeclock", "bogus"], isActive: true });
+  const staffPick = resolveAllowedTabs({
+    role: "staff",
+    allowedTabs: ["paystaff", "timeclock", "bogus"],
+    isActive: true,
+  });
   eq(staffPick.size, 2, "explicit list is exact; unknown keys dropped");
   eq(staffPick.has("paystaff") && staffPick.has("timeclock"), true, "explicit tabs kept");
-  eq(resolveAllowedTabs({ role: "staff", allowedTabs: null, isActive: true }).size, all, "staff role default = all tabs");
-  eq(resolveAllowedTabs({ role: "staff", allowedTabs: [], isActive: true }).size, all, "staff empty list fails OPEN (no lockout)");
-  eq(resolveAllowedTabs({ role: "mentor", allowedTabs: null, isActive: true }).size, 0, "mentor role default = nothing yet");
-  eq(resolveAllowedTabs({ role: "mentor", allowedTabs: [], isActive: true }).size, 0, "mentor empty list = nothing");
   eq(
-    resolveAllowedTabs({ role: "mentor", allowedTabs: ["timeclock"], isActive: true }).has("timeclock"),
-    true,
-    "mentor with a granted tab sees it"
+    resolveAllowedTabs({ role: "staff", allowedTabs: null, isActive: true }).size,
+    all,
+    "staff role default = all tabs",
   );
-  eq(resolveAllowedTabs({ role: "staff", allowedTabs: ["metrics"], isActive: false }).size, 0, "inactive non-admin → no tabs");
+  eq(
+    resolveAllowedTabs({ role: "staff", allowedTabs: [], isActive: true }).size,
+    all,
+    "staff empty list fails OPEN (no lockout)",
+  );
+  eq(
+    resolveAllowedTabs({ role: "mentor", allowedTabs: null, isActive: true }).size,
+    0,
+    "mentor role default = nothing yet",
+  );
+  eq(
+    resolveAllowedTabs({ role: "mentor", allowedTabs: [], isActive: true }).size,
+    0,
+    "mentor empty list = nothing",
+  );
+  eq(
+    resolveAllowedTabs({ role: "mentor", allowedTabs: ["timeclock"], isActive: true }).has(
+      "timeclock",
+    ),
+    true,
+    "mentor with a granted tab sees it",
+  );
+  eq(
+    resolveAllowedTabs({ role: "staff", allowedTabs: ["metrics"], isActive: false }).size,
+    0,
+    "inactive non-admin → no tabs",
+  );
   eq(normalizeRole("weird"), "staff", "unknown role normalizes to staff");
   eq(DEFAULT_ROLE_TABS.mentor.length, 0, "mentor default set is empty (bones)");
 }
 
 console.log("[26] Update-Mentee transition options (parse/serialize)");
 {
-  eq(parseTransitionOptions(null).join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "null → seed defaults");
-  eq(parseTransitionOptions("not json").join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "garbage → seed defaults");
-  eq(parseTransitionOptions("[]").join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "empty list → seed defaults (dropdown never empty)");
-  eq(parseTransitionOptions('["A"," B ","A","",42]').join("|"), "A|B|42", "trim, dedupe, drop blanks, stringify");
+  eq(
+    parseTransitionOptions(null).join("|"),
+    DEFAULT_TRANSITION_OPTIONS.join("|"),
+    "null → seed defaults",
+  );
+  eq(
+    parseTransitionOptions("not json").join("|"),
+    DEFAULT_TRANSITION_OPTIONS.join("|"),
+    "garbage → seed defaults",
+  );
+  eq(
+    parseTransitionOptions("[]").join("|"),
+    DEFAULT_TRANSITION_OPTIONS.join("|"),
+    "empty list → seed defaults (dropdown never empty)",
+  );
+  eq(
+    parseTransitionOptions('["A"," B ","A","",42]').join("|"),
+    "A|B|42",
+    "trim, dedupe, drop blanks, stringify",
+  );
   eq(serializeTransitionOptions([" X ", "X", "", "Y"]), '["X","Y"]', "serialize trims + dedupes");
   const roundTrip = parseTransitionOptions(serializeTransitionOptions(DEFAULT_TRANSITION_OPTIONS));
   eq(roundTrip.join("|"), DEFAULT_TRANSITION_OPTIONS.join("|"), "round-trip stable");
@@ -1684,9 +3039,33 @@ console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduati
         { date: "2026-04-05", isGroup: false },
       ],
     },
-    { clientId: 3, name: "Cara", graduated: false, graduationDate: null, jumpstartEnd: "2026-01-01", firstOngoingStart: "2026-02-01", meetings: [{ date: "2026-03-01", isGroup: false }] },
-    { clientId: 4, name: "Dan", graduated: true, graduationDate: "2026-05-01", jumpstartEnd: null, firstOngoingStart: null, meetings: [] }, // no window
-    { clientId: 5, name: "Eve", graduated: true, graduationDate: "2026-05-01", jumpstartEnd: "2026-06-01", firstOngoingStart: null, meetings: [] }, // window starts after graduation (anomaly)
+    {
+      clientId: 3,
+      name: "Cara",
+      graduated: false,
+      graduationDate: null,
+      jumpstartEnd: "2026-01-01",
+      firstOngoingStart: "2026-02-01",
+      meetings: [{ date: "2026-03-01", isGroup: false }],
+    },
+    {
+      clientId: 4,
+      name: "Dan",
+      graduated: true,
+      graduationDate: "2026-05-01",
+      jumpstartEnd: null,
+      firstOngoingStart: null,
+      meetings: [],
+    }, // no window
+    {
+      clientId: 5,
+      name: "Eve",
+      graduated: true,
+      graduationDate: "2026-05-01",
+      jumpstartEnd: "2026-06-01",
+      firstOngoingStart: null,
+      meetings: [],
+    }, // window starts after graduation (anomaly)
   ];
 
   const rep = computeMeetingsToFreedom(mentees);
@@ -1697,7 +3076,11 @@ console.log("[14] meetings to freedom (1-on-1 sessions JumpStart-end -> graduati
   eq(rep.rows[0].windowStart, "2026-01-31", "Alice window starts at JumpStart end date");
   const bob = rep.rows.find((r) => r.name === "Bob")!;
   eq(bob.meetings, 2, "Bob: both ongoing meetings count");
-  eq(bob.windowStart, "2026-03-01", "Bob falls back to first ongoing-tier start (no JumpStart end)");
+  eq(
+    bob.windowStart,
+    "2026-03-01",
+    "Bob falls back to first ongoing-tier start (no JumpStart end)",
+  );
   eq(rep.total, 5, "total sessions across measurable mentees");
   eq(rep.avg, 2.5, "avg meetings-to-freedom = 5/2");
   eq(rep.median, 2.5, "median of [2,3] = 2.5");
@@ -1762,17 +3145,33 @@ console.log("[16] Journeys per-stage colors (gradient interpolation + config res
   eq(gradientColors("nope", "#15803d").length, 6, "invalid 'from' still yields 6 colors");
 
   // Gradient mode ignores the explicit colors; custom mode uses them.
-  const grad = resolveStageColors({ mode: "gradient", from: "#000000", to: "#ffffff", colors: ["#111111"] });
+  const grad = resolveStageColors({
+    mode: "gradient",
+    from: "#000000",
+    to: "#ffffff",
+    colors: ["#111111"],
+  });
   eq(grad[0], "#000000", "gradient mode interpolates (ignores colors[])");
-  const cust = resolveStageColors({ mode: "custom", from: "#000000", to: "#ffffff", colors: ["#123456", "#abcdef"] });
+  const cust = resolveStageColors({
+    mode: "custom",
+    from: "#000000",
+    to: "#ffffff",
+    colors: ["#123456", "#abcdef"],
+  });
   eq(cust[0], "#123456", "custom mode uses colors[0]");
-  eq(cust[2], DEFAULT_STAGE_COLORS[2], "custom mode fills a missing color from the default palette");
+  eq(
+    cust[2],
+    DEFAULT_STAGE_COLORS[2],
+    "custom mode fills a missing color from the default palette",
+  );
 
   // Defensive parsing: junk / empty -> a complete, valid default config.
   const def = parseStageColorConfig("not json");
   eq(def.colors.length, 6, "malformed JSON -> 6 default colors");
   eq(stageColorsFromRaw(null).length, 6, "null raw -> 6 default colors");
-  const round = parseStageColorConfig(JSON.stringify({ mode: "gradient", from: "#aabbcc", to: "#112233", colors: [] }));
+  const round = parseStageColorConfig(
+    JSON.stringify({ mode: "gradient", from: "#aabbcc", to: "#112233", colors: [] }),
+  );
   eq(round.mode, "gradient", "round-trip preserves mode");
   eq(round.from, "#aabbcc", "round-trip preserves 'from'");
 }
@@ -1888,7 +3287,10 @@ console.log("[19] Pipeline-timing start-date cohort compare (windowing + roll-up
   assert(!inStartWindow("2026-02-01", winA, today), "A: Feb 1 out of 0–3");
   assert(!inStartWindow(null, winA, today), "A: null start never in window");
   // Order-insensitive (from/to swapped is the same band).
-  assert(inStartWindow("2026-05-01", { fromMonths: 3, toMonths: 0 }, today), "A: swapped edges same band");
+  assert(
+    inStartWindow("2026-05-01", { fromMonths: 3, toMonths: 0 }, today),
+    "A: swapped edges same band",
+  );
 
   // Cohort B = 4–6 months ago (Dec 24 .. Feb 24).
   const winB = { fromMonths: 4, toMonths: 6 };
@@ -1898,7 +3300,12 @@ console.log("[19] Pipeline-timing start-date cohort compare (windowing + roll-up
   eq(startWindowLabel(winA), "0–3 mo ago", "label A");
 
   const base: CohortJourneyInput = {
-    startDate: "2026-05-01", daysInSystem: 100, resolvedStatus: "active", currentTier: "4x", excluded: false, inSourceOfTruth: true,
+    startDate: "2026-05-01",
+    daysInSystem: 100,
+    resolvedStatus: "active",
+    currentTier: "4x",
+    excluded: false,
+    inSourceOfTruth: true,
   };
   const cohort: CohortJourneyInput[] = [
     { ...base, resolvedStatus: "active", currentTier: "jumpstart", daysInSystem: 10 },
@@ -1912,7 +3319,10 @@ console.log("[19] Pipeline-timing start-date cohort compare (windowing + roll-up
   eq(s.total, 4, "summarize: 4 in-scope (excluded + off-roster dropped)");
   eq(s.active, 3, "summarize: 3 active");
   eq(s.graduated, 1, "summarize: 1 graduated");
-  assert(s.pctGraduated != null && Math.abs(s.pctGraduated - 0.25) < 1e-9, "summarize: 25% graduated");
+  assert(
+    s.pctGraduated != null && Math.abs(s.pctGraduated - 0.25) < 1e-9,
+    "summarize: 25% graduated",
+  );
   eq(s.avgDaysInSystem, 100, "summarize: avg days = (10+200+90)/3 (negative skipped)");
   eq(s.tierMix.jumpstart, 1, "tierMix jumpstart");
   eq(s.tierMix["4x"], 1, "tierMix 4x");
@@ -1940,20 +3350,74 @@ console.log("[20] Mentee management — CA-layer derivation (deriveMenteeCaRecor
     { id: 99, name: "Gain Momentum Group 1", coachId: null, isExcluded: true }, // dropped
   ];
   const engagements = [
-    { id: 100, clientId: 10, name: "MN Subscription | (0x Month) JumpStart", startDate: "2025-01-01", endDate: "2025-02-01", isComplete: true, isCanceled: false },
-    { id: 101, clientId: 10, name: "MN Subscription | (4x Month)", startDate: "2025-02-01", endDate: null, isComplete: true, isCanceled: false },
-    { id: 102, clientId: 10, name: "After Graduation Care", startDate: "2025-12-01", endDate: null, isComplete: false, isCanceled: false },
-    { id: 110, clientId: 11, name: "MN Subscription | (4x Month)", startDate: "2026-06-01", endDate: null, isComplete: false, isCanceled: false }, // open
-    { id: 999, clientId: 99, name: "(4x)", startDate: "2026-01-01", endDate: null, isComplete: false, isCanceled: false }, // excluded client
+    {
+      id: 100,
+      clientId: 10,
+      name: "MN Subscription | (0x Month) JumpStart",
+      startDate: "2025-01-01",
+      endDate: "2025-02-01",
+      isComplete: true,
+      isCanceled: false,
+    },
+    {
+      id: 101,
+      clientId: 10,
+      name: "MN Subscription | (4x Month)",
+      startDate: "2025-02-01",
+      endDate: null,
+      isComplete: true,
+      isCanceled: false,
+    },
+    {
+      id: 102,
+      clientId: 10,
+      name: "After Graduation Care",
+      startDate: "2025-12-01",
+      endDate: null,
+      isComplete: false,
+      isCanceled: false,
+    },
+    {
+      id: 110,
+      clientId: 11,
+      name: "MN Subscription | (4x Month)",
+      startDate: "2026-06-01",
+      endDate: null,
+      isComplete: false,
+      isCanceled: false,
+    }, // open
+    {
+      id: 999,
+      clientId: 99,
+      name: "(4x)",
+      startDate: "2026-01-01",
+      endDate: null,
+      isComplete: false,
+      isCanceled: false,
+    }, // excluded client
   ];
   const appointments = [
     { clientId: 10, coachId: 1, engagementId: null, category: "discoveryZoom", date: "2024-12-15" },
-    { clientId: 11, coachId: 2, engagementId: null, category: "discoveryPhone", date: "2026-05-01" },
+    {
+      clientId: 11,
+      coachId: 2,
+      engagementId: null,
+      category: "discoveryPhone",
+      date: "2026-05-01",
+    },
     { clientId: 11, coachId: 2, engagementId: 110, category: "mentoring", date: "2026-06-05" },
     { clientId: 12, coachId: 1, engagementId: null, category: "discoveryZoom", date: "2025-01-01" }, // stale discovery only
   ];
   const purchases = [{ clientId: 11, date: "2026-05-20" }];
-  const recs = deriveMenteeCaRecords({ clients, engagements, appointments, coaches, purchases, today, basis: "engagement_start" });
+  const recs = deriveMenteeCaRecords({
+    clients,
+    engagements,
+    appointments,
+    coaches,
+    purchases,
+    today,
+    basis: "engagement_start",
+  });
   eq(recs.length, 3, "3 records (excluded client dropped)");
   const byId = new Map(recs.map((r) => [r.clientId, r]));
 
@@ -2003,29 +3467,70 @@ console.log("[20] Mentee management — CA-layer derivation (deriveMenteeCaRecor
 console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg roll-up");
 {
   const base = (o: Partial<MenteeRowLike>): MenteeRowLike => ({
-    id: "x", client_id: 1, ca_name: null, ca_owner_coach_id: null, ca_owner_coach_name: null,
-    ca_discovery_date: null, ca_jumpstart_date: null, ca_tier_4x_date: null, ca_tier_2x_date: null,
-    ca_tier_1x_date: null, ca_graduation_date: null, ca_first_meeting: null, ca_last_meeting: null,
-    ca_meeting_count: 0, ca_jumpstart_end: null, ca_jyf_purchase_date: null, ca_start_date: null,
-    ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
-    status_date: null, discovery_date_override: null, jumpstart_date_override: null,
-    tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
-    graduation_date_override: null, owner_coach_id_override: null,
-    notion_name: null, notion_status: null, notion_coach: null, notion_coach_conflict: false,
-    notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null,
-    notion_imported_at: null, pre_waiting_date_override: null, email_override: null,
-    phone_override: null, coach_override: null, is_test: false, ...o,
+    id: "x",
+    client_id: 1,
+    ca_name: null,
+    ca_owner_coach_id: null,
+    ca_owner_coach_name: null,
+    ca_discovery_date: null,
+    ca_jumpstart_date: null,
+    ca_tier_4x_date: null,
+    ca_tier_2x_date: null,
+    ca_tier_1x_date: null,
+    ca_graduation_date: null,
+    ca_first_meeting: null,
+    ca_last_meeting: null,
+    ca_meeting_count: 0,
+    ca_jumpstart_end: null,
+    ca_jyf_purchase_date: null,
+    ca_start_date: null,
+    ca_status: null,
+    ca_synced_at: null,
+    name_override: null,
+    status: null,
+    status_stage: null,
+    status_date: null,
+    discovery_date_override: null,
+    jumpstart_date_override: null,
+    tier_4x_date_override: null,
+    tier_2x_date_override: null,
+    tier_1x_date_override: null,
+    graduation_date_override: null,
+    owner_coach_id_override: null,
+    notion_name: null,
+    notion_status: null,
+    notion_coach: null,
+    notion_coach_conflict: false,
+    notion_email: null,
+    notion_phone: null,
+    notion_dc_date: null,
+    notion_offering_signup: null,
+    notion_imported_at: null,
+    pre_waiting_date_override: null,
+    email_override: null,
+    phone_override: null,
+    coach_override: null,
+    is_test: false,
+    ...o,
   });
   const today = "2026-06-24";
 
   // Hand layer wins over CA layer.
   const e1 = toEffectiveMentee(
     base({
-      id: "a", client_id: 1, ca_name: "CA Name", ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-01-15",
-      ca_status: "active", name_override: "Hand Name", discovery_date_override: "2026-02-01",
-      status: "quit", status_stage: "jumpstart", status_date: "2026-03-01",
+      id: "a",
+      client_id: 1,
+      ca_name: "CA Name",
+      ca_discovery_date: "2026-01-01",
+      ca_jumpstart_date: "2026-01-15",
+      ca_status: "active",
+      name_override: "Hand Name",
+      discovery_date_override: "2026-02-01",
+      status: "quit",
+      status_stage: "jumpstart",
+      status_date: "2026-03-01",
     }),
-    today
+    today,
   );
   eq(e1.name, "Hand Name", "effective name = override");
   eq(e1.discoveryDate, "2026-02-01", "effective discovery = override (hand wins)");
@@ -2038,10 +3543,17 @@ console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg 
   // CA-only row: effective = CA values; status derives from the CA guess.
   const e2 = toEffectiveMentee(
     base({
-      id: "b", client_id: 2, ca_name: "Grad", ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01",
-      ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-12-01", ca_status: "graduated", ca_owner_coach_name: "Arthur",
+      id: "b",
+      client_id: 2,
+      ca_name: "Grad",
+      ca_discovery_date: "2025-01-01",
+      ca_jumpstart_date: "2025-02-01",
+      ca_tier_4x_date: "2025-03-01",
+      ca_graduation_date: "2025-12-01",
+      ca_status: "graduated",
+      ca_owner_coach_name: "Arthur",
     }),
-    today
+    today,
   );
   eq(e2.discoveryDate, "2025-01-01", "CA-only discovery");
   eq(e2.graduationDate, "2025-12-01", "CA-only graduation");
@@ -2053,15 +3565,42 @@ console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg 
   eq(e2.daysInSystem, 334, "days = discovery -> graduation");
 
   // CA inactive + no hand status => Unclassified, sitting at discovery.
-  const e3 = toEffectiveMentee(base({ id: "c", client_id: 3, ca_name: "Stale", ca_discovery_date: "2025-01-01", ca_status: "inactive" }), today);
+  const e3 = toEffectiveMentee(
+    base({
+      id: "c",
+      client_id: 3,
+      ca_name: "Stale",
+      ca_discovery_date: "2025-01-01",
+      ca_status: "inactive",
+    }),
+    today,
+  );
   eq(e3.statusLabel, "Unclassified", "inactive + unclassified");
   eq(e3.currentStage, "discovery", "discovery-only stage");
   assert(e3.currentTier === null, "no tier");
 
   // Leg durations off effective mentees; is_test dropped.
-  const m1 = base({ id: "m1", client_id: 11, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-01-11", ca_tier_4x_date: "2025-01-21", ca_graduation_date: "2025-02-01" });
-  const m2 = base({ id: "m2", client_id: 12, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-01-21" });
-  const mt = base({ id: "mt", client_id: 13, ca_discovery_date: "2020-01-01", ca_jumpstart_date: "2020-06-01", is_test: true });
+  const m1 = base({
+    id: "m1",
+    client_id: 11,
+    ca_discovery_date: "2025-01-01",
+    ca_jumpstart_date: "2025-01-11",
+    ca_tier_4x_date: "2025-01-21",
+    ca_graduation_date: "2025-02-01",
+  });
+  const m2 = base({
+    id: "m2",
+    client_id: 12,
+    ca_discovery_date: "2025-01-01",
+    ca_jumpstart_date: "2025-01-21",
+  });
+  const mt = base({
+    id: "mt",
+    client_id: 13,
+    ca_discovery_date: "2020-01-01",
+    ca_jumpstart_date: "2020-06-01",
+    is_test: true,
+  });
   const legs = aggregateLegDurations([m1, m2, mt].map((r) => toEffectiveMentee(r, today)));
   const byKey = new Map(legs.map((l) => [l.key, l]));
   eq(byKey.get("dc_js")!.n, 2, "dc_js n=2 (test dropped)");
@@ -2074,26 +3613,86 @@ console.log("[21] Mentee management — effective view-model (hand ?? CA) + leg 
 console.log("[22] Mentee management — funnel + exits (computeFunnel)");
 {
   const b = (o: Partial<MenteeRowLike>): MenteeRowLike => ({
-    id: "x", client_id: 1, ca_name: null, ca_owner_coach_id: null, ca_owner_coach_name: null,
-    ca_discovery_date: null, ca_jumpstart_date: null, ca_tier_4x_date: null, ca_tier_2x_date: null,
-    ca_tier_1x_date: null, ca_graduation_date: null, ca_first_meeting: null, ca_last_meeting: null,
-    ca_meeting_count: 0, ca_jumpstart_end: null, ca_jyf_purchase_date: null, ca_start_date: null,
-    ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
-    status_date: null, discovery_date_override: null, jumpstart_date_override: null,
-    tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
-    graduation_date_override: null, owner_coach_id_override: null,
-    notion_name: null, notion_status: null, notion_coach: null, notion_coach_conflict: false,
-    notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null,
-    notion_imported_at: null, pre_waiting_date_override: null, email_override: null,
-    phone_override: null, coach_override: null, is_test: false, ...o,
+    id: "x",
+    client_id: 1,
+    ca_name: null,
+    ca_owner_coach_id: null,
+    ca_owner_coach_name: null,
+    ca_discovery_date: null,
+    ca_jumpstart_date: null,
+    ca_tier_4x_date: null,
+    ca_tier_2x_date: null,
+    ca_tier_1x_date: null,
+    ca_graduation_date: null,
+    ca_first_meeting: null,
+    ca_last_meeting: null,
+    ca_meeting_count: 0,
+    ca_jumpstart_end: null,
+    ca_jyf_purchase_date: null,
+    ca_start_date: null,
+    ca_status: null,
+    ca_synced_at: null,
+    name_override: null,
+    status: null,
+    status_stage: null,
+    status_date: null,
+    discovery_date_override: null,
+    jumpstart_date_override: null,
+    tier_4x_date_override: null,
+    tier_2x_date_override: null,
+    tier_1x_date_override: null,
+    graduation_date_override: null,
+    owner_coach_id_override: null,
+    notion_name: null,
+    notion_status: null,
+    notion_coach: null,
+    notion_coach_conflict: false,
+    notion_email: null,
+    notion_phone: null,
+    notion_dc_date: null,
+    notion_offering_signup: null,
+    notion_imported_at: null,
+    pre_waiting_date_override: null,
+    email_override: null,
+    phone_override: null,
+    coach_override: null,
+    is_test: false,
+    ...o,
   });
   const t = "2026-06-24";
   const mentees = [
     b({ id: "A", client_id: 1, ca_discovery_date: "2026-01-01", status: "declined" }), // declined @ discovery
-    b({ id: "B", client_id: 2, ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-01-20", status: "quit" }), // quit @ jumpstart
-    b({ id: "C", client_id: 3, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01", ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-09-01", ca_status: "graduated" }), // graduated from 4x
-    b({ id: "D", client_id: 4, ca_discovery_date: "2026-02-01", ca_jumpstart_date: "2026-03-01", ca_tier_4x_date: "2026-05-01", ca_status: "active" }), // active @ 4x
-    b({ id: "T", client_id: 5, ca_discovery_date: "2020-01-01", ca_jumpstart_date: "2020-02-01", is_test: true }), // dropped
+    b({
+      id: "B",
+      client_id: 2,
+      ca_discovery_date: "2026-01-01",
+      ca_jumpstart_date: "2026-01-20",
+      status: "quit",
+    }), // quit @ jumpstart
+    b({
+      id: "C",
+      client_id: 3,
+      ca_discovery_date: "2025-01-01",
+      ca_jumpstart_date: "2025-02-01",
+      ca_tier_4x_date: "2025-03-01",
+      ca_graduation_date: "2025-09-01",
+      ca_status: "graduated",
+    }), // graduated from 4x
+    b({
+      id: "D",
+      client_id: 4,
+      ca_discovery_date: "2026-02-01",
+      ca_jumpstart_date: "2026-03-01",
+      ca_tier_4x_date: "2026-05-01",
+      ca_status: "active",
+    }), // active @ 4x
+    b({
+      id: "T",
+      client_id: 5,
+      ca_discovery_date: "2020-01-01",
+      ca_jumpstart_date: "2020-02-01",
+      is_test: true,
+    }), // dropped
   ].map((r) => toEffectiveMentee(r, t));
   const f = computeFunnel(mentees);
   eq(f.total, 4, "funnel total excludes test");
@@ -2107,7 +3706,10 @@ console.log("[22] Mentee management — funnel + exits (computeFunnel)");
   eq(byStage.get("jumpstart")!.exits.quit, 1, "1 quit at jumpstart");
   eq(byStage.get("4x")!.activeHere, 1, "1 active at 4x (D)");
   eq(byStage.get("graduated")!.activeHere, 0, "graduated not counted active");
-  assert(Math.abs((byStage.get("discovery")!.conversionToNext ?? -1) - 0.75) < 1e-9, "discovery->jumpstart conversion 75%");
+  assert(
+    Math.abs((byStage.get("discovery")!.conversionToNext ?? -1) - 0.75) < 1e-9,
+    "discovery->jumpstart conversion 75%",
+  );
   assert(byStage.get("graduated")!.conversionToNext === null, "graduated has no next");
 }
 
@@ -2121,16 +3723,32 @@ console.log("[23] Mentee management — Notion CSV importer (notionCsv)");
   eq(grid[2][1], 'say "hi"', "escaped quote unescaped");
 
   // Notion page-link stripping.
-  eq(stripNotionLink("Arthur Nisly (https://app.notion.com/p/Arthur-Nisly-1a4?pvs=21)"), "Arthur Nisly", "strip notion link");
+  eq(
+    stripNotionLink("Arthur Nisly (https://app.notion.com/p/Arthur-Nisly-1a4?pvs=21)"),
+    "Arthur Nisly",
+    "strip notion link",
+  );
   eq(stripNotionLink("Plain Name"), "Plain Name", "plain name untouched");
 
   // Coach reconciliation (Mentor 1 + Mentor). Notion exports render person cells
   // as `Name (https://app.notion.com/p/…)`; stripNotionLink removes that.
-  const c1 = reconcileCoach("Arthur Nisly (https://app.notion.com/p/x?pvs=21)", "Arthur Nisly (https://app.notion.com/p/y?pvs=21)");
+  const c1 = reconcileCoach(
+    "Arthur Nisly (https://app.notion.com/p/x?pvs=21)",
+    "Arthur Nisly (https://app.notion.com/p/y?pvs=21)",
+  );
   assert(c1.value === "Arthur Nisly" && c1.conflict === false, "coach agree → no conflict");
-  const c2 = reconcileCoach("Arthur Nisly (https://app.notion.com/p/a?pvs=21)", "Bill Moser (https://app.notion.com/p/b?pvs=21)");
-  assert(c2.value === "Arthur Nisly" && c2.conflict === true, "coach disagree → conflict, prefer Mentor 1");
-  const c3 = reconcileCoach("“None Available” (Placeholder) (https://app.notion.com/p/n?pvs=21)", "");
+  const c2 = reconcileCoach(
+    "Arthur Nisly (https://app.notion.com/p/a?pvs=21)",
+    "Bill Moser (https://app.notion.com/p/b?pvs=21)",
+  );
+  assert(
+    c2.value === "Arthur Nisly" && c2.conflict === true,
+    "coach disagree → conflict, prefer Mentor 1",
+  );
+  const c3 = reconcileCoach(
+    "“None Available” (Placeholder) (https://app.notion.com/p/n?pvs=21)",
+    "",
+  );
   assert(c3.value === null && c3.conflict === false, "none-placeholder → null coach");
 
   // Name normalization + date parsing.
@@ -2158,9 +3776,36 @@ console.log("[23] Mentee management — Notion CSV importer (notionCsv)");
     { id: "e3", clientId: null, name: "Bryce Miller" },
   ];
   const importRows: NotionImportRow[] = [
-    { name: "daniel  strite", notion_status: null, notion_coach: null, notion_coach_conflict: false, notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null },
-    { name: "New Prospect", notion_status: null, notion_coach: null, notion_coach_conflict: false, notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null },
-    { name: "Bryce Miller", notion_status: null, notion_coach: null, notion_coach_conflict: false, notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null },
+    {
+      name: "daniel  strite",
+      notion_status: null,
+      notion_coach: null,
+      notion_coach_conflict: false,
+      notion_email: null,
+      notion_phone: null,
+      notion_dc_date: null,
+      notion_offering_signup: null,
+    },
+    {
+      name: "New Prospect",
+      notion_status: null,
+      notion_coach: null,
+      notion_coach_conflict: false,
+      notion_email: null,
+      notion_phone: null,
+      notion_dc_date: null,
+      notion_offering_signup: null,
+    },
+    {
+      name: "Bryce Miller",
+      notion_status: null,
+      notion_coach: null,
+      notion_coach_conflict: false,
+      notion_email: null,
+      notion_phone: null,
+      notion_dc_date: null,
+      notion_offering_signup: null,
+    },
   ];
   const plan = planNotionUpsert(existing, importRows);
   eq(plan.updates.length, 1, "1 matched → update");
@@ -2188,7 +3833,10 @@ console.log("[23] Mentee management — Notion CSV importer (notionCsv)");
       { id: "n1", clientId: null, name: "Sam Twin" },
       { id: "c1", clientId: 7, name: "Other Person" },
     ];
-    const claims = planClientIdClaims(ex, [{ clientId: 5, name: "sam  twin" }, { clientId: 7, name: "Other Person" }]);
+    const claims = planClientIdClaims(ex, [
+      { clientId: 5, name: "sam  twin" },
+      { clientId: 7, name: "Other Person" },
+    ]);
     eq(claims.length, 1, "one client-id claim");
     eq(claims[0].id, "n1", "claim merges the Notion-only row by name");
     eq(claims[0].clientId, 5, "claim sets the CA client id");
@@ -2198,37 +3846,118 @@ console.log("[23] Mentee management — Notion CSV importer (notionCsv)");
 console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)");
 {
   const b2 = (o: Partial<MenteeRowLike>): MenteeRowLike => ({
-    id: "x", client_id: 1, ca_name: null, ca_owner_coach_id: null, ca_owner_coach_name: null,
-    ca_discovery_date: null, ca_jumpstart_date: null, ca_tier_4x_date: null, ca_tier_2x_date: null,
-    ca_tier_1x_date: null, ca_graduation_date: null, ca_first_meeting: null, ca_last_meeting: null,
-    ca_meeting_count: 0, ca_jumpstart_end: null, ca_jyf_purchase_date: null, ca_start_date: null,
-    ca_status: null, ca_synced_at: null, name_override: null, status: null, status_stage: null,
-    status_date: null, discovery_date_override: null, jumpstart_date_override: null,
-    tier_4x_date_override: null, tier_2x_date_override: null, tier_1x_date_override: null,
-    graduation_date_override: null, owner_coach_id_override: null,
-    notion_name: null, notion_status: null, notion_coach: null, notion_coach_conflict: false,
-    notion_email: null, notion_phone: null, notion_dc_date: null, notion_offering_signup: null,
-    notion_imported_at: null, pre_waiting_date_override: null, email_override: null,
-    phone_override: null, coach_override: null, is_test: false, ...o,
+    id: "x",
+    client_id: 1,
+    ca_name: null,
+    ca_owner_coach_id: null,
+    ca_owner_coach_name: null,
+    ca_discovery_date: null,
+    ca_jumpstart_date: null,
+    ca_tier_4x_date: null,
+    ca_tier_2x_date: null,
+    ca_tier_1x_date: null,
+    ca_graduation_date: null,
+    ca_first_meeting: null,
+    ca_last_meeting: null,
+    ca_meeting_count: 0,
+    ca_jumpstart_end: null,
+    ca_jyf_purchase_date: null,
+    ca_start_date: null,
+    ca_status: null,
+    ca_synced_at: null,
+    name_override: null,
+    status: null,
+    status_stage: null,
+    status_date: null,
+    discovery_date_override: null,
+    jumpstart_date_override: null,
+    tier_4x_date_override: null,
+    tier_2x_date_override: null,
+    tier_1x_date_override: null,
+    graduation_date_override: null,
+    owner_coach_id_override: null,
+    notion_name: null,
+    notion_status: null,
+    notion_coach: null,
+    notion_coach_conflict: false,
+    notion_email: null,
+    notion_phone: null,
+    notion_dc_date: null,
+    notion_offering_signup: null,
+    notion_imported_at: null,
+    pre_waiting_date_override: null,
+    email_override: null,
+    phone_override: null,
+    coach_override: null,
+    is_test: false,
+    ...o,
   });
   const t = "2026-06-27";
 
   // Notion status drives the effective status when there's no hand classification.
-  const pw = toEffectiveMentee(b2({ id: "PW", client_id: 1, notion_status: "Pre-Waiting List" }), t);
+  const pw = toEffectiveMentee(
+    b2({ id: "PW", client_id: 1, notion_status: "Pre-Waiting List" }),
+    t,
+  );
   eq(pw.effectiveStatus, "active", "Pre-Waiting List → active");
   eq(pw.mappedStage, "pre_waiting", "mapped stage pre_waiting");
-  assert(reachedStage(pw, "pre_waiting") && !reachedStage(pw, "discovery"), "reached pre_waiting only");
+  assert(
+    reachedStage(pw, "pre_waiting") && !reachedStage(pw, "discovery"),
+    "reached pre_waiting only",
+  );
 
-  const coarse = toEffectiveMentee(b2({ id: "Q", client_id: 2, ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-02-01", notion_status: "Done (Quit OR No Mentoring)" }), t);
+  const coarse = toEffectiveMentee(
+    b2({
+      id: "Q",
+      client_id: 2,
+      ca_discovery_date: "2026-01-01",
+      ca_jumpstart_date: "2026-02-01",
+      notion_status: "Done (Quit OR No Mentoring)",
+    }),
+    t,
+  );
   eq(coarse.effectiveStatus, "quit", "Done (Quit OR No Mentoring) → quit");
   assert(coarse.coarseExit === true, "coarse exit flagged for hand refinement");
 
-  const imn = toEffectiveMentee(b2({ id: "I", client_id: 3, ca_discovery_date: "2026-01-01", notion_status: "IMN" }), t);
+  const imn = toEffectiveMentee(
+    b2({ id: "I", client_id: 3, ca_discovery_date: "2026-01-01", notion_status: "IMN" }),
+    t,
+  );
   eq(imn.effectiveStatus, "imn", "IMN status");
 
-  const grad = toEffectiveMentee(b2({ id: "G", client_id: 4, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01", ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-09-01", notion_status: "Done (Graduated)" }), t);
-  const active4x = toEffectiveMentee(b2({ id: "A4", client_id: 5, ca_discovery_date: "2026-02-01", ca_jumpstart_date: "2026-03-01", ca_tier_4x_date: "2026-05-01", notion_status: "4x Mentoring" }), t);
-  const other = toEffectiveMentee(b2({ id: "O", client_id: 6, ca_discovery_date: "2026-01-01", ca_jumpstart_date: "2026-02-01", notion_status: "Done (Other)" }), t);
+  const grad = toEffectiveMentee(
+    b2({
+      id: "G",
+      client_id: 4,
+      ca_discovery_date: "2025-01-01",
+      ca_jumpstart_date: "2025-02-01",
+      ca_tier_4x_date: "2025-03-01",
+      ca_graduation_date: "2025-09-01",
+      notion_status: "Done (Graduated)",
+    }),
+    t,
+  );
+  const active4x = toEffectiveMentee(
+    b2({
+      id: "A4",
+      client_id: 5,
+      ca_discovery_date: "2026-02-01",
+      ca_jumpstart_date: "2026-03-01",
+      ca_tier_4x_date: "2026-05-01",
+      notion_status: "4x Mentoring",
+    }),
+    t,
+  );
+  const other = toEffectiveMentee(
+    b2({
+      id: "O",
+      client_id: 6,
+      ca_discovery_date: "2026-01-01",
+      ca_jumpstart_date: "2026-02-01",
+      notion_status: "Done (Other)",
+    }),
+    t,
+  );
 
   const f = computeFunnel([pw, coarse, imn, grad, active4x, other]);
   eq(f.imnCount, 1, "IMN excluded from funnel, counted separately");
@@ -2239,10 +3968,22 @@ console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)
   eq(byStage.get("jumpstart")!.exits.quit, 1, "coarse quit attributed to jumpstart");
   eq(byStage.get("jumpstart")!.exits.declined, 1, "Done (Other) → declined at jumpstart");
   eq(byStage.get("4x")!.activeHere, 1, "active@4x (A4)");
-  assert(byStage.get("pre_waiting")!.conversionToNext === null, "pre_waiting conversion is null (opt-in side stage)");
+  assert(
+    byStage.get("pre_waiting")!.conversionToNext === null,
+    "pre_waiting conversion is null (opt-in side stage)",
+  );
 
   // currentStage = furthest of date- and status-derived stage; exit lands there.
-  const ahead = toEffectiveMentee(b2({ id: "AH", client_id: 9, ca_jumpstart_date: "2026-02-01", notion_status: "1x Mentoring", status: "quit" }), t);
+  const ahead = toEffectiveMentee(
+    b2({
+      id: "AH",
+      client_id: 9,
+      ca_jumpstart_date: "2026-02-01",
+      notion_status: "1x Mentoring",
+      status: "quit",
+    }),
+    t,
+  );
   eq(ahead.currentStage, "1x", "currentStage = furthest (Notion 1x beats a CA jumpstart date)");
   const sAhead = new Map(computeFunnel([ahead]).stages.map((s) => [s.stage, s]));
   eq(sAhead.get("1x")!.exits.quit, 1, "exit attributed to 1x (furthest reached)");
@@ -2257,8 +3998,16 @@ console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)
 
   // An exit never lands on the graduated stage, even with a graduation date.
   const ge = toEffectiveMentee(
-    b2({ id: "GE", client_id: 11, ca_discovery_date: "2025-01-01", ca_jumpstart_date: "2025-02-01", ca_tier_4x_date: "2025-03-01", ca_graduation_date: "2025-09-01", status: "quit" }),
-    t
+    b2({
+      id: "GE",
+      client_id: 11,
+      ca_discovery_date: "2025-01-01",
+      ca_jumpstart_date: "2025-02-01",
+      ca_tier_4x_date: "2025-03-01",
+      ca_graduation_date: "2025-09-01",
+      status: "quit",
+    }),
+    t,
   );
   const sGe = new Map(computeFunnel([ge]).stages.map((s) => [s.stage, s]));
   eq(sGe.get("graduated")!.exitedHere, 0, "no exit attributed to graduated");

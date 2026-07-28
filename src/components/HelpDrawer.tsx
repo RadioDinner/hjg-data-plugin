@@ -52,7 +52,9 @@ function HelpDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer__head">
-          <h2>{article?.title ?? "Help"} <SectionId id="drawer.help" /></h2>
+          <h2>
+            {article?.title ?? "Help"} <SectionId id="drawer.help" />
+          </h2>
           <button className="btn btn--sm" onClick={onClose} aria-label="Close help">
             Close
           </button>
@@ -112,7 +114,7 @@ function renderMarkdown(md: string): ReactNode[] {
           {list.map((li, i) => (
             <li key={i}>{renderInline(li)}</li>
           ))}
-        </ul>
+        </ul>,
       );
       list = [];
     }
@@ -142,7 +144,7 @@ function renderMarkdown(md: string): ReactNode[] {
       blocks.push(
         <blockquote key={key++} className="drawer__note">
           {renderInline(line.slice(2))}
-        </blockquote>
+        </blockquote>,
       );
     } else {
       flushList();

@@ -132,7 +132,8 @@ export function BuildPayoutView({
   // Every coach with pay lines in the ledger…
   const allCoachOptions = useMemo(() => {
     const m = new Map<number, string>();
-    for (const r of timeline?.ledger ?? []) if (r.assigned && r.coachId != null) m.set(r.coachId, r.coachName);
+    for (const r of timeline?.ledger ?? [])
+      if (r.assigned && r.coachId != null) m.set(r.coachId, r.coachName);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [timeline]);
   // …filtered to the mentors ASSIGNED in Company options → Payment groups (§451)
@@ -173,7 +174,7 @@ export function BuildPayoutView({
   // Months already marked Payment sent (any mentor) — drive the default month.
   const paidMonths = useMemo(
     () => [...builds.values()].filter((b) => b.paymentSentAt).map((b) => b.serviceMonth),
-    [builds]
+    [builds],
   );
 
   // Keep the month valid for the chosen coach. On FIRST open (no month chosen
@@ -235,8 +236,9 @@ export function BuildPayoutView({
     });
   }, [data, ym]);
   const mentor = useMemo(
-    () => (report && coach != null ? report.mentors.find((m) => m.coachId === coach) ?? null : null),
-    [report, coach]
+    () =>
+      report && coach != null ? (report.mentors.find((m) => m.coachId === coach) ?? null) : null,
+    [report, coach],
   );
   const lines: PayMenteeLine[] = mentor?.lines ?? [];
   const unassigned = report?.unassigned ?? [];
@@ -254,7 +256,7 @@ export function BuildPayoutView({
   const pieceTotal = piecesTotal(cleanPieces);
   const summary = useMemo(
     () => summarizeBuild(lines, stateMap, splitOverride, cleanPieces),
-    [lines, stateMap, splitOverride, cleanPieces]
+    [lines, stateMap, splitOverride, cleanPieces],
   );
 
   const locked = status === "approved";
@@ -266,13 +268,20 @@ export function BuildPayoutView({
   // mentors in the (filtered) list.
   const progress = useMemo(() => {
     const mm: { coachId: number; ym: string }[] = [];
-    for (const [id] of mentorList) for (const m of monthsByCoach.get(id) ?? []) mm.push({ coachId: id, ym: m });
+    for (const [id] of mentorList)
+      for (const m of monthsByCoach.get(id) ?? []) mm.push({ coachId: id, ym: m });
     const cur = currentYm();
-    return monthPayProgress(mm, (cid, m) => !!builds.get(payoutBuildKey(cid, m))?.paymentSentAt).filter((p) => p.ym < cur);
+    return monthPayProgress(
+      mm,
+      (cid, m) => !!builds.get(payoutBuildKey(cid, m))?.paymentSentAt,
+    ).filter((p) => p.ym < cur);
   }, [mentorList, monthsByCoach, builds]);
 
   function updateLine(clientId: number, patch: Partial<BuildLineState>) {
-    setLineStates((s) => ({ ...s, [clientId]: { ...(s[clientId] ?? DEFAULT_LINE_STATE), ...patch } }));
+    setLineStates((s) => ({
+      ...s,
+      [clientId]: { ...(s[clientId] ?? DEFAULT_LINE_STATE), ...patch },
+    }));
     setDirty(true);
     setFlash(null);
   }
@@ -334,7 +343,8 @@ export function BuildPayoutView({
       setBuilds((m) => {
         const next = new Map(m);
         const rec = next.get(payoutBuildKey(coach, ym));
-        if (rec) next.set(payoutBuildKey(coach, ym), { ...rec, paymentSentAt: sentAt, paymentRef: ref });
+        if (rec)
+          next.set(payoutBuildKey(coach, ym), { ...rec, paymentSentAt: sentAt, paymentRef: ref });
         return next;
       });
       setPayModal(false);
@@ -348,7 +358,12 @@ export function BuildPayoutView({
 
   async function unmarkPaymentSent() {
     if (coach == null || !ym || !paid) return;
-    if (!confirm(`Clear the Payment-sent mark for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?`)) return;
+    if (
+      !confirm(
+        `Clear the Payment-sent mark for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?`,
+      )
+    )
+      return;
     setBusy(true);
     setPayErr(null);
     try {
@@ -356,7 +371,8 @@ export function BuildPayoutView({
       setBuilds((m) => {
         const next = new Map(m);
         const rec = next.get(payoutBuildKey(coach, ym));
-        if (rec) next.set(payoutBuildKey(coach, ym), { ...rec, paymentSentAt: null, paymentRef: null });
+        if (rec)
+          next.set(payoutBuildKey(coach, ym), { ...rec, paymentSentAt: null, paymentRef: null });
         return next;
       });
       setPayModal(false);
@@ -373,7 +389,12 @@ export function BuildPayoutView({
     const paidWarning = savedRec.paymentSentAt
       ? ` This build is marked PAID${savedRec.paymentRef ? ` (Melio ref ${savedRec.paymentRef})` : ""} — discarding DELETES the payment record and reference too.`
       : "";
-    if (!confirm(`Discard the saved review for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?${paidWarning}`)) return;
+    if (
+      !confirm(
+        `Discard the saved review for ${mentor?.coachName ?? "this coach"} — ${monthLabel(ym)}?${paidWarning}`,
+      )
+    )
+      return;
     setBusy(true);
     try {
       await deletePayoutBuild(coach, ym);
@@ -442,7 +463,9 @@ export function BuildPayoutView({
       });
       setFlash(`${locked ? "Pay stub" : "Review stub"} printed + archived to History.`);
     } catch (e) {
-      setFlash(`Stub printed, but archiving failed: ${String(e)} — apply migration 9970_staff_hourly_pay.sql`);
+      setFlash(
+        `Stub printed, but archiving failed: ${String(e)} — apply migration 9970_staff_hourly_pay.sql`,
+      );
     }
   }
 
@@ -452,13 +475,19 @@ export function BuildPayoutView({
     // TOTAL row aligned to the "Engine payout" + "Effective payout" columns of
     // PAYOUT_DETAIL_CSV_COLUMNS (found by label so it survives column reordering).
     const total: (string | number)[] = PAYOUT_DETAIL_CSV_COLUMNS.map((c) =>
-      c === "Mentee" ? "TOTAL" : c === "Engine payout" ? summary.computedTotal : c === "Effective payout" ? summary.builtTotal : ""
+      c === "Mentee"
+        ? "TOTAL"
+        : c === "Engine payout"
+          ? summary.computedTotal
+          : c === "Effective payout"
+            ? summary.builtTotal
+            : "",
     );
     rows.push(total);
     downloadCsv(
       `payout-build-${data?.coachName(coach).replace(/\s+/g, "-").toLowerCase() ?? coach}-${ym}`,
       [...PAYOUT_DETAIL_CSV_COLUMNS],
-      rows
+      rows,
     );
   }
 
@@ -466,7 +495,7 @@ export function BuildPayoutView({
   if (error) return <div className="notice notice--warn">Failed to load payment data: {error}</div>;
 
   const noInvoices = !data || data.invoices.length === 0;
-  const coachMonths = coach != null ? monthsByCoach.get(coach) ?? [] : [];
+  const coachMonths = coach != null ? (monthsByCoach.get(coach) ?? []) : [];
   const projection = !!ym && ym >= currentYm();
 
   return (
@@ -479,9 +508,10 @@ export function BuildPayoutView({
               <SectionId id="build.screen" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              A deliberate human checkpoint over the automated engine: pick a mentor and a month, confirm or drop each
-              line (override an amount if you must, with a note), and sign off the payout you've personally checked. The
-              engine numbers never change — this records your review.
+              A deliberate human checkpoint over the automated engine: pick a mentor and a month,
+              confirm or drop each line (override an amount if you must, with a note), and sign off
+              the payout you've personally checked. The engine numbers never change — this records
+              your review.
             </div>
           </div>
           {onBack && (
@@ -493,8 +523,9 @@ export function BuildPayoutView({
 
         {noInvoices && (
           <p className="muted" style={{ marginTop: 8 }}>
-            No invoice data yet. Apply migration <code>9993_ca_invoices.sql</code> in the Supabase SQL Editor, then run a
-            sync (Admin → Sync now). The builder lights up once invoices are mirrored.
+            No invoice data yet. Apply migration <code>9993_ca_invoices.sql</code> in the Supabase
+            SQL Editor, then run a sync (Admin → Sync now). The builder lights up once invoices are
+            mirrored.
           </p>
         )}
 
@@ -531,7 +562,13 @@ export function BuildPayoutView({
                   return (
                     <option key={m} value={m}>
                       {monthLabel(m)}
-                      {rec ? (rec.paymentSentAt ? " — paid ✓" : rec.status === "approved" ? " — approved ✓" : " — draft") : ""}
+                      {rec
+                        ? rec.paymentSentAt
+                          ? " — paid ✓"
+                          : rec.status === "approved"
+                            ? " — approved ✓"
+                            : " — draft"
+                        : ""}
                     </option>
                   );
                 })}
@@ -543,8 +580,18 @@ export function BuildPayoutView({
         {/* Which months are DONE: every mentor with lines that month marked
             Payment sent. Green ✓ = complete; N/M = partial. */}
         {!noInvoices && progress.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-            <span className="muted" style={{ fontSize: 12 }}>Payments completed:</span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexWrap: "wrap",
+              marginTop: 10,
+            }}
+          >
+            <span className="muted" style={{ fontSize: 12 }}>
+              Payments completed:
+            </span>
             {progress.slice(0, 8).map((p) => (
               <span
                 key={p.ym}
@@ -572,18 +619,44 @@ export function BuildPayoutView({
                 <h2 style={{ fontSize: 15 }}>
                   {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)}
                   <SectionId id="build.review" />
-                  {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
-                  {locked && !paid && <span className="pill pill--success" style={{ marginLeft: 8 }}>approved</span>}
+                  {projection && (
+                    <span className="pill pill--running" style={{ marginLeft: 8 }}>
+                      projection
+                    </span>
+                  )}
+                  {locked && !paid && (
+                    <span className="pill pill--success" style={{ marginLeft: 8 }}>
+                      approved
+                    </span>
+                  )}
                   {/* The paid pill renders whatever the status, so reopening an
                       already-paid build never hides that money already moved. */}
                   {paid && (
-                    <span className="pill pill--success" style={{ marginLeft: 8 }} title={savedRec?.paymentRef ? `Melio ref ${savedRec.paymentRef}` : undefined}>
+                    <span
+                      className="pill pill--success"
+                      style={{ marginLeft: 8 }}
+                      title={savedRec?.paymentRef ? `Melio ref ${savedRec.paymentRef}` : undefined}
+                    >
                       paid ✓{!locked ? " (reopened)" : ""}
                     </span>
                   )}
-                  {dirty && <span className="pill pill--running" style={{ marginLeft: 8 }}>unsaved</span>}
+                  {dirty && (
+                    <span className="pill pill--running" style={{ marginLeft: 8 }}>
+                      unsaved
+                    </span>
+                  )}
                 </h2>
-                <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div
+                  className="muted"
+                  style={{
+                    fontSize: 12,
+                    marginTop: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
                   {mentor ? (
                     <>
                       <span>Tenure month {mentor.tenureMonth ?? "—"} · split</span>
@@ -600,7 +673,11 @@ export function BuildPayoutView({
                         onChange={(e) => {
                           const v = e.target.value.trim();
                           const n = Number(v);
-                          setSplitOverride(v === "" || !Number.isFinite(n) ? null : Math.min(Math.max(n, 0), 100) / 100);
+                          setSplitOverride(
+                            v === "" || !Number.isFinite(n)
+                              ? null
+                              : Math.min(Math.max(n, 0), 100) / 100,
+                          );
                           setDirty(true);
                           setFlash(null);
                         }}
@@ -609,13 +686,18 @@ export function BuildPayoutView({
                       />
                       <span>%</span>
                       {splitOverride != null && splitOverride !== mentor.splitPct && (
-                        <span className="pill pill--running" title={`Engine ramp split is ${fmtPct(mentor.splitPct)}`}>
+                        <span
+                          className="pill pill--running"
+                          title={`Engine ramp split is ${fmtPct(mentor.splitPct)}`}
+                        >
                           engine {fmtPct(mentor.splitPct)}
                         </span>
                       )}
                       <span>
                         · {lines.length} line{lines.length === 1 ? "" : "s"} ·{" "}
-                        <em>click a mentee to see the invoices + payment dates behind their number</em>
+                        <em>
+                          click a mentee to see the invoices + payment dates behind their number
+                        </em>
                       </span>
                     </>
                   ) : (
@@ -650,8 +732,8 @@ export function BuildPayoutView({
                     !savedRec || (!locked && !paid)
                       ? "Approve (and save) the build first — Payment sent records that the approved payout was actually paid"
                       : paid
-                      ? `Payment sent ${savedRec?.paymentSentAt ? fmtDateTime(savedRec.paymentSentAt) : ""}${savedRec?.paymentRef ? ` · Melio ref ${savedRec.paymentRef}` : ""} — click to edit the reference or clear the mark`
-                      : "Record that this payout was paid, with the Melio payment number as reference"
+                        ? `Payment sent ${savedRec?.paymentSentAt ? fmtDateTime(savedRec.paymentSentAt) : ""}${savedRec?.paymentRef ? ` · Melio ref ${savedRec.paymentRef}` : ""} — click to edit the reference or clear the mark`
+                        : "Record that this payout was paid, with the Melio payment number as reference"
                   }
                 >
                   {paid ? "Payment sent ✓" : "Payment sent…"}
@@ -664,7 +746,8 @@ export function BuildPayoutView({
 
             {lines.length === 0 ? (
               <p className="muted">
-                {mentor?.coachName ?? "This coach"} has no payout lines for {monthLabel(ym)}. Pick another month.
+                {mentor?.coachName ?? "This coach"} has no payout lines for {monthLabel(ym)}. Pick
+                another month.
               </p>
             ) : (
               <div className="table-scroll">
@@ -696,8 +779,12 @@ export function BuildPayoutView({
                       // Engine-flagged judgment lines (credits/unmatched charges) —
                       // the hand-review targets for the first payout rounds.
                       const reviewLines = l.sources.reduce(
-                        (t, src) => t + src.lineItems.filter((li) => li.status === "credit" || li.status === "excluded").length,
-                        0
+                        (t, src) =>
+                          t +
+                          src.lineItems.filter(
+                            (li) => li.status === "credit" || li.status === "excluded",
+                          ).length,
+                        0,
                       );
                       return (
                         <tr key={l.clientId} className={s.included ? "" : "builder__row--excluded"}>
@@ -706,7 +793,9 @@ export function BuildPayoutView({
                               type="checkbox"
                               checked={s.included}
                               disabled={locked}
-                              onChange={(e) => updateLine(l.clientId, { included: e.target.checked })}
+                              onChange={(e) =>
+                                updateLine(l.clientId, { included: e.target.checked })
+                              }
                               aria-label={`Include ${l.clientName}`}
                             />
                           </td>
@@ -739,13 +828,31 @@ export function BuildPayoutView({
                             )}
                           </td>
                           <td>{l.tier}</td>
-                          <td className="num" title={l.invoiceDay != null ? `invoice day ${l.invoiceDay}` : "rollover only"}>
+                          <td
+                            className="num"
+                            title={
+                              l.invoiceDay != null ? `invoice day ${l.invoiceDay}` : "rollover only"
+                            }
+                          >
                             {fmtUsd(l.billed)}
                           </td>
-                          <td className="num" title={`this-mo ${fmtUsd(l.recognizedThis)} + rolled-in ${fmtUsd(l.rolloverPrev)}`}>
+                          <td
+                            className="num"
+                            title={`this-mo ${fmtUsd(l.recognizedThis)} + rolled-in ${fmtUsd(l.rolloverPrev)}`}
+                          >
                             {fmtUsd(l.earned)}
                           </td>
-                          <td className="num" style={{ color: splitOverride != null && splitOverride !== l.splitPct ? "var(--accent)" : undefined }}>{fmtPct(splitOverride ?? l.splitPct)}</td>
+                          <td
+                            className="num"
+                            style={{
+                              color:
+                                splitOverride != null && splitOverride !== l.splitPct
+                                  ? "var(--accent)"
+                                  : undefined,
+                            }}
+                          >
+                            {fmtPct(splitOverride ?? l.splitPct)}
+                          </td>
                           <td className="num">{fmtUsd(l.payout)}</td>
                           <td className="num">
                             <input
@@ -759,12 +866,20 @@ export function BuildPayoutView({
                               onChange={(e) => {
                                 const v = e.target.value.trim();
                                 const n = Number(v);
-                                updateLine(l.clientId, { override: v === "" || !Number.isFinite(n) ? null : n });
+                                updateLine(l.clientId, {
+                                  override: v === "" || !Number.isFinite(n) ? null : n,
+                                });
                               }}
                               aria-label={`Override payout for ${l.clientName}`}
                             />
                           </td>
-                          <td className="num" style={{ fontWeight: 600, color: s.override != null ? "var(--accent)" : undefined }}>
+                          <td
+                            className="num"
+                            style={{
+                              fontWeight: 600,
+                              color: s.override != null ? "var(--accent)" : undefined,
+                            }}
+                          >
                             {fmtUsd(eff)}
                           </td>
                           <td style={{ textAlign: "left" }}>
@@ -774,7 +889,9 @@ export function BuildPayoutView({
                               placeholder="reason…"
                               value={s.note ?? ""}
                               disabled={locked}
-                              onChange={(e) => updateLine(l.clientId, { note: e.target.value || null })}
+                              onChange={(e) =>
+                                updateLine(l.clientId, { note: e.target.value || null })
+                              }
                               aria-label={`Note for ${l.clientName}`}
                             />
                           </td>
@@ -788,10 +905,22 @@ export function BuildPayoutView({
                         Totals
                       </td>
                       <td className="num">{fmtUsd(summary.computedTotal)}</td>
-                      <td className="num muted">{summary.overriddenCount ? `${summary.overriddenCount} ovr` : ""}</td>
-                      <td className="num" style={{ fontWeight: 700 }} title={pieceTotal !== 0 ? `includes ${fmtUsd(pieceTotal)} piece work` : undefined}>
+                      <td className="num muted">
+                        {summary.overriddenCount ? `${summary.overriddenCount} ovr` : ""}
+                      </td>
+                      <td
+                        className="num"
+                        style={{ fontWeight: 700 }}
+                        title={
+                          pieceTotal !== 0 ? `includes ${fmtUsd(pieceTotal)} piece work` : undefined
+                        }
+                      >
                         {fmtUsd(summary.builtTotal)}
-                        {pieceTotal !== 0 && <div className="muted" style={{ fontSize: 10, fontWeight: 400 }}>incl. {fmtUsd(pieceTotal)} piece work</div>}
+                        {pieceTotal !== 0 && (
+                          <div className="muted" style={{ fontSize: 10, fontWeight: 400 }}>
+                            incl. {fmtUsd(pieceTotal)} piece work
+                          </div>
+                        )}
                       </td>
                       <td />
                     </tr>
@@ -802,10 +931,11 @@ export function BuildPayoutView({
 
             {unassigned.length > 0 && (
               <p className="notice notice--info" style={{ fontSize: 13 }}>
-                Heads up — {fmtUsd(unassigned.reduce((s, u) => s + u.billed, 0))} billed in {monthLabel(ym)} across{" "}
-                {unassigned.length} mentee{unassigned.length === 1 ? "" : "s"} isn't attributed to any coach (no
-                overlapping engagement), so it's in no one's payout. Review it in <strong>Pay staff → Explore source
-                data</strong>.
+                Heads up — {fmtUsd(unassigned.reduce((s, u) => s + u.billed, 0))} billed in{" "}
+                {monthLabel(ym)} across {unassigned.length} mentee
+                {unassigned.length === 1 ? "" : "s"} isn't attributed to any coach (no overlapping
+                engagement), so it's in no one's payout. Review it in{" "}
+                <strong>Pay staff → Explore source data</strong>.
               </p>
             )}
           </section>
@@ -825,25 +955,33 @@ export function BuildPayoutView({
 
           <aside className="builder__side">
             <div className="card">
-              <div className="muted" style={{ fontSize: 12 }}>Built payout (signed-off)</div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                Built payout (signed-off)
+              </div>
               <div className="builder__total">{fmtUsd(summary.builtTotal)}</div>
               <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
                 Engine computed: <strong>{fmtUsd(summary.computedTotal)}</strong>
               </div>
               <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                 Review delta:{" "}
-                <strong style={{ color: summary.delta === 0 ? undefined : "var(--accent)" }}>{fmtSigned(summary.delta)}</strong>
+                <strong style={{ color: summary.delta === 0 ? undefined : "var(--accent)" }}>
+                  {fmtSigned(summary.delta)}
+                </strong>
               </div>
               {pieceTotal !== 0 && (
                 <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                  Piece work: <strong>{fmtUsd(pieceTotal)}</strong> (in the built total, not the engine number)
+                  Piece work: <strong>{fmtUsd(pieceTotal)}</strong> (in the built total, not the
+                  engine number)
                 </div>
               )}
               <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                {summary.includedCount} of {summary.lineCount} line{summary.lineCount === 1 ? "" : "s"} included
+                {summary.includedCount} of {summary.lineCount} line
+                {summary.lineCount === 1 ? "" : "s"} included
                 {summary.excludedCount ? ` · ${summary.excludedCount} dropped` : ""}
                 {summary.overriddenCount ? ` · ${summary.overriddenCount} overridden` : ""}
-                {summary.invoiceAdjustedCount ? ` · ${summary.invoiceAdjustedCount} with invoices dropped` : ""}
+                {summary.invoiceAdjustedCount
+                  ? ` · ${summary.invoiceAdjustedCount} with invoices dropped`
+                  : ""}
               </div>
             </div>
 
@@ -859,17 +997,34 @@ export function BuildPayoutView({
                     setNotes(e.target.value);
                     setDirty(true);
                   }}
-                  style={{ resize: "vertical", width: "100%", background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, color: "var(--text)", padding: "6px 8px", fontSize: 13 }}
+                  style={{
+                    resize: "vertical",
+                    width: "100%",
+                    background: "var(--panel-2)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 6,
+                    color: "var(--text)",
+                    padding: "6px 8px",
+                    fontSize: 13,
+                  }}
                 />
               </label>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
                 {!locked ? (
                   <>
-                    <button className="btn btn--sm" onClick={() => persist("draft")} disabled={busy || !lines.length}>
+                    <button
+                      className="btn btn--sm"
+                      onClick={() => persist("draft")}
+                      disabled={busy || !lines.length}
+                    >
                       Save draft
                     </button>
-                    <button className="btn btn--sm btn--primary" onClick={() => persist("approved")} disabled={busy || !lines.length}>
+                    <button
+                      className="btn btn--sm btn--primary"
+                      onClick={() => persist("approved")}
+                      disabled={busy || !lines.length}
+                    >
                       Approve
                     </button>
                   </>
@@ -882,7 +1037,7 @@ export function BuildPayoutView({
                         !confirm(
                           `This build is already marked PAID${savedRec?.paymentRef ? ` (Melio ref ${savedRec.paymentRef})` : ""}. ` +
                             "Reopening lets the amounts change while the payment record stays — if you re-approve at a different total, " +
-                            "what was actually sent won't match the build. Continue?"
+                            "what was actually sent won't match the build. Continue?",
                         )
                       )
                         return;
@@ -907,22 +1062,28 @@ export function BuildPayoutView({
               )}
               {savedRec && (
                 <div className="muted" style={{ fontSize: 11, marginTop: 8 }}>
-                  Last saved {fmtDateTime(savedRec.reviewedAt)} · status{" "}
-                  {savedRec.status}
+                  Last saved {fmtDateTime(savedRec.reviewedAt)} · status {savedRec.status}
                 </div>
               )}
               {paid && savedRec && (
                 <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
                   Payment sent {fmtDateTime(savedRec.paymentSentAt)}
-                  {savedRec.paymentRef ? <> · Melio ref <strong>{savedRec.paymentRef}</strong></> : null}
+                  {savedRec.paymentRef ? (
+                    <>
+                      {" "}
+                      · Melio ref <strong>{savedRec.paymentRef}</strong>
+                    </>
+                  ) : null}
                 </div>
               )}
               {savedRec && !dirty && Math.abs(summary.builtTotal - savedRec.builtTotal) > 0.005 && (
                 <div className="notice notice--warn" style={{ fontSize: 12, marginTop: 8 }}>
-                  Heads up — the engine's numbers have <strong>changed since this build was saved</strong> (saved{" "}
-                  {fmtUsd(savedRec.builtTotal)}, now {fmtUsd(summary.builtTotal)}). A re-sync or a Payment-groups change
-                  can do this. Re-review and save{status === "approved" ? " (reopen first)" : ""} so the signed-off
-                  number matches what's shown.
+                  Heads up — the engine's numbers have{" "}
+                  <strong>changed since this build was saved</strong> (saved{" "}
+                  {fmtUsd(savedRec.builtTotal)}, now {fmtUsd(summary.builtTotal)}). A re-sync or a
+                  Payment-groups change can do this. Re-review and save
+                  {status === "approved" ? " (reopen first)" : ""} so the signed-off number matches
+                  what's shown.
                 </div>
               )}
             </div>
@@ -933,10 +1094,15 @@ export function BuildPayoutView({
       {/* Payment sent — Melio reference dialog (§906). */}
       {payModal && coach != null && ym && (
         <div className="modal" onClick={() => setPayModal(false)}>
-          <div className="modal__card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal__card"
+            style={{ maxWidth: 460 }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal__head">
               <h2>
-                Payment sent — {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)} <SectionId id="modal.paymentSent" />
+                Payment sent — {mentor?.coachName ?? data?.coachName(coach)} · {monthLabel(ym)}{" "}
+                <SectionId id="modal.paymentSent" />
               </h2>
               <button className="btn btn--sm" onClick={() => setPayModal(false)}>
                 Close
@@ -944,8 +1110,9 @@ export function BuildPayoutView({
             </div>
             <div className="modal__body" style={{ padding: "12px 20px 16px" }}>
               <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-                Records that this approved payout was actually paid ({fmtUsd(summary.builtTotal)}). Enter the{" "}
-                <strong>Melio payment number</strong> as the reference so the payment is easy to trace later.
+                Records that this approved payout was actually paid ({fmtUsd(summary.builtTotal)}).
+                Enter the <strong>Melio payment number</strong> as the reference so the payment is
+                easy to trace later.
               </p>
               <label className="filter" style={{ width: "100%" }}>
                 <span>Melio payment number (reference)</span>
@@ -963,16 +1130,29 @@ export function BuildPayoutView({
               </label>
               {paid && savedRec?.paymentSentAt && (
                 <p className="muted" style={{ fontSize: 12 }}>
-                  Already marked sent {fmtDateTime(savedRec.paymentSentAt)} — saving updates the reference.
+                  Already marked sent {fmtDateTime(savedRec.paymentSentAt)} — saving updates the
+                  reference.
                 </p>
               )}
-              {payErr && <div className="notice notice--warn" style={{ fontSize: 12 }}>{payErr}</div>}
+              {payErr && (
+                <div className="notice notice--warn" style={{ fontSize: 12 }}>
+                  {payErr}
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <button className="btn btn--sm btn--primary" onClick={markPaymentSent} disabled={busy}>
+                <button
+                  className="btn btn--sm btn--primary"
+                  onClick={markPaymentSent}
+                  disabled={busy}
+                >
                   {paid ? "Save reference" : "Mark payment sent"}
                 </button>
                 {paid && (
-                  <button className="btn btn--sm btn--danger" onClick={unmarkPaymentSent} disabled={busy}>
+                  <button
+                    className="btn btn--sm btn--danger"
+                    onClick={unmarkPaymentSent}
+                    disabled={busy}
+                  >
                     Clear payment-sent mark
                   </button>
                 )}

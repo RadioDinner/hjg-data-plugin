@@ -62,8 +62,16 @@ export function computeMeetingsToFreedom(mentees: FreedomMenteeInput[]): Freedom
       unmeasured++;
       continue;
     }
-    const count = m.meetings.filter((mt) => !mt.isGroup && mt.date >= windowStart && mt.date <= gradDate).length;
-    rows.push({ clientId: m.clientId, name: m.name, windowStart, graduationDate: gradDate, meetings: count });
+    const count = m.meetings.filter(
+      (mt) => !mt.isGroup && mt.date >= windowStart && mt.date <= gradDate,
+    ).length;
+    rows.push({
+      clientId: m.clientId,
+      name: m.name,
+      windowStart,
+      graduationDate: gradDate,
+      meetings: count,
+    });
   }
 
   rows.sort((a, b) => b.meetings - a.meetings || a.name.localeCompare(b.name));

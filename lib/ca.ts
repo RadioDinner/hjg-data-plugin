@@ -19,7 +19,11 @@ import type {
 const CA_ENDPOINT = "https://www.coachaccountable.com/API/";
 
 export class CAError extends Error {
-  constructor(public caCode: number, message: string, public detail?: unknown) {
+  constructor(
+    public caCode: number,
+    message: string,
+    public detail?: unknown,
+  ) {
     super(message);
     this.name = "CAError";
   }
@@ -117,7 +121,9 @@ export class CAClient {
   }
 
   async getClients(includeInactive = true, coachId?: number): Promise<CAClientEntity[]> {
-    return asArray<CAClientEntity>(await this.call(CA_FN.clientGetAll, { includeInactive, CoachID: coachId }));
+    return asArray<CAClientEntity>(
+      await this.call(CA_FN.clientGetAll, { includeInactive, CoachID: coachId }),
+    );
   }
 
   async getAppointments(opts: {
@@ -136,12 +142,14 @@ export class CAClient {
         ClientID: opts.clientId,
         includeCanceled: opts.includeCanceled,
         includePending: opts.includePending,
-      })
+      }),
     );
   }
 
   async getAppointmentTypes(coachId: number): Promise<CAAppointmentType[]> {
-    return asArray<CAAppointmentType>(await this.call(CA_FN.appointmentGetTypes, { CoachID: coachId }));
+    return asArray<CAAppointmentType>(
+      await this.call(CA_FN.appointmentGetTypes, { CoachID: coachId }),
+    );
   }
 
   async getOfferings(): Promise<CAOffering[]> {
@@ -149,7 +157,7 @@ export class CAClient {
   }
 
   async getOfferingSubmissions(
-    opts: { dateFrom?: string; dateTo?: string; clientId?: number; offeringId?: number } = {}
+    opts: { dateFrom?: string; dateTo?: string; clientId?: number; offeringId?: number } = {},
   ): Promise<CAOfferingSubmission[]> {
     return asArray<CAOfferingSubmission>(
       await this.call(CA_FN.offeringGetSubmissions, {
@@ -157,7 +165,7 @@ export class CAClient {
         dateTo: opts.dateTo,
         ClientID: opts.clientId,
         OfferingID: opts.offeringId,
-      })
+      }),
     );
   }
 
@@ -165,14 +173,14 @@ export class CAClient {
   // pull every engagement in one (best-effort) request; includeAppointments
   // stays false since we already mirror appointments with their EngagementID.
   async getEngagements(
-    opts: { clientId?: number; coachId?: number; includeAppointments?: boolean } = {}
+    opts: { clientId?: number; coachId?: number; includeAppointments?: boolean } = {},
   ): Promise<CAEngagement[]> {
     return asArray<CAEngagement>(
       await this.call(CA_FN.engagementGetAll, {
         ClientID: opts.clientId,
         CoachID: opts.coachId,
         includeAppointments: opts.includeAppointments ?? false,
-      })
+      }),
     );
   }
 
@@ -190,7 +198,7 @@ export class CAClient {
   // CoachID filter is the client's *primary* coach (per the CA docs), not
   // necessarily who ran each appointment — attribution is decided downstream.
   async getInvoices(
-    opts: { dateFrom?: string; dateTo?: string; clientId?: number; coachId?: number } = {}
+    opts: { dateFrom?: string; dateTo?: string; clientId?: number; coachId?: number } = {},
   ): Promise<CAInvoice[]> {
     return asArray<CAInvoice>(
       await this.call(CA_FN.invoiceGetAll, {
@@ -198,7 +206,7 @@ export class CAClient {
         dateTo: opts.dateTo,
         ClientID: opts.clientId,
         CoachID: opts.coachId,
-      })
+      }),
     );
   }
 }

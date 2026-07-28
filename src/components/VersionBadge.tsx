@@ -51,10 +51,12 @@ export function VersionBadge() {
   const updateAvailable =
     __APP_VERSION__ !== "dev" &&
     deployed != null &&
-    (deployed.commit != null ? deployed.commit !== __APP_VERSION__ : deployed.version !== __APP_SEMVER__);
+    (deployed.commit != null
+      ? deployed.commit !== __APP_VERSION__
+      : deployed.version !== __APP_SEMVER__);
 
   if (updateAvailable) {
-    const label = deployed?.version ? `v${deployed.version}` : deployed?.commit ?? "latest";
+    const label = deployed?.version ? `v${deployed.version}` : (deployed?.commit ?? "latest");
     return (
       <button
         className="version-chip version-chip--update"

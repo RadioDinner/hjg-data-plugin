@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   fetchMentees,
   fetchCompanyOptions,
@@ -54,13 +64,21 @@ export function MenteeFunnelCard() {
     if (ownerF !== "all" && !owners.includes(ownerF)) setOwnerF("all");
   }, [owners, ownerF]);
 
-  const scoped = useMemo(() => (ownerF === "all" ? mentees : mentees.filter((m) => m.ownerCoachName === ownerF)), [mentees, ownerF]);
+  const scoped = useMemo(
+    () => (ownerF === "all" ? mentees : mentees.filter((m) => m.ownerCoachName === ownerF)),
+    [mentees, ownerF],
+  );
   const funnel = useMemo(() => computeFunnel(scoped), [scoped]);
   // FUNNEL_STAGES[0] = pre_waiting (no palette slot — neutral); 1..6 map to the
   // 6-color stage palette (Discovery … Graduation).
   const chart = useMemo(
-    () => funnel.stages.map((s, i) => ({ stage: s.label, entered: s.entered, color: i === 0 ? "#94a3b8" : stageColors[i - 1] ?? ct.accent })),
-    [funnel, stageColors, ct.accent]
+    () =>
+      funnel.stages.map((s, i) => ({
+        stage: s.label,
+        entered: s.entered,
+        color: i === 0 ? "#94a3b8" : (stageColors[i - 1] ?? ct.accent),
+      })),
+    [funnel, stageColors, ct.accent],
   );
 
   if (error) return <div className="error">{error}</div>;
@@ -75,10 +93,11 @@ export function MenteeFunnelCard() {
       help={<HelpButton id="metrics.funnel" label="Mentee funnel & exits" />}
     >
       <p className="view__hint">
-        How many mentees <strong>entered</strong> each stage, who's still <strong>active</strong> there, who <strong>exited</strong> there
-        (declined / quit / fired / no&nbsp;mentoring), and the <strong>conversion</strong> to the next stage. Graduation can happen directly
-        from 4x or 2x. Built off the effective mentee data (CA + Notion + your edits); test mentees excluded. All-time.{" "}
-        {funnel.imnCount > 0 ? <strong>{funnel.imnCount} IMN excluded.</strong> : null}
+        How many mentees <strong>entered</strong> each stage, who's still <strong>active</strong>{" "}
+        there, who <strong>exited</strong> there (declined / quit / fired / no&nbsp;mentoring), and
+        the <strong>conversion</strong> to the next stage. Graduation can happen directly from 4x or
+        2x. Built off the effective mentee data (CA + Notion + your edits); test mentees excluded.
+        All-time. {funnel.imnCount > 0 ? <strong>{funnel.imnCount} IMN excluded.</strong> : null}
       </p>
 
       <div className="journey-filters">
@@ -105,17 +124,37 @@ export function MenteeFunnelCard() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chart} layout="vertical" margin={{ left: 8, right: 40 }}>
               <CartesianGrid stroke={ct.grid} horizontal={false} />
-              <XAxis type="number" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} allowDecimals={false} />
-              <YAxis type="category" dataKey="stage" width={80} tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+              <XAxis
+                type="number"
+                tick={{ fill: ct.axis, fontSize: 11 }}
+                stroke={ct.grid}
+                allowDecimals={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="stage"
+                width={80}
+                tick={{ fill: ct.axis, fontSize: 11 }}
+                stroke={ct.grid}
+              />
               <Tooltip
-                contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText }}
+                contentStyle={{
+                  background: ct.tooltipBg,
+                  border: `1px solid ${ct.tooltipBorder}`,
+                  borderRadius: 6,
+                  color: ct.tooltipText,
+                }}
                 cursor={{ fill: "rgba(148,163,184,0.08)" }}
               />
               <Bar dataKey="entered" radius={[0, 3, 3, 0]}>
                 {chart.map((d, i) => (
                   <Cell key={i} fill={d.color} />
                 ))}
-                <LabelList dataKey="entered" position="right" style={{ fill: ct.axis, fontSize: 11 }} />
+                <LabelList
+                  dataKey="entered"
+                  position="right"
+                  style={{ fill: ct.axis, fontSize: 11 }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -139,9 +178,13 @@ export function MenteeFunnelCard() {
                   <td className="num">{s.activeHere}</td>
                   <td className="num">
                     {s.exitedHere}
-                    {s.exitedHere > 0 ? ` (${s.exits.declined}/${s.exits.quit}/${s.exits.fired}/${s.exits.no_mentoring})` : ""}
+                    {s.exitedHere > 0
+                      ? ` (${s.exits.declined}/${s.exits.quit}/${s.exits.fired}/${s.exits.no_mentoring})`
+                      : ""}
                   </td>
-                  <td className="num">{s.conversionToNext == null ? "—" : pct(s.conversionToNext)}</td>
+                  <td className="num">
+                    {s.conversionToNext == null ? "—" : pct(s.conversionToNext)}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -25,11 +25,7 @@ export const DISCOVERY_ZOOM_CONTAINS = ["discovery call appointment (zoom)"];
 // existing rows.
 export const DISCOVERY_GENERIC_CONTAINS = ["discovery call appointment"];
 
-export const MENTORING_CONTAINS = [
-  "mentoring call",
-  "single men",
-  "married men",
-];
+export const MENTORING_CONTAINS = ["mentoring call", "single men", "married men"];
 
 // --- Group mentoring sessions (multi-mentee formats) ---
 // "In Depth Mentoring Session" and "Tracking Together" are GROUP formats where
@@ -41,10 +37,7 @@ export const MENTORING_CONTAINS = [
 // keeps treating them as mentoring. Checked BEFORE MENTORING_CONTAINS.
 // NOTE: categorization runs at sync time, so a re-sync is needed to reclassify
 // existing rows before the capacity fix takes effect.
-export const GROUP_SESSION_CONTAINS = [
-  "in depth mentoring session",
-  "tracking together",
-];
+export const GROUP_SESSION_CONTAINS = ["in depth mentoring session", "tracking together"];
 
 export function categorizeAppointmentName(rawName: string): AppointmentCategory {
   const name = (rawName ?? "").toLowerCase();
@@ -66,11 +59,7 @@ export const EXCLUDE_CLIENT_NAMES = [
   "Gain Momentum Group 2",
 ];
 
-export function isExcludedClientName(
-  full: string,
-  first?: string,
-  last?: string
-): boolean {
+export function isExcludedClientName(full: string, first?: string, last?: string): boolean {
   const norm = (s?: string) => (s ?? "").trim().toLowerCase();
   const targets = new Set(EXCLUDE_CLIENT_NAMES.map(norm));
   return targets.has(norm(full)) || targets.has(norm(first)) || targets.has(norm(last));
@@ -104,7 +93,8 @@ export const DISCOVERY_DECISION_WINDOW_DAYS = 30;
 // CoachAccountable Engagement names encode HJG's pipeline stage. A mentee's
 // journey is JumpStart → 4x → 2x → 1x → graduated; mentor_training / group /
 // other are NOT part of a mentee's pipeline.
-export type EngagementTier = "jumpstart" | "4x" | "2x" | "1x" | "graduated" | "mentor_training" | "group" | "other";
+export type EngagementTier =
+  "jumpstart" | "4x" | "2x" | "1x" | "graduated" | "mentor_training" | "group" | "other";
 
 // The mentee pipeline tiers, in journey order. JumpStart is the supervised
 // start; "graduated" is reached via an "After Graduation Care" engagement.
@@ -125,7 +115,13 @@ export function engagementTier(rawName: string | null | undefined): EngagementTi
   if (s.includes("after graduation")) return "graduated";
   if (s.includes("gain momentum")) return "group";
   if (s.includes("jumpstart") || s.includes("(0x") || s.includes("jyf")) return "jumpstart";
-  if (s.includes("(1x") || s.includes("one appointment") || s.includes("1x month") || s.includes("1 hour per month")) return "1x";
+  if (
+    s.includes("(1x") ||
+    s.includes("one appointment") ||
+    s.includes("1x month") ||
+    s.includes("1 hour per month")
+  )
+    return "1x";
   if (
     s.includes("(2x") ||
     s.includes("biweekly") ||
@@ -135,7 +131,13 @@ export function engagementTier(rawName: string | null | undefined): EngagementTi
     s.includes("2x month")
   )
     return "2x";
-  if (s.includes("(4x") || s.includes("weekly appointment") || s.includes("every 4 appointment") || s.includes("normal monthly")) return "4x";
+  if (
+    s.includes("(4x") ||
+    s.includes("weekly appointment") ||
+    s.includes("every 4 appointment") ||
+    s.includes("normal monthly")
+  )
+    return "4x";
   return "other";
 }
 

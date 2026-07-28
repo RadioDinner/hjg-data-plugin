@@ -101,8 +101,8 @@ export function App() {
           <div className="card">
             <h2>No tabs assigned</h2>
             <p className="muted">
-              Your account ({user.email}) has no tabs assigned yet. Ask an admin to grant access under{" "}
-              <strong>Admin → User permissions</strong>.
+              Your account ({user.email}) has no tabs assigned yet. Ask an admin to grant access
+              under <strong>Admin → User permissions</strong>.
             </p>
           </div>
         ) : (
@@ -118,7 +118,9 @@ export function App() {
             {tab === "update" && <UpdateMenteeView />}
             {tab === "paystaff" && <PayStaffView />}
             {tab === "timeclock" && <TimeClockView />}
-            {tab === "finevent" && <FinancialEventView onSubmitted={() => setBellRefresh((k) => k + 1)} />}
+            {tab === "finevent" && (
+              <FinancialEventView onSubmitted={() => setBellRefresh((k) => k + 1)} />
+            )}
             {tab === "margins" && <MarginsView />}
             {tab === "raw" && <RawDataView />}
             {tab === "maps" && <MapsView />}
@@ -128,7 +130,9 @@ export function App() {
         )}
       </div>
 
-      <footer className="footer">Read-only toward CoachAccountable · data mirrored into Supabase</footer>
+      <footer className="footer">
+        Read-only toward CoachAccountable · data mirrored into Supabase
+      </footer>
     </div>
   );
 }

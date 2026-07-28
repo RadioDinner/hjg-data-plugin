@@ -146,12 +146,7 @@ export interface CAOfferingSubmission {
 // --- Derived / report shapes ---
 
 export type AppointmentCategory =
-  | "mentoring"
-  | "group"
-  | "discoveryPhone"
-  | "discoveryZoom"
-  | "excluded"
-  | "other";
+  "mentoring" | "group" | "discoveryPhone" | "discoveryZoom" | "excluded" | "other";
 
 export interface MonthlyMetrics {
   year: number;

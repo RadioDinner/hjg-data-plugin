@@ -56,7 +56,13 @@ interface CollapseCtx {
 
 const Ctx = createContext<CollapseCtx | null>(null);
 
-export function CollapseProvider({ storageKey, children }: { storageKey: string; children: ReactNode }) {
+export function CollapseProvider({
+  storageKey,
+  children,
+}: {
+  storageKey: string;
+  children: ReactNode;
+}) {
   // Which sections are collapsed (persisted). Re-seed when the screen changes.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed(storageKey));
   // Which section ids are currently mounted (drives expand/collapse-all + the
@@ -95,11 +101,24 @@ export function CollapseProvider({ storageKey, children }: { storageKey: string;
   const isOpen = useCallback((id: string) => !collapsed.has(id), [collapsed]);
 
   const allOpen = useMemo(() => [...ids].every((id) => !collapsed.has(id)), [ids, collapsed]);
-  const allClosed = useMemo(() => ids.size > 0 && [...ids].every((id) => collapsed.has(id)), [ids, collapsed]);
+  const allClosed = useMemo(
+    () => ids.size > 0 && [...ids].every((id) => collapsed.has(id)),
+    [ids, collapsed],
+  );
 
   const value = useMemo<CollapseCtx>(
-    () => ({ isOpen, toggle, register, unregister, expandAll, collapseAll, allOpen, allClosed, count: ids.size }),
-    [isOpen, toggle, register, unregister, expandAll, collapseAll, allOpen, allClosed, ids.size]
+    () => ({
+      isOpen,
+      toggle,
+      register,
+      unregister,
+      expandAll,
+      collapseAll,
+      allOpen,
+      allClosed,
+      count: ids.size,
+    }),
+    [isOpen, toggle, register, unregister, expandAll, collapseAll, allOpen, allClosed, ids.size],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -121,7 +140,12 @@ export function CollapseControls() {
       <button type="button" className="btn btn--sm" onClick={ctx.expandAll} disabled={ctx.allOpen}>
         Expand all
       </button>
-      <button type="button" className="btn btn--sm" onClick={ctx.collapseAll} disabled={ctx.allClosed}>
+      <button
+        type="button"
+        className="btn btn--sm"
+        onClick={ctx.collapseAll}
+        disabled={ctx.allClosed}
+      >
         Collapse all
       </button>
     </div>
@@ -173,7 +197,10 @@ export function CollapsibleCard({
   const base = variant === "inset" ? "card card--inset collapsible" : "card collapsible";
 
   return (
-    <div className={`${base}${open ? "" : " collapsible--closed"}${className ? ` ${className}` : ""}`} style={style}>
+    <div
+      className={`${base}${open ? "" : " collapsible--closed"}${className ? ` ${className}` : ""}`}
+      style={style}
+    >
       <div className="collapsible__head">
         <Heading className="collapsible__title">
           <button
@@ -190,7 +217,12 @@ export function CollapsibleCard({
             {sectionId ? <SectionId id={sectionId} /> : null}
           </button>
         </Heading>
-        {help || actions ? <div className="collapsible__extras">{help}{actions}</div> : null}
+        {help || actions ? (
+          <div className="collapsible__extras">
+            {help}
+            {actions}
+          </div>
+        ) : null}
       </div>
       {open ? <div className="collapsible__body">{children}</div> : null}
     </div>

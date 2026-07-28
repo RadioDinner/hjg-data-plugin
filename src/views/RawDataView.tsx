@@ -54,17 +54,23 @@ export function RawDataView() {
   }, [table]);
 
   const keys = useMemo(() => (allRows.length > 0 ? Object.keys(allRows[0]) : []), [allRows]);
-  const columns: SortColumn[] = useMemo(() => keys.map((k) => ({ key: k, label: k, csv: (r: Row) => csvCell(r[k]) })), [keys]);
+  const columns: SortColumn[] = useMemo(
+    () => keys.map((k) => ({ key: k, label: k, csv: (r: Row) => csvCell(r[k]) })),
+    [keys],
+  );
 
   // Coerce once; search/filter/sort all operate on these cell values.
   const cellRows: Row[] = useMemo(
     () => allRows.map((r) => Object.fromEntries(keys.map((k) => [k, toCell(r[k])])) as Row),
-    [allRows, keys]
+    [allRows, keys],
   );
 
   const activeColFilters = useMemo(
-    () => Object.entries(colFilters).filter(([, v]) => v.trim() !== "").map(([k, v]) => [k, v.trim().toLowerCase()] as const),
-    [colFilters]
+    () =>
+      Object.entries(colFilters)
+        .filter(([, v]) => v.trim() !== "")
+        .map(([k, v]) => [k, v.trim().toLowerCase()] as const),
+    [colFilters],
   );
 
   const filtered = useMemo(() => {
@@ -72,11 +78,20 @@ export function RawDataView() {
     if (!q && activeColFilters.length === 0) return cellRows;
     return cellRows.filter((r) => {
       if (q) {
-        const hit = keys.some((k) => String(r[k] ?? "").toLowerCase().includes(q));
+        const hit = keys.some((k) =>
+          String(r[k] ?? "")
+            .toLowerCase()
+            .includes(q),
+        );
         if (!hit) return false;
       }
       for (const [k, fv] of activeColFilters) {
-        if (!String(r[k] ?? "").toLowerCase().includes(fv)) return false;
+        if (
+          !String(r[k] ?? "")
+            .toLowerCase()
+            .includes(fv)
+        )
+          return false;
       }
       return true;
     });
@@ -96,14 +111,21 @@ export function RawDataView() {
         try {
           const all = await fetchAllRows(t);
           const cols = all.length > 0 ? Object.keys(all[0]) : [];
-          sheets.push({ name: t, columns: cols, rows: all.map((row) => cols.map((c) => csvCell(toCell(row[c])))) });
+          sheets.push({
+            name: t,
+            columns: cols,
+            rows: all.map((row) => cols.map((c) => csvCell(toCell(row[c])))),
+          });
         } catch {
           skipped.push(t);
         }
       }
       if (sheets.length === 0) throw new Error("No tables could be read.");
       await downloadWorkbook("hjg-raw-data", sheets);
-      if (skipped.length) setError(`Exported, but skipped unreadable table(s): ${skipped.join(", ")} — migration not applied yet?`);
+      if (skipped.length)
+        setError(
+          `Exported, but skipped unreadable table(s): ${skipped.join(", ")} — migration not applied yet?`,
+        );
     } catch (e) {
       setError(String(e));
     } finally {
@@ -131,13 +153,18 @@ export function RawDataView() {
       }
     >
       <p className="view__hint" style={{ marginTop: -2 }}>
-        The data synced from CoachAccountable, straight from the database tables. Search across all columns, click a
-        header to sort, or add per-column filters. The “Export CSV” button downloads the current filtered + sorted view.
+        The data synced from CoachAccountable, straight from the database tables. Search across all
+        columns, click a header to sort, or add per-column filters. The “Export CSV” button
+        downloads the current filtered + sorted view.
       </p>
 
       <div className="tabs" style={{ marginTop: 0 }}>
         {RAW_TABLES.map((t) => (
-          <button key={t} className={`tab ${t === table ? "tab--active" : ""}`} onClick={() => setTable(t)}>
+          <button
+            key={t}
+            className={`tab ${t === table ? "tab--active" : ""}`}
+            onClick={() => setTable(t)}
+          >
             {t}
           </button>
         ))}
@@ -160,7 +187,11 @@ export function RawDataView() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <button className="btn btn--sm" onClick={() => setShowColFilters((v) => !v)} aria-pressed={showColFilters}>
+            <button
+              className="btn btn--sm"
+              onClick={() => setShowColFilters((v) => !v)}
+              aria-pressed={showColFilters}
+            >
               {showColFilters ? "Hide column filters" : "Column filters"}
             </button>
             {anyFilter && (
@@ -192,7 +223,13 @@ export function RawDataView() {
             </div>
           )}
 
-          <SortableTable columns={columns} rows={filtered} exportName={table} maxRows={RENDER_CAP} emptyText="No rows match the filters." />
+          <SortableTable
+            columns={columns}
+            rows={filtered}
+            exportName={table}
+            maxRows={RENDER_CAP}
+            emptyText="No rows match the filters."
+          />
         </>
       )}
     </CollapsibleCard>

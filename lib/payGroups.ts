@@ -29,7 +29,13 @@ export const DEFAULT_PAY_GROUPS_CONFIG: PayGroupsConfig = {
 };
 
 function clone(cfg: PayGroupsConfig): PayGroupsConfig {
-  return { groups: cfg.groups.map((g) => ({ ...g, templateNames: [...g.templateNames], coachIds: [...g.coachIds] })) };
+  return {
+    groups: cfg.groups.map((g) => ({
+      ...g,
+      templateNames: [...g.templateNames],
+      coachIds: [...g.coachIds],
+    })),
+  };
 }
 
 // Normalize an engagement/template name for matching: collapse internal whitespace,
@@ -42,7 +48,12 @@ export function normalizeTemplateName(s: string | null | undefined): string {
 // A URL/id-safe slug for a new group's name (lowercase, hyphenated). Falls back to
 // "group" so an id is never empty.
 export function slugifyGroupName(name: string): string {
-  return (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "group";
+  return (
+    (name || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "group"
+  );
 }
 
 export function parsePayGroupsConfig(raw: string | null | undefined): PayGroupsConfig {
@@ -101,7 +112,7 @@ export function groupHasTemplates(cfg: PayGroupsConfig, groupId: string): boolea
 // template's name).
 export function payEligibleForGroup(
   cfg: PayGroupsConfig,
-  groupId: string
+  groupId: string,
 ): ((engagementName: string | null | undefined) => boolean) | null {
   const g = findGroup(cfg, groupId);
   if (!g || g.templateNames.length === 0) return null;
@@ -122,7 +133,7 @@ export function payEligibleForGroup(
 // general stay unmatched so the reviewer decides them (see lib/pay.ts).
 export function lineItemEligibleForGroup(
   cfg: PayGroupsConfig,
-  groupId: string
+  groupId: string,
 ): ((lineItemText: string | null | undefined) => boolean) | null {
   const g = findGroup(cfg, groupId);
   if (!g || g.templateNames.length === 0) return null;

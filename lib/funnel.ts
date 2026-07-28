@@ -34,7 +34,7 @@ function isExcludedAppointmentClient(appt: CAAppointment, clients: Map<number, C
 function computeSales(
   submissions: CAOfferingSubmission[],
   year: number,
-  endMonth: number
+  endMonth: number,
 ): SalesSummary {
   const unitsByMonth = Array<number>(12).fill(0);
   const revenueByMonth = Array<number>(12).fill(0);
@@ -89,7 +89,7 @@ export function computeFunnelReport(
     snapshotAgeSeconds?: number;
     budget?: { capDaily: number; usedToday: number; remainingToday: number };
     warnings?: string[];
-  }
+  },
 ): FunnelReport {
   const { year, endMonth } = opts;
   const metrics = computeMonthlyMetrics(appointments, clients, opts);

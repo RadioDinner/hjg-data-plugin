@@ -58,7 +58,7 @@ function DiscoveryRow({
       await setDiscoveryOutcome(
         userId,
         { appointmentId: call.appointmentId, clientId: call.clientId, existingId: call.outcomeId },
-        { outcome, followUpOn: followUp || null, notes: notes || null }
+        { outcome, followUpOn: followUp || null, notes: notes || null },
       );
       onSaved();
     } catch (e) {
@@ -85,13 +85,18 @@ function DiscoveryRow({
       <td>{call.prospect}</td>
       <td className="muted">{call.type}</td>
       <td>
-        <span className={`pill pill--${call.resolvedOutcome}`}>{OUTCOME_LABEL[call.resolvedOutcome]}</span>
+        <span className={`pill pill--${call.resolvedOutcome}`}>
+          {OUTCOME_LABEL[call.resolvedOutcome]}
+        </span>
         <div className="pill__sub">
           {call.source === "manual" ? "Manual override" : "Auto"} · {call.resolvedReason}
         </div>
       </td>
       <td>
-        <select value={outcome} onChange={(e) => setOutcome(e.target.value as DiscoveryOutcomeValue | "")}>
+        <select
+          value={outcome}
+          onChange={(e) => setOutcome(e.target.value as DiscoveryOutcomeValue | "")}
+        >
           <option value="">Auto ({OUTCOME_LABEL[call.autoOutcome]})</option>
           {OUTCOMES.map((o) => (
             <option key={o.value} value={o.value}>
@@ -116,7 +121,12 @@ function DiscoveryRow({
           {saving ? "Saving…" : call.outcomeId ? "Update" : "Save"}
         </button>
         {call.outcomeId && (
-          <button className="btn btn--sm" onClick={clearOverride} disabled={clearing} style={{ marginLeft: 6 }}>
+          <button
+            className="btn btn--sm"
+            onClick={clearOverride}
+            disabled={clearing}
+            style={{ marginLeft: 6 }}
+          >
             {clearing ? "…" : "Clear"}
           </button>
         )}
@@ -155,9 +165,10 @@ export function DiscoveryView() {
       help={<HelpButton id="discovery.tab" label="Discovery calls" />}
     >
       <p className="view__hint" style={{ marginTop: -2 }}>
-        Every discovery call synced from CoachAccountable. Status is computed automatically — a call converts when the
-        prospect buys JumpStart Your Freedom (Waiting List) on or after the call, stays pending for 30 days otherwise,
-        then becomes not converted. Set an outcome here to override (e.g. a no-show), or Clear to revert to automatic.
+        Every discovery call synced from CoachAccountable. Status is computed automatically — a call
+        converts when the prospect buys JumpStart Your Freedom (Waiting List) on or after the call,
+        stays pending for 30 days otherwise, then becomes not converted. Set an outcome here to
+        override (e.g. a no-show), or Clear to revert to automatic.
       </p>
 
       <div className="view__controls">

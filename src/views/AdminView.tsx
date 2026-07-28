@@ -56,7 +56,12 @@ export function AdminView() {
   // `coaches` is the canonical roster joined with current saved settings.
   // `mcEdits` mirrors what's in the inputs; rows are saved by Save changes.
   const [coaches, setCoaches] = useState<CoachWithSettings[]>([]);
-  const [mcEdits, setMcEdits] = useState<Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }>>({});
+  const [mcEdits, setMcEdits] = useState<
+    Record<
+      number,
+      { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }
+    >
+  >({});
   const [mcDirty, setMcDirty] = useState<Set<number>>(new Set());
   const [mcSaving, setMcSaving] = useState(false);
   const [mcMsg, setMcMsg] = useState<string | null>(null);
@@ -78,7 +83,10 @@ export function AdminView() {
   async function loadCoaches() {
     const all = await fetchCoachesWithSettings();
     setCoaches(all);
-    const edits: Record<number, { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }> = {};
+    const edits: Record<
+      number,
+      { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }
+    > = {};
     for (const c of all) {
       edits[c.coachId] = {
         isMentor: c.isMentor,
@@ -122,7 +130,7 @@ export function AdminView() {
             payStartMonth: e.payStart.trim() === "" ? null : e.payStart.trim(),
             payRamp: e.payRamp.trim() === "" ? null : e.payRamp.trim(),
           });
-        })
+        }),
       );
       setMcMsg(`Saved ${dirtyIds.length} coach${dirtyIds.length === 1 ? "" : "es"}.`);
       await loadCoaches();
@@ -164,9 +172,10 @@ export function AdminView() {
   }
 
   async function saveManual() {
-    const entries = MANUAL_METRICS.map((def) => ({ def, raw: (mmValues[def.key] ?? "").trim() })).filter(
-      (e) => e.raw !== ""
-    );
+    const entries = MANUAL_METRICS.map((def) => ({
+      def,
+      raw: (mmValues[def.key] ?? "").trim(),
+    })).filter((e) => e.raw !== "");
     if (entries.length === 0) {
       setMmMsg("Enter at least one count to save.");
       return;
@@ -180,7 +189,7 @@ export function AdminView() {
           const n = Number(raw);
           const value = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
           return upsertManualMetric(user?.id ?? "", def.key, mmMonth, value);
-        })
+        }),
       );
       setMmMsg(`Saved ${fmtMonth(mmMonth)}.`);
       await loadRecentManual();
@@ -199,7 +208,7 @@ export function AdminView() {
       setMsg(
         r.status === "success"
           ? `Synced ${r.recordsSynced} records (${r.callsMade} CoachAccountable calls) for ${r.years.join(", ")}.`
-          : `Sync finished with an error: ${r.error ?? "unknown"}`
+          : `Sync finished with an error: ${r.error ?? "unknown"}`,
       );
       await load();
     } catch (e) {
@@ -252,8 +261,8 @@ export function AdminView() {
     <section className="stack">
       <CollapsibleCard id="admin.sync" title="Sync" sectionId="admin.sync">
         <p className="view__hint">
-          Pull the latest data from CoachAccountable into the dashboard. Read-only toward CoachAccountable; capped
-          at the daily call budget below.
+          Pull the latest data from CoachAccountable into the dashboard. Read-only toward
+          CoachAccountable; capped at the daily call budget below.
         </p>
         <button className="btn btn--primary" onClick={doSync} disabled={syncing}>
           {syncing ? "Syncing…" : "Sync now"}
@@ -299,11 +308,15 @@ export function AdminView() {
         </div>
       </CollapsibleCard>
 
-      <CollapsibleCard id="admin.manualMetrics" title="Manual metrics" sectionId="admin.manualMetrics">
+      <CollapsibleCard
+        id="admin.manualMetrics"
+        title="Manual metrics"
+        sectionId="admin.manualMetrics"
+      >
         <p className="view__hint">
-          Board numbers that don&apos;t come from CoachAccountable. Pick a month and enter the count for each; the
-          Metrics tab sums them over its date range. Saving overwrites that month&apos;s value. Leave a field blank to
-          leave it unchanged.
+          Board numbers that don&apos;t come from CoachAccountable. Pick a month and enter the count
+          for each; the Metrics tab sums them over its date range. Saving overwrites that
+          month&apos;s value. Leave a field blank to leave it unchanged.
         </p>
         <div className="entry">
           <label className="field">
@@ -389,13 +402,15 @@ export function AdminView() {
         }
       >
         <p className="view__hint">
-          Mark which CoachAccountable coaches actually count as mentors, and set how many concurrent mentees each can
-          take. <strong>Pay start</strong> anchors the staff-payment ramp to a mentor&apos;s true first
-          month of work — leave it blank to infer from their earliest engagement. <strong>Pay ramp</strong> sets a
-          mentor&apos;s revenue-share ramp by tenure month (e.g. <code>50/60/60</code> for a fast-tracked mentor); blank =
-          the default <code>35/50/60</code>. The Metrics tab&apos;s Mentors metric
-          is filtered to flagged mentors once any are set, and the
-          <strong> Mentor capacity utilization </strong>card reads these capacities. Saves write to the HJG-owned
+          Mark which CoachAccountable coaches actually count as mentors, and set how many concurrent
+          mentees each can take. <strong>Pay start</strong> anchors the staff-payment ramp to a
+          mentor&apos;s true first month of work — leave it blank to infer from their earliest
+          engagement. <strong>Pay ramp</strong> sets a mentor&apos;s revenue-share ramp by tenure
+          month (e.g. <code>50/60/60</code> for a fast-tracked mentor); blank = the default{" "}
+          <code>35/50/60</code>. The Metrics tab&apos;s Mentors metric is filtered to flagged
+          mentors once any are set, and the
+          <strong> Mentor capacity utilization </strong>card reads these capacities. Saves write to
+          the HJG-owned
           <code> coach_settings</code> table, untouched by CA sync.
         </p>
         <div className="table-scroll">
@@ -414,7 +429,13 @@ export function AdminView() {
               {coaches
                 .filter((c) => mcShowOnly === "all" || mcEdits[c.coachId]?.isMentor)
                 .map((c) => {
-                  const e = mcEdits[c.coachId] ?? { isMentor: false, capacity: "", notes: "", payStart: "", payRamp: "" };
+                  const e = mcEdits[c.coachId] ?? {
+                    isMentor: false,
+                    capacity: "",
+                    notes: "",
+                    payStart: "",
+                    payRamp: "",
+                  };
                   return (
                     <tr key={c.coachId}>
                       <td>
@@ -511,7 +532,11 @@ export function AdminView() {
           </table>
         </div>
         <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-          <button className="btn btn--primary" onClick={saveCoachSettings} disabled={mcSaving || mcDirty.size === 0}>
+          <button
+            className="btn btn--primary"
+            onClick={saveCoachSettings}
+            disabled={mcSaving || mcDirty.size === 0}
+          >
             {mcSaving ? "Saving…" : `Save changes${mcDirty.size > 0 ? ` (${mcDirty.size})` : ""}`}
           </button>
           {mcMsg && <span className="muted">{mcMsg}</span>}
@@ -521,17 +546,29 @@ export function AdminView() {
       <CollapsibleCard id="admin.settings" title="Settings" sectionId="admin.settings">
         <p className="view__hint">
           The daily CoachAccountable call cap is{" "}
-          <strong>{cap === null ? "—" : `${cap} calls/day`}</strong> (plan limit × cap %). Leave the sync interval
-          blank to keep syncing manual; set a number of hours to enable the scheduled sync.
+          <strong>{cap === null ? "—" : `${cap} calls/day`}</strong> (plan limit × cap %). Leave the
+          sync interval blank to keep syncing manual; set a number of hours to enable the scheduled
+          sync.
         </p>
         <div className="entry">
           <label className="field">
             <span>CA plan daily limit</span>
-            <input type="number" min={1} value={planLimit} onChange={(e) => setPlanLimit(e.target.value)} />
+            <input
+              type="number"
+              min={1}
+              value={planLimit}
+              onChange={(e) => setPlanLimit(e.target.value)}
+            />
           </label>
           <label className="field">
             <span>Cap %</span>
-            <input type="number" min={1} max={100} value={capPct} onChange={(e) => setCapPct(e.target.value)} />
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={capPct}
+              onChange={(e) => setCapPct(e.target.value)}
+            />
           </label>
           <label className="field">
             <span>Sync interval (hours)</span>

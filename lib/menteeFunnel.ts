@@ -13,7 +13,13 @@
 // reached. IMN ("Independent Mentor") mentees are kept on the roster but
 // EXCLUDED from the funnel and reported separately. No I/O, no React — verify §22.
 
-import { FUNNEL_STAGES, MENTEE_EXIT_STATUSES, reachedStage, type FunnelStage, type EffectiveMentee } from "./menteeView.js";
+import {
+  FUNNEL_STAGES,
+  MENTEE_EXIT_STATUSES,
+  reachedStage,
+  type FunnelStage,
+  type EffectiveMentee,
+} from "./menteeView.js";
 
 const STAGE_LABEL: Record<FunnelStage, string> = {
   pre_waiting: "Pre-Waiting",
@@ -62,10 +68,20 @@ function furthestNonGraduated(reached: Set<FunnelStage>): FunnelStage | null {
 
 export function computeFunnel(mentees: EffectiveMentee[]): FunnelReport {
   const live = mentees.filter((m) => !m.isTest);
-  const imnCount = live.filter((m) => m.effectiveStatus === "imn" || m.resolvedStatus === "imn").length;
+  const imnCount = live.filter(
+    (m) => m.effectiveStatus === "imn" || m.resolvedStatus === "imn",
+  ).length;
   const items = live.filter((m) => m.effectiveStatus !== "imn" && m.resolvedStatus !== "imn");
 
-  const entered: Record<FunnelStage, number> = { pre_waiting: 0, discovery: 0, jumpstart: 0, "4x": 0, "2x": 0, "1x": 0, graduated: 0 };
+  const entered: Record<FunnelStage, number> = {
+    pre_waiting: 0,
+    discovery: 0,
+    jumpstart: 0,
+    "4x": 0,
+    "2x": 0,
+    "1x": 0,
+    graduated: 0,
+  };
   const exits: Record<FunnelStage, FunnelExits> = {
     pre_waiting: emptyExits(),
     discovery: emptyExits(),
@@ -75,7 +91,15 @@ export function computeFunnel(mentees: EffectiveMentee[]): FunnelReport {
     "1x": emptyExits(),
     graduated: emptyExits(),
   };
-  const activeHere: Record<FunnelStage, number> = { pre_waiting: 0, discovery: 0, jumpstart: 0, "4x": 0, "2x": 0, "1x": 0, graduated: 0 };
+  const activeHere: Record<FunnelStage, number> = {
+    pre_waiting: 0,
+    discovery: 0,
+    jumpstart: 0,
+    "4x": 0,
+    "2x": 0,
+    "1x": 0,
+    graduated: 0,
+  };
 
   for (const m of items) {
     // Stages the mentee reached (dates + status-implied).
@@ -105,7 +129,8 @@ export function computeFunnel(mentees: EffectiveMentee[]): FunnelReport {
     // pre_waiting is an opt-in side stage (not a step everyone passes), so a
     // "conversion to discovery" over the whole discovery population is meaningless
     // (it would exceed 100%). Report it as null.
-    const conversionToNext = s === "pre_waiting" ? null : next ? (entered[s] ? entered[next] / entered[s] : null) : null;
+    const conversionToNext =
+      s === "pre_waiting" ? null : next ? (entered[s] ? entered[next] / entered[s] : null) : null;
     return {
       stage: s,
       label: STAGE_LABEL[s],

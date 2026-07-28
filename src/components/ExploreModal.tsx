@@ -14,7 +14,9 @@ export function ExploreModal({ title, columns, rows, onClose }: Props) {
     <div className="modal" onClick={onClose}>
       <div className="modal__card" onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
-          <h2>{title} <SectionId id="modal.explore" /></h2>
+          <h2>
+            {title} <SectionId id="modal.explore" />
+          </h2>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               className="btn btn--sm"

@@ -110,7 +110,10 @@ export function PayGroupsCard() {
   function toggleCoach(groupId: string, coachId: number) {
     patchGroup(groupId, (g) => {
       const on = g.coachIds.includes(coachId);
-      return { ...g, coachIds: on ? g.coachIds.filter((c) => c !== coachId) : [...g.coachIds, coachId] };
+      return {
+        ...g,
+        coachIds: on ? g.coachIds.filter((c) => c !== coachId) : [...g.coachIds, coachId],
+      };
     });
   }
 
@@ -134,7 +137,12 @@ export function PayGroupsCard() {
     if (!cfg) return;
     const g = cfg.groups.find((x) => x.id === groupId);
     if (!g) return;
-    if (!confirm(`Remove the "${g.name}" payment group? Its template and coach selections will be cleared.`)) return;
+    if (
+      !confirm(
+        `Remove the "${g.name}" payment group? Its template and coach selections will be cleared.`,
+      )
+    )
+      return;
     mutate({ groups: cfg.groups.filter((x) => x.id !== groupId) });
   }
 
@@ -164,23 +172,37 @@ export function PayGroupsCard() {
       style={{ marginTop: 16 }}
       help={<HelpButton id="options.payGroups" label="Payment groups" />}
       actions={
-        <button className="btn btn--sm" onClick={doRefresh} disabled={refreshing} title="Pull the latest engagement templates from CoachAccountable">
+        <button
+          className="btn btn--sm"
+          onClick={doRefresh}
+          disabled={refreshing}
+          title="Pull the latest engagement templates from CoachAccountable"
+        >
           {refreshing ? "Refreshing…" : "Refresh templates"}
         </button>
       }
     >
       <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 10 }}>
-        Check which CoachAccountable <strong>engagement templates</strong> count toward each group of staff for
-        payout calculations, and assign coaches to groups. An <strong>invoice line item</strong> counts when it
-        starts with a checked template's name — eligibility comes from what was actually <em>billed</em>, not from
-        engagement records (which can be stale/canceled while still billing). <strong>Mentors</strong> drives the
-        Pay staff / Build payout engine — leaving a group's templates all unchecked keeps the legacy 4×/2×/1×
+        Check which CoachAccountable <strong>engagement templates</strong> count toward each group
+        of staff for payout calculations, and assign coaches to groups. An{" "}
+        <strong>invoice line item</strong> counts when it starts with a checked template's name —
+        eligibility comes from what was actually <em>billed</em>, not from engagement records (which
+        can be stale/canceled while still billing). <strong>Mentors</strong> drives the Pay staff /
+        Build payout engine — leaving a group's templates all unchecked keeps the legacy 4×/2×/1×
         auto-detection until you pick them. Unmatched charges and credits are flagged{" "}
         <strong>review</strong> on each payout's drill-down for hand-checking the first rounds.
       </div>
 
-      {error && <div className="notice notice--warn" style={{ marginTop: 8 }}>{error}</div>}
-      {status && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{status}</div>}
+      {error && (
+        <div className="notice notice--warn" style={{ marginTop: 8 }}>
+          {error}
+        </div>
+      )}
+      {status && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          {status}
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">Loading…</div>
@@ -203,8 +225,10 @@ export function PayGroupsCard() {
 
           {templates.length === 0 ? (
             <p className="notice notice--info" style={{ fontSize: 13, marginTop: 10 }}>
-              No engagement templates yet. Apply migration <code>9972_pay_engagement_groups.sql</code>, then click{" "}
-              <strong>Refresh templates</strong> (or run Admin → Sync) to pull them from CoachAccountable.
+              No engagement templates yet. Apply migration{" "}
+              <code>9972_pay_engagement_groups.sql</code>, then click{" "}
+              <strong>Refresh templates</strong> (or run Admin → Sync) to pull them from
+              CoachAccountable.
             </p>
           ) : (
             <>
@@ -217,7 +241,11 @@ export function PayGroupsCard() {
                       <th style={{ textAlign: "left", minWidth: 320 }}>Engagement template</th>
                       {groups.map((g) => (
                         <th key={g.id}>
-                          <GroupHeader group={g} onRename={(name) => renameGroup(g.id, name)} onRemove={() => removeGroup(g.id)} />
+                          <GroupHeader
+                            group={g}
+                            onRename={(name) => renameGroup(g.id, name)}
+                            onRemove={() => removeGroup(g.id)}
+                          />
                         </th>
                       ))}
                     </tr>
@@ -254,12 +282,17 @@ export function PayGroupsCard() {
                       const orphanByKey = new Map<string, string>();
                       for (const g of groups)
                         for (const n of g.templateNames)
-                          if (!known.has(normalizeTemplateName(n))) orphanByKey.set(normalizeTemplateName(n), n);
+                          if (!known.has(normalizeTemplateName(n)))
+                            orphanByKey.set(normalizeTemplateName(n), n);
                       return [...orphanByKey.values()].sort().map((name) => (
                         <tr key={`orphan:${name}`}>
                           <td style={{ textAlign: "left" }}>
                             {name}
-                            <span className="pill pill--pending" style={{ marginLeft: 6, fontSize: 10 }} title="This checked name is not in the current template list (refreshed away or renamed) but still gates payouts — uncheck it here to stop it, or re-check the matching current template.">
+                            <span
+                              className="pill pill--pending"
+                              style={{ marginLeft: 6, fontSize: 10 }}
+                              title="This checked name is not in the current template list (refreshed away or renamed) but still gates payouts — uncheck it here to stop it, or re-check the matching current template."
+                            >
                               not in current list
                             </span>
                           </td>
@@ -278,7 +311,9 @@ export function PayGroupsCard() {
                     })()}
                     {groups.length === 0 && (
                       <tr>
-                        <td colSpan={1} className="muted">Add a group to start checking templates.</td>
+                        <td colSpan={1} className="muted">
+                          Add a group to start checking templates.
+                        </td>
                       </tr>
                     )}
                   </tbody>
@@ -293,11 +328,14 @@ export function PayGroupsCard() {
             <>
               <h3 style={{ fontSize: 14, margin: "20px 0 6px" }}>Coaches → groups</h3>
               <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 6 }}>
-                Which staff belong to each group. (Stored for group-specific pay schemes; the Mentors payout currently
-                credits each mentee's owner regardless — this list is the roster you're building toward.)
+                Which staff belong to each group. (Stored for group-specific pay schemes; the
+                Mentors payout currently credits each mentee's owner regardless — this list is the
+                roster you're building toward.)
               </p>
               {coaches.length === 0 ? (
-                <p className="muted" style={{ fontSize: 13 }}>No coaches synced yet. Run Admin → Sync first.</p>
+                <p className="muted" style={{ fontSize: 13 }}>
+                  No coaches synced yet. Run Admin → Sync first.
+                </p>
               ) : (
                 <div className="table-scroll">
                   <table className="table table--center">
@@ -339,7 +377,15 @@ export function PayGroupsCard() {
 
 // A group column header: editable name + a remove (×) button. Kept lightweight —
 // the name commits on blur.
-function GroupHeader({ group, onRename, onRemove }: { group: PayGroup; onRename: (name: string) => void; onRemove: () => void }) {
+function GroupHeader({
+  group,
+  onRename,
+  onRemove,
+}: {
+  group: PayGroup;
+  onRename: (name: string) => void;
+  onRemove: () => void;
+}) {
   const [name, setName] = useState(group.name);
   useEffect(() => setName(group.name), [group.name]);
   return (
@@ -356,7 +402,12 @@ function GroupHeader({ group, onRename, onRemove }: { group: PayGroup; onRename:
         style={{ width: 92, fontSize: 12, textAlign: "center" }}
         aria-label={`Rename ${group.name}`}
       />
-      <button className="linkbtn" onClick={onRemove} title={`Remove ${group.name}`} style={{ color: "var(--err-text, #b91c1c)" }}>
+      <button
+        className="linkbtn"
+        onClick={onRemove}
+        title={`Remove ${group.name}`}
+        style={{ color: "var(--err-text, #b91c1c)" }}
+      >
         ×
       </button>
     </div>

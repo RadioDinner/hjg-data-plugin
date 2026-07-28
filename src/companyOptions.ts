@@ -16,7 +16,11 @@
 
 import { serializeStageColorConfig, DEFAULT_STAGE_COLOR_CONFIG } from "../lib/stageColors";
 import { serializeTrendWindow, DEFAULT_TREND_WINDOW } from "../lib/conversionTrend";
-import { serializeTransitionOptions, DEFAULT_TRANSITION_OPTIONS, MENTEE_TRANSITION_OPTIONS_KEY } from "../lib/transitionOptions";
+import {
+  serializeTransitionOptions,
+  DEFAULT_TRANSITION_OPTIONS,
+  MENTEE_TRANSITION_OPTIONS_KEY,
+} from "../lib/transitionOptions";
 
 export interface CompanyOptionChoice {
   value: string;

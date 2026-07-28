@@ -38,7 +38,10 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
     const needle = q.trim().toLowerCase();
     if (!needle) return stubs;
     return stubs.filter(
-      (s) => s.staffName.toLowerCase().includes(needle) || s.periodMonth.includes(needle) || s.kind.includes(needle)
+      (s) =>
+        s.staffName.toLowerCase().includes(needle) ||
+        s.periodMonth.includes(needle) ||
+        s.kind.includes(needle),
     );
   }, [stubs, q]);
 
@@ -62,7 +65,12 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
   }
 
   async function remove(s: PaystubListItem) {
-    if (!confirm(`Delete the archived ${s.periodMonth} stub for ${s.staffName}? This can't be undone.`)) return;
+    if (
+      !confirm(
+        `Delete the archived ${s.periodMonth} stub for ${s.staffName}? This can't be undone.`,
+      )
+    )
+      return;
     setBusyId(s.id);
     try {
       await deletePaystub(s.id);
@@ -85,8 +93,9 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
               <SectionId id="pay.history" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Every printed pay stub, archived as the <strong>exact document that was generated</strong> — open one to
-              review or re-print precisely what was sent, even if the data behind it has changed since. Stubs are
+              Every printed pay stub, archived as the{" "}
+              <strong>exact document that was generated</strong> — open one to review or re-print
+              precisely what was sent, even if the data behind it has changed since. Stubs are
               archived automatically when you print from Build payout or Hourly staff.
             </div>
           </div>
@@ -99,10 +108,15 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
 
         {error && (
           <p className="notice notice--warn" style={{ marginTop: 8 }}>
-            {error} — the archive table needs migration <code>9970_staff_hourly_pay.sql</code> applied.
+            {error} — the archive table needs migration <code>9970_staff_hourly_pay.sql</code>{" "}
+            applied.
           </p>
         )}
-        {flash && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{flash}</div>}
+        {flash && (
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            {flash}
+          </div>
+        )}
 
         <div className="filter-bar" style={{ padding: "12px 0 0", borderBottom: "none" }}>
           <label className="filter">
@@ -142,21 +156,39 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
                     <td style={{ textAlign: "left" }}>{fmtDateTime(s.createdAt)}</td>
                     <td style={{ textAlign: "left", fontWeight: 500 }}>{s.staffName}</td>
                     <td>
-                      <span className={`pill ${s.kind === "mentor" ? "pill--mentee" : "pill--running"}`}>{s.kind}</span>
+                      <span
+                        className={`pill ${s.kind === "mentor" ? "pill--mentee" : "pill--running"}`}
+                      >
+                        {s.kind}
+                      </span>
                     </td>
                     <td>{s.periodMonth}</td>
                     <td>
-                      <span className={`pill ${s.status === "approved" ? "pill--success" : "pill--pending"}`}>
+                      <span
+                        className={`pill ${s.status === "approved" ? "pill--success" : "pill--pending"}`}
+                      >
                         {s.status === "approved" ? "approved" : "review copy"}
                       </span>
                     </td>
-                    <td className="num" style={{ fontWeight: 600 }}>{fmtUsd(s.total)}</td>
+                    <td className="num" style={{ fontWeight: 600 }}>
+                      {fmtUsd(s.total)}
+                    </td>
                     <td>
                       <span style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                        <button className="linkbtn" onClick={() => openStub(s)} disabled={busyId === s.id} title="Open the archived stub (then print from the window if needed)">
+                        <button
+                          className="linkbtn"
+                          onClick={() => openStub(s)}
+                          disabled={busyId === s.id}
+                          title="Open the archived stub (then print from the window if needed)"
+                        >
                           view
                         </button>
-                        <button className="linkbtn" onClick={() => remove(s)} disabled={busyId === s.id} title="Delete this archived stub">
+                        <button
+                          className="linkbtn"
+                          onClick={() => remove(s)}
+                          disabled={busyId === s.id}
+                          title="Delete this archived stub"
+                        >
                           delete
                         </button>
                       </span>
@@ -166,7 +198,11 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={7} className="muted">
-                      No archived stubs{q ? " match the search" : " yet — print one from Build payout or Hourly staff"}.
+                      No archived stubs
+                      {q
+                        ? " match the search"
+                        : " yet — print one from Build payout or Hourly staff"}
+                      .
                     </td>
                   </tr>
                 )}

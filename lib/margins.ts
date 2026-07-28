@@ -19,7 +19,10 @@ export const PROGRAM_MEETING_HOURS = 1;
 // same way, so we don't need the account's zone. Returns null when either side is
 // missing/unparseable or the span is non-positive, so callers fall back to the
 // per-session stand-in.
-export function meetingHours(startRaw: string | null | undefined, endRaw: string | null | undefined): number | null {
+export function meetingHours(
+  startRaw: string | null | undefined,
+  endRaw: string | null | undefined,
+): number | null {
   if (!startRaw || !endRaw) return null;
   const s = Date.parse(startRaw.replace(" ", "T"));
   const e = Date.parse(endRaw.replace(" ", "T"));
@@ -77,7 +80,7 @@ export interface ProgramMonthRow {
 export function mergeProgramMonths(
   delivered: Map<string, { sessions: number; hours: number }>,
   staff: Map<string, number>,
-  extraMonths: string[] = []
+  extraMonths: string[] = [],
 ): ProgramMonthRow[] {
   const months = new Set<string>([...delivered.keys(), ...staff.keys(), ...extraMonths]);
   const rows: ProgramMonthRow[] = [];

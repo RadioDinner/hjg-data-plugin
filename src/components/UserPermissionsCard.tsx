@@ -34,7 +34,10 @@ export function UserPermissionsCard() {
 
   async function load() {
     try {
-      const [u, c] = await Promise.all([fetchAppUsers(), fetchCoachNames().catch(() => new Map<number, string>())]);
+      const [u, c] = await Promise.all([
+        fetchAppUsers(),
+        fetchCoachNames().catch(() => new Map<number, string>()),
+      ]);
       setUsers(u);
       setCoachNames(c);
       setError(null);
@@ -46,12 +49,11 @@ export function UserPermissionsCard() {
   }
   useEffect(() => {
     load();
-     
   }, []);
 
   const coachOptions = useMemo(
     () => [...coachNames.entries()].sort((a, b) => a[1].localeCompare(b[1])),
-    [coachNames]
+    [coachNames],
   );
 
   async function persist(rec: AppUserRecord) {
@@ -71,7 +73,7 @@ export function UserPermissionsCard() {
         !confirm(
           `You're editing YOUR OWN access — this removes ${losing.length} tab${losing.length === 1 ? "" : "s"} from your account` +
             `${losing.includes("admin") ? " INCLUDING the Admin tab (where this screen lives)" : ""}. ` +
-            "The change applies on your next reload/sign-in. Continue?"
+            "The change applies on your next reload/sign-in. Continue?",
         )
       )
         return;
@@ -121,7 +123,12 @@ export function UserPermissionsCard() {
   }
 
   async function remove(rec: AppUserRecord) {
-    if (!confirm(`Remove ${rec.email}? They fall back to FULL access (no row = all tabs, while the system is bones).`)) return;
+    if (
+      !confirm(
+        `Remove ${rec.email}? They fall back to FULL access (no row = all tabs, while the system is bones).`,
+      )
+    )
+      return;
     setBusy(true);
     try {
       await deleteAppUser(rec.id);
@@ -152,10 +159,10 @@ export function UserPermissionsCard() {
       help={<HelpButton id="admin.users" label="User permissions" />}
     >
       <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 12 }}>
-        Who can see which tabs. People are matched to a row by their <strong>sign-in email</strong>; someone{" "}
-        <strong>without a row keeps full access</strong> while this system is bones, and <strong>admins always see
-        everything</strong>. Assign a mentor's row to their coach record to prepare for mentor logins. Needs migration{" "}
-        <code>9968_app_users.sql</code>.
+        Who can see which tabs. People are matched to a row by their <strong>sign-in email</strong>;
+        someone <strong>without a row keeps full access</strong> while this system is bones, and{" "}
+        <strong>admins always see everything</strong>. Assign a mentor's row to their coach record
+        to prepare for mentor logins. Needs migration <code>9968_app_users.sql</code>.
       </div>
 
       {error && <div className="notice notice--warn">{error}</div>}
@@ -209,7 +216,9 @@ export function UserPermissionsCard() {
                           aria-label={`Role for ${u.email}`}
                         >
                           {APP_ROLES.map((r) => (
-                            <option key={r} value={r}>{r}</option>
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
                           ))}
                         </select>
                       </td>
@@ -226,23 +235,41 @@ export function UserPermissionsCard() {
                         <select
                           value={u.coachId ?? ""}
                           disabled={busy}
-                          onChange={(e) => persist({ ...u, coachId: e.target.value ? Number(e.target.value) : null })}
+                          onChange={(e) =>
+                            persist({
+                              ...u,
+                              coachId: e.target.value ? Number(e.target.value) : null,
+                            })
+                          }
                           aria-label={`Coach link for ${u.email}`}
                           title="Link this login to a CoachAccountable coach (for the future mentor experience)"
                         >
                           <option value="">—</option>
                           {coachOptions.map(([id, name]) => (
-                            <option key={id} value={id}>{name}</option>
+                            <option key={id} value={id}>
+                              {name}
+                            </option>
                           ))}
                         </select>
                       </td>
                       <td style={{ textAlign: "left" }}>
                         {u.role === "admin" ? (
-                          <span className="muted" style={{ fontSize: 12 }}>all tabs (admin)</span>
+                          <span className="muted" style={{ fontSize: 12 }}>
+                            all tabs (admin)
+                          </span>
                         ) : (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px" }}>
                             {APP_TABS.map((t) => (
-                              <label key={t.key} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, whiteSpace: "nowrap" }}>
+                              <label
+                                key={t.key}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  fontSize: 12,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={effective.has(t.key)}
@@ -253,7 +280,12 @@ export function UserPermissionsCard() {
                               </label>
                             ))}
                             {usingDefault ? (
-                              <span className="pill" title="No explicit list saved — showing the role's default">role default</span>
+                              <span
+                                className="pill"
+                                title="No explicit list saved — showing the role's default"
+                              >
+                                role default
+                              </span>
                             ) : (
                               <button
                                 className="linkbtn"
@@ -269,7 +301,11 @@ export function UserPermissionsCard() {
                         )}
                       </td>
                       <td className="num">
-                        <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(u)}>
+                        <button
+                          className="btn btn--sm btn--danger"
+                          disabled={busy}
+                          onClick={() => remove(u)}
+                        >
                           Remove
                         </button>
                       </td>
@@ -279,7 +315,8 @@ export function UserPermissionsCard() {
                 {users.length === 0 && (
                   <tr>
                     <td colSpan={7} className="muted">
-                      No users set up yet — everyone signed in has full access. Add people below to start scoping tabs.
+                      No users set up yet — everyone signed in has full access. Add people below to
+                      start scoping tabs.
                     </td>
                   </tr>
                 )}
@@ -287,20 +324,41 @@ export function UserPermissionsCard() {
             </table>
           </div>
 
-          <div className="entry" style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div
+            className="entry"
+            style={{
+              marginTop: 12,
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "flex-end",
+            }}
+          >
             <label className="field">
               <span>Sign-in email</span>
-              <input type="email" value={newEmail} placeholder="person@example.com" onChange={(e) => setNewEmail(e.target.value)} />
+              <input
+                type="email"
+                value={newEmail}
+                placeholder="person@example.com"
+                onChange={(e) => setNewEmail(e.target.value)}
+              />
             </label>
             <label className="field">
               <span>Name</span>
-              <input type="text" value={newName} placeholder="optional" onChange={(e) => setNewName(e.target.value)} />
+              <input
+                type="text"
+                value={newName}
+                placeholder="optional"
+                onChange={(e) => setNewName(e.target.value)}
+              />
             </label>
             <label className="field">
               <span>Role</span>
               <select value={newRole} onChange={(e) => setNewRole(e.target.value as AppRole)}>
                 {APP_ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
                 ))}
               </select>
             </label>

@@ -12,13 +12,15 @@ const MAPS = [
     key: "data",
     label: "Data map",
     src: "/data-map.html",
-    blurb: "How the mirrored CoachAccountable tables and HJG-owned tables relate. Drag to pan, scroll to zoom, click a table to focus its links.",
+    blurb:
+      "How the mirrored CoachAccountable tables and HJG-owned tables relate. Drag to pan, scroll to zoom, click a table to focus its links.",
   },
   {
     key: "pay",
     label: "Payments",
     src: "/pay-map.html",
-    blurb: "How mentor payments are calculated — the two-month split, with an interactive calculator and a worked example.",
+    blurb:
+      "How mentor payments are calculated — the two-month split, with an interactive calculator and a worked example.",
   },
 ] as const;
 
@@ -50,13 +52,21 @@ export function MapsView() {
               </button>
             ))}
           </div>
-          <a className="btn btn--sm" href={src} target="_blank" rel="noopener" title="Open this map full screen in a new tab">
+          <a
+            className="btn btn--sm"
+            href={src}
+            target="_blank"
+            rel="noopener"
+            title="Open this map full screen in a new tab"
+          >
             Full screen ↗
           </a>
         </div>
       }
     >
-      <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 12 }}>{cur.blurb}</div>
+      <div className="muted" style={{ fontSize: 13, marginTop: -2, marginBottom: 12 }}>
+        {cur.blurb}
+      </div>
 
       <iframe
         key={cur.key + theme}

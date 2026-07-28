@@ -3,8 +3,17 @@
 // only signed-in staff can touch them.
 
 import { supabase } from "./lib/supabase";
-import { CONVERSION_OFFERING_IDS, PIPELINE_TIERS, engagementTier, type PipelineTier } from "../lib/config";
-import { computeJyfVsMentoring, type CohortEngagementInput, type JyfVsMentoring } from "../lib/cohort";
+import {
+  CONVERSION_OFFERING_IDS,
+  PIPELINE_TIERS,
+  engagementTier,
+  type PipelineTier,
+} from "../lib/config";
+import {
+  computeJyfVsMentoring,
+  type CohortEngagementInput,
+  type JyfVsMentoring,
+} from "../lib/cohort";
 
 export { PIPELINE_TIERS, engagementTier };
 export type { PipelineTier };
@@ -19,35 +28,168 @@ import {
 export { resolveDiscoveryOutcome };
 export type { DiscoveryOutcomeValue, ResolvedOutcome, ResolvedOutcomeSource };
 
-import { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec, daysInMonth } from "../lib/pay";
-import type { PayInvoiceInput, PayEngagementInput, PayReport, PayTimeline, PayMonth, PayLedgerRow, PayMenteeLine, PayLineSource, PayLineSourceLineItem, LineItemPayStatus, PayInvoicePayment, PayInvoiceLineItem } from "../lib/pay";
-export { computePayReport, computePayTimeline, distinctServiceMonths, payoutMonths, PAY_RAMP, parseRampSpec, formatRampSpec, daysInMonth };
-export type { PayReport, PayTimeline, PayMonth, PayLedgerRow, PayInvoiceInput, PayEngagementInput, PayMenteeLine, PayLineSource, PayLineSourceLineItem, LineItemPayStatus, PayInvoicePayment, PayInvoiceLineItem };
+import {
+  computePayReport,
+  computePayTimeline,
+  distinctServiceMonths,
+  payoutMonths,
+  PAY_RAMP,
+  parseRampSpec,
+  formatRampSpec,
+  daysInMonth,
+} from "../lib/pay";
+import type {
+  PayInvoiceInput,
+  PayEngagementInput,
+  PayReport,
+  PayTimeline,
+  PayMonth,
+  PayLedgerRow,
+  PayMenteeLine,
+  PayLineSource,
+  PayLineSourceLineItem,
+  LineItemPayStatus,
+  PayInvoicePayment,
+  PayInvoiceLineItem,
+} from "../lib/pay";
+export {
+  computePayReport,
+  computePayTimeline,
+  distinctServiceMonths,
+  payoutMonths,
+  PAY_RAMP,
+  parseRampSpec,
+  formatRampSpec,
+  daysInMonth,
+};
+export type {
+  PayReport,
+  PayTimeline,
+  PayMonth,
+  PayLedgerRow,
+  PayInvoiceInput,
+  PayEngagementInput,
+  PayMenteeLine,
+  PayLineSource,
+  PayLineSourceLineItem,
+  LineItemPayStatus,
+  PayInvoicePayment,
+  PayInvoiceLineItem,
+};
 
 // Pure "Build payout" review math (per-line include/exclude/override + totals),
 // re-exported so the frontend imports lib through db.ts — same pattern as above.
-import { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, includedLineItemSet, sourceIsClassified, sourceAutoBasis, lineItemCounts, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS } from "../lib/payBuild";
-import type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine } from "../lib/payBuild";
-export { summarizeBuild, effectiveLinePayout, effectiveLineTotal, payoutAfterExclusions, payLineSourceKey, payLineItemKey, excludedInvoiceSet, excludedLineItemSet, includedLineItemSet, sourceIsClassified, sourceAutoBasis, lineItemCounts, lineItemsSplittable, sourceIncludedBilled, sourceRecognizedAfterExclusions, isDefaultLineState, DEFAULT_LINE_STATE, payoutDetailCsvRows, PAYOUT_DETAIL_CSV_COLUMNS };
+import {
+  summarizeBuild,
+  effectiveLinePayout,
+  effectiveLineTotal,
+  payoutAfterExclusions,
+  payLineSourceKey,
+  payLineItemKey,
+  excludedInvoiceSet,
+  excludedLineItemSet,
+  includedLineItemSet,
+  sourceIsClassified,
+  sourceAutoBasis,
+  lineItemCounts,
+  lineItemsSplittable,
+  sourceIncludedBilled,
+  sourceRecognizedAfterExclusions,
+  isDefaultLineState,
+  DEFAULT_LINE_STATE,
+  payoutDetailCsvRows,
+  PAYOUT_DETAIL_CSV_COLUMNS,
+} from "../lib/payBuild";
+import type {
+  BuildLineState,
+  BuildLineInput,
+  BuildSummary,
+  BuildStatus,
+  BuildDetailLine,
+} from "../lib/payBuild";
+export {
+  summarizeBuild,
+  effectiveLinePayout,
+  effectiveLineTotal,
+  payoutAfterExclusions,
+  payLineSourceKey,
+  payLineItemKey,
+  excludedInvoiceSet,
+  excludedLineItemSet,
+  includedLineItemSet,
+  sourceIsClassified,
+  sourceAutoBasis,
+  lineItemCounts,
+  lineItemsSplittable,
+  sourceIncludedBilled,
+  sourceRecognizedAfterExclusions,
+  isDefaultLineState,
+  DEFAULT_LINE_STATE,
+  payoutDetailCsvRows,
+  PAYOUT_DETAIL_CSV_COLUMNS,
+};
 export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
 // Printable mentor pay stub (one-page summary + per-invoice breakdown), built
 // from a Build-payout review — pure model + self-contained HTML (lib/payStub).
 import { buildPayStubModel, payStubHtml, monthLabelLong } from "../lib/payStub";
-import type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition } from "../lib/payStub";
+import type {
+  PayStubModel,
+  PayStubInput,
+  StubMenteeRow,
+  StubInvoice,
+  StubItem,
+  StubItemDisposition,
+} from "../lib/payStub";
 export { buildPayStubModel, payStubHtml, monthLabelLong };
 
 // Hourly (timesheet) staff pay — pure math + printable stub (lib/hourlyPay).
-import { normalizeEntries, hoursTotal, hourlyTotal, laborTotal, entryRate, entryAmount, hasCustomRates, parseEntries, buildHourlyStubModel, hourlyStubHtml } from "../lib/hourlyPay";
+import {
+  normalizeEntries,
+  hoursTotal,
+  hourlyTotal,
+  laborTotal,
+  entryRate,
+  entryAmount,
+  hasCustomRates,
+  parseEntries,
+  buildHourlyStubModel,
+  hourlyStubHtml,
+} from "../lib/hourlyPay";
 import type { HourlyEntry, HourlyStubModel, HourlyStubInput } from "../lib/hourlyPay";
-export { normalizeEntries, hoursTotal, hourlyTotal, laborTotal, entryRate, entryAmount, hasCustomRates, parseEntries, buildHourlyStubModel, hourlyStubHtml };
+export {
+  normalizeEntries,
+  hoursTotal,
+  hourlyTotal,
+  laborTotal,
+  entryRate,
+  entryAmount,
+  hasCustomRates,
+  parseEntries,
+  buildHourlyStubModel,
+  hourlyStubHtml,
+};
 export type { HourlyEntry, HourlyStubModel, HourlyStubInput };
 // Piece work — flat per-unit pay, shared by the hourly and mentor builders.
-import { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces, emptyPiece } from "../lib/pieceWork";
+import {
+  normalizePieces,
+  pieceAmount,
+  piecesTotal,
+  piecesQty,
+  parsePieces,
+  emptyPiece,
+} from "../lib/pieceWork";
 import type { PieceEntry } from "../lib/pieceWork";
 export { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces, emptyPiece };
 export type { PieceEntry };
-export type { PayStubModel, PayStubInput, StubMenteeRow, StubInvoice, StubItem, StubItemDisposition };
+export type {
+  PayStubModel,
+  PayStubInput,
+  StubMenteeRow,
+  StubInvoice,
+  StubItem,
+  StubItemDisposition,
+};
 
 // Payment groups (engagement templates × staff groups; Company options §451).
 import {
@@ -85,7 +227,14 @@ export { prevYm, defaultServiceMonth, monthPayProgress };
 export type { MonthPayProgress };
 
 // User permissions bones (Admin §405): tab access per user.
-import { APP_TABS, APP_TAB_KEYS, APP_ROLES, DEFAULT_ROLE_TABS, normalizeRole, resolveAllowedTabs } from "../lib/permissions";
+import {
+  APP_TABS,
+  APP_TAB_KEYS,
+  APP_ROLES,
+  DEFAULT_ROLE_TABS,
+  normalizeRole,
+  resolveAllowedTabs,
+} from "../lib/permissions";
 import type { AppRole, AppTabDef, AppUserLike } from "../lib/permissions";
 export { APP_TABS, APP_TAB_KEYS, APP_ROLES, DEFAULT_ROLE_TABS, normalizeRole, resolveAllowedTabs };
 export type { AppRole, AppTabDef, AppUserLike };
@@ -98,7 +247,12 @@ import {
   DEFAULT_TRANSITION_OPTIONS,
   MENTEE_TRANSITION_OPTIONS_KEY,
 } from "../lib/transitionOptions";
-export { parseTransitionOptions, serializeTransitionOptions, DEFAULT_TRANSITION_OPTIONS, MENTEE_TRANSITION_OPTIONS_KEY };
+export {
+  parseTransitionOptions,
+  serializeTransitionOptions,
+  DEFAULT_TRANSITION_OPTIONS,
+  MENTEE_TRANSITION_OPTIONS_KEY,
+};
 
 // Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
 // frontend imports lib through db.ts — same pattern as the pay engine above.
@@ -159,14 +313,30 @@ export type { StageBasis };
 
 // Pure cohort-comparison logic for the Pipeline-timing "Compare start-date
 // cohorts" tool (windowing + per-cohort roll-up).
-export { monthsAgoYmd, inStartWindow, summarizeCohort, startWindowLabel, COHORT_TIERS } from "../lib/cohortCompare";
-export type { CohortJourneyInput, CohortStats, CohortTier, StartWindow } from "../lib/cohortCompare";
+export {
+  monthsAgoYmd,
+  inStartWindow,
+  summarizeCohort,
+  startWindowLabel,
+  COHORT_TIERS,
+} from "../lib/cohortCompare";
+export type {
+  CohortJourneyInput,
+  CohortStats,
+  CohortTier,
+  StartWindow,
+} from "../lib/cohortCompare";
 
 // Pure CA-layer derivation + effective view-model for the rewritten Mentee
 // management system (migration 9974 — three write zones: ca_* / notion_* / hand).
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney";
 import { toEffectiveMentee, type MenteeMgmtStatus } from "../lib/menteeView";
-import { planNotionUpsert, planClientIdClaims, type NotionImportRow, type ExistingMentee } from "../lib/notionCsv";
+import {
+  planNotionUpsert,
+  planClientIdClaims,
+  type NotionImportRow,
+  type ExistingMentee,
+} from "../lib/notionCsv";
 import { computeMeetingsToFreedom } from "../lib/freedom";
 export {
   toEffectiveMentee,
@@ -179,7 +349,13 @@ export {
   OUT_OF_FUNNEL_STATUSES,
   FUNNEL_STAGES,
 } from "../lib/menteeView";
-export type { EffectiveMentee, FunnelStage, MenteeMgmtStatus, MenteeConflict, NotionStatusMapping } from "../lib/menteeView";
+export type {
+  EffectiveMentee,
+  FunnelStage,
+  MenteeMgmtStatus,
+  MenteeConflict,
+  NotionStatusMapping,
+} from "../lib/menteeView";
 export { computeFunnel } from "../lib/menteeFunnel";
 export type { FunnelReport, FunnelStageStat, FunnelExits } from "../lib/menteeFunnel";
 // Notion CSV ingestion (pure parse/match; the upsert lives in upsertMenteeNotion).
@@ -196,11 +372,19 @@ export {
   planClientIdClaims,
   DEFAULT_NOTION_MAP,
 } from "../lib/notionCsv";
-export type { NotionImportRow, NotionColumnMap, NotionUpsertPlan, ExistingMentee, CaIdentity } from "../lib/notionCsv";
+export type {
+  NotionImportRow,
+  NotionColumnMap,
+  NotionUpsertPlan,
+  ExistingMentee,
+  CaIdentity,
+} from "../lib/notionCsv";
 
 // This client's qualifying (supervised JumpStart) purchase dates, keyed by
 // client id and sorted ascending. Empty when nothing counts toward conversion.
-async function fetchConversionPurchasesByClient(clientIds: number[]): Promise<Map<number, string[]>> {
+async function fetchConversionPurchasesByClient(
+  clientIds: number[],
+): Promise<Map<number, string[]>> {
   const out = new Map<number, string[]>();
   if (!clientIds.length || !CONVERSION_OFFERING_IDS.length) return out;
   const chunk = 200;
@@ -267,7 +451,13 @@ function err<T>(res: { data: T | null; error: { message: string } | null }): T {
 
 export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]> {
   const appts = err<
-    { id: number; client_id: number | null; category: string; start_date: string | null; start_month: number | null }[]
+    {
+      id: number;
+      client_id: number | null;
+      category: string;
+      start_date: string | null;
+      start_month: number | null;
+    }[]
   >(
     await supabase
       .from("ca_appointments")
@@ -275,13 +465,15 @@ export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]
       .in("category", ["discoveryPhone", "discoveryZoom"])
       .eq("start_year", year)
       .eq("status", "A")
-      .order("start_date", { ascending: false })
+      .order("start_date", { ascending: false }),
   );
 
-  const clientIds = [...new Set(appts.map((a) => a.client_id).filter((x): x is number => x != null))];
+  const clientIds = [
+    ...new Set(appts.map((a) => a.client_id).filter((x): x is number => x != null)),
+  ];
   const clientRows = clientIds.length
     ? err<{ id: number; name: string | null; is_excluded: boolean }[]>(
-        await supabase.from("ca_clients").select("id,name,is_excluded").in("id", clientIds)
+        await supabase.from("ca_clients").select("id,name,is_excluded").in("id", clientIds),
       )
     : [];
   const clientMap = new Map(clientRows.map((c) => [c.id, c]));
@@ -289,12 +481,18 @@ export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]
   const apptIds = appts.map((a) => a.id);
   const outcomeRows = apptIds.length
     ? err<
-        { id: string; appointment_id: number; outcome: DiscoveryOutcomeValue; follow_up_on: string | null; notes: string | null }[]
+        {
+          id: string;
+          appointment_id: number;
+          outcome: DiscoveryOutcomeValue;
+          follow_up_on: string | null;
+          notes: string | null;
+        }[]
       >(
         await supabase
           .from("discovery_outcomes")
           .select("id,appointment_id,outcome,follow_up_on,notes")
-          .in("appointment_id", apptIds)
+          .in("appointment_id", apptIds),
       )
     : [];
   const outcomeMap = new Map(outcomeRows.map((o) => [o.appointment_id, o]));
@@ -308,14 +506,31 @@ export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]
     if (client?.is_excluded) continue; // skip placeholder / group "clients"
     const o = outcomeMap.get(a.id);
     const manual = o?.outcome ?? null;
-    const purchases = a.client_id != null ? purchasesByClient.get(a.client_id) ?? [] : [];
-    const auto = resolveDiscoveryOutcome({ callDate: a.start_date, manual: null, conversionPurchaseDates: purchases, today });
-    const resolved = manual ? resolveDiscoveryOutcome({ callDate: a.start_date, manual, conversionPurchaseDates: purchases, today }) : auto;
+    const purchases = a.client_id != null ? (purchasesByClient.get(a.client_id) ?? []) : [];
+    const auto = resolveDiscoveryOutcome({
+      callDate: a.start_date,
+      manual: null,
+      conversionPurchaseDates: purchases,
+      today,
+    });
+    const resolved = manual
+      ? resolveDiscoveryOutcome({
+          callDate: a.start_date,
+          manual,
+          conversionPurchaseDates: purchases,
+          today,
+        })
+      : auto;
     calls.push({
       appointmentId: a.id,
       clientId: a.client_id,
       prospect: client?.name ?? (a.client_id != null ? `#${a.client_id}` : "Unknown"),
-      type: a.category === "discoveryPhone" ? "phone" : a.category === "discoveryZoom" ? "zoom" : "other",
+      type:
+        a.category === "discoveryPhone"
+          ? "phone"
+          : a.category === "discoveryZoom"
+            ? "zoom"
+            : "other",
       date: a.start_date,
       month: a.start_month,
       outcomeId: o?.id ?? null,
@@ -335,7 +550,7 @@ export async function fetchDiscoveryCalls(year: number): Promise<DiscoveryCall[]
 export async function setDiscoveryOutcome(
   createdBy: string,
   call: { appointmentId: number; clientId: number; existingId: string | null },
-  values: { outcome: DiscoveryOutcomeValue; followUpOn: string | null; notes: string | null }
+  values: { outcome: DiscoveryOutcomeValue; followUpOn: string | null; notes: string | null },
 ): Promise<void> {
   if (call.existingId) {
     const { error } = await supabase
@@ -409,7 +624,7 @@ async function pageAppts(
   categories: string[],
   dateCol: "start_date" | "date_added",
   from: string,
-  to: string
+  to: string,
 ): Promise<PagedAppt[]> {
   const pageSize = 1000;
   const out: PagedAppt[] = [];
@@ -429,7 +644,7 @@ async function pageAppts(
       const isGroup = r.category === "group";
       out.push({
         id: r.id as number,
-        category: (isGroup ? "mentoring" : (r.category as ApptCategory)),
+        category: isGroup ? "mentoring" : (r.category as ApptCategory),
         is_group: isGroup,
         name: r.name as string,
         date: (r[dateCol] as string | null) ?? null,
@@ -446,10 +661,7 @@ async function pageAppts(
 // Discovery appointments counted by SIGNUP date (date_added), falling back to
 // the scheduled date when date_added isn't populated yet (e.g. before a re-sync
 // backfills it), so the metric is never blank during the transition.
-async function pageDiscovery(
-  from: string,
-  to: string
-): Promise<PagedAppt[]> {
+async function pageDiscovery(from: string, to: string): Promise<PagedAppt[]> {
   const pageSize = 1000;
   const out: PagedAppt[] = [];
   for (let f = 0; ; f += pageSize) {
@@ -459,7 +671,7 @@ async function pageDiscovery(
       .in("category", ["discoveryPhone", "discoveryZoom"])
       .eq("status", "A")
       .or(
-        `and(date_added.gte.${from},date_added.lte.${to}),and(date_added.is.null,start_date.gte.${from},start_date.lte.${to})`
+        `and(date_added.gte.${from},date_added.lte.${to}),and(date_added.is.null,start_date.gte.${from},start_date.lte.${to})`,
       )
       .order("id", { ascending: true })
       .range(f, f + pageSize - 1);
@@ -471,7 +683,7 @@ async function pageDiscovery(
         category: r.category as ApptCategory,
         is_group: false,
         name: r.name as string,
-        date: ((r.date_added as string | null) ?? (r.start_date as string | null)) ?? null,
+        date: (r.date_added as string | null) ?? (r.start_date as string | null) ?? null,
         start_raw: null,
         client_id: (r.client_id as number | null) ?? null,
         coach_id: (r.coach_id as number | null) ?? null,
@@ -495,12 +707,17 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
   ]);
   const rows = [...mentoring, ...discovery];
 
-  const clientIds = [...new Set(rows.map((r) => r.client_id).filter((x): x is number => x != null))];
+  const clientIds = [
+    ...new Set(rows.map((r) => r.client_id).filter((x): x is number => x != null)),
+  ];
   const coachIds = [...new Set(rows.map((r) => r.coach_id).filter((x): x is number => x != null))];
 
   const clientMap = new Map<number, { name: string | null; is_excluded: boolean }>();
   if (clientIds.length) {
-    const { data, error } = await supabase.from("ca_clients").select("id,name,is_excluded").in("id", clientIds);
+    const { data, error } = await supabase
+      .from("ca_clients")
+      .select("id,name,is_excluded")
+      .in("id", clientIds);
     if (error) throw new Error(error.message);
     for (const c of (data ?? []) as { id: number; name: string | null; is_excluded: boolean }[]) {
       clientMap.set(c.id, { name: c.name, is_excluded: c.is_excluded });
@@ -511,11 +728,16 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
   if (coachIds.length) {
     const { data, error } = await supabase.from("ca_coaches").select("id,name").in("id", coachIds);
     if (error) throw new Error(error.message);
-    for (const c of (data ?? []) as { id: number; name: string | null }[]) coachMap.set(c.id, c.name);
+    for (const c of (data ?? []) as { id: number; name: string | null }[])
+      coachMap.set(c.id, c.name);
   }
 
   return rows
-    .filter((r) => r.client_id == null || (!clientMap.get(r.client_id)?.is_excluded && !excludedSet.has(r.client_id)))
+    .filter(
+      (r) =>
+        r.client_id == null ||
+        (!clientMap.get(r.client_id)?.is_excluded && !excludedSet.has(r.client_id)),
+    )
     .map((r) => ({
       id: r.id,
       category: r.category,
@@ -528,12 +750,16 @@ export async function fetchRangeAppointments(from: string, to: string): Promise<
         (r.client_id != null ? clientMap.get(r.client_id)?.name : null) ??
         (r.client_id != null ? `#${r.client_id}` : "Unknown"),
       coachId: r.coach_id,
-      coachName: (r.coach_id != null ? coachMap.get(r.coach_id) : null) ?? (r.coach_id != null ? `#${r.coach_id}` : "Unknown"),
+      coachName:
+        (r.coach_id != null ? coachMap.get(r.coach_id) : null) ??
+        (r.coach_id != null ? `#${r.coach_id}` : "Unknown"),
     }));
 }
 
 // Recorded outcomes for the given appointment ids, keyed by appointment id.
-export async function fetchOutcomesByAppointment(apptIds: number[]): Promise<Map<number, DiscoveryOutcomeValue>> {
+export async function fetchOutcomesByAppointment(
+  apptIds: number[],
+): Promise<Map<number, DiscoveryOutcomeValue>> {
   const out = new Map<number, DiscoveryOutcomeValue>();
   const chunk = 200;
   for (let i = 0; i < apptIds.length; i += chunk) {
@@ -544,7 +770,10 @@ export async function fetchOutcomesByAppointment(apptIds: number[]): Promise<Map
       .select("appointment_id,outcome")
       .in("appointment_id", slice);
     if (error) throw new Error(error.message);
-    for (const o of (data ?? []) as { appointment_id: number | null; outcome: DiscoveryOutcomeValue }[]) {
+    for (const o of (data ?? []) as {
+      appointment_id: number | null;
+      outcome: DiscoveryOutcomeValue;
+    }[]) {
       if (o.appointment_id != null) out.set(o.appointment_id, o.outcome);
     }
   }
@@ -554,21 +783,28 @@ export async function fetchOutcomesByAppointment(apptIds: number[]): Promise<Map
 // Resolve each discovery appointment to its outcome (manual override or the
 // automatic rule), keyed by appointment id. Powers the Metrics conversion panel.
 export async function fetchResolvedOutcomes(
-  appts: { id: number; clientId: number | null; date: string | null }[]
+  appts: { id: number; clientId: number | null; date: string | null }[],
 ): Promise<Map<number, ResolvedOutcome>> {
   const result = new Map<number, ResolvedOutcome>();
   if (!appts.length) return result;
-  const clientIds = [...new Set(appts.map((a) => a.clientId).filter((x): x is number => x != null))];
+  const clientIds = [
+    ...new Set(appts.map((a) => a.clientId).filter((x): x is number => x != null)),
+  ];
   const [manualMap, purchasesByClient] = await Promise.all([
     fetchOutcomesByAppointment(appts.map((a) => a.id)),
     fetchConversionPurchasesByClient(clientIds),
   ]);
   const today = todayYmd();
   for (const a of appts) {
-    const purchases = a.clientId != null ? purchasesByClient.get(a.clientId) ?? [] : [];
+    const purchases = a.clientId != null ? (purchasesByClient.get(a.clientId) ?? []) : [];
     result.set(
       a.id,
-      resolveDiscoveryOutcome({ callDate: a.date, manual: manualMap.get(a.id) ?? null, conversionPurchaseDates: purchases, today })
+      resolveDiscoveryOutcome({
+        callDate: a.date,
+        manual: manualMap.get(a.id) ?? null,
+        conversionPurchaseDates: purchases,
+        today,
+      }),
     );
   }
   return result;
@@ -599,7 +835,11 @@ export interface ManualMetricDef {
 }
 
 export const MANUAL_METRICS: ManualMetricDef[] = [
-  { key: "triggers_pdf_downloads", label: "“Identify Your Triggers” downloads", short: "Triggers PDF downloads" },
+  {
+    key: "triggers_pdf_downloads",
+    label: "“Identify Your Triggers” downloads",
+    short: "Triggers PDF downloads",
+  },
   { key: "sast_worksheets", label: "SAST worksheets completed", short: "SAST worksheets" },
 ];
 
@@ -627,9 +867,21 @@ export async function fetchManualMetrics(from: string, to: string): Promise<Manu
     .lte("period_month", to)
     .order("period_month", { ascending: true });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { id: string; metric: string; period_month: string; value: number; notes: string | null }[]).map(
-    (r) => ({ id: r.id, metric: r.metric, periodMonth: r.period_month, value: r.value, notes: r.notes })
-  );
+  return (
+    (data ?? []) as {
+      id: string;
+      metric: string;
+      period_month: string;
+      value: number;
+      notes: string | null;
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    metric: r.metric,
+    periodMonth: r.period_month,
+    value: r.value,
+    notes: r.notes,
+  }));
 }
 
 // Values for a single month (YYYY-MM), keyed by metric — prefills the editor.
@@ -649,13 +901,13 @@ export async function upsertManualMetric(
   createdBy: string,
   metric: string,
   monthYm: string,
-  value: number
+  value: number,
 ): Promise<void> {
   const { error } = await supabase
     .from("manual_metrics")
     .upsert(
       { metric, period_month: monthStart(monthYm), value, created_by: createdBy || null },
-      { onConflict: "metric,period_month" }
+      { onConflict: "metric,period_month" },
     );
   if (error) throw new Error(error.message);
 }
@@ -678,13 +930,37 @@ export interface CoachWithSettings {
 export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
   const [coachesRes, settingsRes] = await Promise.all([
     supabase.from("ca_coaches").select("id,name").order("name", { ascending: true }),
-    supabase.from("coach_settings").select("coach_id,is_mentor,capacity,notes,pay_start_month,pay_ramp"),
+    supabase
+      .from("coach_settings")
+      .select("coach_id,is_mentor,capacity,notes,pay_start_month,pay_ramp"),
   ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (settingsRes.error) throw new Error(settingsRes.error.message);
-  const settings = new Map<number, { is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null; pay_ramp: string | null }>();
-  for (const s of (settingsRes.data ?? []) as { coach_id: number; is_mentor: boolean; capacity: number | null; notes: string | null; pay_start_month: string | null; pay_ramp: string | null }[]) {
-    settings.set(s.coach_id, { is_mentor: s.is_mentor, capacity: s.capacity, notes: s.notes, pay_start_month: s.pay_start_month, pay_ramp: s.pay_ramp });
+  const settings = new Map<
+    number,
+    {
+      is_mentor: boolean;
+      capacity: number | null;
+      notes: string | null;
+      pay_start_month: string | null;
+      pay_ramp: string | null;
+    }
+  >();
+  for (const s of (settingsRes.data ?? []) as {
+    coach_id: number;
+    is_mentor: boolean;
+    capacity: number | null;
+    notes: string | null;
+    pay_start_month: string | null;
+    pay_ramp: string | null;
+  }[]) {
+    settings.set(s.coach_id, {
+      is_mentor: s.is_mentor,
+      capacity: s.capacity,
+      notes: s.notes,
+      pay_start_month: s.pay_start_month,
+      pay_ramp: s.pay_ramp,
+    });
   }
   return ((coachesRes.data ?? []) as { id: number; name: string | null }[]).map((c) => {
     const s = settings.get(c.id);
@@ -714,34 +990,54 @@ export async function fetchMentorCoachIds(): Promise<Set<number>> {
 
 export async function upsertCoachSettings(
   coachId: number,
-  patch: { isMentor: boolean; capacity: number | null; notes: string | null; payStartMonth: string | null; payRamp: string | null }
+  patch: {
+    isMentor: boolean;
+    capacity: number | null;
+    notes: string | null;
+    payStartMonth: string | null;
+    payRamp: string | null;
+  },
 ): Promise<void> {
   const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
-  const { error } = await supabase
-    .from("coach_settings")
-    .upsert(
-      {
-        coach_id: coachId,
-        is_mentor: patch.isMentor,
-        capacity: patch.capacity,
-        notes: patch.notes,
-        pay_start_month: patch.payStartMonth,
-        pay_ramp: patch.payRamp,
-        created_by: createdBy,
-        updated_by: createdBy,
-      },
-      { onConflict: "coach_id" }
-    );
+  const { error } = await supabase.from("coach_settings").upsert(
+    {
+      coach_id: coachId,
+      is_mentor: patch.isMentor,
+      capacity: patch.capacity,
+      notes: patch.notes,
+      pay_start_month: patch.payStartMonth,
+      pay_ramp: patch.payRamp,
+      created_by: createdBy,
+      updated_by: createdBy,
+    },
+    { onConflict: "coach_id" },
+  );
   if (error) throw new Error(error.message);
 }
 
 // Page every active mentoring appointment across all history (the pipeline spans
 // years, so this is not date-bounded). Used only by the Journeys tab.
 async function fetchAllMentoring(): Promise<
-  { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; category: string; start_date: string | null }[]
+  {
+    id: number;
+    client_id: number | null;
+    coach_id: number | null;
+    engagement_id: number | null;
+    name: string;
+    category: string;
+    start_date: string | null;
+  }[]
 > {
   const pageSize = 1000;
-  const out: { id: number; client_id: number | null; coach_id: number | null; engagement_id: number | null; name: string; category: string; start_date: string | null }[] = [];
+  const out: {
+    id: number;
+    client_id: number | null;
+    coach_id: number | null;
+    engagement_id: number | null;
+    name: string;
+    category: string;
+    start_date: string | null;
+  }[] = [];
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_appointments")
@@ -813,17 +1109,22 @@ export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   const isExcluded = new Map<number, boolean>();
-  for (const c of (clientsRes.data ?? []) as { id: number; is_excluded: boolean }[]) isExcluded.set(c.id, c.is_excluded);
+  for (const c of (clientsRes.data ?? []) as { id: number; is_excluded: boolean }[])
+    isExcluded.set(c.id, c.is_excluded);
 
   const inputs: CohortEngagementInput[] = [];
   for (const e of engagements) {
     if (e.client_id == null) continue;
     if (isExcluded.get(e.client_id) || excludedSet.has(e.client_id)) continue;
-    inputs.push({ clientId: e.client_id, name: e.name, isComplete: e.is_complete, isCanceled: e.is_canceled });
+    inputs.push({
+      clientId: e.client_id,
+      name: e.name,
+      isComplete: e.is_complete,
+      isCanceled: e.is_canceled,
+    });
   }
   return computeJyfVsMentoring(inputs);
 }
-
 
 // ============================================================================
 // Mentee management (SOURCE OF TRUTH) — rebuilt 2026-06-24 (migration 9975).
@@ -940,12 +1241,27 @@ export interface NotionImportResult {
   inserted: number;
   ambiguous: { name: string; candidateIds: string[] }[];
 }
-export async function upsertMenteeNotion(rows: NotionImportRow[], userId?: string): Promise<NotionImportResult> {
-  const { data, error } = await supabase.from("mentees").select("id,client_id,ca_name,notion_name,name_override");
+export async function upsertMenteeNotion(
+  rows: NotionImportRow[],
+  userId?: string,
+): Promise<NotionImportResult> {
+  const { data, error } = await supabase
+    .from("mentees")
+    .select("id,client_id,ca_name,notion_name,name_override");
   if (error) throw new Error(error.message);
-  const existing: ExistingMentee[] = ((data ?? []) as { id: string; client_id: number | null; ca_name: string | null; notion_name: string | null; name_override: string | null }[]).map(
-    (r) => ({ id: r.id, clientId: r.client_id, name: r.name_override ?? r.notion_name ?? r.ca_name })
-  );
+  const existing: ExistingMentee[] = (
+    (data ?? []) as {
+      id: string;
+      client_id: number | null;
+      ca_name: string | null;
+      notion_name: string | null;
+      name_override: string | null;
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    clientId: r.client_id,
+    name: r.name_override ?? r.notion_name ?? r.ca_name,
+  }));
   const plan = planNotionUpsert(existing, rows);
   const importedAt = new Date().toISOString();
   const toNotionCols = (row: NotionImportRow) => ({
@@ -962,12 +1278,18 @@ export async function upsertMenteeNotion(rows: NotionImportRow[], userId?: strin
 
   // Updates: write only notion_* on the matched id.
   for (const u of plan.updates) {
-    const { error: uErr } = await supabase.from("mentees").update(toNotionCols(u.row)).eq("id", u.id);
+    const { error: uErr } = await supabase
+      .from("mentees")
+      .update(toNotionCols(u.row))
+      .eq("id", u.id);
     if (uErr) throw new Error(uErr.message);
   }
   // Inserts: new Notion-only rows (client_id stays null).
   if (plan.inserts.length) {
-    const payload = plan.inserts.map((row) => ({ ...toNotionCols(row), created_by: userId || null }));
+    const payload = plan.inserts.map((row) => ({
+      ...toNotionCols(row),
+      created_by: userId || null,
+    }));
     for (let i = 0; i < payload.length; i += 500) {
       const { error: iErr } = await supabase.from("mentees").insert(payload.slice(i, i + 500));
       if (iErr) throw new Error(iErr.message);
@@ -983,7 +1305,11 @@ export async function saveMenteeHand(id: string, edits: MenteeHandEdit): Promise
 }
 
 // Add a hand-only mentee (a prospect not yet in CA). client_id stays null.
-export async function createMentee(userId: string, name: string, edits: MenteeHandEdit = {}): Promise<MenteeRow> {
+export async function createMentee(
+  userId: string,
+  name: string,
+  edits: MenteeHandEdit = {},
+): Promise<MenteeRow> {
   const { data, error } = await supabase
     .from("mentees")
     .insert({ name_override: name, created_by: userId || null, ...edits })
@@ -1001,19 +1327,34 @@ export async function fetchTestClientIds(): Promise<Set<number>> {
   // rest of the dashboard (Metrics ranges, JYF cohort) keeps working until cutover.
   const { data, error } = await supabase.from("mentees").select("client_id").eq("is_test", true);
   if (error) return set;
-  for (const r of (data ?? []) as { client_id: number | null }[]) if (r.client_id != null) set.add(r.client_id);
+  for (const r of (data ?? []) as { client_id: number | null }[])
+    if (r.client_id != null) set.add(r.client_id);
   return set;
 }
 
 // Before a CA upsert, claim any Notion-only row (client_id NULL) whose name now
 // matches a CA record by setting its client_id, so the upsert MERGES the CA zone
 // onto the existing Notion row instead of inserting a duplicate. Best-effort.
-async function claimNotionOnlyRows(caRecords: { clientId: number; name: string | null }[]): Promise<void> {
-  const { data, error } = await supabase.from("mentees").select("id,client_id,ca_name,notion_name,name_override");
+async function claimNotionOnlyRows(
+  caRecords: { clientId: number; name: string | null }[],
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("mentees")
+    .select("id,client_id,ca_name,notion_name,name_override");
   if (error) return;
-  const existing: ExistingMentee[] = ((data ?? []) as { id: string; client_id: number | null; ca_name: string | null; notion_name: string | null; name_override: string | null }[]).map(
-    (r) => ({ id: r.id, clientId: r.client_id, name: r.name_override ?? r.notion_name ?? r.ca_name })
-  );
+  const existing: ExistingMentee[] = (
+    (data ?? []) as {
+      id: string;
+      client_id: number | null;
+      ca_name: string | null;
+      notion_name: string | null;
+      name_override: string | null;
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    clientId: r.client_id,
+    name: r.name_override ?? r.notion_name ?? r.ca_name,
+  }));
   for (const c of planClientIdClaims(existing, caRecords)) {
     await supabase.from("mentees").update({ client_id: c.clientId }).eq("id", c.id);
   }
@@ -1026,13 +1367,20 @@ async function claimNotionOnlyRows(caRecords: { clientId: number; name: string |
 export async function rebuildMenteesFromCa(): Promise<number> {
   const [cl, en, ap, co] = await Promise.all([
     supabase.from("ca_clients").select("id,name,coach_id,is_excluded"),
-    supabase.from("ca_engagements").select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
+    supabase
+      .from("ca_engagements")
+      .select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
     supabase.from("ca_appointments").select("client_id,coach_id,engagement_id,category,start_date"),
     supabase.from("ca_coaches").select("id,name"),
   ]);
   const firstErr = cl.error || en.error || ap.error || co.error;
   if (firstErr) throw new Error(firstErr.message);
-  const clients = (cl.data ?? []) as { id: number; name: string | null; coach_id: number | null; is_excluded: boolean | null }[];
+  const clients = (cl.data ?? []) as {
+    id: number;
+    name: string | null;
+    coach_id: number | null;
+    is_excluded: boolean | null;
+  }[];
   const engagements = (en.data ?? []) as {
     id: number | null;
     client_id: number | null;
@@ -1042,15 +1390,27 @@ export async function rebuildMenteesFromCa(): Promise<number> {
     is_complete: boolean | null;
     is_canceled: boolean | null;
   }[];
-  const appts = (ap.data ?? []) as { client_id: number | null; coach_id: number | null; engagement_id: number | null; category: string | null; start_date: string | null }[];
+  const appts = (ap.data ?? []) as {
+    client_id: number | null;
+    coach_id: number | null;
+    engagement_id: number | null;
+    category: string | null;
+    start_date: string | null;
+  }[];
   const coaches = (co.data ?? []) as { id: number; name: string | null }[];
 
   const purchaseMap = await fetchConversionPurchasesByClient(clients.map((c) => c.id));
   const purchases: { clientId: number; date: string }[] = [];
-  for (const [clientId, dates] of purchaseMap) if (dates[0]) purchases.push({ clientId, date: dates[0] });
+  for (const [clientId, dates] of purchaseMap)
+    if (dates[0]) purchases.push({ clientId, date: dates[0] });
 
   const caRecords = deriveMenteeCaRecords({
-    clients: clients.map((c) => ({ id: c.id, name: c.name, coachId: c.coach_id ?? null, isExcluded: !!c.is_excluded })),
+    clients: clients.map((c) => ({
+      id: c.id,
+      name: c.name,
+      coachId: c.coach_id ?? null,
+      isExcluded: !!c.is_excluded,
+    })),
     engagements: engagements.map((e) => ({
       id: e.id,
       clientId: e.client_id ?? null,
@@ -1117,15 +1477,24 @@ export async function fetchMenteeMeetings(clientId: number): Promise<MenteeMeeti
     if ((PIPELINE_TIERS as readonly string[]).includes(t)) tierByEng.set(e.id, t as PipelineTier);
   }
   const coachName = new Map<number, string | null>();
-  for (const c of (coachRes.data ?? []) as { id: number; name: string | null }[]) coachName.set(c.id, c.name);
-  return ((apptRes.data ?? []) as { name: string; category: string; engagement_id: number | null; coach_id: number | null; start_date: string | null }[])
+  for (const c of (coachRes.data ?? []) as { id: number; name: string | null }[])
+    coachName.set(c.id, c.name);
+  return (
+    (apptRes.data ?? []) as {
+      name: string;
+      category: string;
+      engagement_id: number | null;
+      coach_id: number | null;
+      start_date: string | null;
+    }[]
+  )
     .filter((a) => a.start_date)
     .map((a) => ({
       date: a.start_date as string,
       name: a.name,
-      tier: a.engagement_id != null ? tierByEng.get(a.engagement_id) ?? null : null,
+      tier: a.engagement_id != null ? (tierByEng.get(a.engagement_id) ?? null) : null,
       isGroup: a.category === "group",
-      coachName: a.coach_id != null ? coachName.get(a.coach_id) ?? `#${a.coach_id}` : null,
+      coachName: a.coach_id != null ? (coachName.get(a.coach_id) ?? `#${a.coach_id}`) : null,
       engagementId: a.engagement_id,
     }));
 }
@@ -1191,7 +1560,8 @@ export async function fetchFreedomReport() {
     graduated: true,
     graduationDate: m.graduationDate,
     jumpstartEnd: m.jumpstartEnd,
-    firstOngoingStart: [m.tier4xDate, m.tier2xDate, m.tier1xDate].filter((d): d is string => !!d).sort()[0] ?? null,
+    firstOngoingStart:
+      [m.tier4xDate, m.tier2xDate, m.tier1xDate].filter((d): d is string => !!d).sort()[0] ?? null,
     meetings: meetingsByClient.get(m.clientId as number) ?? [],
   }));
   return computeMeetingsToFreedom(inputs);
@@ -1315,7 +1685,9 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
     // built each payout line. The engine's math ignores them.
     const { data, error } = await supabase
       .from("ca_invoices")
-      .select("id,invoice_number,client_id,date_of,date_of_year,date_of_month,amount,amount_paid,line_items,payments")
+      .select(
+        "id,invoice_number,client_id,date_of,date_of_year,date_of_month,amount,amount_paid,line_items,payments",
+      )
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as {
@@ -1357,31 +1729,39 @@ async function fetchAllPayInvoices(): Promise<PayInvoiceInput[]> {
 }
 
 export async function fetchPayData(): Promise<PayData> {
-  const [invoices, engagements, coachesRes, clientsRes, settingsRes, primaryCoach, payGroups] = await Promise.all([
-    fetchAllPayInvoices(),
-    fetchAllPayEngagements(),
-    supabase.from("ca_coaches").select("id,name"),
-    supabase.from("ca_clients").select("id,name"),
-    supabase.from("coach_settings").select("coach_id,pay_start_month,pay_ramp"),
-    fetchPrimaryCoachByClient(),
-    fetchPayGroupsConfig(),
-  ]);
+  const [invoices, engagements, coachesRes, clientsRes, settingsRes, primaryCoach, payGroups] =
+    await Promise.all([
+      fetchAllPayInvoices(),
+      fetchAllPayEngagements(),
+      supabase.from("ca_coaches").select("id,name"),
+      supabase.from("ca_clients").select("id,name"),
+      supabase.from("coach_settings").select("coach_id,pay_start_month,pay_ramp"),
+      fetchPrimaryCoachByClient(),
+      fetchPayGroupsConfig(),
+    ]);
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   if (settingsRes.error) throw new Error(settingsRes.error.message);
 
   const coaches = new Map<number, string>();
-  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coaches.set(c.id, c.name ?? `#${c.id}`);
+  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[])
+    coaches.set(c.id, c.name ?? `#${c.id}`);
   const clients = new Map<number, string>();
-  for (const c of (clientsRes.data ?? []) as { id: number; name: string | null }[]) clients.set(c.id, c.name ?? `#${c.id}`);
+  for (const c of (clientsRes.data ?? []) as { id: number; name: string | null }[])
+    clients.set(c.id, c.name ?? `#${c.id}`);
 
   // Staff overrides for the mentor pay-ramp start + per-mentor ramp. Only
   // well-formed 'YYYY-MM' starts are honored; a blank/invalid pay_ramp falls back
   // to the default 35/50/60 (parseRampSpec returns null).
   const startMonthOverride = new Map<number, string>();
   const rampOverride = new Map<number, readonly number[]>();
-  for (const s of (settingsRes.data ?? []) as { coach_id: number; pay_start_month: string | null; pay_ramp: string | null }[]) {
-    if (s.pay_start_month && /^\d{4}-\d{2}$/.test(s.pay_start_month)) startMonthOverride.set(s.coach_id, s.pay_start_month);
+  for (const s of (settingsRes.data ?? []) as {
+    coach_id: number;
+    pay_start_month: string | null;
+    pay_ramp: string | null;
+  }[]) {
+    if (s.pay_start_month && /^\d{4}-\d{2}$/.test(s.pay_start_month))
+      startMonthOverride.set(s.coach_id, s.pay_start_month);
     const ramp = parseRampSpec(s.pay_ramp);
     if (ramp) rampOverride.set(s.coach_id, ramp);
   }
@@ -1451,12 +1831,18 @@ export { buildKey as payoutBuildKey };
 // All saved builds, indexed by `${coachId}|${serviceMonth}`. The table is small
 // (one row per reviewed coach-month), so a single fetch backs the whole view.
 export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord>> {
-  const cols = "coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at";
+  const cols =
+    "coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at";
   // payment_sent_at/payment_ref need 9969, split_override needs 9971 — retry
   // without the newer columns so the screen still loads (those features just
   // won't persist) on an un-migrated database.
-  let res = await supabase.from("payout_builds").select(`${cols},split_override,payment_sent_at,payment_ref,piece_items`);
-  if (res.error) res = await supabase.from("payout_builds").select(`${cols},split_override,payment_sent_at,payment_ref`);
+  let res = await supabase
+    .from("payout_builds")
+    .select(`${cols},split_override,payment_sent_at,payment_ref,piece_items`);
+  if (res.error)
+    res = await supabase
+      .from("payout_builds")
+      .select(`${cols},split_override,payment_sent_at,payment_ref`);
   if (res.error) res = await supabase.from("payout_builds").select(`${cols},split_override`);
   if (res.error) res = await supabase.from("payout_builds").select(cols);
   if (res.error) throw new Error(res.error.message);
@@ -1506,7 +1892,7 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
 export async function setPayoutPaymentSent(
   coachId: number,
   serviceMonth: string,
-  sent: { sentAt: string; ref: string | null } | null
+  sent: { sentAt: string; ref: string | null } | null,
 ): Promise<void> {
   const { data, error } = await supabase
     .from("payout_builds")
@@ -1515,7 +1901,9 @@ export async function setPayoutPaymentSent(
     .eq("service_month", serviceMonth)
     .select("coach_id");
   if (error)
-    throw new Error(`${error.message} — if this mentions payment_sent_at, apply migration 9969_payout_payment_sent.sql`);
+    throw new Error(
+      `${error.message} — if this mentions payment_sent_at, apply migration 9969_payout_payment_sent.sql`,
+    );
   if (!data || data.length === 0)
     throw new Error("No saved build for this coach and month — save/approve the build first.");
 }
@@ -1534,7 +1922,7 @@ export async function savePayoutBuild(
     splitOverride?: number | null;
     pieces?: PieceEntry[];
     notes: string | null;
-  }
+  },
 ): Promise<void> {
   const compact: Record<string, BuildLineState> = {};
   for (const [k, v] of Object.entries(rec.lineStates)) {
@@ -1554,22 +1942,32 @@ export async function savePayoutBuild(
     piece_items: pieces,
     pieces_total: piecesTotal(pieces),
   };
-  let { error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" });
+  let { error } = await supabase
+    .from("payout_builds")
+    .upsert(row, { onConflict: "coach_id,service_month" });
   if (error && pieces.length > 0) {
-    throw new Error(`${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`);
+    throw new Error(
+      `${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`,
+    );
   }
   if (error) {
     // Pre-9964 database: retry without the piece-work columns.
     delete row.piece_items;
     delete row.pieces_total;
-    ({ error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" }));
+    ({ error } = await supabase
+      .from("payout_builds")
+      .upsert(row, { onConflict: "coach_id,service_month" }));
   }
   if (error && rec.splitOverride == null) {
     // Pre-9971 database: retry without the column so ordinary saves still work.
     delete row.split_override;
-    ({ error } = await supabase.from("payout_builds").upsert(row, { onConflict: "coach_id,service_month" }));
+    ({ error } = await supabase
+      .from("payout_builds")
+      .upsert(row, { onConflict: "coach_id,service_month" }));
   } else if (error && rec.splitOverride != null) {
-    throw new Error(`${error.message} — if this mentions split_override, apply migration 9971_payout_build_split.sql`);
+    throw new Error(
+      `${error.message} — if this mentions split_override, apply migration 9971_payout_build_split.sql`,
+    );
   }
   if (error) throw new Error(error.message);
 }
@@ -1612,12 +2010,18 @@ function engagementTierMap(engagements: EngagementRow[]): Map<number, PipelineTi
   return m;
 }
 
-export async function fetchProgramSessionsByMonth(tiers: PipelineTier[]): Promise<Map<string, ProgramSession[]>> {
+export async function fetchProgramSessionsByMonth(
+  tiers: PipelineTier[],
+): Promise<Map<string, ProgramSession[]>> {
   const tierSet = new Set<string>(tiers);
-  const [engagements, coachesRes] = await Promise.all([fetchAllEngagements(), supabase.from("ca_coaches").select("id,name")]);
+  const [engagements, coachesRes] = await Promise.all([
+    fetchAllEngagements(),
+    supabase.from("ca_coaches").select("id,name"),
+  ]);
   const engTier = engagementTierMap(engagements);
   const coachMap = new Map<number, string | null>();
-  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[]) coachMap.set(c.id, c.name);
+  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[])
+    coachMap.set(c.id, c.name);
 
   // slotKey -> the session, with its month carried for the final grouping.
   const bySlot = new Map<string, ProgramSession & { _month: string }>();
@@ -1630,7 +2034,15 @@ export async function fetchProgramSessionsByMonth(tiers: PipelineTier[]): Promis
       .eq("status", "A")
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
-    const batch = (data ?? []) as { id: number; coach_id: number | null; engagement_id: number | null; start_date: string | null; start_raw: string | null; end_raw: string | null; name: string | null }[];
+    const batch = (data ?? []) as {
+      id: number;
+      coach_id: number | null;
+      engagement_id: number | null;
+      start_date: string | null;
+      start_raw: string | null;
+      end_raw: string | null;
+      name: string | null;
+    }[];
     for (const a of batch) {
       if (a.engagement_id == null) continue;
       const tier = engTier.get(a.engagement_id);
@@ -1648,7 +2060,9 @@ export async function fetchProgramSessionsByMonth(tiers: PipelineTier[]): Promis
         _month: month,
         date: a.start_date ?? "",
         time: a.start_raw && a.start_raw.length >= 16 ? a.start_raw.slice(11, 16) : null,
-        coachName: (a.coach_id != null ? coachMap.get(a.coach_id) : null) ?? (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
+        coachName:
+          (a.coach_id != null ? coachMap.get(a.coach_id) : null) ??
+          (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
         name: a.name ?? "",
         attendees: 1,
         hours: dur ?? PROGRAM_MEETING_HOURS,
@@ -1668,12 +2082,15 @@ export async function fetchProgramSessionsByMonth(tiers: PipelineTier[]): Promis
     }
     arr.push(session);
   }
-  for (const arr of out.values()) arr.sort((a, b) => `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`));
+  for (const arr of out.values())
+    arr.sort((a, b) => `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`));
   return out;
 }
 
 // Per-month {sessions, hours} totals from the session detail (for the chart + merge).
-export function programMonthTotals(sessionsByMonth: Map<string, ProgramSession[]>): Map<string, { sessions: number; hours: number }> {
+export function programMonthTotals(
+  sessionsByMonth: Map<string, ProgramSession[]>,
+): Map<string, { sessions: number; hours: number }> {
   const out = new Map<string, { sessions: number; hours: number }>();
   for (const [month, sessions] of sessionsByMonth) {
     let hours = 0;
@@ -1695,14 +2112,26 @@ export interface ProgramHoursRow {
 // missing program_hours table (9981 unapplied) or an RLS problem used to look
 // like "my numbers silently don't save", which is exactly the bug report this
 // fixes: the tab now shows why storage is unavailable.
-export async function fetchAllProgramHours(): Promise<{ rows: ProgramHoursRow[]; error: string | null }> {
-  const { data, error } = await supabase.from("program_hours").select("program,month,staff_hours,notes");
+export async function fetchAllProgramHours(): Promise<{
+  rows: ProgramHoursRow[];
+  error: string | null;
+}> {
+  const { data, error } = await supabase
+    .from("program_hours")
+    .select("program,month,staff_hours,notes");
   if (error)
     return {
       rows: [],
       error: `${error.message} — staff-hours storage is unavailable (is migration 9981_program_hours.sql applied?)`,
     };
-  const rows = ((data ?? []) as { program: string; month: string; staff_hours: number | string | null; notes: string | null }[]).map((r) => ({
+  const rows = (
+    (data ?? []) as {
+      program: string;
+      month: string;
+      staff_hours: number | string | null;
+      notes: string | null;
+    }[]
+  ).map((r) => ({
     program: r.program,
     month: r.month,
     staffHours: r.staff_hours == null || r.staff_hours === "" ? null : Number(r.staff_hours),
@@ -1719,14 +2148,18 @@ export async function setProgramHours(
   program: string,
   month: string,
   staffHours: number | null,
-  notes: string | null = null
+  notes: string | null = null,
 ): Promise<void> {
   const { data, error } = await supabase
     .from("program_hours")
-    .upsert({ program, month, staff_hours: staffHours, notes, created_by: createdBy || null }, { onConflict: "program,month" })
+    .upsert(
+      { program, month, staff_hours: staffHours, notes, created_by: createdBy || null },
+      { onConflict: "program,month" },
+    )
     .select("program,month");
   if (error) throw new Error(`${error.message} — is migration 9981_program_hours.sql applied?`);
-  if (!data || data.length === 0) throw new Error("Save was blocked (no row written) — check program_hours RLS/migration 9981.");
+  if (!data || data.length === 0)
+    throw new Error("Save was blocked (no row written) — check program_hours RLS/migration 9981.");
 }
 
 // --- User permissions (Admin §405, bones) ---
@@ -1772,7 +2205,9 @@ export async function fetchAppUsers(): Promise<AppUserRecord[]> {
 // case-insensitive EQUALITY done client-side — NOT ilike, whose pattern
 // characters (_ %) would let j_smith@x.com match jasmith@x.com's row. The
 // table is tiny (one row per person), so fetching it is cheap.
-export async function fetchMyAppUser(email: string | null | undefined): Promise<AppUserRecord | null> {
+export async function fetchMyAppUser(
+  email: string | null | undefined,
+): Promise<AppUserRecord | null> {
   if (!email) return null;
   const want = email.trim().toLowerCase();
   const { data, error } = await supabase
@@ -1780,7 +2215,12 @@ export async function fetchMyAppUser(email: string | null | undefined): Promise<
     .select("id,email,display_name,role,allowed_tabs,coach_id,is_active,notes")
     .limit(500);
   if (error || !data) return null;
-  const hit = (data as Record<string, unknown>[]).find((r) => String(r.email ?? "").trim().toLowerCase() === want);
+  const hit = (data as Record<string, unknown>[]).find(
+    (r) =>
+      String(r.email ?? "")
+        .trim()
+        .toLowerCase() === want,
+  );
   return hit ? normAppUserRow(hit) : null;
 }
 
@@ -1795,7 +2235,7 @@ export async function saveAppUser(
     coachId: number | null;
     isActive: boolean;
     notes?: string | null;
-  }
+  },
 ): Promise<void> {
   const row: Record<string, unknown> = {
     email: rec.email.trim(),
@@ -1872,15 +2312,22 @@ export async function clockIn(createdBy: string, userEmail: string): Promise<voi
     .is("clock_out", null)
     .limit(1);
   if (openErr) throw new Error(`${openErr.message} — is migration 9966_time_entries.sql applied?`);
-  if (openRows && openRows.length > 0) throw new Error("You're already clocked in (maybe from another device) — refresh to see the running entry.");
-  const { error } = await supabase
-    .from("time_entries")
-    .insert({ user_email: email, clock_in: new Date().toISOString(), created_by: createdBy || null });
+  if (openRows && openRows.length > 0)
+    throw new Error(
+      "You're already clocked in (maybe from another device) — refresh to see the running entry.",
+    );
+  const { error } = await supabase.from("time_entries").insert({
+    user_email: email,
+    clock_in: new Date().toISOString(),
+    created_by: createdBy || null,
+  });
   if (error) {
     // The partial unique index (uq_time_entries_open) caught a racing double
     // clock-in — report it as the state it is, not as a database problem.
     if (/uq_time_entries_open|duplicate key/i.test(error.message))
-      throw new Error("You're already clocked in (maybe from another device) — refresh to see the running entry.");
+      throw new Error(
+        "You're already clocked in (maybe from another device) — refresh to see the running entry.",
+      );
     throw new Error(`${error.message} — is migration 9966_time_entries.sql applied?`);
   }
 }
@@ -1900,7 +2347,9 @@ export async function clockOut(entryId: string, clockInIso?: string): Promise<vo
     .select("id");
   if (error) throw new Error(error.message);
   if (!data || data.length === 0)
-    throw new Error("This entry was already clocked out (maybe on another device) — refreshing the list.");
+    throw new Error(
+      "This entry was already clocked out (maybe on another device) — refreshing the list.",
+    );
 }
 
 export async function updateTimeEntryNote(entryId: string, note: string | null): Promise<void> {
@@ -1911,10 +2360,16 @@ export async function updateTimeEntryNote(entryId: string, note: string | null):
 export async function deleteTimeEntry(entryId: string): Promise<void> {
   // RLS only lets a person delete their OWN unsubmitted entries — verify a row
   // actually went away so a filtered-to-nothing delete isn't shown as success.
-  const { data, error } = await supabase.from("time_entries").delete().eq("id", entryId).select("id");
+  const { data, error } = await supabase
+    .from("time_entries")
+    .delete()
+    .eq("id", entryId)
+    .select("id");
   if (error) throw new Error(error.message);
   if (!data || data.length === 0)
-    throw new Error("Couldn't delete this entry (not yours, or already submitted) — refreshing the list.");
+    throw new Error(
+      "Couldn't delete this entry (not yours, or already submitted) — refreshing the list.",
+    );
 }
 
 // Submit every completed, unsubmitted entry for this person for payroll.
@@ -1947,7 +2402,9 @@ export interface FinancialEvent {
 export async function fetchFinancialEvents(limit = 200): Promise<FinancialEvent[]> {
   const { data, error } = await supabase
     .from("financial_events")
-    .select("id,happened_on,vendor,description,payment_method,receipt_path,created_by_email,created_at")
+    .select(
+      "id,happened_on,vendor,description,payment_method,receipt_path,created_by_email,created_at",
+    )
     .order("happened_on", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`${error.message} — is migration 9965_financial_events.sql applied?`);
@@ -1969,21 +2426,31 @@ export async function uploadReceipt(file: File): Promise<string> {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80) || "receipt";
   const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeName}`;
   const { error } = await supabase.storage.from("receipts").upload(path, file, { upsert: false });
-  if (error) throw new Error(`Receipt upload failed: ${error.message} — is the 'receipts' storage bucket created (migration 9965)?`);
+  if (error)
+    throw new Error(
+      `Receipt upload failed: ${error.message} — is the 'receipts' storage bucket created (migration 9965)?`,
+    );
   return path;
 }
 
 // A short-lived signed URL to view a stored receipt (the bucket is private).
 export async function receiptUrl(path: string): Promise<string> {
   const { data, error } = await supabase.storage.from("receipts").createSignedUrl(path, 300);
-  if (error || !data?.signedUrl) throw new Error(error?.message ?? "Could not sign the receipt URL");
+  if (error || !data?.signedUrl)
+    throw new Error(error?.message ?? "Could not sign the receipt URL");
   return data.signedUrl;
 }
 
 export async function createFinancialEvent(
   createdBy: string,
   createdByEmail: string | null,
-  rec: { happenedOn: string; vendor: string; description: string | null; paymentMethod: string | null; receiptPath: string | null }
+  rec: {
+    happenedOn: string;
+    vendor: string;
+    description: string | null;
+    paymentMethod: string | null;
+    receiptPath: string | null;
+  },
 ): Promise<void> {
   const { error } = await supabase.from("financial_events").insert({
     happened_on: rec.happenedOn,
@@ -2029,7 +2496,7 @@ export async function fetchNotifications(limit = 50): Promise<AppNotification[]>
 
 export async function createNotification(
   createdBy: string,
-  rec: { kind: string; title: string; body: string | null; linkTab?: string | null }
+  rec: { kind: string; title: string; body: string | null; linkTab?: string | null },
 ): Promise<void> {
   const { error } = await supabase.from("app_notifications").insert({
     kind: rec.kind,
@@ -2047,15 +2514,24 @@ export async function createNotification(
 // overwrite each other); falls back to a FRESH read-modify-write per row when
 // the function isn't installed (still narrows the stale-snapshot window from
 // the 60s poll to milliseconds).
-export async function markNotificationsRead(userId: string, notifications: AppNotification[]): Promise<void> {
+export async function markNotificationsRead(
+  userId: string,
+  notifications: AppNotification[],
+): Promise<void> {
   if (!userId) return;
   for (const n of notifications) {
     if (n.readBy.includes(userId)) continue;
     const rpc = await supabase.rpc("mark_notification_read", { nid: n.id });
     if (!rpc.error) continue;
-    const fresh = await supabase.from("app_notifications").select("read_by").eq("id", n.id).limit(1);
+    const fresh = await supabase
+      .from("app_notifications")
+      .select("read_by")
+      .eq("id", n.id)
+      .limit(1);
     if (fresh.error) throw new Error(fresh.error.message);
-    const current = Array.isArray(fresh.data?.[0]?.read_by) ? (fresh.data![0].read_by as string[]) : [];
+    const current = Array.isArray(fresh.data?.[0]?.read_by)
+      ? (fresh.data![0].read_by as string[])
+      : [];
     if (current.includes(userId)) continue;
     const { error } = await supabase
       .from("app_notifications")
@@ -2098,7 +2574,8 @@ export async function fetchCoachNames(): Promise<Map<number, string>> {
   const { data, error } = await supabase.from("ca_coaches").select("id,name");
   if (error) throw new Error(error.message);
   const m = new Map<number, string>();
-  for (const c of (data ?? []) as { id: number; name: string | null }[]) m.set(c.id, c.name ?? `#${c.id}`);
+  for (const c of (data ?? []) as { id: number; name: string | null }[])
+    m.set(c.id, c.name ?? `#${c.id}`);
   return m;
 }
 
@@ -2131,7 +2608,7 @@ export type RawTable = (typeof RAW_TABLES)[number];
 
 export async function fetchTable(
   table: RawTable,
-  limit = 100
+  limit = 100,
 ): Promise<{ rows: Record<string, unknown>[]; total: number }> {
   const { data, error, count } = await supabase
     .from(table)
@@ -2164,12 +2641,18 @@ export async function fetchAllRows(table: RawTable): Promise<Record<string, unkn
 
 export async function listSyncRuns(limit = 10): Promise<SyncRun[]> {
   return err<SyncRun[]>(
-    await supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(limit)
+    await supabase
+      .from("sync_runs")
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(limit),
   );
 }
 
 export async function fetchSettings(): Promise<Record<string, number | null>> {
-  const rows = err<{ key: string; value: number | null }[]>(await supabase.from("app_settings").select("key,value"));
+  const rows = err<{ key: string; value: number | null }[]>(
+    await supabase.from("app_settings").select("key,value"),
+  );
   const out: Record<string, number | null> = {};
   for (const r of rows) out[r.key] = (r.value as number | null) ?? null;
   return out;
@@ -2185,7 +2668,9 @@ export async function updateSetting(key: string, value: number | null): Promise<
 // All string-valued settings (the Company options live alongside the numeric
 // budget/sync settings in app_settings; we surface only the string ones here).
 export async function fetchCompanyOptions(): Promise<Record<string, string>> {
-  const rows = err<{ key: string; value: unknown }[]>(await supabase.from("app_settings").select("key,value"));
+  const rows = err<{ key: string; value: unknown }[]>(
+    await supabase.from("app_settings").select("key,value"),
+  );
   const out: Record<string, string> = {};
   for (const r of rows) if (typeof r.value === "string") out[r.key] = r.value;
   return out;
@@ -2195,10 +2680,16 @@ export async function setCompanyOption(key: string, value: string): Promise<void
   // Staff can UPDATE app_settings but not INSERT, so an unseeded key makes the
   // update match 0 rows without erroring — verify a row was actually written so
   // "Saved ✓" is never shown for a value that silently didn't persist.
-  const { data, error } = await supabase.from("app_settings").update({ value }).eq("key", key).select("key");
+  const { data, error } = await supabase
+    .from("app_settings")
+    .update({ value })
+    .eq("key", key)
+    .select("key");
   if (error) throw new Error(error.message);
   if (!data || data.length === 0)
-    throw new Error(`Option "${key}" isn't seeded in app_settings — apply its migration in the Supabase SQL Editor first.`);
+    throw new Error(
+      `Option "${key}" isn't seeded in app_settings — apply its migration in the Supabase SQL Editor first.`,
+    );
 }
 
 // --- Payment groups (Company options §451) ---
@@ -2219,9 +2710,21 @@ export async function fetchEngagementTemplates(): Promise<EngagementTemplate[]> 
     .select("id,name,managing_coach_id,allocation_unit,allocation")
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
-  const templates = ((data ?? []) as { id: number; name: string | null; managing_coach_id: number | null; allocation_unit: string | null; allocation: number | null }[]).map(
-    (t) => ({ id: t.id, name: t.name ?? `#${t.id}`, managingCoachId: t.managing_coach_id, allocationUnit: t.allocation_unit, allocation: t.allocation })
-  );
+  const templates = (
+    (data ?? []) as {
+      id: number;
+      name: string | null;
+      managing_coach_id: number | null;
+      allocation_unit: string | null;
+      allocation: number | null;
+    }[]
+  ).map((t) => ({
+    id: t.id,
+    name: t.name ?? `#${t.id}`,
+    managingCoachId: t.managing_coach_id,
+    allocationUnit: t.allocation_unit,
+    allocation: t.allocation,
+  }));
   if (templates.length > 0) return templates;
   // The CA mirror hasn't been refreshed yet (Refresh templates / Sync). Fall back
   // to the distinct engagement names already synced so the §451 grid is usable
@@ -2231,7 +2734,10 @@ export async function fetchEngagementTemplates(): Promise<EngagementTemplate[]> 
   const seen = new Map<string, string>();
   const pageSize = 1000;
   for (let f = 0; ; f += pageSize) {
-    const { data: engs, error: engErr } = await supabase.from("ca_engagements").select("name").range(f, f + pageSize - 1);
+    const { data: engs, error: engErr } = await supabase
+      .from("ca_engagements")
+      .select("name")
+      .range(f, f + pageSize - 1);
     if (engErr) return templates;
     const batch = (engs ?? []) as { name: string | null }[];
     for (const e of batch) {
@@ -2242,19 +2748,25 @@ export async function fetchEngagementTemplates(): Promise<EngagementTemplate[]> 
     }
     if (batch.length < pageSize) break;
   }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b)).map((name, i) => ({
-    id: -(i + 1),
-    name,
-    managingCoachId: null,
-    allocationUnit: null,
-    allocation: null,
-  }));
+  return [...seen.values()]
+    .sort((a, b) => a.localeCompare(b))
+    .map((name, i) => ({
+      id: -(i + 1),
+      name,
+      managingCoachId: null,
+      allocationUnit: null,
+      allocation: null,
+    }));
 }
 
 const PAY_GROUPS_KEY = "pay_engagement_groups";
 
 export async function fetchPayGroupsConfig(): Promise<PayGroupsConfig> {
-  const { data, error } = await supabase.from("app_settings").select("value").eq("key", PAY_GROUPS_KEY).maybeSingle();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", PAY_GROUPS_KEY)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   const value = (data as { value?: unknown } | null)?.value;
   return parsePayGroupsConfig(typeof value === "string" ? value : null);
@@ -2284,7 +2796,16 @@ export async function fetchStaffPayProfiles(): Promise<StaffPayProfile[]> {
     .select("id,name,coach_id,hourly_rate,active,notes")
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { id: string; name: string | null; coach_id: number | null; hourly_rate: number | string | null; active: boolean | null; notes: string | null }[]).map((r) => ({
+  return (
+    (data ?? []) as {
+      id: string;
+      name: string | null;
+      coach_id: number | null;
+      hourly_rate: number | string | null;
+      active: boolean | null;
+      notes: string | null;
+    }[]
+  ).map((r) => ({
     id: r.id,
     name: r.name ?? "",
     coachId: r.coach_id,
@@ -2294,7 +2815,10 @@ export async function fetchStaffPayProfiles(): Promise<StaffPayProfile[]> {
   }));
 }
 
-export async function createStaffPayProfile(createdBy: string, p: { name: string; hourlyRate: number; coachId?: number | null }): Promise<void> {
+export async function createStaffPayProfile(
+  createdBy: string,
+  p: { name: string; hourlyRate: number; coachId?: number | null },
+): Promise<void> {
   const { error } = await supabase.from("staff_pay_profiles").insert({
     name: p.name,
     hourly_rate: p.hourlyRate,
@@ -2304,7 +2828,10 @@ export async function createStaffPayProfile(createdBy: string, p: { name: string
   if (error) throw new Error(error.message);
 }
 
-export async function updateStaffPayProfile(id: string, patch: { name?: string; hourlyRate?: number; active?: boolean; notes?: string | null }): Promise<void> {
+export async function updateStaffPayProfile(
+  id: string,
+  patch: { name?: string; hourlyRate?: number; active?: boolean; notes?: string | null },
+): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.name != null) row.name = patch.name;
   if (patch.hourlyRate != null) row.hourly_rate = patch.hourlyRate;
@@ -2336,7 +2863,8 @@ export function staffPayBuildKey(profileId: string, periodMonth: string): string
 export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRecord>> {
   // piece_items needs 9964 — retry without it so the screen still loads (piece
   // work just won't persist) on an un-migrated database.
-  const cols = "profile_id,period_month,rate,entries,hours_total,adjustment,adjustment_note,notes,total,status,updated_at";
+  const cols =
+    "profile_id,period_month,rate,entries,hours_total,adjustment,adjustment_note,notes,total,status,updated_at";
   let res = await supabase.from("staff_pay_builds").select(`${cols},piece_items`);
   if (res.error) res = await supabase.from("staff_pay_builds").select(cols);
   const { data, error } = res;
@@ -2386,7 +2914,7 @@ export async function saveStaffPayBuild(
     adjustmentNote: string | null;
     notes: string | null;
     status: BuildStatus;
-  }
+  },
 ): Promise<void> {
   const entries = normalizeEntries(rec.entries);
   const pieces = normalizePieces(rec.pieces ?? []);
@@ -2405,20 +2933,30 @@ export async function saveStaffPayBuild(
     status: rec.status,
     created_by: createdBy || null,
   };
-  let { error } = await supabase.from("staff_pay_builds").upsert(row, { onConflict: "profile_id,period_month" });
+  let { error } = await supabase
+    .from("staff_pay_builds")
+    .upsert(row, { onConflict: "profile_id,period_month" });
   if (error && pieces.length === 0) {
     // Pre-9964 database: retry without the columns so ordinary timesheets save.
     delete row.piece_items;
     delete row.pieces_total;
-    ({ error } = await supabase.from("staff_pay_builds").upsert(row, { onConflict: "profile_id,period_month" }));
+    ({ error } = await supabase
+      .from("staff_pay_builds")
+      .upsert(row, { onConflict: "profile_id,period_month" }));
   } else if (error && pieces.length > 0) {
-    throw new Error(`${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`);
+    throw new Error(
+      `${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`,
+    );
   }
   if (error) throw new Error(error.message);
 }
 
 export async function deleteStaffPayBuild(profileId: string, periodMonth: string): Promise<void> {
-  const { error } = await supabase.from("staff_pay_builds").delete().eq("profile_id", profileId).eq("period_month", periodMonth);
+  const { error } = await supabase
+    .from("staff_pay_builds")
+    .delete()
+    .eq("profile_id", profileId)
+    .eq("period_month", periodMonth);
   if (error) throw new Error(error.message);
 }
 
@@ -2438,7 +2976,15 @@ export interface PaystubListItem {
 // actually sent, not a re-derivation from data that may have changed since.
 export async function savePaystub(
   createdBy: string,
-  rec: { kind: "mentor" | "hourly"; staffName: string; coachId?: number | null; periodMonth: string; status: BuildStatus; total: number; html: string }
+  rec: {
+    kind: "mentor" | "hourly";
+    staffName: string;
+    coachId?: number | null;
+    periodMonth: string;
+    status: BuildStatus;
+    total: number;
+    html: string;
+  },
 ): Promise<void> {
   const { error } = await supabase.from("paystubs").insert({
     kind: rec.kind,
@@ -2461,7 +3007,18 @@ export async function fetchPaystubs(): Promise<PaystubListItem[]> {
     .order("created_at", { ascending: false })
     .limit(500);
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { id: string; kind: "mentor" | "hourly"; staff_name: string; coach_id: number | null; period_month: string; status: BuildStatus; total: number | string | null; created_at: string | null }[]).map((r) => ({
+  return (
+    (data ?? []) as {
+      id: string;
+      kind: "mentor" | "hourly";
+      staff_name: string;
+      coach_id: number | null;
+      period_month: string;
+      status: BuildStatus;
+      total: number | string | null;
+      created_at: string | null;
+    }[]
+  ).map((r) => ({
     id: r.id,
     kind: r.kind,
     staffName: r.staff_name,

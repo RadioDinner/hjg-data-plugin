@@ -36,7 +36,7 @@ export interface MonthPayProgress {
 // `isPaid` says whether that mentor's build for the month is marked Payment sent.
 export function monthPayProgress(
   mentorMonths: { coachId: number; ym: string }[],
-  isPaid: (coachId: number, ym: string) => boolean
+  isPaid: (coachId: number, ym: string) => boolean,
 ): MonthPayProgress[] {
   const byMonth = new Map<string, { paid: number; total: number; unpaidCoachIds: number[] }>();
   const seen = new Set<string>();
@@ -52,6 +52,12 @@ export function monthPayProgress(
     byMonth.set(ym, e);
   }
   return [...byMonth.entries()]
-    .map(([ym, e]) => ({ ym, paid: e.paid, total: e.total, complete: e.total > 0 && e.paid === e.total, unpaidCoachIds: e.unpaidCoachIds }))
+    .map(([ym, e]) => ({
+      ym,
+      paid: e.paid,
+      total: e.total,
+      complete: e.total > 0 && e.paid === e.total,
+      unpaidCoachIds: e.unpaidCoachIds,
+    }))
     .sort((a, b) => b.ym.localeCompare(a.ym));
 }

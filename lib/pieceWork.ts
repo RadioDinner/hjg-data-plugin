@@ -34,7 +34,9 @@ export function pieceAmount(p: PieceEntry): number {
 // rows — while keeping a deliberate zero-quantity noted line ("0 new mentees").
 export function normalizePieces(items: PieceEntry[]): PieceEntry[] {
   return (items ?? [])
-    .filter((p) => (p.label ?? "").trim().length > 0 || (p.qty || 0) !== 0 || (p.unitRate || 0) !== 0)
+    .filter(
+      (p) => (p.label ?? "").trim().length > 0 || (p.qty || 0) !== 0 || (p.unitRate || 0) !== 0,
+    )
     .map((p) => ({
       date: p.date || null,
       label: (p.label ?? "").trim(),

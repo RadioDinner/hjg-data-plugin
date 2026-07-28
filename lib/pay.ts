@@ -58,7 +58,10 @@ export const MENTORING_PAY_TIERS: ReadonlySet<string> = new Set(["4x", "2x", "1x
 // The mentor's revenue share for a given tenure month (1-indexed), read off the
 // mentor's ramp. Defaults to the standard 35/50/60; pass a per-mentor ramp for a
 // fast-tracked mentor. Past the end of the ramp it holds at the final value.
-export function splitForTenureMonth(tenureMonth: number, ramp: readonly number[] = PAY_RAMP): number {
+export function splitForTenureMonth(
+  tenureMonth: number,
+  ramp: readonly number[] = PAY_RAMP,
+): number {
   const r = ramp.length ? ramp : PAY_RAMP;
   if (tenureMonth < 1) return r[0];
   return r[Math.min(tenureMonth, r.length) - 1];
@@ -300,7 +303,14 @@ export interface PayReport {
   // group, after-graduation, uncovered). Excluded from mentor pay per the user's
   // rule, but surfaced here so it's auditable rather than silently dropped.
   excludedBilled: number;
-  totals: { billed: number; collected: number; earned: number; payout: number; mentorCount: number; menteeCount: number };
+  totals: {
+    billed: number;
+    collected: number;
+    earned: number;
+    payout: number;
+    mentorCount: number;
+    menteeCount: number;
+  };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -321,7 +331,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 function mentoringCoverFor(
   dateYmd: string,
   engs: PayEngagementInput[],
-  payEligible?: (engagementName: string | null) => boolean
+  payEligible?: (engagementName: string | null) => boolean,
 ): { coachId: number; tier: string } | null {
   const d = dateYmd.slice(0, 10);
   const ym = d.slice(0, 7);
@@ -404,11 +414,27 @@ export function computePayReport(input: PayInputs): PayReport {
   // remaining-fraction slice; prev-month invoices contribute the elapsed rollover.
   const acc = new Map<string, LineAcc & { clientId: number }>();
   const keyOf = (coachId: number | null, clientId: number) => `${coachId ?? "—"}|${clientId}`;
-  const ensure = (coachId: number | null, clientId: number, tier: string, tierDate: string): LineAcc & { clientId: number } => {
+  const ensure = (
+    coachId: number | null,
+    clientId: number,
+    tier: string,
+    tierDate: string,
+  ): LineAcc & { clientId: number } => {
     const k = keyOf(coachId, clientId);
     let a = acc.get(k);
     if (!a) {
-      a = { coachId, clientId, tier, tierDate, billed: 0, collected: 0, invoiceDay: null, recognizedThis: 0, rolloverPrev: 0, sources: [] };
+      a = {
+        coachId,
+        clientId,
+        tier,
+        tierDate,
+        billed: 0,
+        collected: 0,
+        invoiceDay: null,
+        recognizedThis: 0,
+        rolloverPrev: 0,
+        sources: [],
+      };
       acc.set(k, a);
     } else if (tierDate && tierDate >= a.tierDate) {
       // INVOICE-TRUTH mode only (legacy passes "" so its first-processed tier is
@@ -450,7 +476,11 @@ export function computePayReport(input: PayInputs): PayReport {
       // to $0 with no reviewer recourse. A re-sync upgrades it to line-item
       // classification; until then the whole-invoice checkbox still works.
       if (amt <= 0) continue;
-      const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible);
+      const cov = mentoringCoverFor(
+        inv.serviceDate,
+        engByClient.get(inv.clientId) ?? [],
+        input.payEligible,
+      );
       if (!cov) {
         if (invYm === ym) excludedBilled += amt;
         continue;
@@ -463,7 +493,11 @@ export function computePayReport(input: PayInputs): PayReport {
       const pred = input.payEligibleLineItem!;
       lineItems = (inv.lineItems ?? []).map((li) => {
         const liAmt = li.amount || 0;
-        const status: LineItemPayStatus = pred(li.item) ? "included" : liAmt < 0 ? "credit" : "excluded";
+        const status: LineItemPayStatus = pred(li.item)
+          ? "included"
+          : liAmt < 0
+            ? "credit"
+            : "excluded";
         return { ...li, status };
       });
       const matched = lineItems.filter((x) => x.status === "included");
@@ -473,8 +507,12 @@ export function computePayReport(input: PayInputs): PayReport {
         continue;
       }
       const matchedSum = matched.reduce((s, x) => s + (x.amount || 0), 0);
-      const creditSum = lineItems.filter((x) => x.status === "credit").reduce((s, x) => s + (x.amount || 0), 0);
-      const excludedSum = lineItems.filter((x) => x.status === "excluded").reduce((s, x) => s + (x.amount || 0), 0);
+      const creditSum = lineItems
+        .filter((x) => x.status === "credit")
+        .reduce((s, x) => s + (x.amount || 0), 0);
+      const excludedSum = lineItems
+        .filter((x) => x.status === "excluded")
+        .reduce((s, x) => s + (x.amount || 0), 0);
       // The basis may be ZERO or NEGATIVE (a fully-credited invoice, or a
       // standalone refund whose matched line is negative). Emit the source
       // anyway: a negative slice nets against the mentee's other invoices, and
@@ -492,11 +530,21 @@ export function computePayReport(input: PayInputs): PayReport {
       // tolerates. A basis with no coach at all surfaces as unassigned.
       const owner = input.primaryCoachOf?.(inv.clientId) ?? null;
       coachId =
-        owner ?? mentoringCoverFor(inv.serviceDate, engByClientAll.get(inv.clientId) ?? [], input.payEligible)?.coachId ?? null;
+        owner ??
+        mentoringCoverFor(
+          inv.serviceDate,
+          engByClientAll.get(inv.clientId) ?? [],
+          input.payEligible,
+        )?.coachId ??
+        null;
     } else {
       if (amt <= 0) continue;
       // Legacy: pay basis is the whole invoice, gated by 4x/2x/1x engagement coverage.
-      const cov = mentoringCoverFor(inv.serviceDate, engByClient.get(inv.clientId) ?? [], input.payEligible);
+      const cov = mentoringCoverFor(
+        inv.serviceDate,
+        engByClient.get(inv.clientId) ?? [],
+        input.payEligible,
+      );
       if (!cov) {
         if (invYm === ym) excludedBilled += amt;
         continue;
@@ -617,8 +665,13 @@ export function computePayReport(input: PayInputs): PayReport {
   for (const m of mentorList) m.lines.sort((a, b) => b.payout - a.payout);
 
   const totals = {
-    billed: round2(mentorList.reduce((s, m) => s + m.billed, 0) + unassigned.reduce((s, u) => s + u.billed, 0)),
-    collected: round2(mentorList.reduce((s, m) => s + m.collected, 0) + unassigned.reduce((s, u) => s + u.collected, 0)),
+    billed: round2(
+      mentorList.reduce((s, m) => s + m.billed, 0) + unassigned.reduce((s, u) => s + u.billed, 0),
+    ),
+    collected: round2(
+      mentorList.reduce((s, m) => s + m.collected, 0) +
+        unassigned.reduce((s, u) => s + u.collected, 0),
+    ),
     earned: round2(mentorList.reduce((s, m) => s + m.earned, 0)),
     payout: round2(mentorList.reduce((s, m) => s + m.payout, 0)),
     mentorCount: mentorList.length,
@@ -659,7 +712,13 @@ export interface PayMonth {
 export interface PayTimeline {
   months: PayMonth[]; // one per requested month, in the requested order
   ledger: PayLedgerRow[]; // every mentee line across all months (incl. unassigned)
-  totals: { billed: number; collected: number; earned: number; payout: number; excludedBilled: number };
+  totals: {
+    billed: number;
+    collected: number;
+    earned: number;
+    payout: number;
+    excludedBilled: number;
+  };
 }
 
 export interface PayTimelineInput {
@@ -714,7 +773,7 @@ export function computePayTimeline(input: PayTimelineInput): PayTimeline {
       rampOverride: input.rampOverride,
       payEligible: input.payEligible,
       payEligibleLineItem: input.payEligibleLineItem,
-    })
+    }),
   );
 
   const ledger: PayLedgerRow[] = [];

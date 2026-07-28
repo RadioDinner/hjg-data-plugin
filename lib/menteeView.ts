@@ -22,10 +22,24 @@ import { type PipelineTier } from "./config.js";
 //  - quit / fired / no_mentoring / declined END the journey somewhere other than
 //    graduation.
 //  - imn ("Independent Mentor") is kept on the roster but sits OUTSIDE the funnel.
-export type MenteeMgmtStatus = "active" | "graduated" | "quit" | "fired" | "no_mentoring" | "declined" | "imn";
-export const MENTEE_STATUSES: MenteeMgmtStatus[] = ["active", "graduated", "quit", "fired", "no_mentoring", "declined", "imn"];
+export type MenteeMgmtStatus =
+  "active" | "graduated" | "quit" | "fired" | "no_mentoring" | "declined" | "imn";
+export const MENTEE_STATUSES: MenteeMgmtStatus[] = [
+  "active",
+  "graduated",
+  "quit",
+  "fired",
+  "no_mentoring",
+  "declined",
+  "imn",
+];
 // Statuses that END the journey somewhere other than graduation.
-export const MENTEE_EXIT_STATUSES: MenteeMgmtStatus[] = ["quit", "fired", "no_mentoring", "declined"];
+export const MENTEE_EXIT_STATUSES: MenteeMgmtStatus[] = [
+  "quit",
+  "fired",
+  "no_mentoring",
+  "declined",
+];
 // Statuses kept on the roster but excluded from the funnel.
 export const OUT_OF_FUNNEL_STATUSES: MenteeMgmtStatus[] = ["imn"];
 
@@ -42,7 +56,15 @@ const STATUS_LABEL: Record<MenteeMgmtStatus, string> = {
 // Funnel stages in order. The pre-mentoring stages (pre_waiting → discovery →
 // jumpstart) are strictly sequential; graduation is reachable directly from 4x,
 // 2x, or 1x (HJG graduates can skip later tiers).
-export const FUNNEL_STAGES = ["pre_waiting", "discovery", "jumpstart", "4x", "2x", "1x", "graduated"] as const;
+export const FUNNEL_STAGES = [
+  "pre_waiting",
+  "discovery",
+  "jumpstart",
+  "4x",
+  "2x",
+  "1x",
+  "graduated",
+] as const;
 export type FunnelStage = (typeof FUNNEL_STAGES)[number];
 // The normal sequential path (Discovery onward). Used to infer that a mentee at
 // stage k also passed through every earlier stage on this path. pre_waiting is a
@@ -196,10 +218,28 @@ function norm(s: string | null): string {
 }
 // A conflict exists when ≥2 zones hold non-empty values that disagree (normalized),
 // or when `force` is set (e.g. the intra-Notion Mentor 1 ≠ Mentor flag).
-function buildConflict(field: string, label: string, ca: string | null, notion: string | null, hand: string | null, force = false): MenteeConflict | null {
-  const distinct = new Set([ca, notion, hand].filter((v) => v != null && String(v).trim() !== "").map((v) => norm(String(v))));
+function buildConflict(
+  field: string,
+  label: string,
+  ca: string | null,
+  notion: string | null,
+  hand: string | null,
+  force = false,
+): MenteeConflict | null {
+  const distinct = new Set(
+    [ca, notion, hand]
+      .filter((v) => v != null && String(v).trim() !== "")
+      .map((v) => norm(String(v))),
+  );
   if (!force && distinct.size < 2) return null;
-  return { field, label, ca: ca ?? null, notion: notion ?? null, hand: hand ?? null, resolved: hand ?? notion ?? ca ?? null };
+  return {
+    field,
+    label,
+    ca: ca ?? null,
+    notion: notion ?? null,
+    hand: hand ?? null,
+    resolved: hand ?? notion ?? ca ?? null,
+  };
 }
 
 // Collapse a row into its effective view-model. `today` is passed in (determinism).
@@ -222,14 +262,14 @@ export function toEffectiveMentee(r: MenteeRowLike, today: string): EffectiveMen
   const currentTier: PipelineTier | null = graduationDate
     ? "graduated"
     : tier1xDate
-    ? "1x"
-    : tier2xDate
-    ? "2x"
-    : tier4xDate
-    ? "4x"
-    : jumpstartDate
-    ? "jumpstart"
-    : null;
+      ? "1x"
+      : tier2xDate
+        ? "2x"
+        : tier4xDate
+          ? "4x"
+          : jumpstartDate
+            ? "jumpstart"
+            : null;
 
   // Status: hand ?? Notion-derived ?? (CA guess for display only).
   const handStatus = r.status ?? null;
@@ -246,23 +286,34 @@ export function toEffectiveMentee(r: MenteeRowLike, today: string): EffectiveMen
   // stage (by funnel order). Taking the max keeps currentStage consistent with
   // reachedStage so exit/active attribution lands where the mentee actually is —
   // e.g. Notion says "1x" but CA only has a jumpstart date.
-  const dateStage: FunnelStage | null = currentTier ?? (discoveryDate ? "discovery" : preWaitingDate ? "pre_waiting" : null);
+  const dateStage: FunnelStage | null =
+    currentTier ?? (discoveryDate ? "discovery" : preWaitingDate ? "pre_waiting" : null);
   let currentStage: FunnelStage | null = dateStage;
-  if (mappedStage && (currentStage == null || FUNNEL_STAGES.indexOf(mappedStage) > FUNNEL_STAGES.indexOf(currentStage))) {
+  if (
+    mappedStage &&
+    (currentStage == null ||
+      FUNNEL_STAGES.indexOf(mappedStage) > FUNNEL_STAGES.indexOf(currentStage))
+  ) {
     currentStage = mappedStage;
   }
 
-  const resolvedStatus = effectiveStatus ?? (caStatus === "graduated" ? "graduated" : caStatus === "active" ? "active" : "inactive");
+  const resolvedStatus =
+    effectiveStatus ??
+    (caStatus === "graduated" ? "graduated" : caStatus === "active" ? "active" : "inactive");
   const statusLabel = effectiveStatus
     ? STATUS_LABEL[effectiveStatus]
     : caStatus === "graduated"
-    ? "Graduated"
-    : caStatus === "active"
-    ? "Active"
-    : "Unclassified";
+      ? "Graduated"
+      : caStatus === "active"
+        ? "Active"
+        : "Unclassified";
 
   // Shared-field three-zone resolution.
-  const name = r.name_override ?? r.notion_name ?? r.ca_name ?? (r.client_id != null ? `#${r.client_id}` : "(unnamed)");
+  const name =
+    r.name_override ??
+    r.notion_name ??
+    r.ca_name ??
+    (r.client_id != null ? `#${r.client_id}` : "(unnamed)");
   const email = r.email_override ?? r.notion_email ?? null;
   const phone = r.phone_override ?? r.notion_phone ?? null;
   const ownerCoachName = r.coach_override ?? r.notion_coach ?? r.ca_owner_coach_name ?? null;
@@ -270,17 +321,25 @@ export function toEffectiveMentee(r: MenteeRowLike, today: string): EffectiveMen
 
   const firstMeeting = r.ca_first_meeting;
   const lastMeeting = r.ca_last_meeting;
-  const startDate = preWaitingDate ?? discoveryDate ?? jumpstartDate ?? r.ca_jyf_purchase_date ?? firstMeeting ?? r.ca_start_date;
-  const lastActivity = lastMeeting ?? maxDate([discoveryDate, jumpstartDate, tier4xDate, tier2xDate, tier1xDate, graduationDate]);
+  const startDate =
+    preWaitingDate ??
+    discoveryDate ??
+    jumpstartDate ??
+    r.ca_jyf_purchase_date ??
+    firstMeeting ??
+    r.ca_start_date;
+  const lastActivity =
+    lastMeeting ??
+    maxDate([discoveryDate, jumpstartDate, tier4xDate, tier2xDate, tier1xDate, graduationDate]);
   const isExitStatus = effectiveStatus != null && MENTEE_EXIT_STATUSES.includes(effectiveStatus);
   const exitDate =
     (isExitStatus || effectiveStatus === "graduated") && r.status_date
       ? r.status_date
       : graduationDate
-      ? graduationDate
-      : resolvedStatus === "active"
-      ? today
-      : lastActivity;
+        ? graduationDate
+        : resolvedStatus === "active"
+          ? today
+          : lastActivity;
 
   // Conflicts across zones (shared fields only).
   const conflicts: MenteeConflict[] = [];
@@ -288,13 +347,37 @@ export function toEffectiveMentee(r: MenteeRowLike, today: string): EffectiveMen
     if (c) conflicts.push(c);
   };
   push(buildConflict("name", "Name", r.ca_name, r.notion_name, r.name_override));
-  push(buildConflict("coach", "Coach", r.ca_owner_coach_name, r.notion_coach, r.coach_override, r.notion_coach_conflict));
+  push(
+    buildConflict(
+      "coach",
+      "Coach",
+      r.ca_owner_coach_name,
+      r.notion_coach,
+      r.coach_override,
+      r.notion_coach_conflict,
+    ),
+  );
   push(buildConflict("email", "Email", null, r.notion_email, r.email_override));
   push(buildConflict("phone", "Phone", null, r.notion_phone, r.phone_override));
-  push(buildConflict("discoveryDate", "Discovery date", r.ca_discovery_date, r.notion_dc_date, r.discovery_date_override));
+  push(
+    buildConflict(
+      "discoveryDate",
+      "Discovery date",
+      r.ca_discovery_date,
+      r.notion_dc_date,
+      r.discovery_date_override,
+    ),
+  );
   // Status: Notion-derived vs hand classification.
   if (handStatus && notionDerived && handStatus !== notionDerived.status) {
-    push({ field: "status", label: "Status", ca: caStatus, notion: r.notion_status, hand: STATUS_LABEL[handStatus], resolved: STATUS_LABEL[handStatus] });
+    push({
+      field: "status",
+      label: "Status",
+      ca: caStatus,
+      notion: r.notion_status,
+      hand: STATUS_LABEL[handStatus],
+      resolved: STATUS_LABEL[handStatus],
+    });
   }
 
   return {
@@ -374,12 +457,24 @@ export interface LegStat {
 export function aggregateLegDurations(mentees: EffectiveMentee[]): LegStat[] {
   const items = mentees.filter((m) => !m.isTest);
   const legs: { key: string; label: string; pick: (m: EffectiveMentee) => number | null }[] = [
-    { key: "dc_js", label: "Discovery → JumpStart", pick: (m) => dayspan(m.discoveryDate, m.jumpstartDate) },
+    {
+      key: "dc_js",
+      label: "Discovery → JumpStart",
+      pick: (m) => dayspan(m.discoveryDate, m.jumpstartDate),
+    },
     { key: "js_4x", label: "JumpStart → 4x", pick: (m) => dayspan(m.jumpstartDate, m.tier4xDate) },
     { key: "4x_2x", label: "4x → 2x", pick: (m) => dayspan(m.tier4xDate, m.tier2xDate) },
     { key: "2x_1x", label: "2x → 1x", pick: (m) => dayspan(m.tier2xDate, m.tier1xDate) },
-    { key: "1x_grad", label: "1x → graduation", pick: (m) => dayspan(m.tier1xDate, m.graduationDate) },
-    { key: "dc_grad", label: "Discovery → graduation", pick: (m) => dayspan(m.discoveryDate, m.graduationDate) },
+    {
+      key: "1x_grad",
+      label: "1x → graduation",
+      pick: (m) => dayspan(m.tier1xDate, m.graduationDate),
+    },
+    {
+      key: "dc_grad",
+      label: "Discovery → graduation",
+      pick: (m) => dayspan(m.discoveryDate, m.graduationDate),
+    },
   ];
   return legs.map((leg) => {
     const vals = items
@@ -388,7 +483,11 @@ export function aggregateLegDurations(mentees: EffectiveMentee[]): LegStat[] {
       .sort((a, b) => a - b);
     const n = vals.length;
     const avgDays = n ? Math.round(vals.reduce((s, v) => s + v, 0) / n) : null;
-    const medianDays = n ? (n % 2 ? vals[(n - 1) / 2] : Math.round((vals[n / 2 - 1] + vals[n / 2]) / 2)) : null;
+    const medianDays = n
+      ? n % 2
+        ? vals[(n - 1) / 2]
+        : Math.round((vals[n / 2 - 1] + vals[n / 2]) / 2)
+      : null;
     return { key: leg.key, label: leg.label, n, avgDays, medianDays };
   });
 }

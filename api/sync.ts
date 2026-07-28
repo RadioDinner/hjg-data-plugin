@@ -11,5 +11,5 @@ export default withApi(
     const result = await runSync(fromCron ? "scheduled" : "manual");
     res.status(200).json(result);
   },
-  { methods: ["POST"], auth: "user", allowCronSecret: true, cacheTtl: 0 }
+  { methods: ["POST"], auth: "user", allowCronSecret: true, cacheTtl: 0 },
 );

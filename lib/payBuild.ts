@@ -186,7 +186,10 @@ export function sourceIncludedBilled(src: PayLineSource, state?: BuildLineState)
 // own proration fraction (this-month = 1 − e, rollover = e), so flipping a line
 // item moves exactly its prorated contribution. An unchanged basis returns the
 // engine's stored recognized untouched (no rounding drift).
-export function sourceRecognizedAfterExclusions(src: PayLineSource, state?: BuildLineState): number {
+export function sourceRecognizedAfterExclusions(
+  src: PayLineSource,
+  state?: BuildLineState,
+): number {
   const included = sourceIncludedBilled(src, state);
   if (Math.abs(included - sourceAutoBasis(src)) < 0.005) return src.recognized;
   const fraction = src.slice === "this-month" ? 1 - src.elapsedFraction : src.elapsedFraction;
@@ -203,12 +206,13 @@ export function sourceRecognizedAfterExclusions(src: PayLineSource, state?: Buil
 export function payoutAfterExclusions(
   line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
   state?: BuildLineState,
-  splitOverride?: number | null
+  splitOverride?: number | null,
 ): number {
   const s = state ?? DEFAULT_LINE_STATE;
   const split = splitOverride ?? line.splitPct;
   if (!line.sources || split == null) return round2(line.payout);
-  const noFlips = !excludedInvoiceSet(s).size && !excludedLineItemSet(s).size && !includedLineItemSet(s).size;
+  const noFlips =
+    !excludedInvoiceSet(s).size && !excludedLineItemSet(s).size && !includedLineItemSet(s).size;
   if (noFlips && splitOverride == null) return round2(line.payout);
   if (noFlips) {
     // Only the split changed: engine earned × the overridden split.
@@ -232,7 +236,7 @@ export function payoutAfterExclusions(
 export function effectiveLineTotal(
   line: { payout: number; splitPct?: number; sources?: PayLineSource[] },
   state?: BuildLineState,
-  splitOverride?: number | null
+  splitOverride?: number | null,
 ): number {
   const s = state ?? DEFAULT_LINE_STATE;
   if (!s.included) return 0;
@@ -304,14 +308,19 @@ export const PAYOUT_DETAIL_CSV_COLUMNS = [
 // Join a source's payments/line-items into compact CSV cells (ISO dates kept raw,
 // per the repo's "exports stay machine-sortable" convention).
 function joinPaymentDates(src: PayLineSource): string {
-  return src.payments.map((p) => p.datePaid ?? "").filter(Boolean).join("; ");
+  return src.payments
+    .map((p) => p.datePaid ?? "")
+    .filter(Boolean)
+    .join("; ");
 }
 function joinPaymentAmounts(src: PayLineSource): string {
   return src.payments.map((p) => round2(p.amount)).join("; ");
 }
 function joinPaymentMethods(src: PayLineSource): string {
   return src.payments
-    .map((p) => [p.method ?? "", p.checkNumber ? `#${p.checkNumber}` : ""].filter(Boolean).join(" "))
+    .map((p) =>
+      [p.method ?? "", p.checkNumber ? `#${p.checkNumber}` : ""].filter(Boolean).join(" "),
+    )
     .filter(Boolean)
     .join("; ");
 }
@@ -327,9 +336,11 @@ function joinLineItems(src: PayLineSource, state?: BuildLineState): string {
   const invoiceOff = excludedInvoiceSet(state).has(payLineSourceKey(src));
   return src.lineItems
     .map((li, i) => {
-      const counts = !invoiceOff && (classified || legacyReviewable ? lineItemCounts(src, i, state) : true);
+      const counts =
+        !invoiceOff && (classified || legacyReviewable ? lineItemCounts(src, i, state) : true);
       let tag = "";
-      if (!counts) tag = classified && li.status === "excluded" ? " [not in pay]" : " [removed by review]";
+      if (!counts)
+        tag = classified && li.status === "excluded" ? " [not in pay]" : " [removed by review]";
       else if (classified && li.status === "excluded") tag = " [included by review]";
       else if (li.status === "credit") tag = " [credit]";
       return `${li.item ?? "—"} ($${round2(li.amount)})${tag}`;
@@ -350,7 +361,7 @@ function joinLineItems(src: PayLineSource, state?: BuildLineState): string {
 export function payoutDetailCsvRows(
   lines: BuildDetailLine[],
   states: Map<number, BuildLineState>,
-  splitOverride?: number | null
+  splitOverride?: number | null,
 ): (string | number)[][] {
   const rows: (string | number)[][] = [];
   for (const l of lines) {
@@ -364,7 +375,7 @@ export function payoutDetailCsvRows(
       first ? (s.included ? "yes" : "no") : "",
       first && s.override != null ? s.override : "",
       first ? eff : "",
-      first ? s.note ?? "" : "",
+      first ? (s.note ?? "") : "",
     ];
     // A line always has ≥1 source once it's a paid line; guard anyway so a
     // rollover-only line with missing invoice metadata still emits one row.
@@ -372,11 +383,31 @@ export function payoutDetailCsvRows(
     srcs.forEach((src, i) => {
       const first = i === 0;
       if (src == null) {
-        rows.push([l.clientName, l.clientId, l.tier, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ...menteeCols(first)]);
+        rows.push([
+          l.clientName,
+          l.clientId,
+          l.tier,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ...menteeCols(first),
+        ]);
         return;
       }
       const incBilled = sourceIncludedBilled(src, s);
-      const inclFlag = incBilled <= 0.005 ? "no" : Math.abs(incBilled - src.billed) < 0.005 ? "yes" : "partial";
+      const inclFlag =
+        incBilled <= 0.005 ? "no" : Math.abs(incBilled - src.billed) < 0.005 ? "yes" : "partial";
       rows.push([
         l.clientName,
         l.clientId,
@@ -406,7 +437,7 @@ export function summarizeBuild(
   lines: BuildLineInput[],
   states: Map<number, BuildLineState>,
   splitOverride?: number | null,
-  pieces: PieceEntry[] = []
+  pieces: PieceEntry[] = [],
 ): BuildSummary {
   let computedTotal = 0;
   let builtTotal = 0;
@@ -422,7 +453,9 @@ export function summarizeBuild(
       includedCount++;
       if (s.override != null) overriddenCount++;
       else if (
-        (s.excludedInvoices?.length ?? 0) + (s.excludedLineItems?.length ?? 0) + (s.includedLineItems?.length ?? 0) >
+        (s.excludedInvoices?.length ?? 0) +
+          (s.excludedLineItems?.length ?? 0) +
+          (s.includedLineItems?.length ?? 0) >
         0
       )
         invoiceAdjustedCount++;

@@ -45,7 +45,14 @@ export const DEFAULT_GRADIENT_TO = "#15803d"; // green-700
 // A curated red → green palette (red, orange, yellow, lime, green, dark-green) —
 // reads cleanly out of the box; the gradient mode is there for a pure two-color
 // blend. This is the seeded default (custom mode).
-export const DEFAULT_STAGE_COLORS: string[] = ["#e11d48", "#f97316", "#eab308", "#84cc16", "#22c55e", "#15803d"];
+export const DEFAULT_STAGE_COLORS: string[] = [
+  "#e11d48",
+  "#f97316",
+  "#eab308",
+  "#84cc16",
+  "#22c55e",
+  "#15803d",
+];
 
 export const DEFAULT_STAGE_COLOR_CONFIG: StageColorConfig = {
   mode: "custom",
@@ -84,7 +91,9 @@ export function gradientColors(from: string, to: string, steps: number = STAGE_C
   const out: string[] = [];
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    out.push(rgbToHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t));
+    out.push(
+      rgbToHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t),
+    );
   }
   return out;
 }
@@ -131,5 +140,10 @@ export function stageColorsFromRaw(raw: string | null | undefined): string[] {
 
 // Serialize a config to the JSON string stored in app_settings.
 export function serializeStageColorConfig(config: StageColorConfig): string {
-  return JSON.stringify({ mode: config.mode, from: config.from, to: config.to, colors: config.colors });
+  return JSON.stringify({
+    mode: config.mode,
+    from: config.from,
+    to: config.to,
+    colors: config.colors,
+  });
 }

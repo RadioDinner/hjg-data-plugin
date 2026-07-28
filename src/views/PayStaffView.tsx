@@ -1,6 +1,25 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fetchPayData, computePayTimeline, PAY_RAMP, type PayData, type PayTimeline, type PayMonth } from "../db";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  fetchPayData,
+  computePayTimeline,
+  PAY_RAMP,
+  type PayData,
+  type PayTimeline,
+  type PayMonth,
+} from "../db";
 import { downloadCsv } from "../csv";
 import { PayExploreModal } from "../components/PayExploreModal";
 import { BuildPayoutView } from "./BuildPayoutView";
@@ -42,7 +61,11 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
         {label}
       </div>
       <div style={{ fontSize: 26, fontWeight: 700, marginTop: 4 }}>{value}</div>
-      {sub && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{sub}</div>}
+      {sub && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -50,19 +73,36 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 // The per-mentor breakdown revealed when a month row is expanded: one row per
 // mentor that month, the unassigned bucket if any, and a jump into the explorer
 // pre-filtered to this month.
-function MonthDetail({ month, onExplore, onBuild }: { month: PayMonth; onExplore: () => void; onBuild: (coachId: number, ym: string) => void }) {
+function MonthDetail({
+  month,
+  onExplore,
+  onBuild,
+}: {
+  month: PayMonth;
+  onExplore: () => void;
+  onBuild: (coachId: number, ym: string) => void;
+}) {
   const r = month.report;
   if (r.mentors.length === 0 && r.unassigned.length === 0) {
-    return <p className="muted" style={{ margin: "4px 0" }}>No payouts for {monthLabel(month.ym)}.</p>;
+    return (
+      <p className="muted" style={{ margin: "4px 0" }}>
+        No payouts for {monthLabel(month.ym)}.
+      </p>
+    );
   }
   return (
     <div className="month-detail">
       <div className="table-toolbar">
         <span className="muted" style={{ fontSize: 13 }}>
-          {r.mentors.length} mentor{r.mentors.length === 1 ? "" : "s"} · {r.totals.menteeCount} paying mentee
+          {r.mentors.length} mentor{r.mentors.length === 1 ? "" : "s"} · {r.totals.menteeCount}{" "}
+          paying mentee
           {r.totals.menteeCount === 1 ? "" : "s"}
         </span>
-        <button className="btn btn--sm" onClick={onExplore} title="Open the source-data explorer for this month">
+        <button
+          className="btn btn--sm"
+          onClick={onExplore}
+          title="Open the source-data explorer for this month"
+        >
           Explore this month →
         </button>
       </div>
@@ -126,34 +166,56 @@ function MonthDetail({ month, onExplore, onBuild }: { month: PayMonth; onExplore
 // target month), and their sum — the accuracy check the user asked for. Built
 // entirely from the timeline ledger (Clayton two-month split, per-mentor ramp,
 // JYF already excluded), so it always agrees with the Payout-by-month table.
-function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: string; ct: ReturnType<typeof useChartTokens> }) {
+function MentorReconcile({
+  timeline,
+  cur,
+  ct,
+}: {
+  timeline: PayTimeline;
+  cur: string;
+  ct: ReturnType<typeof useChartTokens>;
+}) {
   const AXIS = ct.axis;
   const GRID = ct.grid;
-  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  } as const;
 
   const mentors = useMemo(() => {
     const m = new Map<number, string>();
-    for (const r of timeline.ledger) if (r.assigned && r.coachId != null) m.set(r.coachId, r.coachName);
-    return [...m.entries()].map(([coachId, name]) => ({ coachId, name })).sort((a, b) => a.name.localeCompare(b.name));
+    for (const r of timeline.ledger)
+      if (r.assigned && r.coachId != null) m.set(r.coachId, r.coachName);
+    return [...m.entries()]
+      .map(([coachId, name]) => ({ coachId, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [timeline]);
 
   const [coachSel, setCoachSel] = useState<number | null>(null);
-  const coachId = coachSel != null && mentors.some((m) => m.coachId === coachSel) ? coachSel : mentors[0]?.coachId ?? null;
+  const coachId =
+    coachSel != null && mentors.some((m) => m.coachId === coachSel)
+      ? coachSel
+      : (mentors[0]?.coachId ?? null);
 
   const coachRows = useMemo(
     () => timeline.ledger.filter((r) => r.assigned && r.coachId === coachId),
-    [timeline, coachId]
+    [timeline, coachId],
   );
   // Months (ascending) in which this mentor has a payout.
   const coachMonths = useMemo(
     () => [...new Set(coachRows.map((r) => r.ym))].sort((a, b) => a.localeCompare(b)),
-    [coachRows]
+    [coachRows],
   );
 
   const [monthSel, setMonthSel] = useState<string | null>(null);
   const defaultMonth = useMemo(
-    () => [...coachMonths].reverse().find((m) => m <= cur) ?? coachMonths[coachMonths.length - 1] ?? null,
-    [coachMonths, cur]
+    () =>
+      [...coachMonths].reverse().find((m) => m <= cur) ??
+      coachMonths[coachMonths.length - 1] ??
+      null,
+    [coachMonths, cur],
   );
   const month = monthSel && coachMonths.includes(monthSel) ? monthSel : defaultMonth;
   const nxt = month ? nextYm(month) : null;
@@ -162,10 +224,16 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
   // rounded per mentee here so the tiles + Total row (summed from these) always foot
   // with the cells shown.
   const perMentee = useMemo(() => {
-    const map = new Map<number, { name: string; tier: string; thisMonth: number; paid: number; remaining: number }>();
+    const map = new Map<
+      number,
+      { name: string; tier: string; thisMonth: number; paid: number; remaining: number }
+    >();
     const ensure = (id: number, name: string) => {
       let e = map.get(id);
-      if (!e) { e = { name, tier: "", thisMonth: 0, paid: 0, remaining: 0 }; map.set(id, e); }
+      if (!e) {
+        e = { name, tier: "", thisMonth: 0, paid: 0, remaining: 0 };
+        map.set(id, e);
+      }
       return e;
     };
     for (const r of coachRows) {
@@ -213,8 +281,14 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
     if (!month) return;
     downloadCsv(
       `payout-reconcile-${mentorName.replace(/\s+/g, "-")}-${month}`,
-      ["Mentee", "Tier", `Payout ${monthLabel(month)}`, "Paid through month", "Remaining (billed, unpaid)"],
-      perMentee.map((p) => [p.name, p.tier || "—", p.thisMonth, p.paid, p.remaining])
+      [
+        "Mentee",
+        "Tier",
+        `Payout ${monthLabel(month)}`,
+        "Paid through month",
+        "Remaining (billed, unpaid)",
+      ],
+      perMentee.map((p) => [p.name, p.tier || "—", p.thisMonth, p.paid, p.remaining]),
     );
   };
 
@@ -226,20 +300,33 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
       title="Mentor payout reconciliation"
       sectionId="pay.reconcile"
       help={<HelpButton id="pay.reconcile" label="Reconciliation" />}
-      actions={<button className="btn btn--sm" onClick={exportCsv} disabled={!month}>Export CSV</button>}
+      actions={
+        <button className="btn btn--sm" onClick={exportCsv} disabled={!month}>
+          Export CSV
+        </button>
+      }
     >
       <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
-        Pick a mentor and a month to see that month's payout, the <strong>running total</strong> paid through it, and
-        the <strong>remaining</strong> tail still owed on invoices already billed. Running total + remaining = the
-        full value billed through that month — the accuracy check.
+        Pick a mentor and a month to see that month's payout, the <strong>running total</strong>{" "}
+        paid through it, and the <strong>remaining</strong> tail still owed on invoices already
+        billed. Running total + remaining = the full value billed through that month — the accuracy
+        check.
       </div>
 
       <div className="table-toolbar" style={{ gap: 12, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <span className="muted">Mentor</span>
-          <select value={coachId ?? ""} onChange={(e) => { setCoachSel(Number(e.target.value)); setMonthSel(null); }}>
+          <select
+            value={coachId ?? ""}
+            onChange={(e) => {
+              setCoachSel(Number(e.target.value));
+              setMonthSel(null);
+            }}
+          >
             {mentors.map((m) => (
-              <option key={m.coachId} value={m.coachId}>{m.name}</option>
+              <option key={m.coachId} value={m.coachId}>
+                {m.name}
+              </option>
             ))}
           </select>
         </label>
@@ -247,38 +334,79 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
           <span className="muted">Through month</span>
           <select value={month ?? ""} onChange={(e) => setMonthSel(e.target.value)}>
             {[...coachMonths].reverse().map((ym) => (
-              <option key={ym} value={ym}>{monthLabel(ym)}{ym > cur ? " (projection)" : ""}</option>
+              <option key={ym} value={ym}>
+                {monthLabel(ym)}
+                {ym > cur ? " (projection)" : ""}
+              </option>
             ))}
           </select>
         </label>
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
-        <StatTile label={month ? `Payout — ${monthLabel(month)}` : "Payout"} value={fmtUsd(recon.thisMonth)} sub="this month only" />
-        <StatTile label="Paid through this month" value={fmtUsd(recon.running)} sub="running total, all months so far" />
-        <StatTile label="Remaining (billed, unpaid)" value={fmtUsd(recon.remaining)} sub="rollover tail of billed invoices" />
-        <StatTile label="Total billed through month" value={fmtUsd(recon.total)} sub="paid + remaining" />
+        <StatTile
+          label={month ? `Payout — ${monthLabel(month)}` : "Payout"}
+          value={fmtUsd(recon.thisMonth)}
+          sub="this month only"
+        />
+        <StatTile
+          label="Paid through this month"
+          value={fmtUsd(recon.running)}
+          sub="running total, all months so far"
+        />
+        <StatTile
+          label="Remaining (billed, unpaid)"
+          value={fmtUsd(recon.remaining)}
+          sub="rollover tail of billed invoices"
+        />
+        <StatTile
+          label="Total billed through month"
+          value={fmtUsd(recon.total)}
+          sub="paid + remaining"
+        />
       </div>
 
       <p className="view__hint" style={{ marginTop: 10, marginBottom: 4 }}>
-        {mentorName}: <strong>{fmtUsd(recon.running)}</strong> paid through {month ? monthLabel(month) : "—"} +{" "}
-        <strong>{fmtUsd(recon.remaining)}</strong> remaining = <strong>{fmtUsd(recon.total)}</strong> billed to date.
+        {mentorName}: <strong>{fmtUsd(recon.running)}</strong> paid through{" "}
+        {month ? monthLabel(month) : "—"} + <strong>{fmtUsd(recon.remaining)}</strong> remaining ={" "}
+        <strong>{fmtUsd(recon.total)}</strong> billed to date.
       </p>
 
       <div style={{ width: "100%", height: 260 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
             <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
-            <XAxis dataKey="month" stroke={AXIS} tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
+            <XAxis
+              dataKey="month"
+              stroke={AXIS}
+              tick={{ fontSize: 11 }}
+              interval={0}
+              angle={-20}
+              textAnchor="end"
+              height={60}
+            />
             <YAxis stroke={AXIS} tick={{ fontSize: 11 }} />
-            <Tooltip contentStyle={TOOLTIP} formatter={(v, n) => [fmtUsd(Number(v)), n === "cumulative" ? "Running total" : "Monthly payout"]} />
+            <Tooltip
+              contentStyle={TOOLTIP}
+              formatter={(v, n) => [
+                fmtUsd(Number(v)),
+                n === "cumulative" ? "Running total" : "Monthly payout",
+              ]}
+            />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar name="Monthly payout" dataKey="payout" radius={[4, 4, 0, 0]}>
               {chartData.map((d) => (
                 <Cell key={d.ym} fill={d.ym === month ? ct.accent : "#94a3b8"} />
               ))}
             </Bar>
-            <Line name="Running total" type="monotone" dataKey="cumulative" stroke={ct.accent} strokeWidth={2} dot={{ r: 2 }} />
+            <Line
+              name="Running total"
+              type="monotone"
+              dataKey="cumulative"
+              stroke={ct.accent}
+              strokeWidth={2}
+              dot={{ r: 2 }}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -314,7 +442,11 @@ function MentorReconcile({ timeline, cur, ct }: { timeline: PayTimeline; cur: st
               </tr>
             )}
             {perMentee.length === 0 && (
-              <tr><td colSpan={5} className="muted">No mentoring payouts for this mentor.</td></tr>
+              <tr>
+                <td colSpan={5} className="muted">
+                  No mentoring payouts for this mentor.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -337,7 +469,12 @@ export function PayStaffView() {
   const ct = useChartTokens();
   const AXIS = ct.axis;
   const GRID = ct.grid;
-  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText } as const;
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  } as const;
 
   useEffect(() => {
     let live = true;
@@ -391,7 +528,11 @@ export function PayStaffView() {
   if (build) {
     return (
       <div className="stack">
-        <BuildPayoutView onBack={() => setBuild(null)} initialCoachId={build.coachId} initialYm={build.ym} />
+        <BuildPayoutView
+          onBack={() => setBuild(null)}
+          initialCoachId={build.coachId}
+          initialYm={build.ym}
+        />
       </div>
     );
   }
@@ -429,7 +570,14 @@ export function PayStaffView() {
     if (!timeline) return;
     downloadCsv(
       "payout-by-month",
-      ["Month", "Total payout", "Revenue billed", "Collected so far", "Mentors paid", "Paying mentees"],
+      [
+        "Month",
+        "Total payout",
+        "Revenue billed",
+        "Collected so far",
+        "Mentors paid",
+        "Paying mentees",
+      ],
       timeline.months.map((m) => [
         monthLabel(m.ym),
         m.report.totals.payout,
@@ -437,11 +585,13 @@ export function PayStaffView() {
         m.report.totals.collected,
         m.report.totals.mentorCount,
         m.report.totals.menteeCount,
-      ])
+      ]),
     );
   };
 
-  const distinctMentors = timeline ? new Set(timeline.ledger.filter((r) => r.assigned).map((r) => r.coachId)).size : 0;
+  const distinctMentors = timeline
+    ? new Set(timeline.ledger.filter((r) => r.assigned).map((r) => r.coachId)).size
+    : 0;
 
   return (
     <div className="stack">
@@ -466,34 +616,48 @@ export function PayStaffView() {
                 >
                   Build payout →
                 </button>
-                <button className="btn btn--sm" onClick={() => setExplore({})} title="Browse the data behind every number">
+                <button
+                  className="btn btn--sm"
+                  onClick={() => setExplore({})}
+                  title="Browse the data behind every number"
+                >
                   Explore source data
                 </button>
               </>
             )}
-            <button className="btn btn--sm" onClick={() => setSub("hourly")} title="Timesheet-driven pay for staff the invoice engine doesn't cover">
+            <button
+              className="btn btn--sm"
+              onClick={() => setSub("hourly")}
+              title="Timesheet-driven pay for staff the invoice engine doesn't cover"
+            >
               Hourly staff →
             </button>
-            <button className="btn btn--sm" onClick={() => setSub("history")} title="Review every pay stub that was printed, exactly as it was sent">
+            <button
+              className="btn btn--sm"
+              onClick={() => setSub("history")}
+              title="Review every pay stub that was printed, exactly as it was sent"
+            >
               History →
             </button>
           </div>
         }
       >
         <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
-          Mentors earn a ramped share (default {PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by
-          mentor-tenure month; a fast-tracked mentor can have a custom ramp) of the{" "}
-          <strong>4×/2×/1× mentoring</strong> revenue <strong>billed</strong> to each mentee. JumpStart/JYF and other
-          non-mentoring revenue is <strong>excluded</strong>. Each invoice's share is{" "}
-          <strong>split across two months</strong> by its invoice date (over that month's real length): the remaining part pays in the
-          invoice's month, the elapsed part rolls into the next. (Collected is shown alongside for reference.)
+          Mentors earn a ramped share (default{" "}
+          {PAY_RAMP.map((p) => `${Math.round(p * 100)}%`).join(" → ")} by mentor-tenure month; a
+          fast-tracked mentor can have a custom ramp) of the <strong>4×/2×/1× mentoring</strong>{" "}
+          revenue <strong>billed</strong> to each mentee. JumpStart/JYF and other non-mentoring
+          revenue is <strong>excluded</strong>. Each invoice's share is{" "}
+          <strong>split across two months</strong> by its invoice date (over that month's real
+          length): the remaining part pays in the invoice's month, the elapsed part rolls into the
+          next. (Collected is shown alongside for reference.)
         </div>
 
         {noInvoices && (
           <p className="muted" style={{ marginTop: 8 }}>
-            No invoice data yet. Apply migration <code>9993_ca_invoices.sql</code> in the Supabase SQL Editor, then run a
-            sync (Admin → Sync now). Payouts are computed from billed invoice revenue, so this stays empty until
-            invoices are mirrored.
+            No invoice data yet. Apply migration <code>9993_ca_invoices.sql</code> in the Supabase
+            SQL Editor, then run a sync (Admin → Sync now). Payouts are computed from billed invoice
+            revenue, so this stays empty until invoices are mirrored.
           </p>
         )}
       </CollapsibleCard>
@@ -501,12 +665,32 @@ export function PayStaffView() {
       {timeline && !noInvoices && (
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <StatTile label="Total payout" value={fmtUsd(timeline.totals.payout)} sub={`${timeline.months.length} months`} />
-            <StatTile label="Revenue billed" value={fmtUsd(timeline.totals.billed)} sub="pay basis, all months" />
-            <StatTile label="Collected so far" value={fmtUsd(timeline.totals.collected)} sub="reference" />
+            <StatTile
+              label="Total payout"
+              value={fmtUsd(timeline.totals.payout)}
+              sub={`${timeline.months.length} months`}
+            />
+            <StatTile
+              label="Revenue billed"
+              value={fmtUsd(timeline.totals.billed)}
+              sub="pay basis, all months"
+            />
+            <StatTile
+              label="Collected so far"
+              value={fmtUsd(timeline.totals.collected)}
+              sub="reference"
+            />
             <StatTile label="Months covered" value={String(timeline.months.length)} />
-            <StatTile label="Mentors paid" value={String(distinctMentors)} sub="distinct, all-time" />
-            <StatTile label="Excluded from pay" value={fmtUsd(timeline.totals.excludedBilled)} sub="JumpStart/JYF + non-mentoring" />
+            <StatTile
+              label="Mentors paid"
+              value={String(distinctMentors)}
+              sub="distinct, all-time"
+            />
+            <StatTile
+              label="Excluded from pay"
+              value={fmtUsd(timeline.totals.excludedBilled)}
+              sub="JumpStart/JYF + non-mentoring"
+            />
           </div>
 
           <MentorReconcile timeline={timeline} cur={cur} ct={ct} />
@@ -516,7 +700,11 @@ export function PayStaffView() {
             title="Payout by month"
             sectionId="pay.payoutByMonth"
             actions={
-              <button className="btn btn--sm" onClick={monthlyCsv} disabled={timeline.months.length === 0}>
+              <button
+                className="btn btn--sm"
+                onClick={monthlyCsv}
+                disabled={timeline.months.length === 0}
+              >
                 Export CSV
               </button>
             }
@@ -525,7 +713,15 @@ export function PayStaffView() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
                   <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
-                  <XAxis dataKey="month" stroke={AXIS} tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
+                  <XAxis
+                    dataKey="month"
+                    stroke={AXIS}
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={-20}
+                    textAnchor="end"
+                    height={60}
+                  />
                   <YAxis stroke={AXIS} tick={{ fontSize: 11 }} />
                   <Tooltip contentStyle={TOOLTIP} formatter={(v) => fmtUsd(Number(v))} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -536,9 +732,9 @@ export function PayStaffView() {
             </div>
 
             <p className="view__hint" style={{ marginBottom: 4 }}>
-              Click a month to expand its per-mentor breakdown. Each month blends the current invoices' slices with
-              slices rolled forward from the prior month; months at or after {monthLabel(cur)} update as new invoices
-              sync.
+              Click a month to expand its per-mentor breakdown. Each month blends the current
+              invoices' slices with slices rolled forward from the prior month; months at or after{" "}
+              {monthLabel(cur)} update as new invoices sync.
             </p>
             <div className="table-scroll">
               <table className="table table--center">
@@ -560,10 +756,17 @@ export function PayStaffView() {
                       <Fragment key={m.ym}>
                         <tr className="row--expandable" onClick={() => toggle(m.ym)}>
                           <td style={{ textAlign: "left", fontWeight: 600 }}>
-                            <span className="row__chevron">{isOpen ? "▾" : "▸"}</span> {monthLabel(m.ym)}
-                            {projection && <span className="pill pill--running" style={{ marginLeft: 8 }}>projection</span>}
+                            <span className="row__chevron">{isOpen ? "▾" : "▸"}</span>{" "}
+                            {monthLabel(m.ym)}
+                            {projection && (
+                              <span className="pill pill--running" style={{ marginLeft: 8 }}>
+                                projection
+                              </span>
+                            )}
                           </td>
-                          <td className="num"><strong>{fmtUsd(t.payout)}</strong></td>
+                          <td className="num">
+                            <strong>{fmtUsd(t.payout)}</strong>
+                          </td>
                           <td className="num">{fmtUsd(t.billed)}</td>
                           <td className="num">{t.mentorCount}</td>
                           <td className="num">{t.menteeCount}</td>

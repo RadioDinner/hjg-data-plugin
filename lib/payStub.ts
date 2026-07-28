@@ -28,7 +28,20 @@ import {
 } from "./payBuild";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 export function monthLabelLong(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
@@ -127,16 +140,23 @@ export interface PayStubInput {
   generatedOn: string; // YYYY-MM-DD
 }
 
-function dispositionOf(src: PayLineSource, index: number, state: BuildLineState): StubItemDisposition {
+function dispositionOf(
+  src: PayLineSource,
+  index: number,
+  state: BuildLineState,
+): StubItemDisposition {
   const li = src.lineItems[index];
-  const counts = !excludedInvoiceSet(state).has(payLineSourceKey(src)) && lineItemCounts(src, index, state);
+  const counts =
+    !excludedInvoiceSet(state).has(payLineSourceKey(src)) && lineItemCounts(src, index, state);
   if (sourceIsClassified(src)) {
     if (li.status === "credit") return counts ? "credit-counted" : "credit-out";
     if (li.status === "excluded") return counts ? "opted-in" : "not-pay";
     return counts ? "counted" : "removed-by-review";
   }
   // Legacy sources: per-line review only exists when splittable; otherwise all count.
-  const legacyCounts = lineItemsSplittable(src) ? counts : !excludedInvoiceSet(state).has(payLineSourceKey(src));
+  const legacyCounts = lineItemsSplittable(src)
+    ? counts
+    : !excludedInvoiceSet(state).has(payLineSourceKey(src));
   if ((li.amount || 0) < 0) return legacyCounts ? "credit-counted" : "credit-out";
   return legacyCounts ? "counted" : "removed-by-review";
 }
@@ -180,8 +200,13 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
     const adjusted =
       excluded ||
       overridden ||
-      (s.excludedInvoices?.length ?? 0) + (s.excludedLineItems?.length ?? 0) + (s.includedLineItems?.length ?? 0) > 0 ||
-      invoices.some((inv) => inv.items.some((it) => it.disposition === "credit-out" || it.disposition === "opted-in"));
+      (s.excludedInvoices?.length ?? 0) +
+        (s.excludedLineItems?.length ?? 0) +
+        (s.includedLineItems?.length ?? 0) >
+        0 ||
+      invoices.some((inv) =>
+        inv.items.some((it) => it.disposition === "credit-out" || it.disposition === "opted-in"),
+      );
     return {
       name: l.clientName,
       tier: l.tier,
@@ -238,9 +263,11 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
 // modern sans (system-UI stack — San Francisco / Segoe UI / Roboto, no web
 // fonts to fetch). One summary page, then the per-mentee breakdown.
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const usd = (n: number) =>
-  (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  (n < 0 ? "−$" : "$") +
+  Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtD = (ymd: string) => {
   const [y, m, d] = ymd.slice(0, 10).split("-").map(Number);
   return m && d ? `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}-${y}` : ymd;
@@ -329,7 +356,9 @@ export function payStubHtml(m: PayStubModel): string {
   const badge = m.approved
     ? `<span class="badge badge--ok">APPROVED PAY STUB</span>`
     : `<span class="badge badge--draft">REVIEW COPY — DRAFT</span>`;
-  const unsaved = m.unsavedChanges ? `<span class="badge badge--draft" style="margin-left:6px">UNSAVED CHANGES</span>` : "";
+  const unsaved = m.unsavedChanges
+    ? `<span class="badge badge--draft" style="margin-left:6px">UNSAVED CHANGES</span>`
+    : "";
   const watermark = m.approved ? "" : `<div class="watermark">REVIEW<br/>COPY</div>`;
   const pct = `${Math.round(m.splitPct * 100)}%`;
 
@@ -351,7 +380,7 @@ export function payStubHtml(m: PayStubModel): string {
       (p) =>
         `<tr><td class="l">${esc(p.label || "—")} <span class="tag tag--good">piece work</span>${p.date ? ` <span class="muted">${fmtD(p.date)}</span>` : ""}</td>` +
         `<td>${round2(p.qty).toLocaleString("en-US", { maximumFractionDigits: 2 })} × ${usd(p.unitRate)}</td>` +
-        `<td class="n"></td><td class="n"></td><td class="n"></td><td class="n b">${usd(pieceAmount(p))}</td></tr>`
+        `<td class="n"></td><td class="n"></td><td class="n"></td><td class="n b">${usd(pieceAmount(p))}</td></tr>`,
     )
     .join("");
 
@@ -369,8 +398,13 @@ export function payStubHtml(m: PayStubModel): string {
             inv.slice === "this-month"
               ? `${m.monthLabel} invoice · ${inv.fractionLabel}`
               : `${m.prevMonthLabel} invoice · ${inv.fractionLabel}`;
-          const excludedTag = inv.wholeExcluded ? ` <span class="item__tag item__tag--warn">invoice excluded by HJG review</span>` : "";
-          const countsCell = inv.counts !== inv.billed ? `${usd(inv.counts)} <span class="was">(billed ${usd(inv.billed)})</span>` : usd(inv.billed);
+          const excludedTag = inv.wholeExcluded
+            ? ` <span class="item__tag item__tag--warn">invoice excluded by HJG review</span>`
+            : "";
+          const countsCell =
+            inv.counts !== inv.billed
+              ? `${usd(inv.counts)} <span class="was">(billed ${usd(inv.billed)})</span>`
+              : usd(inv.billed);
           return `<div class="inv${inv.wholeExcluded ? " inv--x" : ""}">
             <div class="inv__head"><strong>Invoice #${esc(inv.invoiceNumber)}</strong> · ${fmtD(inv.serviceDate)} · <span class="mut">${sliceTag}</span>${excludedTag}
               <span class="inv__nums">counts <strong>${countsCell}</strong> → <strong>${usd(inv.recognized)}</strong> into ${m.monthLabel}</span></div>
@@ -383,7 +417,9 @@ export function payStubHtml(m: PayStubModel): string {
         : r.note
           ? `<div class="callout">Review note: ${esc(r.note)}</div>`
           : "";
-      const excludedNote = r.excluded ? `<div class="callout">This mentee was excluded from this payout by HJG review.${r.note ? ` Reason: ${esc(r.note)}` : ""}</div>` : "";
+      const excludedNote = r.excluded
+        ? `<div class="callout">This mentee was excluded from this payout by HJG review.${r.note ? ` Reason: ${esc(r.note)}` : ""}</div>`
+        : "";
       return `<section class="mentee">
         <div class="mentee__head"><h3>${esc(r.name)} <span class="mut">· ${esc(r.tier)}</span></h3>
         <div class="mentee__math">${usd(r.thisMonth)} this month + ${usd(r.rolledIn)} rolled in = <strong>${usd(r.earned)}</strong> × ${pct} = <strong>${usd(r.payout)}</strong></div></div>
@@ -421,8 +457,12 @@ export function payStubHtml(m: PayStubModel): string {
   <div class="cards">
     <div class="card"><div class="lab">Eligible revenue</div><div class="val">${usd(m.totals.earned)}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.totals.menteeCount} mentee${m.totals.menteeCount === 1 ? "" : "s"}</span><span>× ${pct}</span></div></div>
-    ${m.pieces.length ? `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
-      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>paid per unit</span></div></div>` : ""}
+    ${
+      m.pieces.length
+        ? `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
+      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>paid per unit</span></div></div>`
+        : ""
+    }
     <div class="card card--hero"><div class="lab">Total payout</div><div class="val">${usd(m.totals.payout)}</div>${deltaRow}</div>
     <div class="card"><div class="lab">HJG review</div><div class="val">${m.totals.adjustedCount || "—"}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.totals.adjustedCount === 1 ? "line reviewed / adjusted" : "lines reviewed / adjusted"}</span><span>see breakdown</span></div></div>

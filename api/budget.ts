@@ -24,5 +24,5 @@ export default withApi(
       recentRuns: lastRuns.data ?? [],
     });
   },
-  { auth: "user", cacheTtl: 0 }
+  { auth: "user", cacheTtl: 0 },
 );

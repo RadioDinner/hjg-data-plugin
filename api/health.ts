@@ -27,7 +27,11 @@ export default withApi(
         ]);
         budget = { capDaily: b.capDaily, usedToday: b.usedToday, remainingToday: b.remainingToday };
         const row = sync.data?.[0];
-        if (row) lastSync = { finished_at: (row.finished_at as string | null) ?? null, status: row.status as string };
+        if (row)
+          lastSync = {
+            finished_at: (row.finished_at as string | null) ?? null,
+            status: row.status as string,
+          };
       } catch {
         // health stays "ok:true" but with null budget/lastSync if the DB is unreachable
       }
@@ -42,5 +46,5 @@ export default withApi(
       timestamp: new Date().toISOString(),
     });
   },
-  { auth: "none", cacheTtl: 0 }
+  { auth: "none", cacheTtl: 0 },
 );

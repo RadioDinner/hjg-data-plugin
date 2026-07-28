@@ -20,7 +20,12 @@ export function toCsv(columns: string[], rows: Cell[][]): string {
 // Build a filename-safe slug. Lowercases and replaces non-alphanumerics with
 // hyphens; collapses runs; trims leading/trailing hyphens.
 function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "export";
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "export"
+  );
 }
 
 // Trigger a CSV download in the browser. Filename ends with the current date so

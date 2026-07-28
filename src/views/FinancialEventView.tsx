@@ -55,7 +55,6 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
   }
   useEffect(() => {
     load();
-     
   }, []);
 
   async function submit() {
@@ -103,7 +102,7 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
       setFlash(
         notified
           ? "Financial event reported — org support staff have been notified."
-          : "Financial event SAVED, but the staff alert could not be sent (notifications table unavailable?) — tell support directly."
+          : "Financial event SAVED, but the staff alert could not be sent (notifications table unavailable?) — tell support directly.",
       );
       await load();
       onSubmitted?.();
@@ -139,22 +138,41 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
         help={<HelpButton id="finevent.screen" label="Report financial event" />}
       >
         <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
-          Log a transaction — when it happened, the vendor, what it was, how it was paid — and attach the receipt.
-          Submitting alerts org support staff via the <strong>notification bell</strong> in the top bar.
+          Log a transaction — when it happened, the vendor, what it was, how it was paid — and
+          attach the receipt. Submitting alerts org support staff via the{" "}
+          <strong>notification bell</strong> in the top bar.
         </div>
 
         {error && <div className="notice notice--warn">{error}</div>}
         {flash && !error && <div className="notice notice--info">{flash}</div>}
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginTop: 4 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            flexWrap: "wrap",
+            alignItems: "flex-end",
+            marginTop: 4,
+          }}
+        >
           <SectionId id="finevent.form" />
           <label className="field">
             <span>When it happened</span>
-            <input type="date" value={happenedOn} max={todayYmd()} onChange={(e) => setHappenedOn(e.target.value)} />
+            <input
+              type="date"
+              value={happenedOn}
+              max={todayYmd()}
+              onChange={(e) => setHappenedOn(e.target.value)}
+            />
           </label>
           <label className="field">
             <span>Vendor</span>
-            <input type="text" value={vendor} placeholder="who was paid" onChange={(e) => setVendor(e.target.value)} />
+            <input
+              type="text"
+              value={vendor}
+              placeholder="who was paid"
+              onChange={(e) => setVendor(e.target.value)}
+            />
           </label>
           <label className="field" style={{ minWidth: 260, flex: 1 }}>
             <span>What it was</span>
@@ -170,7 +188,9 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
             <select value={method} onChange={(e) => setMethod(e.target.value)}>
               <option value="">— choose —</option>
               {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
           </label>
@@ -215,7 +235,11 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
                     <td>{e.paymentMethod ?? "—"}</td>
                     <td>
                       {e.receiptPath ? (
-                        <button className="linkbtn" onClick={() => viewReceipt(e.receiptPath!)} title="Open the receipt (signed link)">
+                        <button
+                          className="linkbtn"
+                          onClick={() => viewReceipt(e.receiptPath!)}
+                          title="Open the receipt (signed link)"
+                        >
                           view
                         </button>
                       ) : (
@@ -223,12 +247,16 @@ export function FinancialEventView({ onSubmitted }: { onSubmitted?: () => void }
                       )}
                     </td>
                     <td style={{ textAlign: "left" }}>{e.createdByEmail ?? "—"}</td>
-                    <td style={{ textAlign: "left" }}>{e.createdAt ? fmtDateTime(e.createdAt) : "—"}</td>
+                    <td style={{ textAlign: "left" }}>
+                      {e.createdAt ? fmtDateTime(e.createdAt) : "—"}
+                    </td>
                   </tr>
                 ))}
                 {events.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted">Nothing reported yet.</td>
+                    <td colSpan={7} className="muted">
+                      Nothing reported yet.
+                    </td>
                   </tr>
                 )}
               </tbody>

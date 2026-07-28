@@ -5,7 +5,11 @@
 import { getAdminClient } from "./supabase-admin.js";
 import { CAClient } from "./ca.js";
 import { makeTracker, BudgetExhaustedError, type BudgetTracker } from "./budget.js";
-import { categorizeAppointmentName, isExcludedClientName, CONVERSION_OFFERING_IDS } from "./config.js";
+import {
+  categorizeAppointmentName,
+  isExcludedClientName,
+  CONVERSION_OFFERING_IDS,
+} from "./config.js";
 import { caDateParts } from "./metrics.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "./menteeJourney.js";
 import { planClientIdClaims } from "./notionCsv.js";
@@ -72,7 +76,11 @@ export function syncYears(): number[] {
 // stored or returned.
 function sanitizeError(e: unknown): string {
   let msg = e instanceof Error ? e.message : String(e);
-  for (const secret of [process.env.CA_API_ID, process.env.CA_API_KEY, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
+  for (const secret of [
+    process.env.CA_API_ID,
+    process.env.CA_API_KEY,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  ]) {
     if (secret) msg = msg.split(secret).join("[redacted]");
   }
   return msg.slice(0, 500);
@@ -81,7 +89,7 @@ function sanitizeError(e: unknown): string {
 async function chunkedUpsert<T extends object>(
   admin: ReturnType<typeof getAdminClient>,
   table: string,
-  rows: T[]
+  rows: T[],
 ): Promise<number> {
   if (rows.length === 0) return 0;
   const size = 500;
@@ -99,7 +107,7 @@ async function chunkedUpsert<T extends object>(
 // mirror. Shared by the full sync and the standalone "Refresh templates" endpoint.
 async function syncEngagementTemplateRows(
   admin: ReturnType<typeof getAdminClient>,
-  ca: CAClient
+  ca: CAClient,
 ): Promise<number> {
   const templates = await ca.getEngagementTemplates();
   const rows: CaEngagementTemplateRow[] = templates.map((t) => ({
@@ -378,18 +386,33 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       const today = new Date().toISOString().slice(0, 10);
       const [cl, en, ap, co, sub] = await Promise.all([
         admin.from("ca_clients").select("id,name,coach_id,is_excluded"),
-        admin.from("ca_engagements").select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
-        admin.from("ca_appointments").select("client_id,coach_id,engagement_id,category,start_date"),
+        admin
+          .from("ca_engagements")
+          .select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
+        admin
+          .from("ca_appointments")
+          .select("client_id,coach_id,engagement_id,category,start_date"),
         admin.from("ca_coaches").select("id,name"),
         admin.from("ca_offering_submissions").select("client_id,offering_id,date_added"),
       ]);
       const firstErr = cl.error || en.error || ap.error || co.error || sub.error;
       if (firstErr) throw new Error(firstErr.message);
       const purchases = (sub.data ?? [])
-        .filter((s) => s.offering_id != null && CONVERSION_OFFERING_IDS.includes(s.offering_id) && s.client_id != null && s.date_added)
+        .filter(
+          (s) =>
+            s.offering_id != null &&
+            CONVERSION_OFFERING_IDS.includes(s.offering_id) &&
+            s.client_id != null &&
+            s.date_added,
+        )
         .map((s) => ({ clientId: s.client_id as number, date: s.date_added as string }));
       const caRecords = deriveMenteeCaRecords({
-        clients: (cl.data ?? []).map((c) => ({ id: c.id, name: c.name, coachId: c.coach_id ?? null, isExcluded: !!c.is_excluded })),
+        clients: (cl.data ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          coachId: c.coach_id ?? null,
+          isExcluded: !!c.is_excluded,
+        })),
         engagements: (en.data ?? []).map((e) => ({
           id: e.id,
           clientId: e.client_id ?? null,
@@ -413,11 +436,26 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       });
       // Claim Notion-only rows (client_id NULL) by name so the upsert MERGES the
       // CA zone onto them instead of inserting a duplicate row for the same person.
-      const { data: exRows } = await admin.from("mentees").select("id,client_id,ca_name,notion_name,name_override");
-      const existing = ((exRows ?? []) as { id: string; client_id: number | null; ca_name: string | null; notion_name: string | null; name_override: string | null }[]).map(
-        (r) => ({ id: r.id, clientId: r.client_id, name: r.name_override ?? r.notion_name ?? r.ca_name })
-      );
-      for (const c of planClientIdClaims(existing, caRecords.map((r) => ({ clientId: r.clientId, name: r.name })))) {
+      const { data: exRows } = await admin
+        .from("mentees")
+        .select("id,client_id,ca_name,notion_name,name_override");
+      const existing = (
+        (exRows ?? []) as {
+          id: string;
+          client_id: number | null;
+          ca_name: string | null;
+          notion_name: string | null;
+          name_override: string | null;
+        }[]
+      ).map((r) => ({
+        id: r.id,
+        clientId: r.client_id,
+        name: r.name_override ?? r.notion_name ?? r.ca_name,
+      }));
+      for (const c of planClientIdClaims(
+        existing,
+        caRecords.map((r) => ({ clientId: r.clientId, name: r.name })),
+      )) {
         await admin.from("mentees").update({ client_id: c.clientId }).eq("id", c.id);
       }
       const syncedAt = new Date().toISOString();
@@ -470,7 +508,10 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       callsMade: tracker.callsMade,
       recordsSynced: records,
       years,
-      error: e instanceof BudgetExhaustedError ? `Daily CA call budget reached (cap ${e.capDaily}). Partial data synced.` : error,
+      error:
+        e instanceof BudgetExhaustedError
+          ? `Daily CA call budget reached (cap ${e.capDaily}). Partial data synced.`
+          : error,
     };
   }
 }

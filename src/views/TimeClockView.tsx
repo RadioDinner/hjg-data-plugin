@@ -73,10 +73,12 @@ export function TimeClockView() {
   }
   useEffect(() => {
     load();
-     
   }, []);
 
-  const mine = useMemo(() => entries.filter((e) => e.userEmail.toLowerCase() === myEmail), [entries, myEmail]);
+  const mine = useMemo(
+    () => entries.filter((e) => e.userEmail.toLowerCase() === myEmail),
+    [entries, myEmail],
+  );
   const open = useMemo(() => mine.find((e) => !e.clockOut) ?? null, [mine]);
 
   const totals = useMemo(() => {
@@ -146,7 +148,12 @@ export function TimeClockView() {
   async function doSubmit() {
     const n = mine.filter((e) => !e.submittedAt && e.clockOut).length;
     if (!n) return;
-    if (!confirm(`Submit ${n} completed entr${n === 1 ? "y" : "ies"} (${fmtHours(totals.unsubmitted)}) for payroll? Submitted entries lock.`)) return;
+    if (
+      !confirm(
+        `Submit ${n} completed entr${n === 1 ? "y" : "ies"} (${fmtHours(totals.unsubmitted)}) for payroll? Submitted entries lock.`,
+      )
+    )
+      return;
     setBusy(true);
     try {
       const count = await submitTimeEntries(user?.email ?? "");
@@ -194,7 +201,10 @@ export function TimeClockView() {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {open ? (
               <>
-                <span className="pill pill--running" title={`Clocked in ${fmtDateTime(open.clockIn)}`}>
+                <span
+                  className="pill pill--running"
+                  title={`Clocked in ${fmtDateTime(open.clockIn)}`}
+                >
                   on the clock · {fmtHours(entryHours(open, now))}
                 </span>
                 <button className="btn btn--primary" onClick={doClockOut} disabled={busy}>
@@ -211,8 +221,8 @@ export function TimeClockView() {
       >
         <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
           Clock in when you start, out when you stop, add a note about what you worked on, and{" "}
-          <strong>submit your completed entries for payroll</strong>. Everything recorded here also feeds the
-          org's metrics over time. Needs migration <code>9966_time_entries.sql</code>.
+          <strong>submit your completed entries for payroll</strong>. Everything recorded here also
+          feeds the org's metrics over time. Needs migration <code>9966_time_entries.sql</code>.
         </div>
         {error && <div className="notice notice--warn">{error}</div>}
         {flash && !error && <div className="notice notice--info">{flash}</div>}
@@ -264,7 +274,9 @@ export function TimeClockView() {
               {mine.slice(0, 50).map((e) => (
                 <tr key={e.id}>
                   <td style={{ textAlign: "left" }}>{fmtDateTime(e.clockIn)}</td>
-                  <td style={{ textAlign: "left" }}>{e.clockOut ? fmtDateTime(e.clockOut) : <em>on the clock</em>}</td>
+                  <td style={{ textAlign: "left" }}>
+                    {e.clockOut ? fmtDateTime(e.clockOut) : <em>on the clock</em>}
+                  </td>
                   <td className="num">{fmtHours(entryHours(e, now))}</td>
                   <td style={{ textAlign: "left" }}>
                     <input
@@ -279,7 +291,12 @@ export function TimeClockView() {
                   </td>
                   <td>
                     {e.submittedAt ? (
-                      <span className="pill pill--success" title={`Submitted ${fmtDateTime(e.submittedAt)}`}>submitted</span>
+                      <span
+                        className="pill pill--success"
+                        title={`Submitted ${fmtDateTime(e.submittedAt)}`}
+                      >
+                        submitted
+                      </span>
                     ) : e.clockOut ? (
                       <span className="pill">open</span>
                     ) : (
@@ -288,7 +305,11 @@ export function TimeClockView() {
                   </td>
                   <td className="num">
                     {!e.submittedAt && (
-                      <button className="btn btn--sm btn--danger" onClick={() => remove(e)} disabled={busy}>
+                      <button
+                        className="btn btn--sm btn--danger"
+                        onClick={() => remove(e)}
+                        disabled={busy}
+                      >
                         Delete
                       </button>
                     )}
@@ -297,7 +318,9 @@ export function TimeClockView() {
               ))}
               {mine.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted">No entries yet — hit Clock in to start your first one.</td>
+                  <td colSpan={6} className="muted">
+                    No entries yet — hit Clock in to start your first one.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -325,7 +348,9 @@ export function TimeClockView() {
               ))}
               {staffTotals.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="muted">Nobody has clocked time yet.</td>
+                  <td colSpan={3} className="muted">
+                    Nobody has clocked time yet.
+                  </td>
                 </tr>
               )}
             </tbody>

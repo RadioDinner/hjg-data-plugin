@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   fetchMentees,
   fetchCompanyOptions,
@@ -23,8 +33,20 @@ import { pct, signed, signedPp } from "../format";
 
 // Pipeline-timing leg -> stage-palette index of the stage the leg leads INTO.
 // (0 Discovery, 1 JumpStart, 2 4x, 3 2x, 4 1x, 5 Graduation.)
-const LEG_COLOR_INDEX: Record<string, number> = { dc_js: 1, js_4x: 2, "4x_2x": 3, "2x_1x": 4, "1x_grad": 5 };
-const TIER_LABEL: Record<CohortTier, string> = { jumpstart: "JumpStart", "4x": "4x", "2x": "2x", "1x": "1x", graduated: "Graduated" };
+const LEG_COLOR_INDEX: Record<string, number> = {
+  dc_js: 1,
+  js_4x: 2,
+  "4x_2x": 3,
+  "2x_1x": 4,
+  "1x_grad": 5,
+};
+const TIER_LABEL: Record<CohortTier, string> = {
+  jumpstart: "JumpStart",
+  "4x": "4x",
+  "2x": "2x",
+  "1x": "1x",
+  graduated: "Graduated",
+};
 const EXIT_STATUSES = ["quit", "fired", "no_mentoring", "declined"];
 
 function humanizeDays(n: number | null): string {
@@ -72,7 +94,12 @@ export function PipelineTimingCard() {
   }, [today]);
 
   const legColor = (key: string) => stageColors[LEG_COLOR_INDEX[key] ?? 0] ?? ct.accent;
-  const TOOLTIP = { background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.tooltipText };
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  };
 
   // Filters
   const [statusF, setStatusF] = useState("all");
@@ -118,15 +145,25 @@ export function PipelineTimingCard() {
   const rosterTotal = useMemo(() => mentees.filter((m) => !m.isTest).length, [mentees]);
   const grad = legs.find((l) => l.key === "dc_grad");
   const displayLegs = legs.filter((l) => l.key !== "dc_grad");
-  const chartData = displayLegs.map((l) => ({ leg: l.label, avg: l.avgDays, color: legColor(l.key) }));
+  const chartData = displayLegs.map((l) => ({
+    leg: l.label,
+    avg: l.avgDays,
+    color: legColor(l.key),
+  }));
 
   // Compare cohorts by start date.
   const winA: StartWindow = { fromMonths: aFrom, toMonths: aTo };
   const winB: StartWindow = { fromMonths: bFrom, toMonths: bTo };
   const labelA = startWindowLabel(winA);
   const labelB = startWindowLabel(winB);
-  const cohortA = useMemo(() => cohort.filter((m) => inStartWindow(m.startDate, winA, today)), [cohort, aFrom, aTo, today]);
-  const cohortB = useMemo(() => cohort.filter((m) => inStartWindow(m.startDate, winB, today)), [cohort, bFrom, bTo, today]);
+  const cohortA = useMemo(
+    () => cohort.filter((m) => inStartWindow(m.startDate, winA, today)),
+    [cohort, aFrom, aTo, today],
+  );
+  const cohortB = useMemo(
+    () => cohort.filter((m) => inStartWindow(m.startDate, winB, today)),
+    [cohort, bFrom, bTo, today],
+  );
   const legsA = useMemo(() => aggregateLegDurations(cohortA), [cohortA]);
   const legsB = useMemo(() => aggregateLegDurations(cohortB), [cohortB]);
   const statsA: CohortStats = useMemo(() => summarizeCohort(cohortA.map(toCohortInput)), [cohortA]);
@@ -136,10 +173,19 @@ export function PipelineTimingCard() {
   const cmpLegs = useMemo(() => {
     const ad = legsA.filter((l) => l.key !== "dc_grad");
     const bd = legsB.filter((l) => l.key !== "dc_grad");
-    return ad.map((l, i) => ({ key: l.key, leg: l.label, avgA: l.avgDays, nA: l.n, avgB: bd[i]?.avgDays ?? null, nB: bd[i]?.n ?? 0 }));
+    return ad.map((l, i) => ({
+      key: l.key,
+      leg: l.label,
+      avgA: l.avgDays,
+      nA: l.n,
+      avgB: bd[i]?.avgDays ?? null,
+      nB: bd[i]?.n ?? 0,
+    }));
   }, [legsA, legsB]);
-  const dDelta = (a: number | null, b: number | null) => (a != null && b != null ? `${signed(a - b)}d` : "—");
-  const ppDelta = (a: number | null, b: number | null) => (a != null && b != null ? signedPp((a - b) * 100) : "—");
+  const dDelta = (a: number | null, b: number | null) =>
+    a != null && b != null ? `${signed(a - b)}d` : "—";
+  const ppDelta = (a: number | null, b: number | null) =>
+    a != null && b != null ? signedPp((a - b) * 100) : "—";
   const tierPct = (n: number, total: number) => (total ? Math.round((n / total) * 100) : 0);
 
   if (error) return <div className="error">{error}</div>;
@@ -151,11 +197,19 @@ export function PipelineTimingCard() {
       variant="inset"
       style={{ marginBottom: 18 }}
       help={<HelpButton id="metrics.pipelineTiming" label="Pipeline timing" />}
-      title={<>Pipeline timing — {compareMode ? "comparing start-date cohorts" : `${anyFilter ? "filtered" : "all"} mentees`}</>}
+      title={
+        <>
+          Pipeline timing —{" "}
+          {compareMode
+            ? "comparing start-date cohorts"
+            : `${anyFilter ? "filtered" : "all"} mentees`}
+        </>
+      }
     >
       <p className="view__hint">
-        Average time each leg of the journey takes (Discovery → JumpStart → 4x → 2x → 1x → Graduation), across every mentee where
-        both ends are known (n shown per leg). Off the Mentees source of truth (effective dates); test mentees excluded. All-time.
+        Average time each leg of the journey takes (Discovery → JumpStart → 4x → 2x → 1x →
+        Graduation), across every mentee where both ends are known (n shown per leg). Off the
+        Mentees source of truth (effective dates); test mentees excluded. All-time.
       </p>
 
       <div className="journey-filters">
@@ -193,8 +247,15 @@ export function PipelineTimingCard() {
             </select>
           </label>
         )}
-        <label className="journey-filters__check" title="Split the roster into two start-date bands and compare how each is doing">
-          <input type="checkbox" checked={compareMode} onChange={(e) => setCompareMode(e.target.checked)} />
+        <label
+          className="journey-filters__check"
+          title="Split the roster into two start-date bands and compare how each is doing"
+        >
+          <input
+            type="checkbox"
+            checked={compareMode}
+            onChange={(e) => setCompareMode(e.target.checked)}
+          />
           <span>Compare start-date cohorts</span>
         </label>
         <span className="journey-filters__count muted">
@@ -211,22 +272,70 @@ export function PipelineTimingCard() {
       </div>
 
       {compareMode && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 18, margin: "4px 0 14px", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 18,
+            margin: "4px 0 14px",
+            alignItems: "center",
+          }}
+        >
           <span className="muted" style={{ fontSize: 12 }}>
-            “Start” = system start (discovery → JumpStart → JYF → first meeting), the basis for days in system.
+            “Start” = system start (discovery → JumpStart → JYF → first meeting), the basis for days
+            in system.
           </span>
           {(
             [
-              { tag: "A", color: ct.accent, from: aFrom, to: aTo, setFrom: setAFrom, setTo: setATo, n: statsA.total },
-              { tag: "B", color: ct.cmp, from: bFrom, to: bTo, setFrom: setBFrom, setTo: setBTo, n: statsB.total },
+              {
+                tag: "A",
+                color: ct.accent,
+                from: aFrom,
+                to: aTo,
+                setFrom: setAFrom,
+                setTo: setATo,
+                n: statsA.total,
+              },
+              {
+                tag: "B",
+                color: ct.cmp,
+                from: bFrom,
+                to: bTo,
+                setFrom: setBFrom,
+                setTo: setBTo,
+                n: statsB.total,
+              },
             ] as const
           ).map((c) => (
-            <span key={c.tag} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-              <span style={{ width: 11, height: 11, borderRadius: 2, background: c.color, display: "inline-block" }} />
+            <span
+              key={c.tag}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}
+            >
+              <span
+                style={{
+                  width: 11,
+                  height: 11,
+                  borderRadius: 2,
+                  background: c.color,
+                  display: "inline-block",
+                }}
+              />
               <strong>Cohort {c.tag}</strong> — started
-              <input type="number" min={0} value={c.from} onChange={(e) => c.setFrom(clampMo(e.target.value))} style={{ width: 52 }} />
+              <input
+                type="number"
+                min={0}
+                value={c.from}
+                onChange={(e) => c.setFrom(clampMo(e.target.value))}
+                style={{ width: 52 }}
+              />
               to
-              <input type="number" min={0} value={c.to} onChange={(e) => c.setTo(clampMo(e.target.value))} style={{ width: 52 }} />
+              <input
+                type="number"
+                min={0}
+                value={c.to}
+                onChange={(e) => c.setTo(clampMo(e.target.value))}
+                style={{ width: 52 }}
+              />
               months ago
               <span className="muted">· {c.n} mentees</span>
             </span>
@@ -281,20 +390,49 @@ export function PipelineTimingCard() {
           <div className="chart-card__split chart-card__split--both">
             <div style={{ width: "100%", height: 240 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cmpLegs} layout="vertical" margin={{ left: 8, right: 56 }} barGap={2}>
+                <BarChart
+                  data={cmpLegs}
+                  layout="vertical"
+                  margin={{ left: 8, right: 56 }}
+                  barGap={2}
+                >
                   <CartesianGrid stroke={ct.grid} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} unit="d" />
-                  <YAxis type="category" dataKey="leg" width={150} tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+                  <XAxis
+                    type="number"
+                    tick={{ fill: ct.axis, fontSize: 11 }}
+                    stroke={ct.grid}
+                    unit="d"
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="leg"
+                    width={150}
+                    tick={{ fill: ct.axis, fontSize: 11 }}
+                    stroke={ct.grid}
+                  />
                   <Tooltip
                     contentStyle={TOOLTIP}
                     cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                    formatter={(v, n) => [v == null ? "—" : `${v}d`, n === "avgA" ? labelA : labelB]}
+                    formatter={(v, n) => [
+                      v == null ? "—" : `${v}d`,
+                      n === "avgA" ? labelA : labelB,
+                    ]}
                   />
                   <Bar dataKey="avgA" fill={ct.accent} radius={[0, 3, 3, 0]}>
-                    <LabelList dataKey="avgA" position="right" style={{ fill: ct.axis, fontSize: 10 }} formatter={(v) => (v == null ? "" : `${v}d`)} />
+                    <LabelList
+                      dataKey="avgA"
+                      position="right"
+                      style={{ fill: ct.axis, fontSize: 10 }}
+                      formatter={(v) => (v == null ? "" : `${v}d`)}
+                    />
                   </Bar>
                   <Bar dataKey="avgB" fill={ct.cmp} radius={[0, 3, 3, 0]}>
-                    <LabelList dataKey="avgB" position="right" style={{ fill: ct.axis, fontSize: 10 }} formatter={(v) => (v == null ? "" : `${v}d`)} />
+                    <LabelList
+                      dataKey="avgB"
+                      position="right"
+                      style={{ fill: ct.axis, fontSize: 10 }}
+                      formatter={(v) => (v == null ? "" : `${v}d`)}
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -327,7 +465,9 @@ export function PipelineTimingCard() {
             </div>
           </div>
           <div className="table-scroll" style={{ marginTop: 6 }}>
-            <h3 style={{ margin: "8px 0 6px", fontSize: 14 }}>Current-tier mix (how far each cohort has progressed)</h3>
+            <h3 style={{ margin: "8px 0 6px", fontSize: 14 }}>
+              Current-tier mix (how far each cohort has progressed)
+            </h3>
             <table className="table">
               <thead>
                 <tr>
@@ -381,14 +521,34 @@ export function PipelineTimingCard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 48 }}>
                   <CartesianGrid stroke={ct.grid} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} unit="d" />
-                  <YAxis type="category" dataKey="leg" width={150} tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
-                  <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} formatter={(v) => [v == null ? "—" : `${v}d`, "Avg"]} />
+                  <XAxis
+                    type="number"
+                    tick={{ fill: ct.axis, fontSize: 11 }}
+                    stroke={ct.grid}
+                    unit="d"
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="leg"
+                    width={150}
+                    tick={{ fill: ct.axis, fontSize: 11 }}
+                    stroke={ct.grid}
+                  />
+                  <Tooltip
+                    contentStyle={TOOLTIP}
+                    cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                    formatter={(v) => [v == null ? "—" : `${v}d`, "Avg"]}
+                  />
                   <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
                     {chartData.map((d, i) => (
                       <Cell key={i} fill={d.color} />
                     ))}
-                    <LabelList dataKey="avg" position="right" style={{ fill: ct.axis, fontSize: 11 }} formatter={(v) => (v == null ? "" : `${v}d`)} />
+                    <LabelList
+                      dataKey="avg"
+                      position="right"
+                      style={{ fill: ct.axis, fontSize: 11 }}
+                      formatter={(v) => (v == null ? "" : `${v}d`)}
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -408,7 +568,15 @@ export function PipelineTimingCard() {
                     <tr key={l.key}>
                       <td>
                         <span
-                          style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: legColor(l.key), marginRight: 6, verticalAlign: "middle" }}
+                          style={{
+                            display: "inline-block",
+                            width: 10,
+                            height: 10,
+                            borderRadius: 2,
+                            background: legColor(l.key),
+                            marginRight: 6,
+                            verticalAlign: "middle",
+                          }}
                         />
                         {l.label}
                       </td>

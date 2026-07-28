@@ -130,7 +130,10 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
     if (!name) return;
     setBusy(true);
     try {
-      await createStaffPayProfile(user?.id ?? "", { name, hourlyRate: Number.isFinite(r) && r > 0 ? r : 0 });
+      await createStaffPayProfile(user?.id ?? "", {
+        name,
+        hourlyRate: Number.isFinite(r) && r > 0 ? r : 0,
+      });
       const p = await reload();
       const created = p.find((x) => x.name.toLowerCase() === name.toLowerCase());
       if (created) setProfileId(created.id);
@@ -176,7 +179,9 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
       setDirty(false);
       setFlash(nextStatus === "approved" ? "Approved and saved." : "Draft saved.");
     } catch (e) {
-      setFlash(`Save failed: ${String(e)} — staff-pay tables need migration 9970_staff_hourly_pay.sql`);
+      setFlash(
+        `Save failed: ${String(e)} — staff-pay tables need migration 9970_staff_hourly_pay.sql`,
+      );
     } finally {
       setBusy(false);
     }
@@ -233,9 +238,13 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
         total: model.total,
         html,
       });
-      setFlash(`${status === "approved" ? "Pay stub" : "Review stub"} printed + archived to History.`);
+      setFlash(
+        `${status === "approved" ? "Pay stub" : "Review stub"} printed + archived to History.`,
+      );
     } catch (e) {
-      setFlash(`Stub printed, but archiving failed: ${String(e)} — apply migration 9970_staff_hourly_pay.sql`);
+      setFlash(
+        `Stub printed, but archiving failed: ${String(e)} — apply migration 9970_staff_hourly_pay.sql`,
+      );
     }
   }
 
@@ -251,9 +260,10 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
               <SectionId id="pay.hourly" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Timesheet-driven pay for staff the invoice engine doesn't cover: set the <strong>default hourly rate</strong>,
-              enter the <strong>hours</strong> from their time sheet (any line can carry its <strong>own rate</strong> when
-              that work pays more), add <strong>piece-work</strong> items paid per unit, then save/approve and{" "}
+              Timesheet-driven pay for staff the invoice engine doesn't cover: set the{" "}
+              <strong>default hourly rate</strong>, enter the <strong>hours</strong> from their time
+              sheet (any line can carry its <strong>own rate</strong> when that work pays more), add{" "}
+              <strong>piece-work</strong> items paid per unit, then save/approve and{" "}
               <strong>print the pay stub</strong> (archived to History automatically).
             </div>
           </div>
@@ -266,7 +276,8 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
 
         {error && (
           <p className="notice notice--warn" style={{ marginTop: 8 }}>
-            {error} — the staff-pay tables need migration <code>9970_staff_hourly_pay.sql</code> applied.
+            {error} — the staff-pay tables need migration <code>9970_staff_hourly_pay.sql</code>{" "}
+            applied.
           </p>
         )}
 
@@ -285,13 +296,31 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
           </label>
           <label className="filter">
             <span>Period month</span>
-            <input type="month" value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} />
+            <input
+              type="month"
+              value={ym}
+              onChange={(e) => e.target.value && setYm(e.target.value)}
+            />
           </label>
           <label className="filter">
             <span>New staff</span>
             <span style={{ display: "flex", gap: 6 }}>
-              <input type="text" placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ width: 160 }} />
-              <input type="number" placeholder="$/h" min="0" step="0.5" value={newRate} onChange={(e) => setNewRate(e.target.value)} style={{ width: 80 }} />
+              <input
+                type="text"
+                placeholder="Name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={{ width: 160 }}
+              />
+              <input
+                type="number"
+                placeholder="$/h"
+                min="0"
+                step="0.5"
+                value={newRate}
+                onChange={(e) => setNewRate(e.target.value)}
+                style={{ width: 80 }}
+              />
               <button className="btn btn--sm" onClick={addStaff} disabled={busy || !newName.trim()}>
                 + Add
               </button>
@@ -307,10 +336,28 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
               <div>
                 <h2 style={{ fontSize: 15 }}>
                   {profile.name} · {ym}
-                  {locked && <span className="pill pill--success" style={{ marginLeft: 8 }}>approved</span>}
-                  {dirty && <span className="pill pill--running" style={{ marginLeft: 8 }}>unsaved</span>}
+                  {locked && (
+                    <span className="pill pill--success" style={{ marginLeft: 8 }}>
+                      approved
+                    </span>
+                  )}
+                  {dirty && (
+                    <span className="pill pill--running" style={{ marginLeft: 8 }}>
+                      unsaved
+                    </span>
+                  )}
                 </h2>
-                <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div
+                  className="muted"
+                  style={{
+                    fontSize: 12,
+                    marginTop: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <span>Rate</span>
                   <input
                     className="input--inline"
@@ -331,8 +378,8 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                     aria-label={`Default hourly rate for ${profile.name}`}
                   />
                   <span>
-                    $/hour default · {cleanEntries.length} line{cleanEntries.length === 1 ? "" : "s"} · {hours} h ·{" "}
-                    {fmtUsd(labor)} labor
+                    $/hour default · {cleanEntries.length} line
+                    {cleanEntries.length === 1 ? "" : "s"} · {hours} h · {fmtUsd(labor)} labor
                     {pieceTotal !== 0 ? ` · ${fmtUsd(pieceTotal)} piece work` : ""}
                   </span>
                 </div>
@@ -358,7 +405,10 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                     <th style={{ width: 150 }}>Date</th>
                     <th style={{ textAlign: "left" }}>Work (from the time sheet)</th>
                     <th style={{ width: 90 }}>Hours</th>
-                    <th style={{ width: 110 }} title="Leave blank to pay this line at the default rate above">
+                    <th
+                      style={{ width: 110 }}
+                      title="Leave blank to pay this line at the default rate above"
+                    >
                       Rate ($/h)
                     </th>
                     <th style={{ width: 110 }}>Amount</th>
@@ -429,7 +479,10 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                       </td>
                       <td
                         className="num"
-                        style={{ fontWeight: e.rate != null && e.rate !== rate ? 700 : undefined, color: e.rate != null && e.rate !== rate ? "var(--accent)" : undefined }}
+                        style={{
+                          fontWeight: e.rate != null && e.rate !== rate ? 700 : undefined,
+                          color: e.rate != null && e.rate !== rate ? "var(--accent)" : undefined,
+                        }}
                       >
                         {fmtUsd(entryAmount(e, rate))}
                       </td>
@@ -462,9 +515,13 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                     <td colSpan={2} style={{ textAlign: "right", fontWeight: 600 }}>
                       Labor totals
                     </td>
-                    <td className="num" style={{ fontWeight: 700 }}>{hours} h</td>
+                    <td className="num" style={{ fontWeight: 700 }}>
+                      {hours} h
+                    </td>
                     <td />
-                    <td className="num" style={{ fontWeight: 700 }}>{fmtUsd(labor)}</td>
+                    <td className="num" style={{ fontWeight: 700 }}>
+                      {fmtUsd(labor)}
+                    </td>
                     <td />
                   </tr>
                 </tfoot>
@@ -500,7 +557,9 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
 
           <aside className="builder__side">
             <div className="card">
-              <div className="muted" style={{ fontSize: 12 }}>Payout ({ym})</div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                Payout ({ym})
+              </div>
               <div className="builder__total">{fmtUsd(total)}</div>
               <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
                 {fmtUsd(labor)} labor ({hours} h)
@@ -549,17 +608,34 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
                     setNotes(e.target.value);
                     touch();
                   }}
-                  style={{ resize: "vertical", width: "100%", background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, color: "var(--text)", padding: "6px 8px", fontSize: 13 }}
+                  style={{
+                    resize: "vertical",
+                    width: "100%",
+                    background: "var(--panel-2)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 6,
+                    color: "var(--text)",
+                    padding: "6px 8px",
+                    fontSize: 13,
+                  }}
                 />
               </label>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
                 {!locked ? (
                   <>
-                    <button className="btn btn--sm" onClick={() => persist("draft")} disabled={busy}>
+                    <button
+                      className="btn btn--sm"
+                      onClick={() => persist("draft")}
+                      disabled={busy}
+                    >
                       Save draft
                     </button>
-                    <button className="btn btn--sm btn--primary" onClick={() => persist("approved")} disabled={busy}>
+                    <button
+                      className="btn btn--sm btn--primary"
+                      onClick={() => persist("approved")}
+                      disabled={busy}
+                    >
                       Approve
                     </button>
                   </>

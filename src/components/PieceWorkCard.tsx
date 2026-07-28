@@ -24,7 +24,8 @@ export function PieceWorkCard({
 }) {
   const total = piecesTotal(items);
 
-  const patch = (i: number, p: Partial<PieceEntry>) => onChange(items.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const patch = (i: number, p: Partial<PieceEntry>) =>
+    onChange(items.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const num = (v: string) => {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
