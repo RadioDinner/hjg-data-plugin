@@ -1,0 +1,51 @@
+
+/home/user/hjg-data-plugin/lib/notionCsv.ts
+  207:37  error  Irregular whitespace not allowed  no-irregular-whitespace
+
+/home/user/hjg-data-plugin/src/auth.tsx
+  33:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  37:23  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  42:23  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+/home/user/hjg-data-plugin/src/components/NotificationsBell.tsx
+  30:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+/home/user/hjg-data-plugin/src/components/NotionImportModal.tsx
+  34:97  error  Irregular whitespace not allowed  no-irregular-whitespace
+
+/home/user/hjg-data-plugin/src/components/PipelineTimingCard.tsx
+  128:96  warning  React Hook useMemo has a missing dependency: 'winA'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  129:96  warning  React Hook useMemo has a missing dependency: 'winB'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/hjg-data-plugin/src/components/UserPermissionsCard.tsx
+  49:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+/home/user/hjg-data-plugin/src/csv.ts
+  31:27  error  Irregular whitespace not allowed  no-irregular-whitespace
+
+/home/user/hjg-data-plugin/src/theme.tsx
+  45:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  65:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+/home/user/hjg-data-plugin/src/views/AdminView.tsx
+  136:6  warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/hjg-data-plugin/src/views/BuildPayoutView.tsx
+  241:9  warning  The 'lines' logical expression could make the dependencies of useMemo Hook (at line 257) change on every render. To fix this, wrap the initialization of 'lines' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+/home/user/hjg-data-plugin/src/views/FinancialEventView.tsx
+  58:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+/home/user/hjg-data-plugin/src/views/MetricsView.tsx
+  663:5  warning  React Hook useMemo has a missing dependency: 'isMentor'. Either include it or remove the dependency array                                                                 react-hooks/exhaustive-deps
+  671:5  warning  React Hook useMemo has a missing dependency: 'isMentor'. Either include it or remove the dependency array                                                                 react-hooks/exhaustive-deps
+  687:5  warning  React Hook useMemo has a missing dependency: 'isMentor'. Either include it or remove the dependency array                                                                 react-hooks/exhaustive-deps
+  756:9  warning  The 'kpis' object makes the dependencies of useMemo Hook (at line 1007) change on every render. To fix this, wrap the initialization of 'kpis' in its own useMemo() Hook  react-hooks/exhaustive-deps
+  756:9  warning  The 'kpis' object makes the dependencies of useMemo Hook (at line 1027) change on every render. To fix this, wrap the initialization of 'kpis' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+/home/user/hjg-data-plugin/src/views/TimeClockView.tsx
+  76:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+✖ 21 problems (3 errors, 18 warnings)
+  0 errors and 4 warnings potentially fixable with the `--fix` option.
+

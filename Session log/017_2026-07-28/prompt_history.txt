@@ -1,0 +1,2 @@
+--- 2026-07-28 14:21 ---
+Add ESLint and Prettier configs. Run them. Tell me what they flag. Commit to main for this session
