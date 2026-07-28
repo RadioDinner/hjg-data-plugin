@@ -1,0 +1,16 @@
+# Build output + deps
+dist/
+node_modules/
+package-lock.json
+
+# Per-session archives — history stays byte-exact
+Session log/
+
+# Hand-wrapped prose, incl. docs/coachaccountable-api.md (source of truth — never reformat)
+*.md
+
+# Hand-tuned standalone HTML tools
+public/
+
+# SQL migrations are pasted into the Supabase SQL editor as-is
+supabase/
