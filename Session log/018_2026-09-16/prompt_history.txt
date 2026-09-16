@@ -1,0 +1,2 @@
+--- 2026-09-16 12:36 ---
+On my "Metrics 001" page, I see there are some events or meetings that are considered discovery calls that shouldn't be. Can you take a look at how the discovery calls card (003) builds the data?

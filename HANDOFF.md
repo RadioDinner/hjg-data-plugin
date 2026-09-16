@@ -1,10 +1,39 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-07-28 (session 017 — ESLint + Prettier tooling added; safe lint fixes +
-repo-wide format pass applied; **no behavior change**, version stays 0.7.0).
+2026-09-16 (session 018 — investigation only: why card 003 over-counts
+discovery calls; **no code change**, version stays 0.7.0).
 
-## ▶ START HERE (2026-07-28, session 017 — lint/format tooling, ON `main`)
+## ▶ START HERE (2026-09-16, session 018 — discovery-call over-count, branch `claude/peaceful-noether-543uzn`)
+
+**User report:** Metrics (001) → *Discovery calls → conversion* (003) counts
+events that are not discovery calls. **Assessment only this session; nothing
+shipped.** Full trace + ranked findings in
+`Session log/018_2026-09-16/session_log.md`; a paste-ready audit query in
+`Session log/018_2026-09-16/discovery_card_audit.sql`.
+
+**Root-cause candidates, ranked:**
+1. **Canceled calls never leave the mirror (confirmed in code).**
+   `lib/sync.ts:194` calls `Appointment.getAll` without `includeCanceled`
+   (docs default false), and the sync is upsert-only with no stale-row
+   handling (`synced_at` isn't even refreshed). A call canceled in CA after
+   it was first synced keeps `status='A'` forever and stays in the card.
+2. **Substring classification on the appointment label** (`lib/config.ts`
+   `DISCOVERY_*_CONTAINS`); labels can be per-appointment `alternateLabel`s.
+3. **Card feeds `date_added` (booking date) into the outcome resolver** as the
+   call date (`MetricsView.tsx:488-491`), unlike the Discovery tab
+   (`start_date`). Counting by booking date is deliberate; the outcome-clock
+   basis looks accidental.
+4. Appointments are counted, not unique prospects (funnel counts prospects).
+5. The card's Explore modal omits name / scheduled date / coach / status, so
+   rows can't be diagnosed from the UI. Raw data tab → `ca_appointments` can.
+
+**Proposed next step (needs the user's go-ahead):** sync with
+`includeCanceled: true` + refresh `synced_at` on upsert; add the hidden
+columns to the Explore modal; decide the outcome `callDate` basis. Could not
+check live data — no Supabase credentials in the container.
+
+## ▶ Prior session START HERE (2026-07-28, session 017 — lint/format tooling, ON `main`)
 
 **ESLint + Prettier now live in the repo** (committed straight to `main` per
 the user; tooling only, chip stays `v0.7.0`). New: `eslint.config.js` (flat
