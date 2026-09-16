@@ -3,3 +3,6 @@ On my "Metrics 001" page, I see there are some events or meetings that are consi
 
 --- 2026-09-16 12:58 ---
 @"/root/.claude/uploads/fc08e154-2e3f-5752-b307-49d329144152/4308c52f-ca-appointments-2026-09-16.csv" I believe the discovery calls are built off this list. Currently on the dashboard there are 19 discovery calls shown. And I think it is mixing in the Mentor Training meetings. Can you confirm
+
+--- 2026-09-16 13:20 ---
+So yeah lets merge the fix into main

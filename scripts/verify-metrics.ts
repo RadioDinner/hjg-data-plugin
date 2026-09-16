@@ -466,6 +466,13 @@ console.log("[7] appointment categorization (group sessions vs 1-on-1)");
   // Discovery + exclusions are unaffected by the new group precedence.
   eq(c("Discovery Call Appointment (Phone Call)"), "discoveryPhone", "discovery phone unaffected");
   eq(c("Mentor Training Extra Teaching"), "excluded", "excluded type unaffected");
+  // Session 018: Mentor-Training practice discovery calls must NOT count as
+  // prospect discovery calls, and the newer "(Phone)" type name is phone, not zoom.
+  eq(c("MT Discovery Call Appointment (Zoom)"), "excluded", "MT practice discovery call excluded");
+  eq(c("mt discovery call appointment (zoom)"), "excluded", "MT exclusion is case-insensitive");
+  eq(c("Discovery Call Appointment (Phone)"), "discoveryPhone", "new (Phone) type name is phone");
+  eq(c("Discovery Call Appointment (Zoom)"), "discoveryZoom", "(Zoom) type name is zoom");
+  eq(c("Discovery Call Appointment"), "discoveryZoom", "legacy generic discovery defaults to zoom");
 }
 
 console.log(

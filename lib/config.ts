@@ -11,9 +11,21 @@ export const EXCLUDE_CONTAINS = [
   "mentor training extra teaching",
   "get-acquainted zoom visit",
   "gain momentum group",
+  // "MT Discovery Call Appointment (Zoom)" is a Mentor-Training practice session
+  // (one CA row per trainee attendee, all on the same slot). Its label contains
+  // "discovery call appointment (zoom)", so without this entry the discovery
+  // rules below counted every attendee as a prospect discovery call (11 phantom
+  // calls in Aug 2026). Excluded here because EXCLUDE_CONTAINS wins precedence.
+  "mt discovery call",
 ];
 
-export const DISCOVERY_PHONE_CONTAINS = ["discovery call appointment (phone call)"];
+// Two phone type names exist: the original "(Phone Call)" and, since June 2026,
+// "(Phone)" on the newer booking flow. Both are phone. Without the second entry
+// "(Phone)" fell through to the generic rule below and was counted as Zoom.
+export const DISCOVERY_PHONE_CONTAINS = [
+  "discovery call appointment (phone call)",
+  "discovery call appointment (phone)",
+];
 
 export const DISCOVERY_ZOOM_CONTAINS = ["discovery call appointment (zoom)"];
 
