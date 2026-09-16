@@ -64,3 +64,32 @@ export function delta(a: number, b: number): Delta {
   const abs = a - b;
   return { abs, pct: b === 0 ? null : (abs / b) * 100 };
 }
+
+// ---------------------------------------------------------------------------
+// Point-in-time ("as of") presets for the JYF vs Active Mentoring card (§005).
+// That card is a current-state snapshot, not a date range, so "compare" there
+// means TODAY vs WHAT THE CARD WOULD HAVE SHOWN ON AN EARLIER DAY. The three
+// presets pick that earlier day by shifting today back a calendar month /
+// quarter / year (day-of-month clamped by shiftMonths, so Mar 31 → Feb 28).
+// ---------------------------------------------------------------------------
+
+export type AsOfKey = "month" | "quarter" | "year";
+
+export interface AsOfPreset {
+  key: AsOfKey;
+  label: string;
+  shiftMonths: number;
+}
+
+export const ASOF_PRESETS: AsOfPreset[] = [
+  { key: "month", label: "Today vs a month ago", shiftMonths: 1 },
+  { key: "quarter", label: "Today vs a quarter ago", shiftMonths: 3 },
+  { key: "year", label: "Today vs a year ago", shiftMonths: 12 },
+];
+
+// The "then" date for a preset, given today's YYYY-MM-DD.
+export function asOfDate(today: string, key: AsOfKey): string {
+  const p = ASOF_PRESETS.find((x) => x.key === key);
+  if (!p) throw new Error(`unknown as-of preset: ${key}`);
+  return shiftMonths(today, p.shiftMonths);
+}

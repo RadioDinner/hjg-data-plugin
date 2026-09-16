@@ -14,15 +14,19 @@ import {
   YAxis,
 } from "recharts";
 import {
+  ASOF_PRESETS,
   COMPARE_PRESETS,
   MANUAL_METRICS,
+  asOfDate,
+  computeJyfVsMentoring,
+  computeJyfVsMentoringAsOf,
   derivePeriodB,
   delta,
   fetchCoachesWithSettings,
   fetchPrimaryCoachByClient,
   fetchLastSyncedAt,
   fetchFreedomReport,
-  fetchJyfVsMentoring,
+  fetchJyfCohortInputs,
   fetchManualMetrics,
   fetchMentorCoachIds,
   fetchRangeAppointments,
@@ -33,7 +37,9 @@ import {
   rollingConversionTrend,
   trendWindowLabel,
   DEFAULT_TREND_WINDOW,
+  type AsOfKey,
   type CapacityAppt,
+  type CohortEngagementAsOfInput,
   type CompareKey,
   type CoachWithSettings,
   type DiscoveryOutcomeValue,
@@ -280,6 +286,19 @@ function buildCompareTable(
   return { columns: ["Month (A)", `A ${label}`, "Month (B)", `B ${label}`, "Δ"], rows };
 }
 
+// Sub-line under a §005 stat tile while the card's point-in-time compare is on:
+// "was 38 · +4 (+11%)". Green when up, red when down, muted when unchanged.
+function StatDelta({ now, before }: { now: number; before: number }) {
+  const d = delta(now, before);
+  const cls = d.abs > 0 ? "stat__delta--up" : d.abs < 0 ? "stat__delta--down" : "";
+  return (
+    <span className={`stat__delta ${cls}`}>
+      was {num(before)} · {signed(d.abs)}
+      {d.pct !== null ? ` (${signedPct(d.pct)})` : ""}
+    </span>
+  );
+}
+
 function ChartCard({
   title,
   children,
@@ -433,7 +452,12 @@ export function MetricsView() {
   // "Meetings to Freedom!" report, loaded once (all-history, computed in db.ts off
   // the new mentees table — not scoped to the date range).
   const [freedomReport, setFreedomReport] = useState<FreedomReport | null>(null);
-  const [jyfVsMentoring, setJyfVsMentoring] = useState<JyfVsMentoring | null>(null);
+  // "JYF vs Active Mentoring" (§005): the engagement rows behind the card, fetched
+  // once. Today's snapshot and the compare tool's as-of snapshot are both pure
+  // functions of these rows, so switching the compare option never refetches.
+  const [jyfInputs, setJyfInputs] = useState<CohortEngagementAsOfInput[] | null>(null);
+  // §005 point-in-time compare: off, or one of the three "Today vs …" presets.
+  const [jyfCompare, setJyfCompare] = useState<AsOfKey | "off">("off");
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -542,9 +566,9 @@ export function MetricsView() {
   // range-scoped), so it loads once like the journeys above.
   useEffect(() => {
     let cancelled = false;
-    fetchJyfVsMentoring()
+    fetchJyfCohortInputs()
       .then((r) => {
-        if (!cancelled) setJyfVsMentoring(r);
+        if (!cancelled) setJyfInputs(r);
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -1061,6 +1085,21 @@ export function MetricsView() {
     [freedomReport],
   );
 
+  // "JYF vs Active Mentoring" — today's snapshot (what the card always showed),
+  // plus the compare tool's "then": today shifted back a month / quarter / year
+  // and the card rebuilt as of that day (lib/cohort.ts computeJyfVsMentoringAsOf).
+  // `today` is the browser's local date, like the range presets above.
+  const jyfVsMentoring = useMemo<JyfVsMentoring | null>(
+    () => (jyfInputs ? computeJyfVsMentoring(jyfInputs) : null),
+    [jyfInputs],
+  );
+  const today = useMemo(() => ymd(new Date()), []);
+  const jyfAsOf = jyfCompare === "off" ? null : asOfDate(today, jyfCompare);
+  const jyfThen = useMemo(
+    () => (jyfInputs && jyfAsOf ? computeJyfVsMentoringAsOf(jyfInputs, jyfAsOf) : null),
+    [jyfInputs, jyfAsOf],
+  );
+
   // "JYF vs Active Mentoring" — two bars (distinct people per phase). The table
   // adds the per-tier mentoring breakdown + the de-duplicated pipeline total.
   // Two categories: JumpStart, then Active Mentoring. `back` is the backdrop layer
@@ -1100,6 +1139,45 @@ export function MetricsView() {
     }),
     [jyfVsMentoring],
   );
+  // §005 compare mode: five grouped "before vs now" categories (the two headline
+  // cohorts + the three tiers) and a Δ table against the earlier day. `before`
+  // is the reconstructed as-of value; `now` is today's.
+  const jyfCompareBars = useMemo(
+    () =>
+      jyfVsMentoring && jyfThen
+        ? [
+            { metric: "JYF", now: jyfVsMentoring.jyf, before: jyfThen.jyf },
+            {
+              metric: "Active Mentoring",
+              now: jyfVsMentoring.mentoring,
+              before: jyfThen.mentoring,
+            },
+            { metric: "4x", now: jyfVsMentoring.byTier["4x"], before: jyfThen.byTier["4x"] },
+            { metric: "2x", now: jyfVsMentoring.byTier["2x"], before: jyfThen.byTier["2x"] },
+            { metric: "1x", now: jyfVsMentoring.byTier["1x"], before: jyfThen.byTier["1x"] },
+          ]
+        : [],
+    [jyfVsMentoring, jyfThen],
+  );
+  const jyfCompareTable = useMemo<ChartCardTable>(() => {
+    if (!jyfVsMentoring || !jyfThen)
+      return { columns: ["Cohort", "Today", "Then", "Δ", "Δ%"], rows: [] };
+    const row = (label: string, now: number, before: number): ChartCardCell[] => {
+      const d = delta(now, before);
+      return [label, now, before, signed(d.abs), signedPct(d.pct)];
+    };
+    return {
+      columns: ["Cohort", `Today (${fmtDate(today)})`, `As of ${fmtDate(jyfThen.asOf)}`, "Δ", "Δ%"],
+      rows: [
+        row("JumpStart (JYF) — open", jyfVsMentoring.jyf, jyfThen.jyf),
+        row("Active Mentoring (4x + 2x + 1x) — open", jyfVsMentoring.mentoring, jyfThen.mentoring),
+        row("• 4x", jyfVsMentoring.byTier["4x"], jyfThen.byTier["4x"]),
+        row("• 2x", jyfVsMentoring.byTier["2x"], jyfThen.byTier["2x"]),
+        row("• 1x", jyfVsMentoring.byTier["1x"], jyfThen.byTier["1x"]),
+        row("Total in pipeline (distinct)", jyfVsMentoring.total, jyfThen.total),
+      ],
+    };
+  }, [jyfVsMentoring, jyfThen, today]);
 
   // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
   // per-chart Period-B overlay datasets (aligned to A by month index), and
@@ -1945,109 +2023,215 @@ export function MetricsView() {
               title="JYF vs Active Mentoring"
               helpId="metrics.jyfVsMentoring"
               sectionId="metrics.jyfVsMentoring"
-              table={jyfTable}
+              table={jyfThen ? jyfCompareTable : jyfTable}
               extra={
                 <>
-                  <p className="view__hint">
-                    People currently in an <strong>open JumpStart Your Freedom</strong> engagement,
-                    then <strong>Active Mentoring</strong> split into its{" "}
-                    <strong>4x / 2x / 1x</strong> tiers. The shaded
-                    <strong> master block behind the three tiers</strong> is the <em>distinct</em>{" "}
-                    Active-Mentoring total — smaller than 4x+2x+1x added up when someone is in more
-                    than one tier. Counts distinct people; completed or canceled engagements drop
-                    out. <em>All-time snapshot — not affected by the date range above.</em>
-                  </p>
+                  <div className="jyf-compare">
+                    <span className="stat__label">Compare:</span>
+                    <div
+                      className="seg"
+                      role="tablist"
+                      aria-label="Compare today with an earlier day"
+                    >
+                      <button
+                        role="tab"
+                        aria-selected={jyfCompare === "off"}
+                        className={`seg__btn ${jyfCompare === "off" ? "seg__btn--active" : ""}`}
+                        onClick={() => setJyfCompare("off")}
+                      >
+                        Off
+                      </button>
+                      {ASOF_PRESETS.map((p) => (
+                        <button
+                          key={p.key}
+                          role="tab"
+                          aria-selected={jyfCompare === p.key}
+                          className={`seg__btn ${jyfCompare === p.key ? "seg__btn--active" : ""}`}
+                          onClick={() => setJyfCompare(p.key)}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {jyfThen ? (
+                    <p className="view__hint">
+                      <strong>Today ({fmtDate(today)})</strong> vs what this card would have shown
+                      on <strong>{fmtDate(jyfThen.asOf)}</strong>, rebuilt from each engagement's
+                      created / closed dates in the CoachAccountable mirror (open then = created by
+                      that day and not yet completed or canceled). Colored bars are today; grey bars
+                      are the earlier day. Δ is today minus then.
+                      {jyfThen.unknownClose > 0 && (
+                        <em>
+                          {" "}
+                          {num(jyfThen.unknownClose)} closed engagement
+                          {jyfThen.unknownClose === 1 ? " has" : "s have"} no recorded close date
+                          and {jyfThen.unknownClose === 1 ? "is" : "are"} left out of the earlier
+                          snapshot.
+                        </em>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="view__hint">
+                      People currently in an <strong>open JumpStart Your Freedom</strong>{" "}
+                      engagement, then <strong>Active Mentoring</strong> split into its{" "}
+                      <strong>4x / 2x / 1x</strong> tiers. The shaded
+                      <strong> master block behind the three tiers</strong> is the <em>distinct</em>{" "}
+                      Active-Mentoring total — smaller than 4x+2x+1x added up when someone is in
+                      more than one tier. Counts distinct people; completed or canceled engagements
+                      drop out. <em>All-time snapshot — not affected by the date range above.</em>
+                    </p>
+                  )}
                   <div className="stat-row">
                     <div className="stat">
                       <span className="stat__value" style={{ color: C.mentees }}>
                         {jyfVsMentoring ? num(jyfVsMentoring.jyf) : "—"}
                       </span>
                       <span className="stat__label">In JumpStart (JYF)</span>
+                      {jyfVsMentoring && jyfThen && (
+                        <StatDelta now={jyfVsMentoring.jyf} before={jyfThen.jyf} />
+                      )}
                     </div>
                     <div className="stat">
                       <span className="stat__value" style={{ color: C.meetings }}>
                         {jyfVsMentoring ? num(jyfVsMentoring.mentoring) : "—"}
                       </span>
                       <span className="stat__label">In Active Mentoring</span>
+                      {jyfVsMentoring && jyfThen && (
+                        <StatDelta now={jyfVsMentoring.mentoring} before={jyfThen.mentoring} />
+                      )}
                     </div>
                     <div className="stat">
                       <span className="stat__value">
                         {jyfVsMentoring ? num(jyfVsMentoring.byTier["4x"]) : "—"}
                       </span>
                       <span className="stat__label">4x</span>
+                      {jyfVsMentoring && jyfThen && (
+                        <StatDelta
+                          now={jyfVsMentoring.byTier["4x"]}
+                          before={jyfThen.byTier["4x"]}
+                        />
+                      )}
                     </div>
                     <div className="stat">
                       <span className="stat__value">
                         {jyfVsMentoring ? num(jyfVsMentoring.byTier["2x"]) : "—"}
                       </span>
                       <span className="stat__label">2x</span>
+                      {jyfVsMentoring && jyfThen && (
+                        <StatDelta
+                          now={jyfVsMentoring.byTier["2x"]}
+                          before={jyfThen.byTier["2x"]}
+                        />
+                      )}
                     </div>
                     <div className="stat">
                       <span className="stat__value">
                         {jyfVsMentoring ? num(jyfVsMentoring.byTier["1x"]) : "—"}
                       </span>
                       <span className="stat__label">1x</span>
+                      {jyfVsMentoring && jyfThen && (
+                        <StatDelta
+                          now={jyfVsMentoring.byTier["1x"]}
+                          before={jyfThen.byTier["1x"]}
+                        />
+                      )}
                     </div>
                   </div>
                 </>
               }
             >
-              <BarChart
-                data={jyfBars}
-                margin={{ top: 12, right: 12, bottom: 8, left: 8 }}
-                barGap={2}
-              >
-                <CartesianGrid stroke={GRID} vertical={false} />
-                <XAxis dataKey="phase" xAxisId={0} {...axisProps} />
-                {/* hidden twin axis so the master/JYF backdrop overlaps the trio */}
-                <XAxis dataKey="phase" xAxisId={1} hide />
-                <YAxis allowDecimals={false} width={28} {...axisProps} />
-                <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                {/* Backdrop: the JYF column (solid) + the Active-Mentoring "master" total
-                    (faint), drawn BEHIND the trio via the hidden axis. */}
-                <Bar
-                  dataKey="back"
-                  name="Total"
-                  xAxisId={1}
-                  barSize={132}
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
+              {jyfThen ? (
+                <BarChart
+                  data={jyfCompareBars}
+                  margin={{ top: 12, right: 12, bottom: 8, left: 8 }}
+                  barGap={4}
                 >
-                  <Cell fill={C.mentees} />
-                  <Cell
-                    fill={C.meetings}
-                    fillOpacity={0.18}
-                    stroke={C.meetings}
-                    strokeOpacity={0.55}
-                    strokeDasharray="4 3"
+                  <CartesianGrid stroke={GRID} vertical={false} />
+                  <XAxis dataKey="metric" {...axisProps} />
+                  <YAxis allowDecimals={false} width={28} {...axisProps} />
+                  <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar
+                    dataKey="before"
+                    name={`As of ${fmtDate(jyfThen.asOf)}`}
+                    fill={CMP}
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
                   />
-                </Bar>
-                {/* The three tier divisions, grouped IN FRONT of the master. */}
-                <Bar
-                  dataKey="t4"
-                  name="4x"
-                  xAxisId={0}
-                  barSize={34}
-                  fill="#7c3aed"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="t2"
-                  name="2x"
-                  xAxisId={0}
-                  barSize={34}
-                  fill="#a78bfa"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="t1"
-                  name="1x"
-                  xAxisId={0}
-                  barSize={34}
-                  fill="#c4b5fd"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
+                  {/* fill = the legend swatch only; each bar takes its cohort color below */}
+                  <Bar
+                    dataKey="now"
+                    name={`Today (${fmtDate(today)})`}
+                    fill={ct.accent}
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
+                  >
+                    <Cell fill={C.mentees} />
+                    <Cell fill={C.meetings} />
+                    <Cell fill="#7c3aed" />
+                    <Cell fill="#a78bfa" />
+                    <Cell fill="#c4b5fd" />
+                  </Bar>
+                </BarChart>
+              ) : (
+                <BarChart
+                  data={jyfBars}
+                  margin={{ top: 12, right: 12, bottom: 8, left: 8 }}
+                  barGap={2}
+                >
+                  <CartesianGrid stroke={GRID} vertical={false} />
+                  <XAxis dataKey="phase" xAxisId={0} {...axisProps} />
+                  {/* hidden twin axis so the master/JYF backdrop overlaps the trio */}
+                  <XAxis dataKey="phase" xAxisId={1} hide />
+                  <YAxis allowDecimals={false} width={28} {...axisProps} />
+                  <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                  {/* Backdrop: the JYF column (solid) + the Active-Mentoring "master" total
+                    (faint), drawn BEHIND the trio via the hidden axis. */}
+                  <Bar
+                    dataKey="back"
+                    name="Total"
+                    xAxisId={1}
+                    barSize={132}
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
+                  >
+                    <Cell fill={C.mentees} />
+                    <Cell
+                      fill={C.meetings}
+                      fillOpacity={0.18}
+                      stroke={C.meetings}
+                      strokeOpacity={0.55}
+                      strokeDasharray="4 3"
+                    />
+                  </Bar>
+                  {/* The three tier divisions, grouped IN FRONT of the master. */}
+                  <Bar
+                    dataKey="t4"
+                    name="4x"
+                    xAxisId={0}
+                    barSize={34}
+                    fill="#7c3aed"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="t2"
+                    name="2x"
+                    xAxisId={0}
+                    barSize={34}
+                    fill="#a78bfa"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="t1"
+                    name="1x"
+                    xAxisId={0}
+                    barSize={34}
+                    fill="#c4b5fd"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              )}
             </ChartCard>
           </div>
 

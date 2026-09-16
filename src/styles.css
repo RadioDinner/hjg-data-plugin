@@ -2090,3 +2090,26 @@ button.version-chip {
   border-color: var(--accent);
   font-weight: 600;
 }
+
+/* --- stat tile: point-in-time compare sub-line ("was 38 · +4") --- */
+.stat__delta {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.stat__delta--up {
+  color: var(--ok-text);
+}
+.stat__delta--down {
+  color: var(--err-text);
+}
+
+/* --- §005 point-in-time compare control (label + segmented presets) --- */
+.jyf-compare {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}

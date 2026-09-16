@@ -11,7 +11,7 @@ import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
 import { toAppointmentRow, MIRROR_STATUS_GONE } from "../lib/sync.js";
-import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
+import { shiftMonths, derivePeriodB, delta, ASOF_PRESETS, asOfDate } from "../lib/compare.js";
 import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
 import {
   computeStageDates,
@@ -20,7 +20,13 @@ import {
   type MeetingStageInput,
 } from "../lib/journey.js";
 import { computeMeetingsToFreedom, type FreedomMenteeInput } from "../lib/freedom.js";
-import { computeJyfVsMentoring, type CohortEngagementInput } from "../lib/cohort.js";
+import {
+  computeJyfVsMentoring,
+  computeJyfVsMentoringAsOf,
+  engagementStateAsOf,
+  type CohortEngagementInput,
+  type CohortEngagementAsOfInput,
+} from "../lib/cohort.js";
 import {
   monthsAgoYmd,
   inStartWindow,
@@ -4064,6 +4070,132 @@ console.log("[27] sync — canceled appointments reach the mirror; rows stamped 
     { year: 2026, endMonth: 12 },
   );
   eq(m.discoveryZoom[7], 1, "monthly metrics count the active call only (Aug)");
+}
+
+console.log(
+  "[28] JYF vs Active Mentoring — point-in-time compare (as-of presets + reconstruction)",
+);
+{
+  // The three presets, verbatim labels, and the "then" date each one picks.
+  eq(ASOF_PRESETS.length, 3, "three as-of presets");
+  eq(
+    ASOF_PRESETS.map((p) => p.label).join("|"),
+    "Today vs a month ago|Today vs a quarter ago|Today vs a year ago",
+    "preset labels read exactly as requested",
+  );
+  eq(asOfDate("2026-09-16", "month"), "2026-08-16", "a month ago from Sep 16 = Aug 16");
+  eq(asOfDate("2026-09-16", "quarter"), "2026-06-16", "a quarter ago from Sep 16 = Jun 16");
+  eq(asOfDate("2026-09-16", "year"), "2025-09-16", "a year ago from Sep 16 = Sep 16 last year");
+  eq(asOfDate("2026-03-31", "month"), "2026-02-28", "day-of-month clamps to a short month");
+
+  // One engagement's state at the end of a given day.
+  const base: CohortEngagementAsOfInput = {
+    clientId: 1,
+    name: "JumpStart Your Freedom",
+    isComplete: false,
+    isCanceled: false,
+    dateAdded: "2026-08-20",
+    startDate: "2026-09-01",
+    dateClosed: null,
+    endDate: "2026-12-01",
+  };
+  eq(engagementStateAsOf(base, "2026-08-16"), "not_yet", "created after the day -> not yet there");
+  eq(engagementStateAsOf(base, "2026-08-20"), "open", "created that day -> counts (end of day)");
+  eq(
+    engagementStateAsOf(base, "2026-08-25"),
+    "open",
+    "open engagement created before the day counts even if its start date is later (mirrors live)",
+  );
+  eq(
+    engagementStateAsOf({ ...base, dateAdded: null }, "2026-08-25"),
+    "not_yet",
+    "no dateAdded -> existence falls back to startDate",
+  );
+  eq(
+    engagementStateAsOf({ ...base, dateAdded: null, startDate: null }, "2020-01-01"),
+    "open",
+    "no dates at all -> assumed to exist (the live card never checks dates)",
+  );
+  const done = { ...base, isComplete: true, dateClosed: "2026-09-01" };
+  eq(engagementStateAsOf(done, "2026-08-25"), "open", "completed later -> was still open then");
+  eq(engagementStateAsOf(done, "2026-09-01"), "closed", "closed that day -> closed (end of day)");
+  eq(engagementStateAsOf(done, "2026-09-16"), "closed", "closed before the day -> closed");
+  const doneNoDate = { ...base, isComplete: true, dateClosed: null, endDate: "2026-09-10" };
+  eq(
+    engagementStateAsOf(doneNoDate, "2026-09-05"),
+    "open",
+    "completed with no dateClosed -> endDate stands in (still open before it)",
+  );
+  eq(
+    engagementStateAsOf(doneNoDate, "2026-09-10"),
+    "closed",
+    "completed with no dateClosed -> closed from its endDate",
+  );
+  eq(
+    engagementStateAsOf({ ...doneNoDate, endDate: null }, "2026-09-05"),
+    "unknown_close",
+    "completed with no dateClosed and no endDate -> unknown",
+  );
+  eq(
+    engagementStateAsOf(
+      { ...base, isCanceled: true, dateClosed: null, endDate: "2026-12-01" },
+      "2026-09-05",
+    ),
+    "unknown_close",
+    "canceled with no dateClosed -> unknown (endDate is not a cancel proxy)",
+  );
+
+  // The card rebuilt as of Aug 16 vs Sep 16 (the user's "what would August have shown").
+  const jyf = (id: number, over: Partial<CohortEngagementAsOfInput> = {}) => ({
+    ...base,
+    clientId: id,
+    name: "JumpStart Your Freedom",
+    ...over,
+  });
+  const four = (id: number, over: Partial<CohortEngagementAsOfInput> = {}) => ({
+    ...base,
+    clientId: id,
+    name: "MN Subscription | (4x Month) Zoom",
+    ...over,
+  });
+  const engs: CohortEngagementAsOfInput[] = [
+    jyf(1, { dateAdded: "2026-07-01" }), // in JYF both days
+    jyf(2, { dateAdded: "2026-07-01" }), // in JYF both days
+    jyf(3, { dateAdded: "2026-07-01", isComplete: true, dateClosed: "2026-09-01" }), // JYF then, done now
+    four(3, { dateAdded: "2026-09-01" }), // ...and moved to 4x on Sep 1
+    jyf(4, { dateAdded: "2026-09-10" }), // joined JYF after Aug 16
+    four(5, { dateAdded: "2026-05-01", isCanceled: true, dateClosed: "2026-08-20" }), // 4x then, canceled since
+    four(6, { dateAdded: "2026-05-01", isCanceled: true, dateClosed: null }), // canceled, unknown when
+    { ...base, clientId: 7, name: "Mentor Training", dateAdded: "2026-01-01" }, // never a pipeline tier
+  ];
+  const aug = computeJyfVsMentoringAsOf(engs, "2026-08-16");
+  eq(aug.asOf, "2026-08-16", "snapshot carries its as-of day");
+  eq(aug.jyf, 3, "Aug 16: JYF = clients 1,2,3");
+  eq(aug.mentoring, 1, "Aug 16: mentoring = client 5 (canceled only on Aug 20)");
+  eq(aug.byTier["4x"], 1, "Aug 16: 4x = client 5");
+  eq(aug.total, 4, "Aug 16: pipeline total = 1,2,3,5");
+  eq(
+    aug.unknownClose,
+    1,
+    "Aug 16: client 6's canceled 4x has no close date -> reported, not counted",
+  );
+  const sep = computeJyfVsMentoringAsOf(engs, "2026-09-16");
+  eq(sep.jyf, 3, "Sep 16: JYF = clients 1,2,4 (3 completed, 4 joined)");
+  eq(sep.mentoring, 1, "Sep 16: mentoring = client 3 (5 canceled)");
+  eq(sep.total, 4, "Sep 16: pipeline total = 1,2,3,4");
+  // Today's reconstruction must equal the live card on the same rows.
+  const live = computeJyfVsMentoring(engs);
+  eq(sep.jyf, live.jyf, "as-of today reproduces the live JYF count");
+  eq(sep.mentoring, live.mentoring, "as-of today reproduces the live mentoring count");
+  eq(sep.byTier["4x"], live.byTier["4x"], "as-of today reproduces the live 4x count");
+  eq(sep.total, live.total, "as-of today reproduces the live total");
+  // Δ wiring: today minus then, percent vs then.
+  const d = delta(sep.mentoring, aug.mentoring);
+  eq(d.abs, 0, "mentoring Δ = 0 (one person out, one in)");
+  eq(Math.round(delta(sep.jyf + 1, aug.jyf).pct ?? NaN), 33, "Δ% is relative to the earlier day");
+  // A day before anything existed reads as an empty card, not an error.
+  const empty = computeJyfVsMentoringAsOf(engs, "2025-12-31");
+  eq(empty.jyf + empty.mentoring + empty.total, 0, "before any engagement existed -> all zero");
 }
 
 console.log("");

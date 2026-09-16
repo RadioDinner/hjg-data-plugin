@@ -70,3 +70,70 @@ export function computeJyfVsMentoring(engagements: CohortEngagementInput[]): Jyf
     total: new Set<number>([...jyfClients, ...mentoringClients]).size,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Point-in-time reconstruction ("what would this card have shown on day D?").
+//
+// The mirror keeps no history of the card's numbers, but every engagement row
+// carries the dates that decide whether it was open on a given day:
+//   dateAdded  — when it was created in CoachAccountable (it can't have been
+//                counted before that, whatever its start date);
+//   dateClosed — when it was completed or canceled (null while it is open).
+// So an engagement was OPEN as of D when it existed by D and had not been
+// closed by D. Two fallbacks cover missing dates: existence falls back to
+// startDate (and to "assume it existed" when both are missing, mirroring the
+// live card, which never looks at dates); a COMPLETED engagement with no
+// dateClosed falls back to its endDate (CA can close "as of the end date").
+// A closed engagement with no usable close date is UNKNOWN: it is left out of
+// the past snapshot and counted in `unknownClose` so the UI can say so.
+//
+// Limits (stated in the help article): the mirror never drops engagements that
+// were deleted in CA, exclusions and tier names are today's, and a re-opened
+// engagement reads as open for the whole interval.
+// ---------------------------------------------------------------------------
+
+export interface CohortEngagementAsOfInput extends CohortEngagementInput {
+  dateAdded: string | null; // YYYY-MM-DD — created in CA
+  startDate: string | null; // YYYY-MM-DD — fallback for existence
+  dateClosed: string | null; // YYYY-MM-DD — completed/canceled on (null while open)
+  endDate: string | null; // YYYY-MM-DD — fallback close for a completed engagement
+}
+
+export type AsOfState = "open" | "not_yet" | "closed" | "unknown_close";
+
+// State of one engagement at the END of day `asOf` (YYYY-MM-DD). Dates compare
+// as strings (ISO order == chronological order).
+export function engagementStateAsOf(e: CohortEngagementAsOfInput, asOf: string): AsOfState {
+  const existedBy = e.dateAdded ?? e.startDate;
+  if (existedBy != null && existedBy > asOf) return "not_yet";
+  if (!e.isComplete && !e.isCanceled) return "open";
+  const closedOn = e.dateClosed ?? (e.isComplete ? e.endDate : null);
+  if (closedOn == null) return "unknown_close";
+  return closedOn > asOf ? "open" : "closed";
+}
+
+export interface JyfVsMentoringAsOf extends JyfVsMentoring {
+  asOf: string; // the day this snapshot reconstructs (YYYY-MM-DD)
+  unknownClose: number; // pipeline engagements closed on an unknown date, left out
+}
+
+// The card's numbers as they would have read on day `asOf`. For asOf = today
+// this reproduces computeJyfVsMentoring on the same rows (verify §28).
+export function computeJyfVsMentoringAsOf(
+  engagements: CohortEngagementAsOfInput[],
+  asOf: string,
+): JyfVsMentoringAsOf {
+  const open: CohortEngagementInput[] = [];
+  let unknownClose = 0;
+  for (const e of engagements) {
+    if (e.clientId == null) continue;
+    const state = engagementStateAsOf(e, asOf);
+    if (state === "open") {
+      open.push({ clientId: e.clientId, name: e.name, isComplete: false, isCanceled: false });
+    } else if (state === "unknown_close") {
+      const tier = engagementTier(e.name);
+      if (tier === "jumpstart" || MENTORING_TIERS.has(tier)) unknownClose++;
+    }
+  }
+  return { ...computeJyfVsMentoring(open), asOf, unknownClose };
+}

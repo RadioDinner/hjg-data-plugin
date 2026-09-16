@@ -439,13 +439,19 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 ### Chart
 - The bars are **JumpStart (JYF)** then the three Active-Mentoring tiers as their own columns — **4x · 2x · 1x**. The shaded **master block behind the trio** is the **distinct** Active-Mentoring total; because a person in two tiers is counted in each tier but only once in the total, the three columns can add up to more than the master block.
 
+### Compare: today vs an earlier day
+- The **Compare** control on the card has three presets — **Today vs a month ago**, **Today vs a quarter ago**, **Today vs a year ago**. Pick one and the card shows **what it would have read on that earlier day** next to today: grey bars for the earlier day, colored bars for today, a **was … · Δ** line under each tile, and a table with **Today / As of / Δ / Δ%** columns (Δ is today minus then; Δ% is relative to then).
+- "A month ago" means the **same day of the month** one calendar month back (a quarter = 3 months, a year = 12), clamped to the month's length — on Mar 31 "a month ago" is Feb 28.
+- **How the earlier day is rebuilt.** The dashboard keeps no history of this card, so the earlier value is **reconstructed** from dates on each engagement in the CoachAccountable mirror: an engagement was open on day D when it was **created in CA on or before D** (\`dateAdded\`) and **not yet completed or canceled by D** (\`dateClosed\`). A completed engagement with no close date falls back to its end date; a closed engagement with **no usable close date at all is left out** of the earlier snapshot, and the card says how many.
+- **Where it can differ from what you actually saw that day:** engagements deleted in CA never leave the mirror (they are missing from neither side); exclusions (test/placeholder mentees) and tier names are applied as they stand today; an engagement that was closed and later re-opened reads as open for the whole interval; and CA can back-date a completion to the engagement's end date, in which case the reconstruction reflects the back-dated day rather than the day the button was pressed.
+
 ### Notes
 - Counts **people, not engagements** — someone with two open engagements is counted once per side. The **4x / 2x / 1x** tiles break down the mentoring side; in the rare case a person has open engagements in two tiers they show under both, so the tiles can total slightly more than "In Active Mentoring".
 - Test/placeholder mentees you've excluded (and group/placeholder clients) are left out.
 - **All-time snapshot** — *not* affected by the date range at the top of the page.
 
 ### Source
-- \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`). Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`).`,
+- \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`; the compare tool also reads \`date_added\`, \`date_closed\`, \`start_date\`, \`end_date\`). Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`, \`computeJyfVsMentoringAsOf\`) and \`lib/compare.ts\` (\`ASOF_PRESETS\`, \`asOfDate\`).`,
   },
 
   "margins.tab": {

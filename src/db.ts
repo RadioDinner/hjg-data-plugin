@@ -11,8 +11,13 @@ import {
 } from "../lib/config";
 import {
   computeJyfVsMentoring,
+  computeJyfVsMentoringAsOf,
+  engagementStateAsOf,
   type CohortEngagementInput,
+  type CohortEngagementAsOfInput,
   type JyfVsMentoring,
+  type JyfVsMentoringAsOf,
+  type AsOfState,
 } from "../lib/cohort";
 
 export { PIPELINE_TIERS, engagementTier };
@@ -256,8 +261,22 @@ export {
 
 // Pure period-comparison helpers (Metrics "Compare" mode), re-exported so the
 // frontend imports lib through db.ts — same pattern as the pay engine above.
-export { COMPARE_PRESETS, derivePeriodB, delta, shiftMonths } from "../lib/compare";
-export type { CompareKey, ComparePreset, Delta, Range as ComparePeriod } from "../lib/compare";
+export {
+  COMPARE_PRESETS,
+  ASOF_PRESETS,
+  asOfDate,
+  derivePeriodB,
+  delta,
+  shiftMonths,
+} from "../lib/compare";
+export type {
+  CompareKey,
+  ComparePreset,
+  AsOfKey,
+  AsOfPreset,
+  Delta,
+  Range as ComparePeriod,
+} from "../lib/compare";
 
 // Pure mentor-capacity helpers (1-on-1 mentees per coach, excluding group slots).
 export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
@@ -276,8 +295,14 @@ export type { FreedomMenteeInput, FreedomRow, FreedomReport } from "../lib/freed
 // Pure "JYF vs Active Mentoring" cohort snapshot (open engagements by phase).
 // computeJyfVsMentoring / the input + result types are imported at the top (used
 // by fetchJyfVsMentoring below) and re-exported here for the view.
-export { computeJyfVsMentoring };
-export type { CohortEngagementInput, JyfVsMentoring };
+export { computeJyfVsMentoring, computeJyfVsMentoringAsOf, engagementStateAsOf };
+export type {
+  CohortEngagementInput,
+  CohortEngagementAsOfInput,
+  JyfVsMentoring,
+  JyfVsMentoringAsOf,
+  AsOfState,
+};
 export type { MentoringTier } from "../lib/cohort";
 
 // Pure Journeys per-stage color logic (gradient interpolation + config resolution).
@@ -1077,6 +1102,8 @@ interface EngagementRow {
   end_date: string | null;
   is_complete: boolean | null;
   is_canceled: boolean | null;
+  date_added: string | null; // created in CA — the as-of compare's existence date
+  date_closed: string | null; // completed/canceled on — null while open
 }
 
 // Page every engagement across all history (for the pipeline-stage timeline).
@@ -1086,7 +1113,9 @@ async function fetchAllEngagements(): Promise<EngagementRow[]> {
   for (let f = 0; ; f += pageSize) {
     const { data, error } = await supabase
       .from("ca_engagements")
-      .select("id,client_id,name,start_date,end_date,is_complete,is_canceled")
+      .select(
+        "id,client_id,name,start_date,end_date,is_complete,is_canceled,date_added,date_closed",
+      )
       .range(f, f + pageSize - 1);
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as EngagementRow[];
@@ -1096,12 +1125,13 @@ async function fetchAllEngagements(): Promise<EngagementRow[]> {
   return out;
 }
 
-// "JYF vs Active Mentoring" — a current-state cohort snapshot. Reads every
+// "JYF vs Active Mentoring" — the engagement rows behind the card. Reads every
 // engagement, drops placeholder/group clients (ca_clients.is_excluded) and
-// staff-flagged test mentees (mentees.is_test), then counts distinct people
-// with an OPEN JumpStart engagement vs an open 4x/2x/1x engagement. Pure math in
-// lib/cohort.ts; not date-range scoped.
-export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
+// staff-flagged test mentees (mentees.is_test). The view feeds these rows to
+// computeJyfVsMentoring (today's snapshot) and, in the card's compare mode, to
+// computeJyfVsMentoringAsOf (the same card rebuilt as of an earlier day from
+// each row's created/closed dates) — one fetch, any number of as-of points.
+export async function fetchJyfCohortInputs(): Promise<CohortEngagementAsOfInput[]> {
   const [engagements, excludedSet, clientsRes] = await Promise.all([
     fetchAllEngagements(),
     fetchTestClientIds(),
@@ -1112,7 +1142,7 @@ export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
   for (const c of (clientsRes.data ?? []) as { id: number; is_excluded: boolean }[])
     isExcluded.set(c.id, c.is_excluded);
 
-  const inputs: CohortEngagementInput[] = [];
+  const inputs: CohortEngagementAsOfInput[] = [];
   for (const e of engagements) {
     if (e.client_id == null) continue;
     if (isExcluded.get(e.client_id) || excludedSet.has(e.client_id)) continue;
@@ -1121,9 +1151,20 @@ export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
       name: e.name,
       isComplete: e.is_complete,
       isCanceled: e.is_canceled,
+      dateAdded: e.date_added,
+      startDate: e.start_date,
+      dateClosed: e.date_closed,
+      endDate: e.end_date,
     });
   }
-  return computeJyfVsMentoring(inputs);
+  return inputs;
+}
+
+// The card's live (current-state) snapshot: distinct people with an OPEN
+// JumpStart engagement vs an open 4x/2x/1x engagement. Pure math in
+// lib/cohort.ts; not date-range scoped.
+export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
+  return computeJyfVsMentoring(await fetchJyfCohortInputs());
 }
 
 // ============================================================================
