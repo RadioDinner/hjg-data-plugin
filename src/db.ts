@@ -1370,7 +1370,10 @@ export async function rebuildMenteesFromCa(): Promise<number> {
     supabase
       .from("ca_engagements")
       .select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
-    supabase.from("ca_appointments").select("client_id,coach_id,engagement_id,category,start_date"),
+    supabase
+      .from("ca_appointments")
+      .select("client_id,coach_id,engagement_id,category,start_date")
+      .eq("status", "A"),
     supabase.from("ca_coaches").select("id,name"),
   ]);
   const firstErr = cl.error || en.error || ap.error || co.error;

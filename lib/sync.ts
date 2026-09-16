@@ -14,6 +14,7 @@ import { caDateParts } from "./metrics.js";
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "./menteeJourney.js";
 import { planClientIdClaims } from "./notionCsv.js";
 import type {
+  CAAppointment,
   SyncTrigger,
   CaCoachRow,
   CaClientRow,
@@ -57,6 +58,62 @@ function dateParts(raw: string | undefined): {
 
 function fullName(first?: string, last?: string, name?: string): string {
   return (name ?? [first, last].filter(Boolean).join(" ")).trim();
+}
+
+// Mirror-only appointment status for rows CoachAccountable no longer returns for
+// the synced window (deleted in CA, or rescheduled outside the window). NOT a CA
+// value — CA's own are A / C / P / D. Rows are marked rather than deleted so they
+// stay auditable in Raw data and any discovery_outcomes stay attached; if CA ever
+// returns the row again, the upsert overwrites status from CA, so it self-heals.
+export const MIRROR_STATUS_GONE = "X";
+
+// One CA appointment → one ca_appointments row. Pure, so it's unit-testable.
+// `syncedAt` stamps the row with THIS run's timestamp (the DB default only fires
+// on insert, so without it an upsert left synced_at frozen at first sight and
+// the mirror could not tell which rows CA had stopped returning).
+export function toAppointmentRow(a: CAAppointment, syncedAt: string): CaAppointmentRow {
+  const dp = dateParts(a.startDate);
+  const da = dateParts(a.dateAdded);
+  return {
+    id: a.ID,
+    coach_id: a.CoachID ?? null,
+    client_id: a.ClientID ?? null,
+    engagement_id: a.EngagementID ?? null,
+    name: a.name ?? "",
+    category: categorizeAppointmentName(a.name),
+    status: a.status,
+    counts_in_engagement: a.countsInEngagement ?? null,
+    start_raw: a.startDate ?? null,
+    end_raw: a.endDate ?? null,
+    start_date: dp.date,
+    start_year: dp.year,
+    start_month: dp.month,
+    date_added_raw: a.dateAdded ?? null,
+    date_added: da.date,
+    date_added_year: da.year,
+    date_added_month: da.month,
+    synced_at: syncedAt,
+  };
+}
+
+// After a successful appointment upsert: any mirror row whose start_date is inside
+// the window CA was asked for, but whose synced_at predates this run, was NOT in
+// CA's response — it was deleted in CA or moved outside the window — so it must
+// stop counting. Returns how many rows were newly marked.
+async function markAppointmentsGone(
+  admin: ReturnType<typeof getAdminClient>,
+  window: { from: string; to: string },
+  runSyncedAt: string,
+): Promise<number> {
+  const { count, error } = await admin
+    .from("ca_appointments")
+    .update({ status: MIRROR_STATUS_GONE }, { count: "exact" })
+    .gte("start_date", window.from)
+    .lte("start_date", window.to)
+    .lt("synced_at", runSyncedAt)
+    .neq("status", MIRROR_STATUS_GONE);
+  if (error) throw new Error(`mark gone ca_appointments: ${error.message}`);
+  return count ?? 0;
 }
 
 export function syncYears(): number[] {
@@ -191,7 +248,16 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
     // real error (the dashboard's headline metrics depend on it).
     const coaches = await ca.getCoaches(true);
     const clients = await ca.getClients(true);
-    const appointments = await ca.getAppointments({ dateFrom: from, dateTo: to });
+    // includeCanceled: CA omits canceled appointments by default, so a call
+    // canceled AFTER its first sync was simply never returned again and its
+    // mirror row kept status "A" forever — phantom discovery calls and meetings.
+    // With it on, the same single call also returns the "C" rows and every
+    // reader's status = 'A' filter drops them. (Pending "P" requests stay out.)
+    const appointments = await ca.getAppointments({
+      dateFrom: from,
+      dateTo: to,
+      includeCanceled: true,
+    });
 
     const coachRows: CaCoachRow[] = coaches.map((c) => ({
       id: c.ID,
@@ -216,33 +282,25 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
       };
     });
 
-    const apptRows: CaAppointmentRow[] = appointments.map((a) => {
-      const dp = dateParts(a.startDate);
-      const da = dateParts(a.dateAdded);
-      return {
-        id: a.ID,
-        coach_id: a.CoachID ?? null,
-        client_id: a.ClientID ?? null,
-        engagement_id: a.EngagementID ?? null,
-        name: a.name ?? "",
-        category: categorizeAppointmentName(a.name),
-        status: a.status,
-        counts_in_engagement: a.countsInEngagement ?? null,
-        start_raw: a.startDate ?? null,
-        end_raw: a.endDate ?? null,
-        start_date: dp.date,
-        start_year: dp.year,
-        start_month: dp.month,
-        date_added_raw: a.dateAdded ?? null,
-        date_added: da.date,
-        date_added_year: da.year,
-        date_added_month: da.month,
-      };
-    });
+    const apptSyncedAt = new Date().toISOString();
+    const apptRows: CaAppointmentRow[] = appointments.map((a) => toAppointmentRow(a, apptSyncedAt));
 
     records += await chunkedUpsert(admin, "ca_coaches", coachRows);
     records += await chunkedUpsert(admin, "ca_clients", clientRows);
     records += await chunkedUpsert(admin, "ca_appointments", apptRows);
+
+    // Rows CA stopped returning for the window (deleted / moved out) → status X.
+    // Guarded: an empty response would otherwise mark the whole window gone.
+    if (appointments.length === 0) {
+      warnings.push("CA returned 0 appointments; stale-row pass skipped");
+    } else {
+      const gone = await markAppointmentsGone(admin, { from, to }, apptSyncedAt);
+      if (gone > 0) {
+        warnings.push(
+          `${gone} appointment(s) no longer returned by CA marked status ${MIRROR_STATUS_GONE}`,
+        );
+      }
+    }
 
     // Offerings/submissions feed only the sales panel, and the submissions
     // function name is unconfirmed (SPEC.md s7). Best-effort: a failure here
@@ -391,7 +449,8 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
           .select("id,client_id,name,start_date,end_date,is_complete,is_canceled"),
         admin
           .from("ca_appointments")
-          .select("client_id,coach_id,engagement_id,category,start_date"),
+          .select("client_id,coach_id,engagement_id,category,start_date")
+          .eq("status", "A"),
         admin.from("ca_coaches").select("id,name"),
         admin.from("ca_offering_submissions").select("client_id,offering_id,date_added"),
       ]);

@@ -6,3 +6,6 @@ On my "Metrics 001" page, I see there are some events or meetings that are consi
 
 --- 2026-09-16 13:20 ---
 So yeah lets merge the fix into main
+
+--- 2026-09-16 13:45 ---
+fix the cancelled bug

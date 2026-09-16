@@ -10,6 +10,7 @@ import { computeFunnelReport } from "../lib/funnel.js";
 import { BudgetTracker, BudgetExhaustedError } from "../lib/budget.js";
 import { resolveDiscoveryOutcome } from "../lib/conversion.js";
 import { engagementTier, categorizeAppointmentName } from "../lib/config.js";
+import { toAppointmentRow, MIRROR_STATUS_GONE } from "../lib/sync.js";
 import { shiftMonths, derivePeriodB, delta } from "../lib/compare.js";
 import { groupSlotKeys, oneOnOneMenteesByCoach, type CapacityAppt } from "../lib/capacity.js";
 import {
@@ -4019,6 +4020,50 @@ console.log("[24] Mentee management — new stages / exits / IMN (Notion-driven)
   const sGe = new Map(computeFunnel([ge]).stages.map((s) => [s.stage, s]));
   eq(sGe.get("graduated")!.exitedHere, 0, "no exit attributed to graduated");
   eq(sGe.get("4x")!.exits.quit, 1, "exit capped to furthest non-grad stage (4x)");
+}
+
+console.log("[27] sync — canceled appointments reach the mirror; rows stamped per run");
+{
+  // Session 018: the sync now asks CA for canceled appointments too (status "C")
+  // and stamps every upserted row with the run's synced_at, so rows CA stops
+  // returning can be told apart (they keep an older stamp) and marked gone.
+  const base = {
+    ID: 2703506,
+    CoachID: 9315,
+    ClientID: 49321,
+    EngagementID: 0,
+    name: "Discovery Call Appointment (Zoom)",
+    startDate: "2026-08-10T09:00:00-05:00",
+    endDate: "2026-08-10T10:00:00-05:00",
+    dateAdded: "2026-08-01T12:00:00-05:00",
+    countsInEngagement: 0,
+  };
+  const stamp = "2026-09-16T13:00:00.000Z";
+  const canceled = toAppointmentRow({ ...base, status: "C" }, stamp);
+  eq(canceled.status, "C", "canceled status stored as CA returns it (not coerced)");
+  eq(canceled.synced_at, stamp, "row carries this run's synced_at stamp");
+  eq(canceled.category, "discoveryZoom", "category still derived from the label");
+  eq(canceled.start_date, "2026-08-10", "start_date parsed from the CA string");
+  eq(canceled.date_added, "2026-08-01", "date_added parsed from the CA string");
+  const active = toAppointmentRow({ ...base, status: "A" }, stamp);
+  eq(active.status, "A", "active status passes through");
+  eq(active.id, 2703506, "id is the CA appointment ID");
+  eq(MIRROR_STATUS_GONE, "X", "gone marker is X");
+  eq(
+    ["A", "C", "P", "D"].includes(MIRROR_STATUS_GONE),
+    false,
+    "gone marker is never a real CA status",
+  );
+  // Every metric reader keeps counting status A only, so a canceled row is inert.
+  const m = computeMonthlyMetrics(
+    [
+      { ...base, status: "A" },
+      { ...base, ID: 2703507, status: "C" },
+    ],
+    new Map([[49321, { ID: 49321, firstName: "Test", lastName: "Prospect" }]]),
+    { year: 2026, endMonth: 12 },
+  );
+  eq(m.discoveryZoom[7], 1, "monthly metrics count the active call only (Aug)");
 }
 
 console.log("");

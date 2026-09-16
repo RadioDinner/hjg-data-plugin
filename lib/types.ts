@@ -239,6 +239,9 @@ export interface CaAppointmentRow {
   engagement_id: number | null;
   name: string;
   category: AppointmentCategory;
+  // CA status A / C / P / D as returned, or the mirror-only "X" (see
+  // MIRROR_STATUS_GONE in lib/sync.ts): CA stopped returning the row. Readers
+  // count status = 'A' only.
   status: string;
   // CA Appointment.countsInEngagement: 1 = credited toward the engagement
   // (delivered), -1 = explicitly not counted, 0 = no judgement yet, null = not
