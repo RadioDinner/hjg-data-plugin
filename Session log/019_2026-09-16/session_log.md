@@ -58,11 +58,11 @@ today)` equals `computeJyfVsMentoring(rows)`.
 day clamped), i.e. Sep 16 → Aug 16, not "30 days ago". Stated in the help
 article; open for the user to change.
 
-Known limits (in the help article): engagements deleted in CA never leave the
-mirror (they appear on neither side... more precisely, on both sides if still
-open); exclusions and tier names are today's; a re-opened engagement reads as
-open across the whole interval; CA back-dated completions follow the
-back-dated day.
+Known limits (in the help article): an engagement deleted in CA never leaves
+the mirror, so if it was still open when deleted it is counted on BOTH sides
+(today and as-of); exclusions and tier names are today's; a re-opened
+engagement reads as open across the whole interval; CA back-dated completions
+follow the back-dated day.
 
 ## UI
 
