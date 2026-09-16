@@ -199,3 +199,5 @@ awaiting the user's go-ahead (a merge to `main` is a production deploy).
 Optional follow-up: the theme toggle still uses text glyphs (☾ / ☀), which
 sit slightly lighter than the SVG bell; matching SVG sun/moon would be
 consistent.
+
+## Turn 7 — "merge it": v0.7.3 fast-forwarded to `main`.

@@ -15,3 +15,6 @@ fixed now ty bb
 
 --- 2026-09-16 14:30 ---
 up top, on the notifications icon, I want that  changed from an emoji to something professional looking
+
+--- 2026-09-16 14:50 ---
+merge it
