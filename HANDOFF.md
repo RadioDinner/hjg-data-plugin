@@ -2,16 +2,24 @@
 
 Working notes for resuming this project in a future session. Last updated
 2026-09-16 (session 019 — Metrics §005 point-in-time Compare tool **v0.8.0**,
-ON BRANCH `claude/dreamy-rubin-xr7wrd`, NOT merged).
+MERGED TO `main`).
 
-## ▶ START HERE (2026-09-16, session 019 — v0.8.0, ON BRANCH, NOT MERGED)
+## ▶ START HERE (2026-09-16, session 019 — v0.8.0, MERGED TO `main`)
+
+**v0.8.0 merged to `main`** on the user's "merge it and ill try the branch"
+(fast-forward from `claude/dreamy-rubin-xr7wrd`); chip must read `v0.8.0`
+once Vercel deploys. **No migration and no re-sync needed**: the compare
+reads `ca_engagements.date_added` / `date_closed`, which the sync has written
+since migration `9994`. The user is trying the tool on real data next —
+their verdict on the calendar-month semantics and on the reconstruction's
+"N closed engagements have no recorded close date" count is the open item.
 
 **Metrics §005 "JYF vs Active Mentoring" gained a point-in-time Compare
 tool.** The user asked to see "what the dashboard would have shown had we
-looked at it in August" next to today, with three options for now. Shipped on
-branch **`claude/dreamy-rubin-xr7wrd`** only — the user was heading into a
-meeting and asked that nothing touch the live dashboard; **do not merge
-without their go-ahead.** Version **0.8.0** (chip reads `v0.8.0` once merged).
+looked at it in August" next to today, with three options for now. Built on
+branch **`claude/dreamy-rubin-xr7wrd`** while the user was in a meeting (they
+asked that nothing touch the live dashboard until they said so), then merged
+on their word. Version **0.8.0** (chip reads `v0.8.0`).
 Gates green on the branch head: `typecheck` + `verify` (**726 checks**; new
 §28 +34) + `lint` (0 errors / 14 pre-existing warnings) + `build` +
 `prettier --check`. Render-checked in headless Chromium, both themes, with
@@ -62,8 +70,7 @@ reconstruction disagrees with what the user remembers seeing.
 **Open / next:** (1) user to eyeball the compare against real data and say
 whether "a month ago" should stay calendar-month (Sep 16 → Aug 16) or become
 "30 days ago"; (2) possibly a custom "as of" date picker (the math already
-takes any YYYY-MM-DD); (3) merge to `main` on the user's word (fast-forward;
-chip → v0.8.0). Full detail: `Session log/019_2026-09-16/session_log.md`.
+takes any YYYY-MM-DD). Full detail: `Session log/019_2026-09-16/session_log.md`.
 
 ## ▶ Prior session START HERE (2026-09-16, session 018 — v0.7.3, MERGED TO `main`)
 

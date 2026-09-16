@@ -1,7 +1,8 @@
 # Session 019 — 2026-09-16
 
-Branch: `claude/dreamy-rubin-xr7wrd` (NOT merged — the user asked for a branch
-because a meeting was starting and the live dashboard must not change).
+Branch: `claude/dreamy-rubin-xr7wrd`, built while the user was in a meeting
+(they asked that the live dashboard not change until they said so), then
+**fast-forwarded onto `main`** on "merge it and ill try the branch".
 Version **0.8.0** (minor bump: new feature).
 
 ## Ask
@@ -102,4 +103,12 @@ re-export + explicit override stub renders any view without Supabase.
    match their mental model, or do they want "30 days ago" / a custom date?
 2. Custom "as of" date picker — the math already takes any YYYY-MM-DD.
 3. Daily snapshot table if exactness matters more than history depth.
-4. Merge to `main` on the user's word (fast-forward; chip → `v0.8.0`).
+4. ~~Merge to `main` on the user's word~~ — DONE (turn 3, below).
+
+## Turn 3 — MERGED (user: "merge it and ill try the branch")
+
+`main` was still at the branch's base (`e59dba3`), so `main` was
+fast-forwarded to the branch head and pushed; no merge commit. No migration,
+no re-sync: `date_added` / `date_closed` have been mirrored since migration
+`9994`. Chip should read `v0.8.0` after the Vercel deploy of `main`. Awaiting
+the user's read of the tool on real data.
