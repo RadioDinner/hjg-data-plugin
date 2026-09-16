@@ -1,7 +1,8 @@
 # Session 018 — 2026-09-16
 
-Branch: `claude/peaceful-noether-543uzn`. Read-only investigation; **no app code
-changed**, version stays 0.7.0.
+Branch: `claude/peaceful-noether-543uzn`, fast-forwarded onto `main`.
+Investigation (turns 1–2), then the classification fix shipped (turn 3) as
+**v0.7.1**.
 
 ## Ask
 
@@ -112,3 +113,32 @@ the 19 discovery calls on the dashboard include Mentor Training meetings.
 2. Show Name / Scheduled / Coach in the card's Explore modal so this is a
    ten-second diagnosis next time.
 3. Separately decide on `includeCanceled: true` in the sync.
+
+## Turn 3 — SHIPPED (user: "lets merge the fix into main")
+
+**What shipped**
+- `2bfca7b` — `lib/config.ts`: `"mt discovery call"` added to
+  `EXCLUDE_CONTAINS`; `"discovery call appointment (phone)"` added to
+  `DISCOVERY_PHONE_CONTAINS`. `scripts/verify-metrics.ts` §7: +5
+  classification cases. `package.json` 0.7.0 → **0.7.1**.
+- Gates: `typecheck` green; `verify` **682/682**; `lint` 0 errors / 14
+  pre-existing warnings; `build` green; Prettier clean on changed files.
+- Replay of the user's export with the new classifier: 11 MT rows →
+  `excluded`, 9 `(Phone)` rows → `discoveryPhone`; 2026 total 71 → 60;
+  August 19 → 8. Post-fix monthly (Phone/Zoom): Jan 4/6, Feb 4/2, Mar 2/8,
+  Apr 2/2, May 4/2, Jun 8/1, Jul 1/2, Aug 3/5, Sep 1/3.
+- Merged to `main` by fast-forward; both branches pushed.
+
+**User action required:** re-sync from Admin once the `main` deploy is live
+(categorization runs at sync time; existing rows keep the old category until
+then).
+
+**Directional decisions**
+- MT practice discovery calls are `excluded` (same bucket as "Mentor Training
+  Extra Teaching"), not `other` — it's a known, deliberate non-count.
+- The exclusion entry is the specific `"mt discovery call"`, not a broad
+  `"mt "` prefix rule, to avoid false positives on unrelated labels.
+
+**Open (carried in HANDOFF):** `includeCanceled` in the sync + `synced_at`
+refresh; Explore-modal columns; outcome-date basis; substring-classifier
+fragility.

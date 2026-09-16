@@ -1,36 +1,55 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-16 (session 018 — investigation only: why card 003 over-counts
-discovery calls; **no code change**, version stays 0.7.0).
+2026-09-16 (session 018 — discovery-call classification fix, **v0.7.1**,
+MERGED TO `main`).
 
-## ▶ START HERE (2026-09-16, session 018 — discovery-call over-count, branch `claude/peaceful-noether-543uzn`)
+## ▶ START HERE (2026-09-16, session 018 — v0.7.1, MERGED TO `main`)
 
-**User report:** Metrics (001) → *Discovery calls → conversion* (003) counts
-events that are not discovery calls. **Assessment only this session; nothing
-shipped.** Full trace + ranked findings in
-`Session log/018_2026-09-16/session_log.md`; a paste-ready audit query in
-`Session log/018_2026-09-16/discovery_card_audit.sql`.
+**Shipped: `2bfca7b` — discovery-call classification fix (`lib/config.ts`).**
+Version **0.7.1** (chip must read `v0.7.1`). `typecheck` + `verify`
+(**682 checks**, §7 gained 5) + `lint` (0 errors / 14 pre-existing warnings)
++ `build` green. Fast-forwarded onto `main` from
+`claude/peaceful-noether-543uzn`.
 
-**CONFIRMED from the user's Raw-data CSV export (turn 2):** the 19 calls
-the dashboard shows are the **August 2026 bucket = 11 × `MT Discovery Call
-Appointment (Zoom)` + 8 real calls.** The 11 are one Mentor Training session
-(same booking second, same 2026-09-12 slot, coach 9315, all 11 attendees also
-in `Mentor Training Group Meeting`) that the substring classifier in
-`lib/config.ts` files as `discoveryZoom`. Second bug: the newer type name
-`Discovery Call Appointment (Phone)` (9 rows since June 2026, coach 29074)
-is filed as `discoveryZoom` because the phone rule only matches
-`"(phone call)"`. Export also shows all 4,410 rows `status='A'` and
-`synced_at` never refreshed — canceled calls never leave the mirror because
-`lib/sync.ts:194` omits `includeCanceled`. Reproduction script:
-`Session log/018_2026-09-16/reproduce_card_from_csv.py`.
+**⚠ ONE USER ACTION: after the `main` deploy is live, run a re-sync (Admin →
+Sync).** Categorization runs at sync time, so the mirror's existing rows keep
+their old `category` until the re-sync recomputes them. Until then card 003
+still shows the phantom calls.
 
-**Proposed fix (not applied, needs the user's go-ahead):** `lib/config.ts` —
-add `"mt discovery call"` to `EXCLUDE_CONTAINS` and
-`"discovery call appointment (phone)"` to `DISCOVERY_PHONE_CONTAINS`, with
-verify §7 cases; then **re-sync** (categorization runs at sync time). Then:
-Name/Scheduled/Coach columns in the card's Explore modal; decide on
-`includeCanceled: true` in the sync.
+**What was wrong (confirmed from the user's `ca_appointments` CSV export):**
+- `MT Discovery Call Appointment (Zoom)` — a Mentor-Training practice
+  session, one CA row per trainee attendee (11 rows, same booking second,
+  same 2026-09-12 slot, coach 9315, all 11 also in `Mentor Training Group
+  Meeting`) — matched the substring rule `"discovery call appointment
+  (zoom)"` and counted as 11 prospect discovery calls. The card's August
+  2026 bucket read **19; the true number is 8.** Fix: `"mt discovery call"`
+  added to `EXCLUDE_CONTAINS` (wins precedence) → `excluded`.
+- `Discovery Call Appointment (Phone)` — the newer booking type name used
+  since June 2026 (coach 29074) — fell through to the generic rule as Zoom.
+  Fix: added to `DISCOVERY_PHONE_CONTAINS`. 9 rows move Zoom → Phone.
+- Post-fix replay of the export: 2026 discovery calls **71 → 60**
+  (reproduction: `Session log/018_2026-09-16/reproduce_card_from_csv.py`;
+  audit SQL: `discovery_card_audit.sql`).
+
+**Still open from this session's investigation (not shipped):**
+1. **Canceled calls never leave the mirror.** `lib/sync.ts:194` calls
+   `Appointment.getAll` without `includeCanceled` (CA default false) and the
+   sync is upsert-only with no stale-row handling; `synced_at` is never
+   refreshed (the export: all 4,410 rows `status='A'`, 3,769 still stamped
+   2026-05-26). A call canceled in CA after first sync stays counted forever.
+   Proposed: `includeCanceled: true` (same single API call; the existing
+   `status='A'` filters then drop them) + stamp `synced_at = now()` on upsert.
+2. Card 003's Explore modal omits Name / Scheduled date / Coach / Status —
+   add them so the next over-count is a ten-second diagnosis.
+3. Card 003 feeds `date_added` (booking date) to the outcome resolver as the
+   call date (`MetricsView.tsx:488-491`); the Discovery tab uses
+   `start_date`. Decide the basis.
+4. The classifier is a substring match on the appointment label, which can be
+   a per-appointment `alternateLabel`. Any new CA type name containing
+   "discovery call appointment" will count until a rule is added.
+
+Full detail: `Session log/018_2026-09-16/session_log.md`.
 
 ## ▶ Prior session START HERE (2026-07-28, session 017 — lint/format tooling, ON `main`)
 
