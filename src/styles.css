@@ -158,7 +158,8 @@ body {
   color: var(--muted);
 }
 
-/* theme toggle */
+/* topbar icon buttons (theme toggle, notifications bell): one 34px square */
+.icon-btn,
 .theme-toggle {
   background: var(--panel-2);
   color: var(--muted);
@@ -166,6 +167,7 @@ body {
   border-radius: var(--r-control);
   width: 34px;
   height: 34px;
+  padding: 0;
   cursor: pointer;
   font-size: 15px;
   display: inline-flex;
@@ -173,6 +175,7 @@ body {
   justify-content: center;
   line-height: 1;
 }
+.icon-btn:hover,
 .theme-toggle:hover {
   color: var(--text);
   border-color: var(--line-strong);

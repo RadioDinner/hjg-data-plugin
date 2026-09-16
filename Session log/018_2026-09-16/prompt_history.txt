@@ -12,3 +12,6 @@ fix the cancelled bug
 
 --- 2026-09-16 14:20 ---
 fixed now ty bb
+
+--- 2026-09-16 14:30 ---
+up top, on the notifications icon, I want that  changed from an emoji to something professional looking

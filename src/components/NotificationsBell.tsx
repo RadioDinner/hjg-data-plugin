@@ -4,6 +4,30 @@ import { fetchNotifications, markNotificationsRead, type AppNotification } from 
 import { fmtDateTime } from "../format";
 import { SectionId } from "./SectionId";
 
+// Outline bell glyph (Lucide "bell", ISC licence), drawn in the button's current
+// text color so it follows the theme like the other topbar controls. Inline SVG
+// rather than an emoji: emoji render as a colored picture that differs per OS
+// and can't be tinted.
+function BellIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+}
+
 // Topbar notifications bell (§907): the in-app alert channel — e.g. a submitted
 // "Report financial event" form notifies org support staff here. Polls the feed
 // every 60s; unread = notifications this user hasn't dismissed. Fails quiet
@@ -61,7 +85,7 @@ export function NotificationsBell({
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
       <button
-        className="btn"
+        className="icon-btn"
         onClick={() => setOpen((o) => !o)}
         title={
           unread.length
@@ -69,15 +93,17 @@ export function NotificationsBell({
             : "Notifications"
         }
         aria-label="Notifications"
+        aria-haspopup="dialog"
+        aria-expanded={open}
         style={{ position: "relative" }}
       >
-        🔔
+        <BellIcon />
         {unread.length > 0 && (
           <span
             style={{
               position: "absolute",
-              top: -4,
-              right: -4,
+              top: -5,
+              right: -5,
               background: "var(--danger, #dc2626)",
               color: "#fff",
               borderRadius: 999,
