@@ -1,8 +1,8 @@
 # Session 018 — 2026-09-16
 
 Branch: `claude/peaceful-noether-543uzn`, fast-forwarded onto `main`.
-Investigation (turns 1–2), then the classification fix shipped (turn 3) as
-**v0.7.1**.
+Investigation (turns 1–2), the classification fix (turn 3, **v0.7.1**), then
+the canceled-appointment sync fix (turn 4, **v0.7.2**).
 
 ## Ask
 
@@ -142,3 +142,37 @@ then).
 **Open (carried in HANDOFF):** `includeCanceled` in the sync + `synced_at`
 refresh; Explore-modal columns; outcome-date basis; substring-classifier
 fragility.
+
+## Turn 4 — "fix the cancelled bug" — SHIPPED as v0.7.2
+
+**What shipped** (`lib/sync.ts`, `src/db.ts`, `lib/types.ts`, verify §27):
+- `getAppointments({ includeCanceled: true })` — CA now returns "C" rows in
+  the same single call; every reader filters `status='A'`, so they drop out.
+- `toAppointmentRow(a, syncedAt)` extracted (pure, tested); every upserted
+  row is stamped with the run's `synced_at`. Before, the DB default only
+  fired on insert, so the stamp was frozen at first sight (export: 3,769 rows
+  still stamped 2026-05-26).
+- `markAppointmentsGone`: after the upsert, rows with `start_date` in the
+  fetched window and `synced_at < run stamp` were not in CA's response →
+  `status = 'X'` (`MIRROR_STATUS_GONE`, mirror-only, documented in
+  `lib/types.ts`). Marked, not deleted (audit trail + `discovery_outcomes`
+  FK-free but attached). Guarded against an empty CA response. Count goes to
+  the run note.
+- Mentee materialize (sync) + browser `rebuildMenteesFromCa` now select
+  `status='A'` only — both had NO status filter and would otherwise have
+  started ingesting the "C"/"X" rows.
+- Gates: typecheck ✓, lint 0 errors, Prettier ✓, build ✓, verify **692/692**.
+- Version 0.7.1 → **0.7.2**. Fast-forwarded to `main`.
+
+**Mid-turn user report:** after running Admin → Sync the card still showed
+71 / 20 Phone / 51 Zoom, Aug 19 — the exact pre-fix numbers, so that sync
+ran the old classifier (deploy not live yet, or Metrics not reloaded). Left
+UNRESOLVED; verification steps + fallback `reclassify_now.sql` are in
+HANDOFF. This container cannot reach the site (proxy 403) to check the
+deployed version.
+
+**Directional decisions**
+- Rows CA stops returning are MARKED (`X`), never deleted.
+- Pending requests (`P`) are still not fetched — not part of the bug.
+- `dateCanceled` not mirrored (would need a migration); revisit if audit
+  needs it.
