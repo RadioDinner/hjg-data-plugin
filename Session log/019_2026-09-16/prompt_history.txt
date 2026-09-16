@@ -1,0 +1,5 @@
+--- 2026-09-16 15:00 ---
+I want to build a "Compare" tool for feature 005. I want to be able to see what the dashboard would have shown had we looked at it in August and compare to now, September 16, 30 days later. I'm not sure how I'd want it to work entirely, since the number can change day to day. For now, lets put 3 options, "Today vs a month ago","Today vs a quarter ago","Today vs a year ago"
+
+--- 2026-09-16 15:05 ---
+put it in a branch. I have a meeting beginning in 10 minutes and I don't want our changes to mess up my dashboard if they go wrong

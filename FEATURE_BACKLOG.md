@@ -300,6 +300,21 @@ use the engine's per-month attribution (`coachByClientMonth`). The `overlaps`
 month-range predicate was factored out and shared with the Engagements view.
 `src/components/PayExploreModal.tsx`.
 
+### Metrics §005 "Compare" tool (today vs an earlier day) — session 019, 2026-09-16 — ON BRANCH, not merged
+
+A per-card compare for the **JYF vs Active Mentoring** snapshot: **Today vs a
+month ago / Today vs a quarter ago / Today vs a year ago** (plus Off). The card
+is a current-state count with no stored history, so the earlier value is
+**reconstructed** from each engagement's `date_added` / `date_closed` in
+`ca_engagements` (`lib/cohort.ts` `computeJyfVsMentoringAsOf`; presets in
+`lib/compare.ts` `ASOF_PRESETS` / `asOfDate`; locked by **verify §28**).
+Compare on → grey "as of" bars beside today's colored bars, "was N · Δ (Δ%)"
+under each stat tile, and a Today / As of / Δ / Δ% table; the card says how
+many closed engagements had no usable close date and were left out. Off → the
+original card, unchanged. Follow-ups: a custom as-of date; "30 days ago" vs
+calendar-month semantics; a daily snapshot table written by the sync if
+exactness matters more than history depth.
+
 ### Metrics "Compare" mode (period vs period) — session 006, 2026-06-22
 
 Toggle on the Metrics page to compare **Period A vs Period B**. Shipped as

@@ -1,10 +1,71 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-16 (session 018 — discovery-call classification fix **v0.7.1** +
-canceled-appointment sync fix **v0.7.2**, both MERGED TO `main`).
+2026-09-16 (session 019 — Metrics §005 point-in-time Compare tool **v0.8.0**,
+ON BRANCH `claude/dreamy-rubin-xr7wrd`, NOT merged).
 
-## ▶ START HERE (2026-09-16, session 018 — v0.7.3, MERGED TO `main`)
+## ▶ START HERE (2026-09-16, session 019 — v0.8.0, ON BRANCH, NOT MERGED)
+
+**Metrics §005 "JYF vs Active Mentoring" gained a point-in-time Compare
+tool.** The user asked to see "what the dashboard would have shown had we
+looked at it in August" next to today, with three options for now. Shipped on
+branch **`claude/dreamy-rubin-xr7wrd`** only — the user was heading into a
+meeting and asked that nothing touch the live dashboard; **do not merge
+without their go-ahead.** Version **0.8.0** (chip reads `v0.8.0` once merged).
+Gates green on the branch head: `typecheck` + `verify` (**726 checks**; new
+§28 +34) + `lint` (0 errors / 14 pre-existing warnings) + `build` +
+`prettier --check`. Render-checked in headless Chromium, both themes, with
+synthetic engagements: a temporary `.harness/` dir inside the repo stubbed
+`src/db.ts` through a Vite `resolve.alias` on `../db` (star re-export of the
+real module + explicit fetcher overrides) and the global Playwright
+(`/opt/node22/lib/node_modules/playwright/index.mjs`, `--no-proxy-server`).
+Harness deleted; screenshots were sent in chat, not committed.
+
+**How it works.** The card is a current-state snapshot, so "compare" means
+today vs the card REBUILT as of an earlier day. Presets (`lib/compare.ts`
+`ASOF_PRESETS` / `asOfDate`): "Today vs a month ago" / "…a quarter ago" /
+"…a year ago" = today shifted back 1 / 3 / 12 **calendar months** via
+`shiftMonths` (day clamped: Mar 31 → Feb 28). Reconstruction (`lib/cohort.ts`
+`engagementStateAsOf`, `computeJyfVsMentoringAsOf`): an engagement was open
+on day D when `date_added <= D` (fallback `start_date`; no dates → assumed to
+exist, mirroring the live card which never checks dates) AND not closed by D
+(`date_closed > D`; a COMPLETED row with no `date_closed` falls back to
+`end_date`; a closed row with no usable close date is `unknown_close` → left
+out of the past snapshot and counted in `unknownClose`, which the card
+states). `computeJyfVsMentoringAsOf(rows, today)` reproduces
+`computeJyfVsMentoring(rows)` (asserted in §28). `src/db.ts`:
+`fetchAllEngagements` now also selects `date_added,date_closed`; new
+`fetchJyfCohortInputs()` returns the exclusion-filtered rows;
+`fetchJyfVsMentoring()` is a thin wrapper kept for compatibility.
+`MetricsView.tsx`: state `jyfInputs` (one fetch) + `jyfCompare` (`"off"` |
+`AsOfKey`, ephemeral like the other card toggles); `jyfVsMentoring` and
+`jyfThen` are memos, so switching presets never refetches. Compare on → a
+segmented control (Off + the 3 presets), a hint naming both dates, "was N ·
+±Δ (±%)" sub-lines under the 5 stat tiles (`.stat__delta`, green up / red
+down), a 5-category grouped chart (grey = as-of, colored = today, legend swatch
+= accent) replacing the backdrop chart, and a Today / As of / Δ / Δ% table.
+Off → the pre-existing card, text-identical (checked in the harness). Help
+article `metrics.jyfVsMentoring` documents the tool and its limits. **No
+migration.** No new UI number (the control lives inside §005).
+
+**Known limits of the reconstruction (told to the user):** the mirror never
+drops engagements deleted in CA (so they are missing from neither side);
+exclusions and tier names are applied as they stand today; a re-opened
+engagement reads as open across the whole interval; CA can back-date a
+completion to the engagement's end date, and the reconstruction follows the
+back-dated day rather than the day the button was pressed. The exact
+alternative is a **daily snapshot table written by the sync** (migration +
+sync step): exact from the day it is switched on, but nothing to compare
+against until history accumulates. Not built; a natural follow-up if the
+reconstruction disagrees with what the user remembers seeing.
+
+**Open / next:** (1) user to eyeball the compare against real data and say
+whether "a month ago" should stay calendar-month (Sep 16 → Aug 16) or become
+"30 days ago"; (2) possibly a custom "as of" date picker (the math already
+takes any YYYY-MM-DD); (3) merge to `main` on the user's word (fast-forward;
+chip → v0.8.0). Full detail: `Session log/019_2026-09-16/session_log.md`.
+
+## ▶ Prior session START HERE (2026-09-16, session 018 — v0.7.3, MERGED TO `main`)
 
 **v0.7.3 (topbar bell icon) merged to `main`** on the user's "merge it";
 chip must read `v0.7.3`. The 🔔 emoji is now an outline SVG bell sharing a
