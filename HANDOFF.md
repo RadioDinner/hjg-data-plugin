@@ -12,26 +12,25 @@ shipped.** Full trace + ranked findings in
 `Session log/018_2026-09-16/session_log.md`; a paste-ready audit query in
 `Session log/018_2026-09-16/discovery_card_audit.sql`.
 
-**Root-cause candidates, ranked:**
-1. **Canceled calls never leave the mirror (confirmed in code).**
-   `lib/sync.ts:194` calls `Appointment.getAll` without `includeCanceled`
-   (docs default false), and the sync is upsert-only with no stale-row
-   handling (`synced_at` isn't even refreshed). A call canceled in CA after
-   it was first synced keeps `status='A'` forever and stays in the card.
-2. **Substring classification on the appointment label** (`lib/config.ts`
-   `DISCOVERY_*_CONTAINS`); labels can be per-appointment `alternateLabel`s.
-3. **Card feeds `date_added` (booking date) into the outcome resolver** as the
-   call date (`MetricsView.tsx:488-491`), unlike the Discovery tab
-   (`start_date`). Counting by booking date is deliberate; the outcome-clock
-   basis looks accidental.
-4. Appointments are counted, not unique prospects (funnel counts prospects).
-5. The card's Explore modal omits name / scheduled date / coach / status, so
-   rows can't be diagnosed from the UI. Raw data tab → `ca_appointments` can.
+**CONFIRMED from the user's Raw-data CSV export (turn 2):** the 19 calls
+the dashboard shows are the **August 2026 bucket = 11 × `MT Discovery Call
+Appointment (Zoom)` + 8 real calls.** The 11 are one Mentor Training session
+(same booking second, same 2026-09-12 slot, coach 9315, all 11 attendees also
+in `Mentor Training Group Meeting`) that the substring classifier in
+`lib/config.ts` files as `discoveryZoom`. Second bug: the newer type name
+`Discovery Call Appointment (Phone)` (9 rows since June 2026, coach 29074)
+is filed as `discoveryZoom` because the phone rule only matches
+`"(phone call)"`. Export also shows all 4,410 rows `status='A'` and
+`synced_at` never refreshed — canceled calls never leave the mirror because
+`lib/sync.ts:194` omits `includeCanceled`. Reproduction script:
+`Session log/018_2026-09-16/reproduce_card_from_csv.py`.
 
-**Proposed next step (needs the user's go-ahead):** sync with
-`includeCanceled: true` + refresh `synced_at` on upsert; add the hidden
-columns to the Explore modal; decide the outcome `callDate` basis. Could not
-check live data — no Supabase credentials in the container.
+**Proposed fix (not applied, needs the user's go-ahead):** `lib/config.ts` —
+add `"mt discovery call"` to `EXCLUDE_CONTAINS` and
+`"discovery call appointment (phone)"` to `DISCOVERY_PHONE_CONTAINS`, with
+verify §7 cases; then **re-sync** (categorization runs at sync time). Then:
+Name/Scheduled/Coach columns in the card's Explore modal; decide on
+`includeCanceled: true` in the sync.
 
 ## ▶ Prior session START HERE (2026-07-28, session 017 — lint/format tooling, ON `main`)
 

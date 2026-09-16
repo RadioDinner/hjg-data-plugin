@@ -74,3 +74,41 @@ None yet — assessment delivered, awaiting the user's read of the audit query.
   modal (and the per-month drill-down).
 - Decide whether the card's outcome `callDate` should be `start_date`.
 - Optionally tighten classification to exact CA appointment-type names.
+
+## Turn 2 — CONFIRMED against the user's Raw-data export (4,410 rows)
+
+User uploaded a `ca_appointments` CSV export (2026-09-16) and asked whether
+the 19 discovery calls on the dashboard include Mentor Training meetings.
+**Yes.** Reproduced the card from the CSV (`reproduce_card_from_csv.py`):
+
+- **`MT Discovery Call Appointment (Zoom)`** — 11 rows, category
+  `discoveryZoom`. All 11 booked at the same second
+  (`2026-08-25T12:59:29-05:00`), all for the same slot
+  (`2026-09-12 08:00`), coach 9315, and all 11 client IDs also attend
+  `Mentor Training Group Meeting`. That is ONE mentor-training session with
+  11 attendees, counted as 11 discovery calls. Cause: the substring rule in
+  `lib/config.ts` (`"discovery call appointment (zoom)"`) matches the label;
+  `EXCLUDE_CONTAINS` only knows `"mentor training extra teaching"`.
+- **The 19 = the August 2026 bucket** (booked-date basis): 11 MT + 5 Zoom +
+  3 Phone. "Last month" preset reads 19; the true number is **8**.
+  Full-year 2026 = 71 rows, of which 11 are MT.
+- **Second classification bug:** `Discovery Call Appointment (Phone)` (9 rows
+  since 2026-06-23, coach 29074 — the new booking type name) is filed as
+  `discoveryZoom` because `DISCOVERY_PHONE_CONTAINS` only matches
+  `"(phone call)"` and the generic rule defaults to Zoom. The card's
+  Phone/Zoom split is wrong for those 9.
+- **Corroborates finding #1 (canceled calls never leave the mirror):** every
+  one of the 4,410 rows is `status = 'A'`; not a single `C`. And `synced_at`
+  is the first-insert time (3,769 rows still stamped 2026-05-26), so the
+  mirror cannot tell which rows CA stopped returning.
+- Older bare `Discovery Call Appointment` rows (47) are 2024–2025 only.
+
+## Proposed fix (awaiting go-ahead)
+
+1. `lib/config.ts`: add `"mt discovery call"` to `EXCLUDE_CONTAINS`; add
+   `"discovery call appointment (phone)"` to `DISCOVERY_PHONE_CONTAINS`.
+   Add both cases to verify §7. Categorization runs at sync time → deploy,
+   then **re-sync** (Admin) to reclassify existing rows.
+2. Show Name / Scheduled / Coach in the card's Explore modal so this is a
+   ten-second diagnosis next time.
+3. Separately decide on `includeCanceled: true` in the sync.
