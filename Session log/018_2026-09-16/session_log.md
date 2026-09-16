@@ -182,3 +182,20 @@ deployed version.
 After the v0.7.2 production deploy went live and a fresh Admin → Sync, the
 user confirmed card 003 reads correctly. The earlier "still 71" sync had run
 against the old deploy. Session closed; HANDOFF updated to RESOLVED.
+
+## Turn 6 — topbar notifications icon: emoji → SVG bell (v0.7.3, ON BRANCH)
+
+`src/components/NotificationsBell.tsx`: the 🔔 emoji replaced by an inline
+outline bell (Lucide "bell", ISC) in `currentColor`; button class `btn` →
+`icon-btn`; `aria-haspopup` / `aria-expanded` added; badge kept (offset −5).
+`src/styles.css`: new `.icon-btn` rule shared with `.theme-toggle` (34px
+square, `--panel-2`, muted → text on hover) so the two topbar icon controls
+match. Version 0.7.2 → **0.7.3**. Gates: typecheck ✓, lint 0 errors,
+Prettier ✓, build ✓, verify 692 ✓. Render-checked in headless Chromium
+(light + dark) via a standalone preview using the app CSS — the real app
+needs a Supabase login, which the container has no credentials for.
+**Pushed to `claude/peaceful-noether-543uzn`, NOT merged to `main`** —
+awaiting the user's go-ahead (a merge to `main` is a production deploy).
+Optional follow-up: the theme toggle still uses text glyphs (☾ / ☀), which
+sit slightly lighter than the SVG bell; matching SVG sun/moon would be
+consistent.

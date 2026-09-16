@@ -4,7 +4,15 @@ Working notes for resuming this project in a future session. Last updated
 2026-09-16 (session 018 — discovery-call classification fix **v0.7.1** +
 canceled-appointment sync fix **v0.7.2**, both MERGED TO `main`).
 
-## ▶ START HERE (2026-09-16, session 018 — v0.7.2, MERGED TO `main`)
+## ▶ START HERE (2026-09-16, session 018 — v0.7.2 on `main`; v0.7.3 on the branch)
+
+**Pending merge:** `claude/peaceful-noether-543uzn` carries **v0.7.3** — the
+topbar notifications icon changed from the 🔔 emoji to an outline SVG bell,
+with a shared `.icon-btn` rule so it matches the theme toggle. Gated
+(typecheck / lint / Prettier / build / verify 692) and render-checked in
+headless Chromium both themes. Fast-forwards cleanly onto `main`; merge when
+the user says so (chip then reads `v0.7.3`).
+
 
 **Two fixes shipped, both fast-forwarded onto `main` from
 `claude/peaceful-noether-543uzn`.** Version **0.7.2** (chip must read
