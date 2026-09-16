@@ -176,3 +176,9 @@ deployed version.
 - Pending requests (`P`) are still not fetched — not part of the bug.
 - `dateCanceled` not mirrored (would need a migration); revisit if audit
   needs it.
+
+## Turn 5 — user confirmed: "fixed now"
+
+After the v0.7.2 production deploy went live and a fresh Admin → Sync, the
+user confirmed card 003 reads correctly. The earlier "still 71" sync had run
+against the old deploy. Session closed; HANDOFF updated to RESOLVED.

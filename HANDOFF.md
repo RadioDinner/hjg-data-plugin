@@ -12,19 +12,11 @@ canceled-appointment sync fix **v0.7.2**, both MERGED TO `main`).
 (**692 checks**; §7 +5, new §27 +10) + `lint` (0 errors / 14 pre-existing
 warnings) + `build`.
 
-**⚠ UNRESOLVED AT SESSION END — the user re-synced and the card STILL read
-71 / 20 Phone / 51 Zoom / Aug 19 (exactly the pre-fix numbers).** That sync
-ran the OLD classifier: the sync executes inside the Vercel function, so
-either the production deploy of `main` was not live yet when "Sync now" was
-clicked, or Metrics was not reloaded after the sync. **Next session, verify
-in this order:** (1) hard-reload; chip must read `v0.7.2` (the "update
-available" pill = stale bundle); (2) Admin → Sync now, wait for it to
-finish — the run note should mention any rows marked status X; (3) reload
-Metrics: expect **60** calls for 2026 (29 Phone / 31 Zoom), **August 8**.
-(4) If still 71, run `Session log/018_2026-09-16/reclassify_now.sql`
-(in-place reclassification; a later sync yields the same) and check the
-Vercel deploy of `268f7c7`+ actually succeeded. Note: this container cannot
-reach the site (proxy 403) so the deploy state was never observed.
+**RESOLVED — user confirmed the card is correct after re-syncing on the
+v0.7.2 deploy** ("fixed now"). The earlier re-sync that still showed
+71 / Aug 19 had simply run before the production deploy of `main` was live
+(the sync executes inside the Vercel function). `reclassify_now.sql` in the
+session folder was NOT needed; keep it only as a reference for the pattern.
 
 **Fix 1 — `2bfca7b`, v0.7.1 — classification (`lib/config.ts`).**
 `MT Discovery Call Appointment (Zoom)` (a Mentor-Training practice session:
