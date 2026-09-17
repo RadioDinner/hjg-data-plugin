@@ -59,14 +59,18 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 504 | `mentees.funnel` | RETIRED — funnel moved to Metrics (012) | — |
 | 551 | `updateMentee.screen` | Update Mentee (screen) | nav tab |
 | 552 | `updateMentee.transition` | Transition Mentee form (from → Transition to…) | `UpdateMenteeView` card |
-| 601 | `margins.screen` | Margins (screen) | nav tab |
+| 601 | `margins.screen` | Margins (screen) — rebuilt 2026-09-17 | nav tab |
+| 602 | `margins.mentoring` | Margins on Mentoring — per-mentee margin per meeting | `MarginsView` card |
+| 603 | `margins.mentoring.invoices` | Margins on Mentoring — Invoices inset | `MarginsView` inset table |
+| 604 | `margins.mentoring.meetings` | Margins on Mentoring — Meetings inset | `MarginsView` inset table |
+| 605 | `margins.mentoring.engagements` | Margins on Mentoring — Engagements inset | `MarginsView` inset table |
 | 651 | `finevent.screen` | Report financial event (screen) | nav tab |
 | 652 | `finevent.form` | Report financial event — entry form | `FinancialEventView` card |
 | 701 | `discovery.screen` | Discovery calls (screen) | nav tab |
 | 801 | `maps.screen` | Maps (screen) | nav tab |
 | 901 | `modal.payExplore` | Explore source data (pay) | `PayExploreModal` |
 | 902 | `modal.explore` | Explore (generic source-data modal) | `ExploreModal` |
-| 903 | `modal.marginsDrill` | Margins month drill-down | `MarginsView` modal |
+| 903 | `modal.marginsDrill` | RETIRED 2026-09-17 — Margins tab rebuilt; reserved | — |
 | 904 | `drawer.help` | Help drawer (contextual explainer) | `HelpDrawer` |
 | 905 | `modal.payoutLineDetail` | Build payout — per-mentee invoice/payment drill-down | `PayoutLineDetailModal` |
 | 906 | `modal.paymentSent` | Payment sent — Melio reference dialog (§204) | `BuildPayoutView` modal |

@@ -282,11 +282,33 @@ export type {
 export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
 export type { CapacityAppt } from "../lib/capacity";
 
-// Pure Margins helpers (program staff-hours vs delivered meeting-hours).
-import { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths, meetingHours } from "../lib/margins";
-import type { ProgramSession } from "../lib/margins";
-export { PROGRAMS, PROGRAM_MEETING_HOURS, mergeProgramMonths, meetingHours };
-export type { ProgramDef, ProgramMonthRow, ProgramSession } from "../lib/margins";
+// Pure Margins helpers ("Margins on Mentoring" — per-mentee margin per meeting).
+import type { MarginInvoiceInput, MarginMeetingInput, MarginEngagementInput } from "../lib/margins";
+export {
+  computeMenteeMargin,
+  projectScheduledInvoices,
+  invoiceTier,
+  invoiceStatus,
+  clampShare,
+  addMonths,
+  isMentoringTier,
+  DEFAULT_MENTOR_SHARE,
+  MENTORING_TIERS,
+  TIER_MEETINGS_PER_MONTH,
+} from "../lib/margins";
+export type {
+  MarginInvoiceInput,
+  MarginMeetingInput,
+  MarginEngagementInput,
+  MenteeMarginInputs,
+  MenteeMarginReport,
+  MarginMonthRow,
+  MarginInvoiceRow,
+  MarginMeetingRow,
+  MarginEngagementRow,
+  ScheduledInvoices,
+  InvoiceStatus,
+} from "../lib/margins";
 
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
 export { computeMeetingsToFreedom } from "../lib/freedom";
@@ -2028,182 +2050,132 @@ export async function deletePayoutBuild(coachId: number, serviceMonth: string): 
 
 // --- Raw data viewer ---
 
-// --- Program hours (Margins tab) ---
-// Delivered meeting hours per month for a program (its pipeline tiers), and the
-// manually-entered staff hours. Pure comparison lives in lib/margins.ts.
+// --- Margins on Mentoring (§602): one mentee's invoices, meetings, engagements ---
+// Everything the per-mentee margin needs, fetched in parallel for ONE CA client
+// and shaped for computeMenteeMargin (lib/margins.ts). Reads: ca_invoices (by
+// client_id), ca_appointments (mentoring/group, status A), ca_engagements (with
+// next_invoice_date when migration 9963 is applied — falls back to a select
+// without it so the tab still loads on an older database), ca_coaches (names).
 
-// Delivered SESSIONS per month for the given tiers — the rows behind the Margins
-// delivered-hours bars (and the click-through meeting list). A session = a distinct
-// (coach, exact start time) slot, so a group meeting is ONE session (its attendees
-// are summed onto it), not one per attendee. Meetings with no start time get their
-// own id. Each session's hours = its real duration (end − start) when recorded, else
-// the PROGRAM_MEETING_HOURS stand-in (e.g. before a re-sync populates end_raw).
-// Derive the per-month {sessions, hours} totals with `programMonthTotals` below.
-// Map each engagement id to its pipeline tier (jumpstart/4x/2x/1x/graduated),
-// skipping non-pipeline engagements (mentor_training/group/other). Used by the
-// Margins delivered-sessions roll-up to tag a meeting's tier from its engagement.
-function engagementTierMap(engagements: EngagementRow[]): Map<number, PipelineTier> {
-  const pipeline = new Set<string>(PIPELINE_TIERS);
-  const m = new Map<number, PipelineTier>();
-  for (const e of engagements) {
-    if (e.id == null || e.client_id == null) continue;
-    const tier = engagementTier(e.name);
-    if (!pipeline.has(tier)) continue;
-    m.set(e.id, tier as PipelineTier);
-  }
-  return m;
+export interface MenteeMarginData {
+  invoices: MarginInvoiceInput[];
+  meetings: MarginMeetingInput[];
+  engagements: MarginEngagementInput[];
+  nextInvoiceColumn: boolean; // false = pre-9963 database (scheduled invoices unknown)
 }
 
-export async function fetchProgramSessionsByMonth(
-  tiers: PipelineTier[],
-): Promise<Map<string, ProgramSession[]>> {
-  const tierSet = new Set<string>(tiers);
-  const [engagements, coachesRes] = await Promise.all([
-    fetchAllEngagements(),
-    supabase.from("ca_coaches").select("id,name"),
-  ]);
-  const engTier = engagementTierMap(engagements);
-  const coachMap = new Map<number, string | null>();
-  for (const c of (coachesRes.data ?? []) as { id: number; name: string | null }[])
-    coachMap.set(c.id, c.name);
+export async function fetchMenteeMarginInputs(clientId: number): Promise<MenteeMarginData> {
+  const invoicesQ = supabase
+    .from("ca_invoices")
+    .select("id,invoice_number,date_of,date_added,date_due,amount,amount_paid,line_items,payments")
+    .eq("client_id", clientId);
+  const meetingsQ = supabase
+    .from("ca_appointments")
+    .select("id,name,category,engagement_id,coach_id,start_date,start_raw,counts_in_engagement")
+    .eq("client_id", clientId)
+    .in("category", ["mentoring", "group"])
+    .eq("status", "A");
+  const coachesQ = supabase.from("ca_coaches").select("id,name");
+  const engagementsQ = supabase
+    .from("ca_engagements")
+    .select("id,name,start_date,end_date,is_complete,is_canceled,next_invoice_date")
+    .eq("client_id", clientId);
 
-  // slotKey -> the session, with its month carried for the final grouping.
-  const bySlot = new Map<string, ProgramSession & { _month: string }>();
-  const pageSize = 1000;
-  for (let f = 0; ; f += pageSize) {
-    const { data, error } = await supabase
-      .from("ca_appointments")
-      .select("id,coach_id,engagement_id,start_date,start_raw,end_raw,name")
-      .in("category", ["mentoring", "group"])
-      .eq("status", "A")
-      .range(f, f + pageSize - 1);
-    if (error) throw new Error(error.message);
-    const batch = (data ?? []) as {
-      id: number;
-      coach_id: number | null;
+  const [invRes, apptRes, coachRes, engFirst] = await Promise.all([
+    invoicesQ,
+    meetingsQ,
+    coachesQ,
+    engagementsQ,
+  ]);
+  if (invRes.error) throw new Error(invRes.error.message);
+  if (apptRes.error) throw new Error(apptRes.error.message);
+  if (coachRes.error) throw new Error(coachRes.error.message);
+
+  // Pre-9963 database: retry the engagement select without the new column.
+  let engData: unknown[] | null = engFirst.data;
+  let nextInvoiceColumn = true;
+  if (engFirst.error) {
+    if (!/next_invoice/i.test(engFirst.error.message)) throw new Error(engFirst.error.message);
+    nextInvoiceColumn = false;
+    const retry = await supabase
+      .from("ca_engagements")
+      .select("id,name,start_date,end_date,is_complete,is_canceled")
+      .eq("client_id", clientId);
+    if (retry.error) throw new Error(retry.error.message);
+    engData = retry.data;
+  }
+
+  const coachName = new Map<number, string>();
+  for (const c of (coachRes.data ?? []) as { id: number; name: string | null }[])
+    coachName.set(c.id, c.name ?? `#${c.id}`);
+
+  const invoices: MarginInvoiceInput[] = (
+    (invRes.data ?? []) as {
+      id: number | null;
+      invoice_number: string | null;
+      date_of: string | null;
+      date_added: string | null;
+      date_due: string | null;
+      amount: number | string | null;
+      amount_paid: number | string | null;
+      line_items: unknown;
+      payments: unknown;
+    }[]
+  ).map((inv) => ({
+    id: inv.id,
+    invoiceNumber: inv.invoice_number,
+    serviceDate: inv.date_of,
+    issuedDate: inv.date_added,
+    dueDate: inv.date_due,
+    amount: Number(inv.amount) || 0,
+    collected: Number(inv.amount_paid) || 0,
+    lineItems: normInvoiceLineItems(inv.line_items),
+    payments: normInvoicePayments(inv.payments),
+  }));
+
+  const meetings: MarginMeetingInput[] = (
+    (apptRes.data ?? []) as {
+      id: number | null;
+      name: string | null;
+      category: string;
       engagement_id: number | null;
+      coach_id: number | null;
       start_date: string | null;
       start_raw: string | null;
-      end_raw: string | null;
-      name: string | null;
-    }[];
-    for (const a of batch) {
-      if (a.engagement_id == null) continue;
-      const tier = engTier.get(a.engagement_id);
-      if (!tier || !tierSet.has(tier)) continue;
-      const month = (a.start_date ?? "").slice(0, 7);
-      if (!month) continue;
-      const slot = a.start_raw ? `${a.coach_id ?? "?"}|${a.start_raw}` : `id|${a.id}`;
-      const existing = bySlot.get(slot);
-      if (existing) {
-        existing.attendees++; // another attendee of the same group slot
-        continue;
-      }
-      const dur = meetingHours(a.start_raw, a.end_raw);
-      bySlot.set(slot, {
-        _month: month,
-        date: a.start_date ?? "",
-        time: a.start_raw && a.start_raw.length >= 16 ? a.start_raw.slice(11, 16) : null,
-        coachName:
-          (a.coach_id != null ? coachMap.get(a.coach_id) : null) ??
-          (a.coach_id != null ? `#${a.coach_id}` : "Unknown"),
-        name: a.name ?? "",
-        attendees: 1,
-        hours: dur ?? PROGRAM_MEETING_HOURS,
-        realDuration: dur != null,
-      });
-    }
-    if (batch.length < pageSize) break;
-  }
-
-  const out = new Map<string, ProgramSession[]>();
-  for (const s of bySlot.values()) {
-    const { _month, ...session } = s;
-    let arr = out.get(_month);
-    if (!arr) {
-      arr = [];
-      out.set(_month, arr);
-    }
-    arr.push(session);
-  }
-  for (const arr of out.values())
-    arr.sort((a, b) => `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`));
-  return out;
-}
-
-// Per-month {sessions, hours} totals from the session detail (for the chart + merge).
-export function programMonthTotals(
-  sessionsByMonth: Map<string, ProgramSession[]>,
-): Map<string, { sessions: number; hours: number }> {
-  const out = new Map<string, { sessions: number; hours: number }>();
-  for (const [month, sessions] of sessionsByMonth) {
-    let hours = 0;
-    for (const s of sessions) hours += s.hours;
-    out.set(month, { sessions: sessions.length, hours: Math.round(hours * 100) / 100 });
-  }
-  return out;
-}
-
-export interface ProgramHoursRow {
-  program: string;
-  month: string; // YYYY-MM
-  staffHours: number | null;
-  notes: string | null;
-}
-
-// All entered staff-hours rows. Fail-open on rows (the Margins tab still renders
-// delivered hours from CA) but SURFACE the error instead of swallowing it — a
-// missing program_hours table (9981 unapplied) or an RLS problem used to look
-// like "my numbers silently don't save", which is exactly the bug report this
-// fixes: the tab now shows why storage is unavailable.
-export async function fetchAllProgramHours(): Promise<{
-  rows: ProgramHoursRow[];
-  error: string | null;
-}> {
-  const { data, error } = await supabase
-    .from("program_hours")
-    .select("program,month,staff_hours,notes");
-  if (error)
-    return {
-      rows: [],
-      error: `${error.message} — staff-hours storage is unavailable (is migration 9981_program_hours.sql applied?)`,
-    };
-  const rows = (
-    (data ?? []) as {
-      program: string;
-      month: string;
-      staff_hours: number | string | null;
-      notes: string | null;
+      counts_in_engagement: number | null;
     }[]
-  ).map((r) => ({
-    program: r.program,
-    month: r.month,
-    staffHours: r.staff_hours == null || r.staff_hours === "" ? null : Number(r.staff_hours),
-    notes: r.notes ?? null,
+  ).map((a) => ({
+    id: a.id,
+    name: a.name ?? "",
+    isGroup: a.category === "group",
+    coachName: a.coach_id != null ? (coachName.get(a.coach_id) ?? `#${a.coach_id}`) : null,
+    engagementId: a.engagement_id,
+    startDate: a.start_date,
+    startRaw: a.start_raw,
+    countsInEngagement: a.counts_in_engagement,
   }));
-  return { rows, error: null };
-}
 
-// Upsert one (program, month) staff-hours entry. `.select()` forces the row to
-// be returned, so a save that Postgres/RLS quietly dropped surfaces as an error
-// instead of looking like it worked.
-export async function setProgramHours(
-  createdBy: string,
-  program: string,
-  month: string,
-  staffHours: number | null,
-  notes: string | null = null,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("program_hours")
-    .upsert(
-      { program, month, staff_hours: staffHours, notes, created_by: createdBy || null },
-      { onConflict: "program,month" },
-    )
-    .select("program,month");
-  if (error) throw new Error(`${error.message} — is migration 9981_program_hours.sql applied?`);
-  if (!data || data.length === 0)
-    throw new Error("Save was blocked (no row written) — check program_hours RLS/migration 9981.");
+  const engagements: MarginEngagementInput[] = (
+    (engData ?? []) as {
+      id: number | null;
+      name: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      is_complete: boolean | null;
+      is_canceled: boolean | null;
+      next_invoice_date?: string | null;
+    }[]
+  ).map((e) => ({
+    id: e.id,
+    name: e.name,
+    startDate: e.start_date,
+    endDate: e.end_date,
+    isComplete: !!e.is_complete,
+    isCanceled: !!e.is_canceled,
+    nextInvoiceDate: e.next_invoice_date ?? null,
+  }));
+
+  return { invoices, meetings, engagements, nextInvoiceColumn };
 }
 
 // --- User permissions (Admin §405, bones) ---

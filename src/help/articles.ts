@@ -455,24 +455,39 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
   },
 
   "margins.tab": {
-    title: "Margins — staff hours vs delivered hours",
-    body: `The first step toward **program margins**: compare the **staff hours** that went into a program each month against the **meeting hours actually delivered**. Sub-tabs split it by program — **JumpStart Your Freedom** (the supervised JumpStart tier) and **Mentoring** (ongoing 4x / 2x / 1x).
+    title: "Margins",
+    body: `Several ways to look at HJG's **margins**, each in its own collapsible card on this tab. The tab was rebuilt from scratch on 2026-09-17; the earlier staff-hours-vs-delivered-hours view is gone.
 
-### Delivered hours
-- Counted from CoachAccountable meetings whose engagement is in the program's tiers, grouped by month.
-- A **session** = a distinct **coach + exact start-time** slot, so a group meeting counts **once** (not once per attendee).
-- Each session's hours = its **actual duration** (\`endDate − startDate\`) when recorded. When a meeting has no end time (pre-sync rows, or CA left it blank) it falls back to a **1 h/session** stand-in (\`PROGRAM_MEETING_HOURS\`).
-- Real durations need migration \`9980_ca_appointments_end.sql\` applied **and a re-sync** (the sync now mirrors \`endDate\` to \`ca_appointments.end_raw\`); until then everything uses the fallback.
+### Lenses
+- **Margins on Mentoring** (§602) — pick one mentee and see what HJG keeps **per meeting** on their ongoing 4x / 2x / 1x mentoring, with the invoice and meeting counts that make the number trustworthy. Open that card's own **?** for the full method.
+- More lenses will be added below it as they are agreed.`,
+  },
 
-### Staff hours
-- **You enter these** per month, in the table (saves on blur). Stored in the \`program_hours\` table (migration \`9981\`).
+  "margins.mentoring": {
+    title: "Margins on Mentoring — per mentee",
+    body: `**What HJG keeps per meeting** on one mentee's ongoing mentoring — and whether that number can be trusted yet.
 
-### Drill into a month
-- **Click a bar (or a table row)** to open the **meetings behind that month** — each delivered session with its date, time, coach, meeting name, attendees, and hours (a group session shows its attendee count). Export the list to CSV. An asterisk on hours marks a session using the fallback length (no end time recorded).
+### The split
+- The mentee pays a monthly invoice for their tier (e.g. **$425 for 4x**). **HJG keeps a share of what is collected** (default **40%**); the mentor gets the rest (**60%**). The **Mentor share** box in the card header changes the split for the whole card (it is not saved).
+- Only **ongoing-mentoring** money counts: invoices whose line item (or, failing that, the engagement covering the invoice's service date) resolves to **4x / 2x / 1x**. JumpStart / JYF, mentor-training and group invoices are listed but **excluded** and counted as "Non-mentoring".
 
-### Reading it
-- **Delivered ÷ staff** = delivered meeting hours per staff hour, for months where staff hours are entered — a first proxy for leverage/efficiency.
-- **Dollars come later.** This is the hours "bones"; cost + revenue layer on top once the hours model is trusted.`,
+### The two margin figures
+- **Per meeting delivered** (cash basis) = HJG's collected share ÷ meetings that have **occurred**. This is the naive number, and it is **inflated the moment a mentee pays ahead**: 4 paid months on a 4x = 16 meetings owed, but if only 12 have happened, $680 ÷ 12 reads $56.67 when the real steady-state margin is $42.50.
+- **Per meeting paid for** (entitlement basis) = HJG's collected share ÷ **meetings paid for**, where meetings paid for = Σ (tier cadence × paid fraction) over the mentoring invoices — a fully paid 4x invoice buys 4 meetings, a 2x buys 2, a 1x buys 1; a half-paid 4x buys 2. This is the number to trust while meetings are prepaid.
+- **Prepaid, not yet delivered** = paid for − occurred (the skew). **HJG share deferred** is the dollar value of that gap: collected, not yet earned. **HJG share earned** is the rest. When occurred ≥ paid for, both figures agree and the card says so.
+
+### The counts
+- **Invoices**: issued (mentoring invoices in the mirror) · paid in full · partially paid · unpaid (with how many are past due) · **scheduled (future)** = the monthly invoices CoachAccountable will still issue on the mentee's **open** mentoring engagements, from each engagement's **next invoice date** through its end date. An engagement with **no end date** is an open-ended monthly subscription — there is no finite count, so the tile shows **∞** and the next invoice date.
+- **Meetings**: occurred (start at or before now) · upcoming (later than now) · paid for · prepaid · **credited by CA** = occurred meetings CoachAccountable has counted against an engagement (\`countsInEngagement = 1\`), a second opinion on "did this session really happen".
+- Meetings count when their engagement is 4x / 2x / 1x **or unknown** (older rows with no engagement id are kept); meetings under a JumpStart / training / group engagement are excluded and counted as "Non-mentoring".
+
+### By month (graph + table)
+- Invoices land in their **service month** (CA's invoice date, \`date_of\`), meetings in the month they happen. Three small charts share the table: HJG share collected, meetings occurred vs upcoming, and margin per meeting delivered — a month with money and no meetings yet is the prepaid skew, visible.
+
+### Source
+- \`ca_invoices\` (\`amount\`, \`amount_paid\`, \`date_of\`, \`date_due\`, \`line_items\`, \`payments\`) · \`ca_appointments\` (mentoring/group, status A, \`start_raw\`, \`counts_in_engagement\`) · \`ca_engagements\` (name → tier via \`engagementTier\`, \`is_complete\` / \`is_canceled\`, \`end_date\`, \`next_invoice_date\`).
+- **Scheduled invoices need migration \`9963_ca_engagements_next_invoice.sql\` and a re-sync** — CA's \`Engagement.getAll\` returns \`nextInvoiceDate\`, which the sync now mirrors. Until then the tile reads "?".
+- Pure math in \`lib/margins.ts\` (\`computeMenteeMargin\`, verified in \`scripts/verify-metrics.ts\` §17).`,
   },
 
   "general.coachAttribution": {

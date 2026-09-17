@@ -349,6 +349,7 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
         const ed = dateParts(e.endDate);
         const dc = dateParts(e.dateClosed);
         const da = dateParts(e.dateAdded);
+        const ni = dateParts(e.nextInvoiceDate);
         return {
           id: e.ID,
           type: e.type ?? null,
@@ -373,9 +374,28 @@ export async function runSync(trigger: SyncTrigger): Promise<SyncResult> {
           date_closed: dc.date,
           date_added_raw: e.dateAdded ?? null,
           date_added: da.date,
+          next_invoice_raw: e.nextInvoiceDate ?? null,
+          next_invoice_date: ni.date,
         };
       });
-      records += await chunkedUpsert(admin, "ca_engagements", engagementRows);
+      try {
+        records += await chunkedUpsert(admin, "ca_engagements", engagementRows);
+      } catch (err) {
+        // Pre-9963 database: the next-invoice columns don't exist yet. Retry
+        // without them so the engagement mirror keeps refreshing, and say so in
+        // the run note (the Margins tab reads next_invoice_date for "scheduled").
+        if (!/next_invoice/i.test(String(err))) throw err;
+        const legacy = engagementRows.map((r) => {
+          const copy: Record<string, unknown> = { ...r };
+          delete copy.next_invoice_raw;
+          delete copy.next_invoice_date;
+          return copy;
+        });
+        records += await chunkedUpsert(admin, "ca_engagements", legacy);
+        warnings.push(
+          "Engagements: next invoice date not stored — apply migration 9963_ca_engagements_next_invoice.sql and re-sync",
+        );
+      }
     } catch (e) {
       if (e instanceof BudgetExhaustedError) throw e;
       warnings.push(`Engagements skipped: ${sanitizeError(e)}`);

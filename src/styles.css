@@ -1304,15 +1304,9 @@ body {
   align-self: center;
 }
 
-/* Margins: rows you can click to drill into that month's meetings */
-.margins__row--drill {
-  cursor: pointer;
-}
-.margins__row--drill:hover {
-  background: var(--row-hover, rgba(148, 163, 184, 0.12));
-}
-.margins__hours-input {
-  width: 72px;
+/* Margins: the mentor-share percent box in the "Margins on Mentoring" header */
+.margins__pct-input {
+  width: 56px;
   text-align: right;
   background: var(--panel);
   color: var(--text);

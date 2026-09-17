@@ -74,6 +74,7 @@ export interface CAEngagement {
   allocationUsedA?: number;
   allocationUsedV?: number;
   allocationPerClient?: number;
+  nextInvoiceDate?: string; // when CA will issue the engagement's next invoice
   isComplete?: boolean;
   isCanceled?: boolean;
   dateClosed?: string;
@@ -306,6 +307,8 @@ export interface CaEngagementRow {
   date_closed: string | null;
   date_added_raw: string | null;
   date_added: string | null;
+  next_invoice_raw: string | null; // CA Engagement.nextInvoiceDate (migration 9963)
+  next_invoice_date: string | null;
   synced_at?: string;
 }
 

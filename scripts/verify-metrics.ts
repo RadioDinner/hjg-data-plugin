@@ -96,7 +96,18 @@ import {
   type BuildLineInput,
   type BuildLineState,
 } from "../lib/payBuild.js";
-import { mergeProgramMonths, meetingHours } from "../lib/margins.js";
+import {
+  computeMenteeMargin,
+  projectScheduledInvoices,
+  invoiceTier,
+  invoiceStatus,
+  addMonths,
+  clampShare,
+  DEFAULT_MENTOR_SHARE,
+  type MarginInvoiceInput,
+  type MarginMeetingInput,
+  type MarginEngagementInput,
+} from "../lib/margins.js";
 import { buildPayStubModel, payStubHtml } from "../lib/payStub.js";
 import {
   normalizeEntries,
@@ -3190,41 +3201,276 @@ console.log("[16] Journeys per-stage colors (gradient interpolation + config res
   eq(round.from, "#aabbcc", "round-trip preserves 'from'");
 }
 
-console.log("[17] Margins — staff-hours vs delivered-hours month merge");
+console.log("[17] Margins on Mentoring — per-mentee margin per meeting (computeMenteeMargin)");
 {
-  const delivered = new Map<string, { sessions: number; hours: number }>([
-    ["2026-05", { sessions: 10, hours: 10 }],
-    ["2026-04", { sessions: 6, hours: 6 }],
-  ]);
-  const staff = new Map<string, number>([
-    ["2026-05", 4],
-    ["2026-03", 8], // a month with staff hours but no delivered meetings
-  ]);
-  const rows = mergeProgramMonths(delivered, staff, ["2026-06"]); // current-month seed
+  // Brian's example (the user's spec): a 4x at $425/month, mentor 60% / HJG 40%.
+  const inv = (
+    id: number,
+    serviceDate: string,
+    amount: number,
+    collected: number,
+    item = "MN Subscription | (4x Month) weekly",
+    dueDate: string | null = null,
+  ): MarginInvoiceInput => ({
+    id,
+    invoiceNumber: `#${1000 + id}`,
+    serviceDate,
+    issuedDate: serviceDate,
+    dueDate,
+    amount,
+    collected,
+    lineItems: [{ item, amount }],
+    payments:
+      collected > 0
+        ? [{ datePaid: `${serviceDate} 09:00:00`, amount: collected, method: "Card" }]
+        : [],
+  });
+  const mtg = (
+    id: number,
+    startRaw: string,
+    engagementId: number | null = 1,
+  ): MarginMeetingInput => ({
+    id,
+    name: "Mentoring Call",
+    isGroup: false,
+    coachName: "Harry",
+    engagementId,
+    startDate: startRaw.slice(0, 10),
+    startRaw,
+    countsInEngagement: 1,
+  });
+  const eng4x: MarginEngagementInput = {
+    id: 1,
+    name: "MN Subscription | (4x Month) weekly",
+    startDate: "2026-06-01",
+    endDate: null,
+    isComplete: false,
+    isCanceled: false,
+    nextInvoiceDate: null,
+  };
+  const today = "2026-09-17";
+  const now = "2026-09-17 12:00:00";
+  // 12 occurred meetings: 4 in Jun, 4 in Jul, 4 in Aug; 3 upcoming in Sep.
+  const meetings: MarginMeetingInput[] = [];
+  let mid = 1;
+  for (const m of ["06", "07", "08"])
+    for (const d of ["03", "10", "17", "24"]) meetings.push(mtg(mid++, `2026-${m}-${d} 10:00:00`));
+  for (const d of ["21", "28"]) meetings.push(mtg(mid++, `2026-09-${d} 10:00:00`));
+  meetings.push(mtg(mid, "2026-10-05 10:00:00"));
 
-  eq(rows.length, 4, "union of delivered + staff + extra months = 4 rows");
-  eq(rows[0].month, "2026-06", "rows are newest-first (extra/current month on top)");
-  const may = rows.find((r) => r.month === "2026-05")!;
-  eq(may.deliveredHours, 10, "delivered hours = sessions × 1h");
-  eq(may.staffHours, 4, "staff hours carried through");
-  eq(may.ratio, 2.5, "ratio = delivered ÷ staff (10/4)");
-  const apr = rows.find((r) => r.month === "2026-04")!;
-  eq(apr.staffHours, null, "month with no staff entry -> staffHours null");
-  eq(apr.ratio, null, "no staff hours -> ratio null");
-  const mar = rows.find((r) => r.month === "2026-03")!;
-  eq(mar.sessions, 0, "staff-only month has 0 delivered sessions");
-  eq(mar.ratio, 0, "0 delivered ÷ 8 staff = 0 ratio");
-  const jun = rows.find((r) => r.month === "2026-06")!;
-  eq(jun.deliveredHours, 0, "seeded current month has 0 delivered");
-  eq(jun.staffHours, null, "seeded current month has no staff hours yet");
+  // Three paid months → $1,275 in, $510 to HJG, 12 meetings → $42.50/meeting, no skew.
+  const three = computeMenteeMargin({
+    invoices: [
+      inv(1, "2026-06-01", 425, 425),
+      inv(2, "2026-07-01", 425, 425),
+      inv(3, "2026-08-01", 425, 425),
+    ],
+    meetings,
+    engagements: [eng4x],
+    today,
+    now,
+  });
+  eq(three.mentorShare, 0.6, "default split: mentor 60%");
+  eq(three.hjgShare, 0.4, "default split: HJG 40%");
+  eq(three.invoices.issued, 3, "3 mentoring invoices issued");
+  eq(three.invoices.paid, 3, "all 3 paid");
+  eq(three.money.billed, 1275, "billed $1,275");
+  eq(three.money.collected, 1275, "collected $1,275");
+  eq(three.money.hjgCollected, 510, "HJG share $510 (40%)");
+  eq(three.money.mentorCollected, 765, "mentor share $765 (60%)");
+  eq(three.meetings.occurred, 12, "12 meetings occurred");
+  eq(three.meetings.upcoming, 3, "3 meetings upcoming (after now)");
+  eq(three.meetings.booked, 15, "booked = occurred + upcoming");
+  eq(three.meetings.paidFor, 12, "3 paid 4x invoices buy 12 meetings");
+  eq(three.meetings.prepaid, 0, "no prepaid gap");
+  eq(three.margin.perMeetingDelivered, 42.5, "$510 ÷ 12 = $42.50 per meeting delivered");
+  eq(three.margin.perMeetingPaidFor, 42.5, "$510 ÷ 12 paid for = $42.50 (agree)");
+  eq(three.money.hjgEarned, 510, "all of HJG's share is earned");
+  eq(three.money.hjgDeferred, 0, "nothing deferred");
+  eq(three.meetings.credited, 12, "CA credited all 12 occurred meetings");
 
-  // meetingHours: real duration from CA datetime strings; null -> caller falls back.
-  eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 10:00:00"), 1, "1h meeting");
-  eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 09:30:00"), 0.5, "30-min meeting = 0.5h");
-  eq(meetingHours("2026-01-31 09:00:00", null), null, "missing end -> null (fall back)");
-  eq(meetingHours(null, "2026-01-31 10:00:00"), null, "missing start -> null");
-  eq(meetingHours("2026-01-31 10:00:00", "2026-01-31 09:00:00"), null, "end before start -> null");
-  eq(meetingHours("2026-01-31 09:00:00", "2026-01-31 11:30:00"), 2.5, "2.5h meeting");
+  // A 4th invoice paid ahead (September) → $680 to HJG but still 12 delivered: the
+  // cash-basis figure inflates to $56.67; the entitlement figure holds at $42.50.
+  const four = computeMenteeMargin({
+    invoices: [
+      inv(1, "2026-06-01", 425, 425),
+      inv(2, "2026-07-01", 425, 425),
+      inv(3, "2026-08-01", 425, 425),
+      inv(4, "2026-09-01", 425, 425),
+    ],
+    meetings,
+    engagements: [eng4x],
+    today,
+    now,
+  });
+  eq(four.money.hjgCollected, 680, "4 paid months → HJG $680");
+  eq(four.meetings.paidFor, 16, "4 paid 4x invoices buy 16 meetings");
+  eq(four.meetings.prepaid, 4, "16 paid for − 12 occurred = 4 prepaid (the skew)");
+  eq(four.margin.perMeetingDelivered, 56.67, "cash basis $680 ÷ 12 = $56.67 (inflated)");
+  eq(four.margin.perMeetingPaidFor, 42.5, "entitlement basis $680 ÷ 16 = $42.50 (steady)");
+  eq(four.money.hjgEarned, 510, "earned = $680 × 12/16 = $510");
+  eq(four.money.hjgDeferred, 170, "deferred = $680 − $510 = $170 (4 meetings × $42.50)");
+  // By month: September has money and no delivered meetings → margin null (the skew is visible).
+  eq(four.byMonth.length, 5, "by-month rows: Jun, Jul, Aug, Sep, Oct");
+  eq(four.byMonth[0].month, "2026-06", "by-month is oldest first");
+  const jun = four.byMonth.find((r) => r.month === "2026-06")!;
+  eq(jun.hjgCollected, 170, "Jun HJG share $170");
+  eq(jun.meetingsOccurred, 4, "Jun 4 meetings occurred");
+  eq(jun.marginPerMeeting, 42.5, "Jun margin per meeting $42.50");
+  const sep = four.byMonth.find((r) => r.month === "2026-09")!;
+  eq(sep.invoicesPaid, 1, "Sep invoice paid");
+  eq(sep.meetingsOccurred, 0, "Sep: no meeting occurred yet");
+  eq(sep.meetingsUpcoming, 2, "Sep: 2 upcoming");
+  eq(sep.marginPerMeeting, null, "Sep: margin per meeting undefined (prepaid month)");
+  const oct = four.byMonth.find((r) => r.month === "2026-10")!;
+  eq(oct.invoicesIssued, 0, "Oct: no invoice yet");
+  eq(oct.meetingsUpcoming, 1, "Oct: 1 upcoming");
+
+  // Custom split (mentor 50%): HJG keeps 50%.
+  const half = computeMenteeMargin({
+    invoices: [inv(1, "2026-06-01", 425, 425)],
+    meetings: meetings.slice(0, 4),
+    engagements: [eng4x],
+    today,
+    now,
+    mentorShare: 0.5,
+  });
+  eq(half.money.hjgCollected, 212.5, "mentor 50% → HJG $212.50 of $425");
+  eq(half.margin.perMeetingDelivered, 53.13, "$212.50 ÷ 4 = $53.13");
+  eq(clampShare(1.7), 1, "share clamps to 1");
+  eq(clampShare(-2), 0, "share clamps to 0");
+  eq(clampShare(NaN), DEFAULT_MENTOR_SHARE, "unparseable share → default");
+
+  // Partial, unpaid, overdue, credit, and non-mentoring invoices.
+  const mixed = computeMenteeMargin({
+    invoices: [
+      inv(1, "2026-06-01", 425, 425),
+      inv(2, "2026-07-01", 425, 212.5), // half paid → buys 2 meetings
+      inv(3, "2026-08-01", 425, 0, "MN Subscription | (4x Month) weekly", "2026-08-15"), // unpaid + overdue
+      inv(4, "2026-09-01", 425, 0, "MN Subscription | (4x Month) weekly", "2026-09-30"), // unpaid, not yet due
+      inv(5, "2026-05-01", 1500, 1500, "JumpStart Your Freedom"), // JYF → excluded
+      inv(6, "2026-06-15", -50, 0), // credit
+    ],
+    meetings,
+    engagements: [eng4x],
+    today,
+    now,
+  });
+  eq(mixed.invoices.issued, 5, "5 mentoring invoices (JYF excluded; the credit counts as issued)");
+  eq(mixed.invoices.paid, 1, "1 paid in full");
+  eq(mixed.invoices.partial, 1, "1 partial");
+  eq(mixed.invoices.unpaid, 2, "2 unpaid");
+  eq(mixed.invoices.overdue, 1, "1 overdue (Aug, due 8/15 < today)");
+  eq(mixed.invoices.nonMentoring, 1, "1 non-mentoring invoice excluded");
+  eq(mixed.money.billed, 1650, "billed = 425×4 − 50 credit (JYF excluded)");
+  eq(mixed.money.collected, 637.5, "collected $637.50");
+  eq(mixed.money.outstanding, 1012.5, "outstanding = billed − collected");
+  eq(mixed.meetings.paidFor, 6, "paid for = 4 (full) + 2 (half)");
+  eq(mixed.meetings.overDelivered, 6, "12 occurred − 6 paid for = 6 delivered beyond paid");
+  eq(
+    mixed.money.hjgEarned,
+    mixed.money.hjgCollected,
+    "over-delivered → everything collected is earned",
+  );
+  const jyfRow = mixed.invoiceRows.find((r) => r.id === 5)!;
+  eq(jyfRow.tier, "jumpstart", "JYF invoice tier from its line item");
+  eq(jyfRow.mentoring, false, "JYF invoice is out of scope");
+  eq(jyfRow.meetingsBought, 0, "JYF invoice buys no mentoring meetings");
+  const credit = mixed.invoiceRows.find((r) => r.id === 6)!;
+  eq(credit.status, "credit", "negative invoice → credit status");
+  const aug = mixed.invoiceRows.find((r) => r.id === 3)!;
+  eq(aug.status, "unpaid", "unpaid status");
+  eq(aug.overdue, true, "past due → overdue flag");
+  eq(mixed.invoiceRows[0].id, 4, "invoice rows newest service date first");
+  eq(
+    mixed.invoiceRows.find((r) => r.id === 1)!.paidOn,
+    "2026-06-01 09:00:00",
+    "last payment date carried",
+  );
+
+  // Tier fallback: a line item that names no tier resolves through the covering engagement.
+  const plain = inv(9, "2026-07-10", 425, 425, "Monthly mentoring");
+  eq(invoiceTier(plain, [eng4x]), "4x", "no tier in the line item → covering engagement's tier");
+  eq(invoiceTier(plain, []), "other", "no line-item tier, no engagement → other");
+  const twoX = inv(10, "2026-07-10", 250, 250, "MN Subscription | (2x Month)");
+  eq(invoiceTier(twoX, [eng4x]), "2x", "line item wins over engagement coverage");
+  eq(invoiceStatus(425, 425), "paid", "status paid");
+  eq(invoiceStatus(425, 424.999), "paid", "status paid within a cent");
+  eq(invoiceStatus(425, 10), "partial", "status partial");
+  eq(invoiceStatus(425, 0), "unpaid", "status unpaid");
+  eq(invoiceStatus(0, 0), "credit", "status credit for $0");
+
+  // Meetings: unknown engagement stays in scope; a JumpStart engagement's meeting is excluded.
+  const jyfEng: MarginEngagementInput = {
+    id: 2,
+    name: "JumpStart Your Freedom",
+    startDate: "2026-04-01",
+    endDate: "2026-05-31",
+    isComplete: true,
+    isCanceled: false,
+    nextInvoiceDate: null,
+  };
+  const scoped = computeMenteeMargin({
+    invoices: [],
+    meetings: [
+      mtg(1, "2026-05-05 10:00:00", 2), // JYF engagement → excluded
+      mtg(2, "2026-06-05 10:00:00", null), // unknown engagement → kept
+      mtg(3, "2026-06-12 10:00:00", 1),
+      { ...mtg(4, "2026-06-19 10:00:00", 1), startRaw: null, startDate: "2026-06-19" }, // date-only fallback
+      { ...mtg(5, "2026-09-17 13:00:00", 1) }, // later today → upcoming
+      { ...mtg(6, "2026-09-17 11:00:00", 1), countsInEngagement: null }, // earlier today → occurred
+    ],
+    engagements: [eng4x, jyfEng],
+    today,
+    now,
+  });
+  eq(scoped.meetings.nonMentoring, 1, "JumpStart-engagement meeting excluded");
+  eq(scoped.meetings.occurred, 4, "occurred: unknown-engagement + 4x + date-only + earlier-today");
+  eq(scoped.meetings.upcoming, 1, "later today → upcoming");
+  eq(scoped.meetings.credited, 3, "credited counts CA's 1s only (null = unsynced)");
+  eq(scoped.margin.perMeetingDelivered, 0, "no money, 4 meetings → $0 per meeting delivered");
+  eq(scoped.margin.perMeetingPaidFor, null, "nothing paid for → entitlement margin undefined");
+  eq(scoped.meetingRows[0].id, 5, "meeting rows newest first");
+  eq(scoped.meetingRows.find((r) => r.id === 2)!.tier, null, "unknown engagement → tier null");
+  eq(
+    scoped.meetingRows.find((r) => r.id === 6)!.credited,
+    null,
+    "unsynced countsInEngagement → null",
+  );
+  eq(scoped.engagementRows[0].id, 1, "engagement rows newest start first");
+  eq(scoped.engagementRows[1].state, "complete", "completed engagement state");
+
+  // Scheduled (future) invoices from CA's nextInvoiceDate.
+  eq(addMonths("2026-01-31", 1), "2026-02-28", "addMonths clamps to month length");
+  eq(addMonths("2026-11-15", 2), "2027-01-15", "addMonths rolls the year");
+  const noData = projectScheduledInvoices([eng4x], today);
+  eq(noData.hasData, false, "no next-invoice dates synced → hasData false");
+  eq(noData.count, 0, "…and count 0");
+  const openEnded = projectScheduledInvoices([{ ...eng4x, nextInvoiceDate: "2026-10-01" }], today);
+  eq(openEnded.hasData, true, "next-invoice date present → hasData");
+  eq(openEnded.openEnded, true, "no end date → open-ended");
+  eq(openEnded.count, null, "open-ended → no finite count");
+  eq(openEnded.nextInvoiceDate, "2026-10-01", "next invoice date reported");
+  const bounded = projectScheduledInvoices(
+    [{ ...eng4x, nextInvoiceDate: "2026-10-01", endDate: "2026-12-15" }],
+    today,
+  );
+  eq(bounded.count, 3, "Oct 1, Nov 1, Dec 1 → 3 scheduled invoices through Dec 15");
+  eq(bounded.openEnded, false, "bounded engagement is not open-ended");
+  const closed = projectScheduledInvoices(
+    [{ ...eng4x, nextInvoiceDate: "2026-10-01", isCanceled: true }],
+    today,
+  );
+  eq(closed.count, 0, "a canceled engagement schedules nothing");
+  const past = projectScheduledInvoices([{ ...eng4x, nextInvoiceDate: "2026-09-01" }], today);
+  eq(past.count, 0, "a next-invoice date already in the past schedules nothing");
+  const viaReport = computeMenteeMargin({
+    invoices: [],
+    meetings: [],
+    engagements: [{ ...eng4x, nextInvoiceDate: "2026-10-01", endDate: "2026-11-30" }],
+    today,
+  });
+  eq(viaReport.invoices.scheduled.count, 2, "report carries the scheduled projection (Oct, Nov)");
 }
 
 console.log("[18] Conversion-rate trend window (parse + rolling trailing rate)");

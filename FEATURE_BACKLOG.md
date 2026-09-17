@@ -119,7 +119,21 @@ from Pay staff — the header "Build payout →" (unscoped) or a per-mentor "Bui
 breakdown (pre-scoped to that mentor+month, via new `initialCoachId`/`initialYm` props), with a
 Back to the overview. Engine + `payout_builds` persistence unchanged.
 
-### "Margins" tab — staff-hours vs delivered-hours, by program — ✅ SHIPPED (bones) session 009, 2026-06-24
+### "Margins" tab — REBUILT from scratch: "Margins on Mentoring" (per mentee) — ✅ SHIPPED session 020, 2026-09-17 (v0.9.0)
+
+The user asked for the tab to be wiped and restarted. Everything below this paragraph (staff hours
+vs delivered hours, the month drill modal §903, `program_hours` entry) is **gone from the UI**; the
+`program_hours` table still exists in the database (a drop migration is the user's call). New:
+one collapsible card **Margins on Mentoring** (§602): pick a mentee → invoices (issued / paid /
+partial / unpaid / **scheduled** from CA's `nextInvoiceDate`, migration `9963`), meetings (occurred /
+upcoming / **paid for** / prepaid / credited by CA), money (billed / collected / HJG 40% / mentor
+60%, share editable), and HJG's **margin per meeting two ways** — cash basis (÷ occurred) and
+entitlement basis (÷ paid for) — so a prepaid invoice can't inflate the number; a notice names the
+skew. By-month graph + table (3 single-axis small multiples), plus Invoices / Meetings /
+Engagements inset tables (§603–605). Pure math `lib/margins.ts` `computeMenteeMargin` (verify §17).
+**Next lenses** (not built): per-mentor roll-up, all-mentee roll-up, JYF margins, staff cost.
+
+#### (superseded) "Margins" tab — staff-hours vs delivered-hours, by program — shipped session 009, 2026-06-24; REMOVED session 020
 
 New top-nav **Margins** tab (`src/views/MarginsView.tsx`) with **JumpStart Your Freedom** +
 **Mentoring** sub-tabs. Each: a by-month **graph + table** (north star) comparing entered **staff

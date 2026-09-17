@@ -74,6 +74,10 @@ export const UI_SECTIONS: Record<string, number> = {
 
   // 6xx — Margins (65x = financial-event reporting)
   "margins.screen": 601,
+  "margins.mentoring": 602, // Margins on Mentoring — per-mentee margin per meeting (2026-09-17)
+  "margins.mentoring.invoices": 603, // …its Invoices inset table (2026-09-17)
+  "margins.mentoring.meetings": 604, // …its Meetings inset table (2026-09-17)
+  "margins.mentoring.engagements": 605, // …its Engagements inset table (2026-09-17)
   "finevent.screen": 651, // Report financial event tab (2026-07-22)
   "finevent.form": 652, // Report financial event: the entry form card (2026-07-22)
 
@@ -86,7 +90,7 @@ export const UI_SECTIONS: Record<string, number> = {
   // 9xx — Modals & drawers
   "modal.payExplore": 901,
   "modal.explore": 902,
-  "modal.marginsDrill": 903,
+  "modal.marginsDrill": 903, // RETIRED 2026-09-17 — the Margins tab was rebuilt; reserved, do not reuse
   "drawer.help": 904,
   "modal.payoutLineDetail": 905, // per-mentee invoice/payment drill-down on Build payout (2026-07-09)
   "modal.paymentSent": 906, // Payment sent — Melio reference dialog on Build payout §204 (2026-07-22)
