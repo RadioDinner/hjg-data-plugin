@@ -2,14 +2,17 @@
 
 Working notes for resuming this project in a future session. Last updated
 2026-09-17 (session 020 — Margins tab rebuilt: "Margins on Mentoring"
-**v0.9.0**, ON BRANCH `claude/busy-cray-1g791j`, not merged).
+**v0.9.0**, MERGED TO `main`).
 
-## ▶ START HERE (2026-09-17, session 020 — v0.9.0, ON BRANCH, NOT MERGED)
+## ▶ START HERE (2026-09-17, session 020 — v0.9.0, MERGED TO `main`)
 
 **The Margins tab (601) was wiped and rebuilt from scratch** on the user's
-"delete everything on that tab ... start from scratch". Branch
-**`claude/busy-cray-1g791j`**, version **0.9.0** (chip must read `v0.9.0`
-once merged and deployed). NOT merged to `main` — the user has not said so.
+"delete everything on that tab ... start from scratch". Built on
+branch `claude/busy-cray-1g791j`, version **0.9.0**; **fast-forwarded onto
+`main`** on the user's "merge it to main so I can test it" (no merge commit).
+Chip must read `v0.9.0` once Vercel deploys `main`. The user is testing it on
+real data next — their verdict on the scope rule and the two margin figures
+is the open item.
 Gates green on the branch head: `typecheck` + `verify` (**802 checks**; §17
 replaced) + `lint` (0 errors / 14 pre-existing warnings) + `build` +
 `prettier --check`. Render-checked in headless Chromium, both themes, with
@@ -74,8 +77,8 @@ old `margins.tab` help (rewritten; new `margins.mentoring` article). The
 is still listed in Raw data — dropping it is destructive and the user's call.
 
 **Open / next:** (1) user to try the card on real data and judge the scope
-rule + the two margin figures; (2) merge to `main` on their word; (3) the
-next "ways to look at the margins" — the user said there will be several
+rule + the two margin figures; (2) ~~merge to `main`~~ DONE; (3) the next
+"ways to look at the margins" — the user said there will be several
 (likely: per-mentor roll-up, all-mentees roll-up, JYF, staff cost); (4)
 optional drop migration for `program_hours`; (5) the Invoices inset's date
 cells wrap at narrow widths (cosmetic). Full detail:

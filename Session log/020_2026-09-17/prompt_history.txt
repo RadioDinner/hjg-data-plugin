@@ -4,3 +4,6 @@ I want to completely redo the Margins (601) tab. Delete everything on that tab t
 I want several ways to look at the margins. The first one will be Margins on Mentoring. Put that in a collapsable card on the Margins tab. Here is how I want it to work.
 
 The first part will be looking at an individual Mentee. I want to be able to select a mentee and see how many paid invoices he has, how many upcoming meetings, and how many completed meetings he had. I want a calculation to run on this page, per mentee. Lets say Brian is on a 4x. He is paying $425 a month. HJG gets 40% of that, the mentor gets 60%. Lets say he has been paying for 3 months. That is $1275 brought in, and $510 for HJG. Let's say he has had 12 meetings that have occurred. That 510 would be divided by 12. That is a "margin" of $42.50 per meeting. Here is where it gets tricky. Lets say he paid his invoice for the next month already, so HJG is +$680. However, he has only had 12 meetings that occurred. That would skew the metrics. I would want it to calculate how many meetings have occurred, how many are scheduled, as well as how many invoices have been issued, paid, and how many invoices would be scheduled for the future.
+
+--- 2026-09-17 (turn 2) ---
+merge it to main so I can test it

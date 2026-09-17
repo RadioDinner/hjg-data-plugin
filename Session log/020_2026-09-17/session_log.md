@@ -1,6 +1,6 @@
 # Session 020 — 2026-09-17 — Margins tab rebuilt: "Margins on Mentoring" (v0.9.0)
 
-Branch: `claude/busy-cray-1g791j` (NOT merged to `main`). Version bumped 0.8.0 → **0.9.0**.
+Branch: `claude/busy-cray-1g791j`, **fast-forwarded onto `main`** (turn 2). Version bumped 0.8.0 → **0.9.0**.
 
 ## What shipped
 
@@ -12,7 +12,8 @@ Branch: `claude/busy-cray-1g791j` (NOT merged to `main`). Version bumped 0.8.0 �
   replaced (802 checks total). Migration `9963_ca_engagements_next_invoice.sql` + sync
   mirroring of CA `Engagement.nextInvoiceDate` (with a pre-9963 fallback in the sync and in
   the browser fetch).
-- (wrap commit) — HANDOFF + this log.
+- `1e82550` — Session 020 wrap: HANDOFF + this log.
+- (this commit) — merged-to-main note in HANDOFF + this log; `main` fast-forwarded to it.
 
 Gates on the head: `typecheck` ✓ · `verify` 802 ✓ · `lint` 0 errors / 14 pre-existing
 warnings ✓ · `build` ✓ · `prettier --check` ✓. Render-checked in headless Chromium (light +
@@ -60,7 +61,7 @@ occurred / upcoming / paid for / prepaid / credited by CA.
    and whether the entitlement-basis margin is the headline they want.
 2. Apply migration `9963` + re-sync so the "Scheduled (future)" tile fills.
 3. The next "ways to look at the margins" cards (the user said there will be several).
-4. Merge to `main` on the user's word (chip → `v0.9.0`).
+4. ~~Merge to `main` on the user's word~~ — DONE (turn 2, below).
 5. Cosmetic: the Invoices inset's Issued/Due date cells wrap at narrow widths.
 
 ## Prevalent for future-me
@@ -73,3 +74,11 @@ occurred / upcoming / paid for / prepaid / credited by CA.
 - `todayYmd` lives in `lib/conversion.ts` and is NOT re-exported from `src/db.ts`.
 - `lib/cohort.ts` already exports a `MentoringTier` type through `src/db.ts` — don't re-export
   another one with the same name.
+
+## Turn 2 — MERGED (user: "merge it to main so I can test it")
+
+`origin/main` was still at the branch's base (`e452669`), so `main` was
+fast-forwarded to the branch head and pushed; no merge commit. Chip should read
+`v0.9.0` after the Vercel deploy of `main`. **Still needed from the user for the
+"Scheduled (future)" tile:** apply `9963_ca_engagements_next_invoice.sql` and
+run a sync. Awaiting the user's read of the card on real mentees.
