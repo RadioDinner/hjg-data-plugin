@@ -15,3 +15,6 @@ I'd want all of our active Mentees to be included in this. Anyone that has a 4x,
 
 --- 2026-09-17 (turn 3, mid-turn) ---
 on the 602 feature screen, I only want active mentees in the dropdown list
+
+--- 2026-09-17 (turn 4) ---
+merge it

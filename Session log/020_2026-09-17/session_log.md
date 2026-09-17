@@ -83,7 +83,7 @@ fast-forwarded to the branch head and pushed; no merge commit. Chip should read
 "Scheduled (future)" tile:** apply `9963_ca_engagements_next_invoice.sql` and
 run a sync. Awaiting the user's read of the card on real mentees.
 
-## Turn 3 — "Margins by tier" (v0.10.0, ON BRANCH, not merged)
+## Turn 3 — "Margins by tier" (v0.10.0; merged in turn 4, below)
 
 User: "average margin per mentoring bracket. For 4x we get $425, for 2x we get $265, 1x is
 $145. We get 40% at each turn. I'd want all of our active Mentees to be included … like
@@ -111,6 +111,14 @@ Decisions / assumptions (stated to the user):
   sums across tiers (a netting bug caught in the harness numbers, fixed, asserted).
 - Assumptions are ephemeral inputs, not Company options (that needs a number control +
   seeded keys — backlog).
-- Built on the branch; NOT merged (the user did not ask this time).
+- Built on the branch; merged on the user's word in turn 4.
 
 Next: user tests §606 on real data; merge on their word; persist assumptions; more lenses.
+
+## Turn 4 — MERGED (user: "merge it")
+
+`origin/main` was still at `80cef5b` (the v0.9.0 merge), so `main` was
+fast-forwarded to the branch head and pushed; no merge commit. Chip should read
+`v0.10.0` after the Vercel deploy of `main`. Still pending on the user's side:
+migration `9963_ca_engagements_next_invoice.sql` + a sync for the "Scheduled
+(future)" tile. Awaiting the user's read of both lenses on real data.

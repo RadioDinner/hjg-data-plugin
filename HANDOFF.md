@@ -1,17 +1,18 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-17 (session 020 — Margins tab rebuilt; v0.9.0 merged, then
-**v0.10.0 "Margins by tier" ON BRANCH `claude/busy-cray-1g791j`, not merged**).
+2026-09-17 (session 020 — Margins tab rebuilt: v0.9.0 then v0.10.0
+"Margins by tier", both **MERGED TO `main`**).
 
-## ▶ START HERE (2026-09-17, session 020 turn 3 — v0.10.0, ON BRANCH, NOT MERGED)
+## ▶ START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
 
 **Second Margins lens shipped on the branch: "Margins by tier — all active
 mentees" (§606)** on the user's "average margin per mentoring bracket … all of
 our active Mentees … like looking at them individually but instead as a group",
 plus their mid-turn ask "on the 602 feature screen, I only want active mentees
-in the dropdown list". Version **0.10.0** (chip must read `v0.10.0` once
-merged + deployed). NOT merged — the user has not said so this time. Gates
+in the dropdown list". Version **0.10.0**; **fast-forwarded onto `main`** on the user's
+"merge it" (no merge commit) — chip must read `v0.10.0` once Vercel deploys
+`main`. The user is testing both lenses on real data next. Gates
 green: `typecheck` + `verify` (**870 checks**; new §29) + `lint` (0 / 14
 pre-existing) + `build` + `prettier --check`; render-checked both themes with
 the harness (deleted; screenshots in chat).
@@ -50,7 +51,7 @@ rows and anyone without a CA client id. Header reads "(N active)".
 
 **Open / next:** (1) user to test §606 on real data — the bracket rule
 (current tier only), collected basis, and whether "Avg of mentees" or the
-pooled figure is their headline; (2) merge to `main` on their word; (3)
+pooled figure is their headline; (2) ~~merge to `main`~~ DONE; (3)
 persist the assumptions in Company options; (4) further lenses (per-mentor
 roll-up, JYF, staff cost); (5) migration 9963 + re-sync still pending on the
 user's side for "Scheduled (future)".
