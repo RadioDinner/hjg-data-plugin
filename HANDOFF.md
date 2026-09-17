@@ -1,10 +1,87 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-16 (session 019 — Metrics §005 point-in-time Compare tool **v0.8.0**,
-MERGED TO `main`).
+2026-09-17 (session 020 — Margins tab rebuilt: "Margins on Mentoring"
+**v0.9.0**, ON BRANCH `claude/busy-cray-1g791j`, not merged).
 
-## ▶ START HERE (2026-09-16, session 019 — v0.8.0, MERGED TO `main`)
+## ▶ START HERE (2026-09-17, session 020 — v0.9.0, ON BRANCH, NOT MERGED)
+
+**The Margins tab (601) was wiped and rebuilt from scratch** on the user's
+"delete everything on that tab ... start from scratch". Branch
+**`claude/busy-cray-1g791j`**, version **0.9.0** (chip must read `v0.9.0`
+once merged and deployed). NOT merged to `main` — the user has not said so.
+Gates green on the branch head: `typecheck` + `verify` (**802 checks**; §17
+replaced) + `lint` (0 errors / 14 pre-existing warnings) + `build` +
+`prettier --check`. Render-checked in headless Chromium, both themes, with
+the session-019 harness pattern (temporary `.harness/` + Vite alias on
+`../db` + global Playwright); harness deleted, screenshots sent in chat.
+
+**⚠ ONE USER ACTION for the "Scheduled (future)" invoice tile: apply
+migration `9963_ca_engagements_next_invoice.sql` (Supabase SQL Editor,
+re-runnable) and run a sync.** CA's `Engagement.getAll` returns
+`nextInvoiceDate`; the sync now mirrors it to `ca_engagements.next_invoice_raw`
+/ `next_invoice_date`. Until then the tile reads "?" with the hint. The sync
+tolerates the migration being unapplied: the engagement upsert retries
+without the two columns and adds a note to the run (`sync_runs.error`), so
+the mirror keeps refreshing. The browser fetch also falls back.
+
+**What the new tab is.** `src/views/MarginsView.tsx`: a small 601 screen card
+(intro) + one collapsible card **Margins on Mentoring (§602)**. Pick a mentee
+(search + select over `mentees`, via `toEffectiveMentee`; rows without a CA
+client id are disabled) → `fetchMenteeMarginInputs(clientId)` (`src/db.ts`)
+pulls that client's `ca_invoices`, mentoring/group `ca_appointments`
+(status A, with `start_raw` + `counts_in_engagement`), `ca_engagements` and
+coach names → `computeMenteeMargin` (`lib/margins.ts`, pure). The card shows:
+- **Invoices**: issued (mentoring only) · paid in full · partially paid ·
+  unpaid (with "N past due") · **scheduled (future)** · non-mentoring (excluded).
+- **Meetings**: occurred (start ≤ now, browser clock as the CA account-local
+  clock) · upcoming · **paid for** (Σ tier cadence × paid fraction over
+  mentoring invoices: 4x=4, 2x=2, 1x=1) · **prepaid, not yet delivered**
+  (paid for − occurred) · delivered beyond paid (when occurred > paid for) ·
+  credited by CA (`counts_in_engagement = 1`) · non-mentoring (excluded).
+- **Money**: billed · collected · outstanding · HJG share · mentor share. The
+  **Mentor share** box in the card header (default 60 → HJG 40) is ephemeral.
+- **HJG margin per meeting, two ways**: *per meeting delivered* = HJG collected
+  ÷ occurred (cash basis; inflated by prepayment) and *per meeting paid for* =
+  HJG collected ÷ paid for (entitlement basis; the one to trust while
+  prepaid), plus HJG share earned / deferred. A notice names the skew: Brian's
+  example (4 paid 4x months, 12 meetings) reads $56.67 vs $42.50 with $170
+  deferred — asserted in verify §17.
+- **By month**: three single-axis small multiples (HJG share collected ·
+  meetings occurred vs upcoming · margin per meeting delivered) + the table,
+  Graph / Table / Both control, Export CSV. Invoices land in their SERVICE
+  month (`date_of`), meetings in the month they happen, so a prepaid month
+  shows money with "—" margin.
+- Inset tables **Invoices (§603)** / **Meetings (§604)** / **Engagements
+  (§605)** (`SortableTable`, CSV export) with an "In margin?" column.
+
+**Scope rule (assumption, stated to the user):** "Mentoring" = tiers 4x / 2x /
+1x (same as `MENTORING_PAY_TIERS`). An invoice's tier comes from its largest
+positive line item (`engagementTier`), else the mentoring engagement covering
+`date_of`, else "other" → excluded. Meetings count when their engagement is
+4x/2x/1x OR unknown (null engagement id); JumpStart / training / group /
+after-graduation engagement meetings are excluded and counted. **Scheduled
+invoices** = for each OPEN mentoring engagement with a next invoice date on or
+after today, one per month through `end_date`; no end date → open-ended, tile
+shows ∞ + the next date. Partial payments prorate "meetings paid for".
+
+**Removed (per the user):** `PROGRAMS` / `mergeProgramMonths` /
+`meetingHours` / `fetchProgramSessionsByMonth` / `fetchAllProgramHours` /
+`setProgramHours` / `ProgramSession` etc., the month drill modal (§903 now
+RETIRED, reserved), `.margins__row--drill` / `.margins__hours-input` CSS, the
+old `margins.tab` help (rewritten; new `margins.mentoring` article). The
+**`program_hours` table (migration 9981) still exists in the database** and
+is still listed in Raw data — dropping it is destructive and the user's call.
+
+**Open / next:** (1) user to try the card on real data and judge the scope
+rule + the two margin figures; (2) merge to `main` on their word; (3) the
+next "ways to look at the margins" — the user said there will be several
+(likely: per-mentor roll-up, all-mentees roll-up, JYF, staff cost); (4)
+optional drop migration for `program_hours`; (5) the Invoices inset's date
+cells wrap at narrow widths (cosmetic). Full detail:
+`Session log/020_2026-09-17/session_log.md`.
+
+## ▶ Prior session START HERE (2026-09-16, session 019 — v0.8.0, MERGED TO `main`)
 
 **v0.8.0 merged to `main`** on the user's "merge it and ill try the branch"
 (fast-forward from `claude/dreamy-rubin-xr7wrd`); chip must read `v0.8.0`
