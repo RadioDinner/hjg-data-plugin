@@ -131,7 +131,13 @@ upcoming / **paid for** / prepaid / credited by CA), money (billed / collected /
 entitlement basis (÷ paid for) — so a prepaid invoice can't inflate the number; a notice names the
 skew. By-month graph + table (3 single-axis small multiples), plus Invoices / Meetings /
 Engagements inset tables (§603–605). Pure math `lib/margins.ts` `computeMenteeMargin` (verify §17).
-**Next lenses** (not built): per-mentor roll-up, all-mentee roll-up, JYF margins, staff cost.
+**Second lens (same day, v0.10.0): Margins by tier (§606)** — every active mentee (open 4x / 2x /
+1x engagement; test/placeholder clients dropped) run through the same per-mentee math and grouped
+by bracket, with the expected margin per meeting from the configured prices (4x $425 · 2x $265 ·
+1x $145 at HJG 40% → $42.50 / $53.00 / $58.00) beside the actual pooled figures, plus a per-mentee
+breakdown (§607). Assumptions (mentor share + prices) live on the Margins screen card and are
+ephemeral. **Next lenses** (not built): per-mentor roll-up, JYF margins, staff cost; persist the
+assumptions in Company options (needs a number control + seeded keys).
 
 #### (superseded) "Margins" tab — staff-hours vs delivered-hours, by program — shipped session 009, 2026-06-24; REMOVED session 020
 

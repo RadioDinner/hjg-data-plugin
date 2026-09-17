@@ -507,3 +507,414 @@ export function clampShare(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_MENTOR_SHARE;
   return Math.min(1, Math.max(0, n));
 }
+
+// ============================================================================
+// Margins by tier — every ACTIVE mentee, grouped by the bracket they are in.
+// "Like looking at them individually, but as a group" (the user, session 020):
+// each member is run through computeMenteeMargin exactly as the per-mentee card
+// does, then bucketed by tier. A mentee belongs to a bracket when they have an
+// OPEN (not complete, not canceled) 4x / 2x / 1x engagement; only that tier's
+// invoices and meetings count toward that bracket (a mentee who moved 4x → 2x
+// contributes their 2x history to the 2x bracket; their old 4x months are not
+// counted anywhere, because they are no longer active in 4x). A meeting with no
+// known engagement goes to the mentee's single open tier, or is reported as
+// unassigned when they have more than one.
+// ============================================================================
+
+// Monthly price per bracket (the user, 2026-09-17): 4x $425 · 2x $265 · 1x $145.
+export const DEFAULT_TIER_PRICES: Record<MentoringTier, number> = {
+  "4x": 425,
+  "2x": 265,
+  "1x": 145,
+};
+
+export interface TierMemberInput {
+  clientId: number;
+  name: string;
+  ownerCoachName?: string | null;
+  invoices: MarginInvoiceInput[];
+  meetings: MarginMeetingInput[];
+  engagements: MarginEngagementInput[];
+}
+
+export interface TierMarginInputs {
+  members: TierMemberInput[]; // already filtered of test / placeholder clients
+  today: string;
+  now?: string;
+  mentorShare?: number;
+  prices?: Partial<Record<MentoringTier, number>>; // overrides of DEFAULT_TIER_PRICES
+}
+
+// One mentee inside one bracket — the per-mentee card's numbers, restricted to
+// that tier.
+export interface TierMemberRow {
+  clientId: number;
+  name: string;
+  ownerCoachName: string | null;
+  tier: MentoringTier;
+  since: string | null; // earliest open engagement start in this tier
+  invoicesIssued: number;
+  invoicesPaid: number;
+  billed: number;
+  collected: number;
+  hjgCollected: number;
+  meetingsOccurred: number;
+  meetingsUpcoming: number;
+  meetingsPaidFor: number;
+  prepaid: number;
+  overDelivered: number;
+  marginPerMeetingDelivered: number | null;
+  marginPerMeetingPaidFor: number | null;
+  scheduled: ScheduledInvoices;
+}
+
+export interface TierMarginRow {
+  tier: MentoringTier | "all";
+  price: number | null; // configured monthly price (null on the "all" row)
+  cadence: number | null; // meetings per month (null on the "all" row)
+  expectedHjgPerMonth: number | null; // price × hjgShare
+  // price × hjgShare ÷ cadence; on the "all" row, blended by the roster mix:
+  // Σ mentees × price × hjgShare ÷ Σ mentees × cadence.
+  expectedMarginPerMeeting: number | null;
+  mentees: number;
+  invoices: { issued: number; paid: number; partial: number; unpaid: number; overdue: number };
+  avgBilledPerInvoice: number | null; // Σ billed ÷ issued — does the price assumption hold?
+  money: {
+    billed: number;
+    collected: number;
+    outstanding: number;
+    hjgCollected: number;
+    mentorCollected: number;
+    hjgEarned: number;
+    hjgDeferred: number;
+  };
+  meetings: {
+    occurred: number;
+    upcoming: number;
+    paidFor: number;
+    prepaid: number;
+    overDelivered: number;
+    credited: number;
+  };
+  margin: {
+    perMeetingDelivered: number | null; // pooled: Σ HJG collected ÷ Σ occurred
+    perMeetingPaidFor: number | null; // pooled: Σ HJG collected ÷ Σ paid for
+    avgMenteeDelivered: number | null; // mean of the members' own cash-basis figures
+    avgMenteePaidFor: number | null; // mean of the members' own entitlement figures
+    vsExpected: number | null; // perMeetingPaidFor − expectedMarginPerMeeting
+  };
+  members: TierMemberRow[]; // sorted by name
+}
+
+export interface TierMarginReport {
+  mentorShare: number;
+  hjgShare: number;
+  prices: Record<MentoringTier, number>;
+  tiers: TierMarginRow[]; // 4x, 2x, 1x
+  total: TierMarginRow; // tier "all"
+  activeMentees: number; // distinct people with an open mentoring engagement
+  inactiveSkipped: number; // members passed in with no open mentoring engagement
+  unassignedMeetings: number; // unknown-engagement meetings of multi-tier mentees
+}
+
+function emptyTierRow(tier: MentoringTier | "all"): TierMarginRow {
+  return {
+    tier,
+    price: null,
+    cadence: null,
+    expectedHjgPerMonth: null,
+    expectedMarginPerMeeting: null,
+    mentees: 0,
+    invoices: { issued: 0, paid: 0, partial: 0, unpaid: 0, overdue: 0 },
+    avgBilledPerInvoice: null,
+    money: {
+      billed: 0,
+      collected: 0,
+      outstanding: 0,
+      hjgCollected: 0,
+      mentorCollected: 0,
+      hjgEarned: 0,
+      hjgDeferred: 0,
+    },
+    meetings: { occurred: 0, upcoming: 0, paidFor: 0, prepaid: 0, overDelivered: 0, credited: 0 },
+    margin: {
+      perMeetingDelivered: null,
+      perMeetingPaidFor: null,
+      avgMenteeDelivered: null,
+      avgMenteePaidFor: null,
+      vsExpected: null,
+    },
+    members: [],
+  };
+}
+
+const mean = (xs: number[]) =>
+  xs.length ? round2(xs.reduce((s, x) => s + x, 0) / xs.length) : null;
+
+export function computeTierMargins(input: TierMarginInputs): TierMarginReport {
+  const mentorShare = clampShare(input.mentorShare ?? DEFAULT_MENTOR_SHARE);
+  const hjgShare = 1 - mentorShare;
+  const prices: Record<MentoringTier, number> = { ...DEFAULT_TIER_PRICES };
+  for (const t of MENTORING_TIERS) {
+    const p = input.prices?.[t];
+    if (p != null && Number.isFinite(p) && p >= 0) prices[t] = p;
+  }
+
+  const rows: Record<MentoringTier, TierMarginRow> = {
+    "4x": emptyTierRow("4x"),
+    "2x": emptyTierRow("2x"),
+    "1x": emptyTierRow("1x"),
+  };
+  // Raw accumulators (rounded only when the row is finalized).
+  const acc: Record<
+    MentoringTier,
+    {
+      billed: number;
+      collected: number;
+      paidFor: number;
+      occurred: number;
+      hjgEarned: number;
+      memberDelivered: number[];
+      memberPaidFor: number[];
+    }
+  > = {
+    "4x": {
+      billed: 0,
+      collected: 0,
+      paidFor: 0,
+      occurred: 0,
+      hjgEarned: 0,
+      memberDelivered: [],
+      memberPaidFor: [],
+    },
+    "2x": {
+      billed: 0,
+      collected: 0,
+      paidFor: 0,
+      occurred: 0,
+      hjgEarned: 0,
+      memberDelivered: [],
+      memberPaidFor: [],
+    },
+    "1x": {
+      billed: 0,
+      collected: 0,
+      paidFor: 0,
+      occurred: 0,
+      hjgEarned: 0,
+      memberDelivered: [],
+      memberPaidFor: [],
+    },
+  };
+
+  let activeMentees = 0;
+  let inactiveSkipped = 0;
+  let unassignedMeetings = 0;
+
+  for (const m of input.members) {
+    const report = computeMenteeMargin({
+      invoices: m.invoices,
+      meetings: m.meetings,
+      engagements: m.engagements,
+      today: input.today,
+      now: input.now,
+      mentorShare,
+    });
+    // The brackets this person is active in.
+    const openTiers = new Set<MentoringTier>();
+    for (const e of m.engagements) {
+      if (e.isComplete || e.isCanceled) continue;
+      const t = engagementTier(e.name);
+      if (isMentoringTier(t)) openTiers.add(t);
+    }
+    if (openTiers.size === 0) {
+      inactiveSkipped++;
+      continue;
+    }
+    activeMentees++;
+    if (openTiers.size > 1)
+      unassignedMeetings += report.meetingRows.filter((r) => r.mentoring && r.tier == null).length;
+
+    for (const tier of openTiers) {
+      const row = rows[tier];
+      const a = acc[tier];
+      const invs = report.invoiceRows.filter((r) => r.mentoring && r.tier === tier);
+      const mtgs = report.meetingRows.filter(
+        (r) => r.mentoring && (r.tier === tier || (r.tier == null && openTiers.size === 1)),
+      );
+      let billed = 0;
+      let collected = 0;
+      let paidFor = 0;
+      let paid = 0;
+      for (const r of invs) {
+        billed += r.amount;
+        collected += r.collected;
+        paidFor += r.meetingsBought;
+        row.invoices.issued++;
+        if (r.status === "paid") {
+          row.invoices.paid++;
+          paid++;
+        } else if (r.status === "partial") row.invoices.partial++;
+        else if (r.status === "unpaid") row.invoices.unpaid++;
+        if (r.overdue) row.invoices.overdue++;
+      }
+      let occurred = 0;
+      let upcoming = 0;
+      for (const r of mtgs) {
+        if (r.occurred) {
+          occurred++;
+          if (r.credited) row.meetings.credited++;
+        } else upcoming++;
+      }
+      const hjg = collected * hjgShare;
+      const delivered = paidFor > 0 ? Math.min(1, occurred / paidFor) : 1;
+      const tierEngs = m.engagements.filter(
+        (e) => !e.isComplete && !e.isCanceled && engagementTier(e.name) === tier,
+      );
+      let since: string | null = null;
+      for (const e of tierEngs)
+        if (e.startDate && (since == null || e.startDate < since)) since = e.startDate;
+      const memberDelivered = occurred > 0 ? round2(hjg / occurred) : null;
+      const memberPaidFor = paidFor > 0 ? round2(hjg / paidFor) : null;
+      if (memberDelivered != null) a.memberDelivered.push(memberDelivered);
+      if (memberPaidFor != null) a.memberPaidFor.push(memberPaidFor);
+
+      row.mentees++;
+      a.billed += billed;
+      a.collected += collected;
+      a.paidFor += paidFor;
+      a.occurred += occurred;
+      a.hjgEarned += hjg * delivered;
+      row.meetings.occurred += occurred;
+      row.meetings.upcoming += upcoming;
+      row.members.push({
+        clientId: m.clientId,
+        name: m.name,
+        ownerCoachName: m.ownerCoachName ?? null,
+        tier,
+        since,
+        invoicesIssued: invs.length,
+        invoicesPaid: paid,
+        billed: round2(billed),
+        collected: round2(collected),
+        hjgCollected: round2(hjg),
+        meetingsOccurred: occurred,
+        meetingsUpcoming: upcoming,
+        meetingsPaidFor: round2(paidFor),
+        prepaid: round2(Math.max(0, paidFor - occurred)),
+        overDelivered: round2(Math.max(0, occurred - paidFor)),
+        marginPerMeetingDelivered: memberDelivered,
+        marginPerMeetingPaidFor: memberPaidFor,
+        scheduled: projectScheduledInvoices(tierEngs, input.today),
+      });
+    }
+  }
+
+  // Finalize each bracket.
+  const total = emptyTierRow("all");
+  let expNum = 0; // Σ mentees × price × hjgShare
+  let expDen = 0; // Σ mentees × cadence
+  const tot = {
+    billed: 0,
+    collected: 0,
+    paidFor: 0,
+    occurred: 0,
+    hjgEarned: 0,
+    memberDelivered: [] as number[],
+    memberPaidFor: [] as number[],
+  };
+  for (const tier of MENTORING_TIERS) {
+    const row = rows[tier];
+    const a = acc[tier];
+    const cadence = TIER_MEETINGS_PER_MONTH[tier];
+    row.price = prices[tier];
+    row.cadence = cadence;
+    row.expectedHjgPerMonth = round2(prices[tier] * hjgShare);
+    row.expectedMarginPerMeeting = round2((prices[tier] * hjgShare) / cadence);
+    finalizeRow(row, a, hjgShare);
+    row.margin.vsExpected =
+      row.margin.perMeetingPaidFor == null
+        ? null
+        : round2(row.margin.perMeetingPaidFor - row.expectedMarginPerMeeting);
+    row.members.sort((x, y) => x.name.localeCompare(y.name));
+
+    expNum += row.mentees * prices[tier] * hjgShare;
+    expDen += row.mentees * cadence;
+    total.mentees += row.mentees;
+    total.invoices.issued += row.invoices.issued;
+    total.invoices.paid += row.invoices.paid;
+    total.invoices.partial += row.invoices.partial;
+    total.invoices.unpaid += row.invoices.unpaid;
+    total.invoices.overdue += row.invoices.overdue;
+    total.meetings.occurred += row.meetings.occurred;
+    total.meetings.upcoming += row.meetings.upcoming;
+    total.meetings.credited += row.meetings.credited;
+    tot.billed += a.billed;
+    tot.collected += a.collected;
+    tot.paidFor += a.paidFor;
+    tot.occurred += a.occurred;
+    tot.hjgEarned += a.hjgEarned;
+    tot.memberDelivered.push(...a.memberDelivered);
+    tot.memberPaidFor.push(...a.memberPaidFor);
+    total.members.push(...row.members);
+  }
+  finalizeRow(total, tot, hjgShare);
+  // Prepaid / over-delivered are GROSS across brackets: a 4x meeting paid for and
+  // not yet delivered is not cancelled out by a 2x meeting delivered unpaid.
+  total.meetings.prepaid = round2(
+    MENTORING_TIERS.reduce((sum, t) => sum + rows[t].meetings.prepaid, 0),
+  );
+  total.meetings.overDelivered = round2(
+    MENTORING_TIERS.reduce((sum, t) => sum + rows[t].meetings.overDelivered, 0),
+  );
+  total.expectedMarginPerMeeting = expDen > 0 ? round2(expNum / expDen) : null;
+  total.margin.vsExpected =
+    total.margin.perMeetingPaidFor == null || total.expectedMarginPerMeeting == null
+      ? null
+      : round2(total.margin.perMeetingPaidFor - total.expectedMarginPerMeeting);
+  total.members.sort((x, y) => x.name.localeCompare(y.name) || x.tier.localeCompare(y.tier));
+
+  return {
+    mentorShare,
+    hjgShare,
+    prices,
+    tiers: [rows["4x"], rows["2x"], rows["1x"]],
+    total,
+    activeMentees,
+    inactiveSkipped,
+    unassignedMeetings,
+  };
+}
+
+function finalizeRow(
+  row: TierMarginRow,
+  a: {
+    billed: number;
+    collected: number;
+    paidFor: number;
+    occurred: number;
+    hjgEarned: number;
+    memberDelivered: number[];
+    memberPaidFor: number[];
+  },
+  hjgShare: number,
+): void {
+  const hjg = a.collected * hjgShare;
+  row.avgBilledPerInvoice = row.invoices.issued > 0 ? round2(a.billed / row.invoices.issued) : null;
+  row.money = {
+    billed: round2(a.billed),
+    collected: round2(a.collected),
+    outstanding: round2(a.billed - a.collected),
+    hjgCollected: round2(hjg),
+    mentorCollected: round2(a.collected * (1 - hjgShare)),
+    hjgEarned: round2(a.hjgEarned),
+    hjgDeferred: round2(hjg - a.hjgEarned),
+  };
+  row.meetings.paidFor = round2(a.paidFor);
+  row.meetings.prepaid = round2(Math.max(0, a.paidFor - a.occurred));
+  row.meetings.overDelivered = round2(Math.max(0, a.occurred - a.paidFor));
+  row.margin.perMeetingDelivered = a.occurred > 0 ? round2(hjg / a.occurred) : null;
+  row.margin.perMeetingPaidFor = a.paidFor > 0 ? round2(hjg / a.paidFor) : null;
+  row.margin.avgMenteeDelivered = mean(a.memberDelivered);
+  row.margin.avgMenteePaidFor = mean(a.memberPaidFor);
+}

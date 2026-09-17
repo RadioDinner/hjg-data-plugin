@@ -283,9 +283,17 @@ export { oneOnOneMenteesByCoach, groupSlotKeys } from "../lib/capacity";
 export type { CapacityAppt } from "../lib/capacity";
 
 // Pure Margins helpers ("Margins on Mentoring" — per-mentee margin per meeting).
-import type { MarginInvoiceInput, MarginMeetingInput, MarginEngagementInput } from "../lib/margins";
+import {
+  isMentoringTier,
+  type MarginInvoiceInput,
+  type MarginMeetingInput,
+  type MarginEngagementInput,
+  type TierMemberInput,
+} from "../lib/margins";
 export {
   computeMenteeMargin,
+  computeTierMargins,
+  DEFAULT_TIER_PRICES,
   projectScheduledInvoices,
   invoiceTier,
   invoiceStatus,
@@ -308,6 +316,11 @@ export type {
   MarginEngagementRow,
   ScheduledInvoices,
   InvoiceStatus,
+  TierMemberInput,
+  TierMarginInputs,
+  TierMarginReport,
+  TierMarginRow,
+  TierMemberRow,
 } from "../lib/margins";
 
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
@@ -377,7 +390,7 @@ export type {
 // Pure CA-layer derivation + effective view-model for the rewritten Mentee
 // management system (migration 9974 — three write zones: ca_* / notion_* / hand).
 import { deriveMenteeCaRecords, toMenteeCaUpsertRow } from "../lib/menteeJourney";
-import { toEffectiveMentee, type MenteeMgmtStatus } from "../lib/menteeView";
+import { toEffectiveMentee, type EffectiveMentee, type MenteeMgmtStatus } from "../lib/menteeView";
 import {
   planNotionUpsert,
   planClientIdClaims,
@@ -2050,78 +2063,54 @@ export async function deletePayoutBuild(coachId: number, serviceMonth: string): 
 
 // --- Raw data viewer ---
 
-// --- Margins on Mentoring (§602): one mentee's invoices, meetings, engagements ---
-// Everything the per-mentee margin needs, fetched in parallel for ONE CA client
-// and shaped for computeMenteeMargin (lib/margins.ts). Reads: ca_invoices (by
-// client_id), ca_appointments (mentoring/group, status A), ca_engagements (with
-// next_invoice_date when migration 9963 is applied — falls back to a select
-// without it so the tab still loads on an older database), ca_coaches (names).
+// --- Margins on Mentoring (§602) + Margins by tier (§606) ---
+// Rows for the pure margin math in lib/margins.ts. Reads: ca_invoices,
+// ca_appointments (mentoring/group, status A, with start_raw +
+// counts_in_engagement), ca_engagements (with next_invoice_date when migration
+// 9963 is applied — every read falls back to a select without it so the tab
+// still loads on an older database), ca_coaches (names).
 
-export interface MenteeMarginData {
-  invoices: MarginInvoiceInput[];
-  meetings: MarginMeetingInput[];
-  engagements: MarginEngagementInput[];
-  nextInvoiceColumn: boolean; // false = pre-9963 database (scheduled invoices unknown)
+interface RawMarginInvoice {
+  id: number | null;
+  invoice_number: string | null;
+  client_id?: number | null;
+  date_of: string | null;
+  date_added: string | null;
+  date_due: string | null;
+  amount: number | string | null;
+  amount_paid: number | string | null;
+  line_items: unknown;
+  payments: unknown;
 }
+interface RawMarginMeeting {
+  id: number | null;
+  client_id?: number | null;
+  name: string | null;
+  category: string;
+  engagement_id: number | null;
+  coach_id: number | null;
+  start_date: string | null;
+  start_raw: string | null;
+  counts_in_engagement: number | null;
+}
+interface RawMarginEngagement {
+  id: number | null;
+  client_id?: number | null;
+  name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  is_complete: boolean | null;
+  is_canceled: boolean | null;
+  next_invoice_date?: string | null;
+}
+const MARGIN_INVOICE_SELECT =
+  "id,invoice_number,client_id,date_of,date_added,date_due,amount,amount_paid,line_items,payments";
+const MARGIN_MEETING_SELECT =
+  "id,client_id,name,category,engagement_id,coach_id,start_date,start_raw,counts_in_engagement";
+const MARGIN_ENGAGEMENT_SELECT = "id,client_id,name,start_date,end_date,is_complete,is_canceled";
 
-export async function fetchMenteeMarginInputs(clientId: number): Promise<MenteeMarginData> {
-  const invoicesQ = supabase
-    .from("ca_invoices")
-    .select("id,invoice_number,date_of,date_added,date_due,amount,amount_paid,line_items,payments")
-    .eq("client_id", clientId);
-  const meetingsQ = supabase
-    .from("ca_appointments")
-    .select("id,name,category,engagement_id,coach_id,start_date,start_raw,counts_in_engagement")
-    .eq("client_id", clientId)
-    .in("category", ["mentoring", "group"])
-    .eq("status", "A");
-  const coachesQ = supabase.from("ca_coaches").select("id,name");
-  const engagementsQ = supabase
-    .from("ca_engagements")
-    .select("id,name,start_date,end_date,is_complete,is_canceled,next_invoice_date")
-    .eq("client_id", clientId);
-
-  const [invRes, apptRes, coachRes, engFirst] = await Promise.all([
-    invoicesQ,
-    meetingsQ,
-    coachesQ,
-    engagementsQ,
-  ]);
-  if (invRes.error) throw new Error(invRes.error.message);
-  if (apptRes.error) throw new Error(apptRes.error.message);
-  if (coachRes.error) throw new Error(coachRes.error.message);
-
-  // Pre-9963 database: retry the engagement select without the new column.
-  let engData: unknown[] | null = engFirst.data;
-  let nextInvoiceColumn = true;
-  if (engFirst.error) {
-    if (!/next_invoice/i.test(engFirst.error.message)) throw new Error(engFirst.error.message);
-    nextInvoiceColumn = false;
-    const retry = await supabase
-      .from("ca_engagements")
-      .select("id,name,start_date,end_date,is_complete,is_canceled")
-      .eq("client_id", clientId);
-    if (retry.error) throw new Error(retry.error.message);
-    engData = retry.data;
-  }
-
-  const coachName = new Map<number, string>();
-  for (const c of (coachRes.data ?? []) as { id: number; name: string | null }[])
-    coachName.set(c.id, c.name ?? `#${c.id}`);
-
-  const invoices: MarginInvoiceInput[] = (
-    (invRes.data ?? []) as {
-      id: number | null;
-      invoice_number: string | null;
-      date_of: string | null;
-      date_added: string | null;
-      date_due: string | null;
-      amount: number | string | null;
-      amount_paid: number | string | null;
-      line_items: unknown;
-      payments: unknown;
-    }[]
-  ).map((inv) => ({
+function toMarginInvoice(inv: RawMarginInvoice): MarginInvoiceInput {
+  return {
     id: inv.id,
     invoiceNumber: inv.invoice_number,
     serviceDate: inv.date_of,
@@ -2131,20 +2120,10 @@ export async function fetchMenteeMarginInputs(clientId: number): Promise<MenteeM
     collected: Number(inv.amount_paid) || 0,
     lineItems: normInvoiceLineItems(inv.line_items),
     payments: normInvoicePayments(inv.payments),
-  }));
-
-  const meetings: MarginMeetingInput[] = (
-    (apptRes.data ?? []) as {
-      id: number | null;
-      name: string | null;
-      category: string;
-      engagement_id: number | null;
-      coach_id: number | null;
-      start_date: string | null;
-      start_raw: string | null;
-      counts_in_engagement: number | null;
-    }[]
-  ).map((a) => ({
+  };
+}
+function toMarginMeeting(a: RawMarginMeeting, coachName: Map<number, string>): MarginMeetingInput {
+  return {
     id: a.id,
     name: a.name ?? "",
     isGroup: a.category === "group",
@@ -2153,19 +2132,10 @@ export async function fetchMenteeMarginInputs(clientId: number): Promise<MenteeM
     startDate: a.start_date,
     startRaw: a.start_raw,
     countsInEngagement: a.counts_in_engagement,
-  }));
-
-  const engagements: MarginEngagementInput[] = (
-    (engData ?? []) as {
-      id: number | null;
-      name: string | null;
-      start_date: string | null;
-      end_date: string | null;
-      is_complete: boolean | null;
-      is_canceled: boolean | null;
-      next_invoice_date?: string | null;
-    }[]
-  ).map((e) => ({
+  };
+}
+function toMarginEngagement(e: RawMarginEngagement): MarginEngagementInput {
+  return {
     id: e.id,
     name: e.name,
     startDate: e.start_date,
@@ -2173,9 +2143,223 @@ export async function fetchMenteeMarginInputs(clientId: number): Promise<MenteeM
     isComplete: !!e.is_complete,
     isCanceled: !!e.is_canceled,
     nextInvoiceDate: e.next_invoice_date ?? null,
-  }));
+  };
+}
 
-  return { invoices, meetings, engagements, nextInvoiceColumn };
+async function fetchCoachNameMap(): Promise<Map<number, string>> {
+  const { data, error } = await supabase.from("ca_coaches").select("id,name");
+  if (error) throw new Error(error.message);
+  const m = new Map<number, string>();
+  for (const c of (data ?? []) as { id: number; name: string | null }[])
+    m.set(c.id, c.name ?? `#${c.id}`);
+  return m;
+}
+
+// Engagements for one client (clientId given) or every client (null), paged,
+// with the 9963 column when the database has it.
+async function fetchMarginEngagements(
+  clientId: number | null,
+): Promise<{ rows: RawMarginEngagement[]; nextInvoiceColumn: boolean }> {
+  let nextInvoiceColumn = true;
+  const out: RawMarginEngagement[] = [];
+  const pageSize = 1000;
+  for (let f = 0; ; f += pageSize) {
+    const build = (cols: string) => {
+      let q = supabase.from("ca_engagements").select(cols);
+      if (clientId != null) q = q.eq("client_id", clientId);
+      return q.range(f, f + pageSize - 1);
+    };
+    let res = await build(`${MARGIN_ENGAGEMENT_SELECT},next_invoice_date`);
+    if (res.error && /next_invoice/i.test(res.error.message)) {
+      // Pre-9963 database: retry without the new column.
+      nextInvoiceColumn = false;
+      res = await build(MARGIN_ENGAGEMENT_SELECT);
+    }
+    if (res.error) throw new Error(res.error.message);
+    const batch = (res.data ?? []) as unknown as RawMarginEngagement[];
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return { rows: out, nextInvoiceColumn };
+}
+
+// Invoices / mentoring meetings for a set of clients, chunked so the `in` list
+// stays a sane URL length, each chunk paged.
+async function fetchMarginInvoicesFor(clientIds: number[]): Promise<RawMarginInvoice[]> {
+  const out: RawMarginInvoice[] = [];
+  const pageSize = 1000;
+  for (let c = 0; c < clientIds.length; c += 150) {
+    const chunk = clientIds.slice(c, c + 150);
+    for (let f = 0; ; f += pageSize) {
+      const { data, error } = await supabase
+        .from("ca_invoices")
+        .select(MARGIN_INVOICE_SELECT)
+        .in("client_id", chunk)
+        .range(f, f + pageSize - 1);
+      if (error) throw new Error(error.message);
+      const batch = (data ?? []) as RawMarginInvoice[];
+      out.push(...batch);
+      if (batch.length < pageSize) break;
+    }
+  }
+  return out;
+}
+async function fetchMarginMeetingsFor(clientIds: number[]): Promise<RawMarginMeeting[]> {
+  const out: RawMarginMeeting[] = [];
+  const pageSize = 1000;
+  for (let c = 0; c < clientIds.length; c += 150) {
+    const chunk = clientIds.slice(c, c + 150);
+    for (let f = 0; ; f += pageSize) {
+      const { data, error } = await supabase
+        .from("ca_appointments")
+        .select(MARGIN_MEETING_SELECT)
+        .in("client_id", chunk)
+        .in("category", ["mentoring", "group"])
+        .eq("status", "A")
+        .range(f, f + pageSize - 1);
+      if (error) throw new Error(error.message);
+      const batch = (data ?? []) as RawMarginMeeting[];
+      out.push(...batch);
+      if (batch.length < pageSize) break;
+    }
+  }
+  return out;
+}
+
+export interface MenteeMarginData {
+  invoices: MarginInvoiceInput[];
+  meetings: MarginMeetingInput[];
+  engagements: MarginEngagementInput[];
+  nextInvoiceColumn: boolean; // false = pre-9963 database (scheduled invoices unknown)
+}
+
+// One mentee's rows (the per-mentee card, §602).
+export async function fetchMenteeMarginInputs(clientId: number): Promise<MenteeMarginData> {
+  const [invoices, meetings, coachName, engs] = await Promise.all([
+    fetchMarginInvoicesFor([clientId]),
+    fetchMarginMeetingsFor([clientId]),
+    fetchCoachNameMap(),
+    fetchMarginEngagements(clientId),
+  ]);
+  return {
+    invoices: invoices.map(toMarginInvoice),
+    meetings: meetings.map((a) => toMarginMeeting(a, coachName)),
+    engagements: engs.rows.map(toMarginEngagement),
+    nextInvoiceColumn: engs.nextInvoiceColumn,
+  };
+}
+
+// Client ids with an OPEN 4x / 2x / 1x engagement right now, minus placeholder /
+// group clients (ca_clients.is_excluded). The "active mentee" population behind
+// the §602 picker (the user: "only active mentees in the dropdown") and §606.
+export async function fetchActiveMentoringClientIds(): Promise<Set<number>> {
+  const [engs, clientsRes] = await Promise.all([
+    fetchMarginEngagements(null),
+    supabase.from("ca_clients").select("id").eq("is_excluded", true),
+  ]);
+  if (clientsRes.error) throw new Error(clientsRes.error.message);
+  const placeholder = new Set<number>();
+  for (const c of (clientsRes.data ?? []) as { id: number }[]) placeholder.add(c.id);
+  const active = new Set<number>();
+  for (const e of engs.rows) {
+    if (e.client_id == null || e.is_complete || e.is_canceled) continue;
+    if (placeholder.has(e.client_id)) continue;
+    if (isMentoringTier(engagementTier(e.name))) active.add(e.client_id);
+  }
+  return active;
+}
+
+export interface TierMarginData {
+  members: TierMemberInput[]; // every active mentee (open 4x/2x/1x), test/placeholder clients dropped
+  excludedClients: number; // active clients dropped as test mentees / placeholder clients
+  nextInvoiceColumn: boolean;
+}
+
+// Every ACTIVE mentee's rows (the by-tier card, §606). Population = clients with
+// an open 4x / 2x / 1x engagement in the mirror (same rule as the JYF-vs-
+// mentoring card), minus staff-flagged test mentees (mentees.is_test) and
+// placeholder/group clients (ca_clients.is_excluded). Names and owner come from
+// the mentees source of truth when the client is on it, else ca_clients.
+export async function fetchTierMarginInputs(): Promise<TierMarginData> {
+  const today = todayYmd();
+  const [menteeRows, clientsRes, coachName, engs] = await Promise.all([
+    fetchMentees(),
+    supabase.from("ca_clients").select("id,name,is_excluded"),
+    fetchCoachNameMap(),
+    fetchMarginEngagements(null),
+  ]);
+  if (clientsRes.error) throw new Error(clientsRes.error.message);
+
+  const excluded = new Set<number>();
+  const clientName = new Map<number, string | null>();
+  for (const c of (clientsRes.data ?? []) as {
+    id: number;
+    name: string | null;
+    is_excluded: boolean;
+  }[]) {
+    clientName.set(c.id, c.name);
+    if (c.is_excluded) excluded.add(c.id);
+  }
+  const effective = new Map<number, EffectiveMentee>();
+  for (const r of menteeRows) {
+    if (r.client_id == null) continue;
+    const m = toEffectiveMentee(r, today);
+    effective.set(r.client_id, m);
+    if (m.isTest) excluded.add(r.client_id);
+  }
+
+  // Active = an open mentoring engagement right now.
+  const active = new Set<number>();
+  for (const e of engs.rows) {
+    if (e.client_id == null || e.is_complete || e.is_canceled) continue;
+    if (isMentoringTier(engagementTier(e.name))) active.add(e.client_id);
+  }
+  let excludedClients = 0;
+  const ids: number[] = [];
+  for (const id of active) {
+    if (excluded.has(id)) excludedClients++;
+    else ids.push(id);
+  }
+  ids.sort((a, b) => a - b);
+
+  const [invoices, meetings] = await Promise.all([
+    fetchMarginInvoicesFor(ids),
+    fetchMarginMeetingsFor(ids),
+  ]);
+  const invBy = new Map<number, MarginInvoiceInput[]>();
+  for (const inv of invoices) {
+    if (inv.client_id == null) continue;
+    let arr = invBy.get(inv.client_id);
+    if (!arr) invBy.set(inv.client_id, (arr = []));
+    arr.push(toMarginInvoice(inv));
+  }
+  const mtgBy = new Map<number, MarginMeetingInput[]>();
+  for (const a of meetings) {
+    if (a.client_id == null) continue;
+    let arr = mtgBy.get(a.client_id);
+    if (!arr) mtgBy.set(a.client_id, (arr = []));
+    arr.push(toMarginMeeting(a, coachName));
+  }
+  const engBy = new Map<number, MarginEngagementInput[]>();
+  for (const e of engs.rows) {
+    if (e.client_id == null) continue;
+    let arr = engBy.get(e.client_id);
+    if (!arr) engBy.set(e.client_id, (arr = []));
+    arr.push(toMarginEngagement(e));
+  }
+
+  const members: TierMemberInput[] = ids.map((id) => {
+    const m = effective.get(id);
+    return {
+      clientId: id,
+      name: m?.name || clientName.get(id) || `#${id}`,
+      ownerCoachName: m?.ownerCoachName ?? null,
+      invoices: invBy.get(id) ?? [],
+      meetings: mtgBy.get(id) ?? [],
+      engagements: engBy.get(id) ?? [],
+    };
+  });
+  return { members, excludedClients, nextInvoiceColumn: engs.nextInvoiceColumn };
 }
 
 // --- User permissions (Admin §405, bones) ---

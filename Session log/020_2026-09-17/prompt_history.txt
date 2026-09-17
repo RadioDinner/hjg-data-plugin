@@ -7,3 +7,11 @@ The first part will be looking at an individual Mentee. I want to be able to sel
 
 --- 2026-09-17 (turn 2) ---
 merge it to main so I can test it
+
+--- 2026-09-17 (turn 3) ---
+Then another part of the mentoring margins I want to look at is the average margin per mentoring bracket. For 4x we get $425, for 2x we get $265, 1x is $145. We get 40% at each turn. 
+
+I'd want all of our active Mentees to be included in this. Anyone that has a 4x, 2x, 1x open, it would be like looking at them individually but instead as a group.
+
+--- 2026-09-17 (turn 3, mid-turn) ---
+on the 602 feature screen, I only want active mentees in the dropdown list

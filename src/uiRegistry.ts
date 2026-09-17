@@ -78,6 +78,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "margins.mentoring.invoices": 603, // …its Invoices inset table (2026-09-17)
   "margins.mentoring.meetings": 604, // …its Meetings inset table (2026-09-17)
   "margins.mentoring.engagements": 605, // …its Engagements inset table (2026-09-17)
+  "margins.tiers": 606, // Margins by tier — all active mentees grouped by 4x / 2x / 1x (2026-09-17)
+  "margins.tiers.mentees": 607, // …its per-mentee breakdown inset table (2026-09-17)
   "finevent.screen": 651, // Report financial event tab (2026-07-22)
   "finevent.form": 652, // Report financial event: the entry form card (2026-07-22)
 

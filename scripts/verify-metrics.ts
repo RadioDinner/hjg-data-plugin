@@ -98,6 +98,7 @@ import {
 } from "../lib/payBuild.js";
 import {
   computeMenteeMargin,
+  computeTierMargins,
   projectScheduledInvoices,
   invoiceTier,
   invoiceStatus,
@@ -107,6 +108,7 @@ import {
   type MarginInvoiceInput,
   type MarginMeetingInput,
   type MarginEngagementInput,
+  type TierMemberInput,
 } from "../lib/margins.js";
 import { buildPayStubModel, payStubHtml } from "../lib/payStub.js";
 import {
@@ -4442,6 +4444,244 @@ console.log(
   // A day before anything existed reads as an empty card, not an error.
   const empty = computeJyfVsMentoringAsOf(engs, "2025-12-31");
   eq(empty.jyf + empty.mentoring + empty.total, 0, "before any engagement existed -> all zero");
+}
+
+console.log("[29] Margins by tier — all active mentees grouped by bracket (computeTierMargins)");
+{
+  const today = "2026-09-17";
+  const now = "2026-09-17 12:00:00";
+  const inv = (
+    id: number,
+    serviceDate: string,
+    amount: number,
+    collected: number,
+    item: string,
+  ): MarginInvoiceInput => ({
+    id,
+    invoiceNumber: `#${id}`,
+    serviceDate,
+    issuedDate: serviceDate,
+    dueDate: serviceDate,
+    amount,
+    collected,
+    lineItems: [{ item, amount }],
+    payments:
+      collected > 0
+        ? [{ datePaid: `${serviceDate} 09:00:00`, amount: collected, method: "Card" }]
+        : [],
+  });
+  const mtg = (id: number, startRaw: string, engagementId: number | null): MarginMeetingInput => ({
+    id,
+    name: "Mentoring Call",
+    isGroup: false,
+    coachName: "Harry",
+    engagementId,
+    startDate: startRaw.slice(0, 10),
+    startRaw,
+    countsInEngagement: 1,
+  });
+  const eng = (
+    id: number,
+    name: string,
+    startDate: string,
+    opts: Partial<MarginEngagementInput> = {},
+  ): MarginEngagementInput => ({
+    id,
+    name,
+    startDate,
+    endDate: null,
+    isComplete: false,
+    isCanceled: false,
+    nextInvoiceDate: null,
+    ...opts,
+  });
+  const FOUR = "MN Subscription | (4x Month) weekly";
+  const TWO = "MN Subscription | (2x Month)";
+  const ONE = "MN Subscription | (1x Month)";
+  const weekly = (from: number, month: string, engagementId: number | null, n = 4) =>
+    ["03", "10", "17", "24"]
+      .slice(0, n)
+      .map((d, i) => mtg(from + i, `2026-${month}-${d} 10:00:00`, engagementId));
+
+  const members: TierMemberInput[] = [
+    {
+      // A: 4x, 3 paid months, 12 occurred (one with an unknown engagement), 2 upcoming.
+      clientId: 1,
+      name: "Amos",
+      ownerCoachName: "Harry",
+      invoices: [
+        inv(1, "2026-06-01", 425, 425, FOUR),
+        inv(2, "2026-07-01", 425, 425, FOUR),
+        inv(3, "2026-08-01", 425, 425, FOUR),
+      ],
+      meetings: [
+        ...weekly(100, "06", 1),
+        ...weekly(110, "07", 1),
+        ...weekly(120, "08", 1).map((m, i) => (i === 0 ? { ...m, engagementId: null } : m)),
+        mtg(130, "2026-09-21 10:00:00", 1),
+        mtg(131, "2026-09-28 10:00:00", 1),
+      ],
+      engagements: [eng(1, FOUR, "2026-06-01", { nextInvoiceDate: "2026-10-01" })],
+    },
+    {
+      // B: 4x, 2 paid + 1 unpaid, 6 occurred → 8 paid for, 2 prepaid.
+      clientId: 2,
+      name: "Ben",
+      ownerCoachName: "Caleb",
+      invoices: [
+        inv(4, "2026-07-01", 425, 425, FOUR),
+        inv(5, "2026-08-01", 425, 425, FOUR),
+        inv(6, "2026-09-01", 425, 0, FOUR),
+      ],
+      meetings: [...weekly(200, "07", 2), ...weekly(210, "08", 2, 2)],
+      engagements: [eng(2, FOUR, "2026-07-01")],
+    },
+    {
+      // C: moved 4x → 2x. The completed 4x history must not count anywhere.
+      clientId: 3,
+      name: "Chris",
+      // Only July is paid; August's 2x meetings were delivered on an unpaid invoice.
+      invoices: [
+        inv(7, "2026-04-01", 425, 425, FOUR),
+        inv(8, "2026-07-01", 265, 265, TWO),
+        inv(9, "2026-08-01", 265, 0, TWO),
+      ],
+      meetings: [...weekly(300, "04", 3), ...weekly(310, "07", 4, 2), ...weekly(320, "08", 4, 2)],
+      engagements: [
+        eng(3, FOUR, "2026-04-01", { endDate: "2026-05-31", isComplete: true }),
+        eng(4, TWO, "2026-07-01"),
+      ],
+    },
+    {
+      // D: brand-new 1x, nothing billed or delivered yet.
+      clientId: 4,
+      name: "Dan",
+      invoices: [],
+      meetings: [],
+      engagements: [eng(5, ONE, "2026-09-15")],
+    },
+    {
+      // E: not active (4x completed) → skipped.
+      clientId: 5,
+      name: "Eli",
+      invoices: [inv(10, "2026-03-01", 425, 425, FOUR)],
+      meetings: weekly(500, "03", 6),
+      engagements: [eng(6, FOUR, "2026-03-01", { endDate: "2026-03-31", isComplete: true })],
+    },
+    {
+      // F: two open tiers (odd but possible) with one unknown-engagement meeting → unassigned.
+      clientId: 6,
+      name: "Fred",
+      invoices: [],
+      meetings: [mtg(600, "2026-09-02 10:00:00", null)],
+      engagements: [eng(7, FOUR, "2026-09-01"), eng(8, TWO, "2026-09-01")],
+    },
+  ];
+
+  const rep = computeTierMargins({ members, today, now });
+  eq(rep.hjgShare, 0.4, "default HJG share 40%");
+  eq(rep.prices["4x"], 425, "default 4x price $425");
+  eq(rep.prices["2x"], 265, "default 2x price $265");
+  eq(rep.prices["1x"], 145, "default 1x price $145");
+  eq(rep.activeMentees, 5, "active = A, B, C, D, F (E has nothing open)");
+  eq(rep.inactiveSkipped, 1, "E skipped as inactive");
+  eq(rep.unassignedMeetings, 1, "F's unknown-engagement meeting is unassigned (two open tiers)");
+
+  const [t4, t2, t1] = rep.tiers;
+  eq(t4.tier, "4x", "tiers ordered 4x, 2x, 1x");
+  eq(t4.expectedHjgPerMonth, 170, "4x expected HJG per month = 425 × 40%");
+  eq(t4.expectedMarginPerMeeting, 42.5, "4x expected margin per meeting = 170 ÷ 4");
+  eq(t2.expectedMarginPerMeeting, 53, "2x expected = 265 × 40% ÷ 2 = $53.00");
+  eq(t1.expectedMarginPerMeeting, 58, "1x expected = 145 × 40% ÷ 1 = $58.00");
+
+  eq(t4.mentees, 3, "4x bracket: A, B, F");
+  eq(t4.invoices.issued, 6, "4x invoices issued: A 3 + B 3");
+  eq(t4.invoices.paid, 5, "4x paid: 5");
+  eq(t4.invoices.unpaid, 1, "4x unpaid: B's September");
+  eq(t4.money.collected, 2125, "4x collected: 1275 + 850");
+  eq(t4.money.hjgCollected, 850, "4x HJG share: $850");
+  eq(t4.avgBilledPerInvoice, 425, "4x avg billed per invoice = $425 (price assumption holds)");
+  eq(t4.meetings.occurred, 18, "4x occurred: A 12 (incl. the unknown-engagement one) + B 6");
+  eq(t4.meetings.upcoming, 2, "4x upcoming: A's two September meetings");
+  eq(t4.meetings.paidFor, 20, "4x paid for: A 12 + B 8");
+  eq(t4.meetings.prepaid, 2, "4x prepaid: B's 2");
+  eq(t4.margin.perMeetingPaidFor, 42.5, "4x pooled margin per meeting paid for = 850 ÷ 20");
+  eq(
+    t4.margin.perMeetingDelivered,
+    47.22,
+    "4x pooled cash-basis = 850 ÷ 18 (inflated by B's prepay)",
+  );
+  eq(t4.margin.vsExpected, 0, "4x actual (paid-for) equals expected → Δ 0");
+  eq(
+    t4.margin.avgMenteePaidFor,
+    42.5,
+    "4x avg of mentees (paid-for) = 42.50 (A and B both; F has none)",
+  );
+  eq(t4.money.hjgEarned, 765, "4x HJG earned = A 510 + B 340 × 6/8 = 255");
+  eq(t4.money.hjgDeferred, 85, "4x deferred = 850 − 765");
+  const amos = t4.members.find((m) => m.name === "Amos")!;
+  eq(amos.since, "2026-06-01", "member 'since' = open engagement start");
+  eq(amos.marginPerMeetingPaidFor, 42.5, "Amos's own entitlement margin");
+  eq(
+    amos.meetingsOccurred,
+    12,
+    "Amos: unknown-engagement meeting assigned to his single open tier",
+  );
+  eq(amos.scheduled.openEnded, true, "Amos: open-ended subscription (no end date)");
+  eq(amos.scheduled.nextInvoiceDate, "2026-10-01", "Amos: next invoice date carried");
+  const fred4 = t4.members.find((m) => m.name === "Fred")!;
+  eq(fred4.meetingsOccurred, 0, "Fred (two open tiers): unknown-engagement meeting not assigned");
+
+  eq(t2.mentees, 2, "2x bracket: C, F");
+  eq(t2.invoices.issued, 2, "2x invoices: C's two 2x months only (his 4x month excluded)");
+  eq(t2.money.collected, 265, "2x collected: July only");
+  eq(t2.invoices.unpaid, 1, "2x unpaid: August");
+  eq(t2.meetings.occurred, 4, "2x occurred: C's four 2x meetings (his 4x meetings excluded)");
+  eq(t2.meetings.paidFor, 2, "2x paid for: 1 paid invoice × 2");
+  eq(t2.meetings.overDelivered, 2, "2x delivered beyond paid: August's two meetings");
+  eq(t2.margin.perMeetingPaidFor, 53, "2x pooled = 106 ÷ 2 = $53.00");
+  eq(t2.margin.perMeetingDelivered, 26.5, "2x cash basis = 106 ÷ 4 (understated: unpaid August)");
+  eq(t2.margin.vsExpected, 0, "2x matches expected");
+
+  eq(t1.mentees, 1, "1x bracket: D");
+  eq(t1.invoices.issued, 0, "1x: nothing invoiced yet");
+  eq(t1.margin.perMeetingPaidFor, null, "1x: no margin yet (no paid meetings)");
+  eq(t1.margin.avgMenteePaidFor, null, "1x: no member figures yet");
+
+  const all = rep.total;
+  eq(all.tier, "all", "total row");
+  eq(all.mentees, 6, "total bracket memberships = 3 + 2 + 1 (F counted in two brackets)");
+  eq(all.money.hjgCollected, 956, "total HJG share = 850 + 106");
+  eq(all.meetings.occurred, 22, "total occurred = 18 + 4");
+  eq(all.meetings.paidFor, 22, "total paid for = 20 + 2");
+  eq(
+    all.meetings.prepaid,
+    2,
+    "total prepaid is GROSS across tiers (4x 2), not netted against 2x over-delivery",
+  );
+  eq(all.meetings.overDelivered, 2, "total over-delivered is gross too (2x 2)");
+  eq(all.margin.perMeetingPaidFor, 43.45, "total pooled = 956 ÷ 22");
+  eq(all.expectedMarginPerMeeting, 45.88, "blended expected = (510 + 212 + 58) ÷ (12 + 4 + 1)");
+  eq(all.margin.vsExpected, -2.43, "total vs expected = 43.45 − 45.88");
+  eq(all.members.length, 6, "total members list = every bracket membership");
+
+  // Price / share overrides flow into expected figures, not the actuals.
+  const custom = computeTierMargins({
+    members,
+    today,
+    now,
+    prices: { "4x": 400 },
+    mentorShare: 0.5,
+  });
+  eq(custom.prices["4x"], 400, "4x price override");
+  eq(custom.prices["2x"], 265, "other prices keep their defaults");
+  eq(custom.tiers[0].expectedMarginPerMeeting, 50, "4x expected at $400 and 50% = $50.00");
+  eq(custom.tiers[0].money.hjgCollected, 1062.5, "HJG share at 50% of $2,125");
+  eq(custom.tiers[0].margin.perMeetingPaidFor, 53.13, "actual at 50% = 1062.5 ÷ 20");
+  const bad = computeTierMargins({ members: [], today, prices: { "1x": -5 } });
+  eq(bad.prices["1x"], 145, "a negative price override is ignored");
+  eq(bad.activeMentees, 0, "no members → empty report");
+  eq(bad.total.expectedMarginPerMeeting, null, "no members → no blended expectation");
 }
 
 console.log("");

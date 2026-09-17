@@ -64,6 +64,8 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 603 | `margins.mentoring.invoices` | Margins on Mentoring — Invoices inset | `MarginsView` inset table |
 | 604 | `margins.mentoring.meetings` | Margins on Mentoring — Meetings inset | `MarginsView` inset table |
 | 605 | `margins.mentoring.engagements` | Margins on Mentoring — Engagements inset | `MarginsView` inset table |
+| 606 | `margins.tiers` | Margins by tier — all active mentees by 4x / 2x / 1x | `MarginsView` card |
+| 607 | `margins.tiers.mentees` | Margins by tier — per-mentee breakdown inset | `MarginsView` inset table |
 | 651 | `finevent.screen` | Report financial event (screen) | nav tab |
 | 652 | `finevent.form` | Report financial event — entry form | `FinancialEventView` card |
 | 701 | `discovery.screen` | Discovery calls (screen) | nav tab |

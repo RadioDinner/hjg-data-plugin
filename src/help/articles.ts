@@ -458,17 +458,26 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
     title: "Margins",
     body: `Several ways to look at HJG's **margins**, each in its own collapsible card on this tab. The tab was rebuilt from scratch on 2026-09-17; the earlier staff-hours-vs-delivered-hours view is gone.
 
+### Assumptions (top of the tab)
+- **Mentor share** — the mentor's cut of what a mentee pays (default **60%**; HJG keeps the rest, **40%**).
+- **Monthly price per bracket** — what a mentee on each tier pays per month (defaults **4x $425 · 2x $265 · 1x $145**). Together these give the **expected HJG margin per meeting**: price × HJG share ÷ meetings per month → **$42.50 / $53.00 / $58.00**.
+- Both are typed here and used by every lens below. They are **not saved** — a reload restores the defaults.
+
 ### Lenses
-- **Margins on Mentoring** (§602) — pick one mentee and see what HJG keeps **per meeting** on their ongoing 4x / 2x / 1x mentoring, with the invoice and meeting counts that make the number trustworthy. Open that card's own **?** for the full method.
-- More lenses will be added below it as they are agreed.`,
+- **Margins on Mentoring** (§602) — pick one mentee and see what HJG keeps **per meeting** on their ongoing 4x / 2x / 1x mentoring, with the invoice and meeting counts that make the number trustworthy.
+- **Margins by tier** (§606) — every **active** mentee, run through the same math and grouped by the bracket they are in (4x / 2x / 1x), with expected vs actual margin per meeting and a per-mentee breakdown.
+- Open each card's own **?** for its method.`,
   },
 
   "margins.mentoring": {
     title: "Margins on Mentoring — per mentee",
     body: `**What HJG keeps per meeting** on one mentee's ongoing mentoring — and whether that number can be trusted yet.
 
+### Who is in the list
+- The picker offers **active mentees only**: everyone with an **open** (not completed, not canceled) 4x / 2x / 1x engagement in CoachAccountable, placeholder clients and test rows dropped. Someone who has graduated or quit is not listed.
+
 ### The split
-- The mentee pays a monthly invoice for their tier (e.g. **$425 for 4x**). **HJG keeps a share of what is collected** (default **40%**); the mentor gets the rest (**60%**). The **Mentor share** box in the card header changes the split for the whole card (it is not saved).
+- The mentee pays a monthly invoice for their tier (e.g. **$425 for 4x**). **HJG keeps a share of what is collected** (default **40%**); the mentor gets the rest (**60%**). The **Mentor share** box on the Margins screen card (top of the tab) changes the split for every lens (it is not saved).
 - Only **ongoing-mentoring** money counts: invoices whose line item (or, failing that, the engagement covering the invoice's service date) resolves to **4x / 2x / 1x**. JumpStart / JYF, mentor-training and group invoices are listed but **excluded** and counted as "Non-mentoring".
 
 ### The two margin figures
@@ -490,6 +499,29 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 - Pure math in \`lib/margins.ts\` (\`computeMenteeMargin\`, verified in \`scripts/verify-metrics.ts\` §17).`,
   },
 
+  "margins.tiers": {
+    title: "Margins by tier — all active mentees",
+    body: `**The average HJG margin per meeting for each mentoring bracket** — every active mentee, run through exactly the per-mentee math of *Margins on Mentoring*, then grouped by the bracket they are in.
+
+### Who is in it
+- **Active** = has an **open** (not completed, not canceled) **4x / 2x / 1x** engagement in CoachAccountable right now. Test mentees and placeholder/group clients are dropped (the card says how many).
+- A mentee belongs to the bracket of their open engagement. Only that tier's invoices and meetings count toward that bracket — someone who moved 4x → 2x contributes their 2x months to the 2x bracket, and their old 4x months are not counted anywhere (they are no longer active in 4x). The rare person with two open tiers appears in both brackets (with each tier's own numbers) and once in **Active mentees**.
+- A meeting with no known engagement goes to the mentee's single open tier; when they have two open tiers it is left **unassigned** and counted.
+
+### Expected vs actual
+- **Expected margin per meeting** = monthly price × HJG share ÷ meetings per month, from the assumptions at the top of the tab: **4x $425 → $42.50 · 2x $265 → $53.00 · 1x $145 → $58.00** at 40%. The **All** row blends these by the roster mix (Σ mentees × price × share ÷ Σ mentees × cadence).
+- **Actual, per meeting paid for** (entitlement basis) = the bracket's HJG share of collected revenue ÷ the meetings its paid invoices bought — the pooled figure, the one to compare with expected. **vs expected** is the difference.
+- **Actual, per meeting delivered** (cash basis) = HJG share ÷ meetings that have occurred — inflated wherever mentees have paid ahead (see **Prepaid**).
+- **Avg of mentees** = the plain average of the members' own per-meeting figures (equal weight per person), beside the pooled figure (weight by meetings). They differ when the roster is uneven.
+- **Avg billed / invoice** checks the price assumption against what was actually invoiced (discounts, partial months).
+
+### Reading it
+- Three small charts share the table: expected vs actual (paid-for basis) margin per meeting by tier, meetings occurred vs upcoming by tier, and HJG share collected by tier.
+- The **per-mentee breakdown** (§607) lists every member with their own counts and both margin figures, sortable and exportable — the "individually" view behind the group number.
+
+### Source
+- Same tables as *Margins on Mentoring* (\`ca_invoices\`, \`ca_appointments\`, \`ca_engagements\`), plus \`mentees\` (names, owner, \`is_test\`) and \`ca_clients.is_excluded\`. Pure math in \`lib/margins.ts\` (\`computeTierMargins\`, verified in \`scripts/verify-metrics.ts\` §29).`,
+  },
   "general.coachAttribution": {
     title: "How clients are matched to coaches",
     body: `**The mentee's OWNER is CoachAccountable's primary coach** — the coach set on the client in CA (the "managed by" pairing you change by re-pairing a client). That owner drives **everything**: the Journeys owner, **Mentor-capacity** grouping, and **Pay-staff** payout attribution.

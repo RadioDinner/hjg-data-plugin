@@ -16,23 +16,37 @@ import { SortableTable, type SortColumn, type Row } from "../components/Sortable
 import { downloadCsv } from "../csv";
 import { fmtDate } from "../format";
 import { todayYmd } from "../../lib/conversion";
+import type { MentoringTier } from "../../lib/margins";
 import {
   fetchMentees,
   toEffectiveMentee,
   fetchMenteeMarginInputs,
+  fetchTierMarginInputs,
+  fetchActiveMentoringClientIds,
   computeMenteeMargin,
+  computeTierMargins,
   clampShare,
   DEFAULT_MENTOR_SHARE,
+  DEFAULT_TIER_PRICES,
+  MENTORING_TIERS,
+  TIER_MEETINGS_PER_MONTH,
   type EffectiveMentee,
   type MenteeMarginData,
   type MenteeMarginReport,
+  type TierMarginData,
+  type TierMarginReport,
+  type TierMarginRow,
 } from "../db";
 
-// Margins tab, rebuilt from scratch (session 020). The first lens is "Margins on
-// Mentoring": pick ONE mentee and see, for their ongoing 4x / 2x / 1x mentoring,
-// the invoices (issued / paid / scheduled), the meetings (occurred / upcoming /
-// paid for) and HJG's margin PER MEETING — computed two ways so a prepaid month
-// can't quietly inflate the number. Pure math: lib/margins.ts (verify §17).
+// Margins tab, rebuilt from scratch (session 020). Two lenses so far:
+//  • Margins on Mentoring (§602): pick ONE mentee and see, for their ongoing
+//    4x / 2x / 1x mentoring, the invoices (issued / paid / scheduled), the
+//    meetings (occurred / upcoming / paid for) and HJG's margin PER MEETING —
+//    computed two ways so a prepaid month can't quietly inflate the number.
+//  • Margins by tier (§606): every ACTIVE mentee run through the same math and
+//    grouped by bracket, with the expected margin from the configured prices.
+// The assumptions (mentor share, price per bracket) live on the screen card and
+// feed both. Pure math: lib/margins.ts (verify §17 / §29).
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function monthLabel(ym: string): string {
@@ -46,6 +60,8 @@ const usd2 = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 const fmtUsd = (n: number | null | undefined) => (n == null ? "—" : usd2.format(n));
+const fmtSignedUsd = (n: number | null | undefined) =>
+  n == null ? "—" : n > 0 ? `+${usd2.format(n)}` : n < 0 ? `−${usd2.format(-n)}` : usd2.format(0);
 // Meeting counts are integers except "paid for" (prorated by partial payments).
 const fmtCount = (n: number) =>
   Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString();
@@ -91,7 +107,49 @@ function GroupTitle({ children }: { children: ReactNode }) {
   );
 }
 
+function ViewSeg({
+  view,
+  setView,
+}: {
+  view: "graph" | "table" | "both";
+  setView: (v: "graph" | "table" | "both") => void;
+}) {
+  return (
+    <div className="seg" role="tablist" aria-label="Card view">
+      {(["graph", "table", "both"] as const).map((k) => (
+        <button
+          key={k}
+          role="tab"
+          aria-selected={view === k}
+          className={`seg__btn ${view === k ? "seg__btn--active" : ""}`}
+          onClick={() => setView(k)}
+        >
+          {k === "graph" ? "Graph" : k === "table" ? "Table" : "Both"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function MarginsView() {
+  // --- assumptions shared by every lens (ephemeral; defaults are the real numbers) ---
+  const [sharePct, setSharePct] = useState(String(Math.round(DEFAULT_MENTOR_SHARE * 100)));
+  const [priceText, setPriceText] = useState<Record<MentoringTier, string>>({
+    "4x": String(DEFAULT_TIER_PRICES["4x"]),
+    "2x": String(DEFAULT_TIER_PRICES["2x"]),
+    "1x": String(DEFAULT_TIER_PRICES["1x"]),
+  });
+  const mentorShare = clampShare(Number(sharePct) / 100);
+  const hjgShare = 1 - mentorShare;
+  const prices = useMemo(() => {
+    const out: Record<MentoringTier, number> = { ...DEFAULT_TIER_PRICES };
+    for (const t of MENTORING_TIERS) {
+      const n = Number(priceText[t]);
+      if (priceText[t].trim() !== "" && Number.isFinite(n) && n >= 0) out[t] = n;
+    }
+    return out;
+  }, [priceText]);
+
   return (
     <div className="stack">
       <CollapsibleCard
@@ -101,19 +159,67 @@ export function MarginsView() {
         help={<HelpButton id="margins.tab" label="Margins" />}
       >
         <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
-          Several ways to look at HJG's margins, each in its own card. The first lens is{" "}
-          <strong>Margins on Mentoring</strong>: what HJG keeps <em>per meeting</em> on one mentee's
-          ongoing 4x / 2x / 1x mentoring, with the invoice and meeting counts that make the number
-          trustworthy. More lenses will be added below it.
+          Several ways to look at HJG's margins, each in its own card.{" "}
+          <strong>Margins on Mentoring</strong> is one mentee at a time;{" "}
+          <strong>Margins by tier</strong> is every active mentee grouped by bracket. Both use the
+          assumptions below.
+        </div>
+        <div
+          className="filter-bar"
+          style={{ padding: "10px 0 6px", borderBottom: "1px solid var(--line)" }}
+        >
+          <label className="filter">
+            <span>Mentor share %</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              className="margins__pct-input"
+              value={sharePct}
+              onChange={(e) => setSharePct(e.target.value)}
+              aria-label="Mentor share of collected revenue, percent"
+            />
+          </label>
+          {MENTORING_TIERS.map((t) => (
+            <label className="filter" key={t}>
+              <span>{t} price / month $</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className="margins__pct-input"
+                value={priceText[t]}
+                onChange={(e) => setPriceText((p) => ({ ...p, [t]: e.target.value }))}
+                aria-label={`${t} monthly price, dollars`}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          HJG keeps <strong>{pctLabel(hjgShare)}</strong> of what mentees pay. Expected HJG margin
+          per meeting (price × {pctLabel(hjgShare)} ÷ meetings per month):{" "}
+          {MENTORING_TIERS.map((t, i) => (
+            <span key={t}>
+              {i > 0 && " · "}
+              <strong>{t}</strong> {fmtUsd((prices[t] * hjgShare) / TIER_MEETINGS_PER_MONTH[t])}
+            </span>
+          ))}
+          . Not saved — a reload restores the defaults.
         </div>
       </CollapsibleCard>
 
-      <MentoringMarginsCard />
+      <MentoringMarginsCard mentorShare={mentorShare} />
+      <TierMarginsCard mentorShare={mentorShare} prices={prices} />
     </div>
   );
 }
 
-function MentoringMarginsCard() {
+// ============================================================================
+// §602 — Margins on Mentoring (one mentee)
+// ============================================================================
+
+function MentoringMarginsCard({ mentorShare }: { mentorShare: number }) {
   const ct = useChartTokens();
   const TOOLTIP = {
     background: ct.tooltipBg,
@@ -124,6 +230,7 @@ function MentoringMarginsCard() {
 
   // --- mentee picker ---
   const [mentees, setMentees] = useState<EffectiveMentee[]>([]);
+  const [activeIds, setActiveIds] = useState<Set<number> | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -132,10 +239,11 @@ function MentoringMarginsCard() {
   useEffect(() => {
     let live = true;
     const today = todayYmd();
-    fetchMentees()
-      .then((rows) => {
+    Promise.all([fetchMentees(), fetchActiveMentoringClientIds()])
+      .then(([rows, active]) => {
         if (!live) return;
         setMentees(rows.map((r) => toEffectiveMentee(r, today)));
+        setActiveIds(active);
         setListError(null);
       })
       .catch((e) => live && setListError(String(e)))
@@ -145,14 +253,23 @@ function MentoringMarginsCard() {
     };
   }, []);
 
+  // Only ACTIVE mentees are offered (the user, session 020): an open 4x / 2x / 1x
+  // engagement in CoachAccountable, no test rows.
+  const activeMentees = useMemo(
+    () =>
+      mentees.filter(
+        (m) => m.clientId != null && !m.isTest && (activeIds?.has(m.clientId) ?? false),
+      ),
+    [mentees, activeIds],
+  );
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const base = q ? mentees.filter((m) => m.name.toLowerCase().includes(q)) : mentees;
+    const base = q ? activeMentees.filter((m) => m.name.toLowerCase().includes(q)) : activeMentees;
     return [...base].sort((a, b) => a.name.localeCompare(b.name));
-  }, [mentees, search]);
+  }, [activeMentees, search]);
   const selected = useMemo(
-    () => mentees.find((m) => m.id === selectedId) ?? null,
-    [mentees, selectedId],
+    () => activeMentees.find((m) => m.id === selectedId) ?? null,
+    [activeMentees, selectedId],
   );
   const clientId = selected?.clientId ?? null;
 
@@ -175,10 +292,6 @@ function MentoringMarginsCard() {
       live = false;
     };
   }, [clientId]);
-
-  // --- the split (mentor share; HJG keeps the rest) ---
-  const [sharePct, setSharePct] = useState(String(Math.round(DEFAULT_MENTOR_SHARE * 100)));
-  const mentorShare = clampShare(Number(sharePct) / 100);
 
   const [view, setView] = useState<"graph" | "table" | "both">("both");
 
@@ -246,42 +359,17 @@ function MentoringMarginsCard() {
       help={<HelpButton id="margins.mentoring" label="Margins on Mentoring" />}
       actions={
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <label className="muted" style={{ fontSize: 12, display: "flex", gap: 6 }}>
-            Mentor share
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              className="margins__pct-input"
-              value={sharePct}
-              onChange={(e) => setSharePct(e.target.value)}
-              aria-label="Mentor share of collected revenue, percent"
-            />
-            %
-          </label>
           <button className="btn btn--sm" onClick={exportMonths} disabled={!report}>
             Export CSV
           </button>
-          <div className="seg" role="tablist" aria-label="Card view">
-            {(["graph", "table", "both"] as const).map((k) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={view === k}
-                className={`seg__btn ${view === k ? "seg__btn--active" : ""}`}
-                onClick={() => setView(k)}
-              >
-                {k === "graph" ? "Graph" : k === "table" ? "Table" : "Both"}
-              </button>
-            ))}
-          </div>
+          <ViewSeg view={view} setView={setView} />
         </div>
       }
     >
       <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
-        Pick a mentee. HJG keeps <strong>{pctLabel(1 - mentorShare)}</strong> of what that mentee
-        has paid (the mentor gets {pctLabel(mentorShare)}); the margin is that share{" "}
+        Pick an <strong>active</strong> mentee (the list holds everyone with an open 4x / 2x / 1x
+        engagement). HJG keeps <strong>{pctLabel(1 - mentorShare)}</strong> of what that mentee has
+        paid (the mentor gets {pctLabel(mentorShare)}); the margin is that share{" "}
         <strong>per meeting</strong>. Only ongoing-mentoring (4x / 2x / 1x) invoices and meetings
         count — JumpStart, training and group engagements are listed but excluded.
       </div>
@@ -308,12 +396,12 @@ function MentoringMarginsCard() {
             onChange={(e) => setSelectedId(e.target.value)}
             disabled={listLoading}
           >
-            <option value="">{listLoading ? "loading…" : "— pick a mentee —"}</option>
+            <option value="">
+              {listLoading ? "loading…" : `— pick a mentee (${activeMentees.length} active) —`}
+            </option>
             {filtered.map((m) => (
-              <option key={m.id} value={m.id} disabled={m.clientId == null}>
+              <option key={m.id} value={m.id}>
                 {m.name}
-                {m.isTest ? " (test)" : ""}
-                {m.clientId == null ? " (not in CoachAccountable)" : ""}
               </option>
             ))}
           </select>
@@ -756,6 +844,401 @@ function EngagementsInset({ report }: { report: MenteeMarginReport }) {
           </tbody>
         </table>
       </div>
+    </CollapsibleCard>
+  );
+}
+
+// ============================================================================
+// §606 — Margins by tier (all active mentees)
+// ============================================================================
+
+const TIER_LABEL: Record<string, string> = { "4x": "4x", "2x": "2x", "1x": "1x", all: "All" };
+
+function TierMarginsCard({
+  mentorShare,
+  prices,
+}: {
+  mentorShare: number;
+  prices: Record<MentoringTier, number>;
+}) {
+  const ct = useChartTokens();
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  } as const;
+
+  const [data, setData] = useState<TierMarginData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"graph" | "table" | "both">("both");
+
+  useEffect(() => {
+    let live = true;
+    fetchTierMarginInputs()
+      .then((d) => {
+        if (!live) return;
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => live && setError(String(e)))
+      .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const report: TierMarginReport | null = useMemo(() => {
+    if (!data) return null;
+    return computeTierMargins({
+      members: data.members,
+      today: todayYmd(),
+      now: localNowRaw(),
+      mentorShare,
+      prices,
+    });
+  }, [data, mentorShare, prices]);
+
+  const chartData = useMemo(
+    () =>
+      (report?.tiers ?? []).map((t) => ({
+        tier: t.tier,
+        Expected: t.expectedMarginPerMeeting,
+        "Actual (paid for)": t.margin.perMeetingPaidFor,
+        Occurred: t.meetings.occurred,
+        Upcoming: t.meetings.upcoming,
+        "HJG share": t.money.hjgCollected,
+      })),
+    [report],
+  );
+
+  const tableRows: TierMarginRow[] = report ? [...report.tiers, report.total] : [];
+
+  function exportCsv() {
+    if (!report) return;
+    downloadCsv(
+      "margins-by-tier",
+      [
+        "Tier",
+        "Mentees",
+        "Price / month",
+        "Expected margin per meeting",
+        "Actual margin per meeting paid for",
+        "vs expected",
+        "Actual margin per meeting delivered",
+        "Avg of mentees (paid for)",
+        "Invoices issued",
+        "Invoices paid",
+        "Avg billed per invoice",
+        "Billed",
+        "Collected",
+        "HJG share",
+        "Meetings occurred",
+        "Meetings upcoming",
+        "Meetings paid for",
+        "Prepaid",
+      ],
+      tableRows.map((t) => [
+        TIER_LABEL[t.tier],
+        t.mentees,
+        t.price ?? "",
+        t.expectedMarginPerMeeting ?? "",
+        t.margin.perMeetingPaidFor ?? "",
+        t.margin.vsExpected ?? "",
+        t.margin.perMeetingDelivered ?? "",
+        t.margin.avgMenteePaidFor ?? "",
+        t.invoices.issued,
+        t.invoices.paid,
+        t.avgBilledPerInvoice ?? "",
+        t.money.billed,
+        t.money.collected,
+        t.money.hjgCollected,
+        t.meetings.occurred,
+        t.meetings.upcoming,
+        t.meetings.paidFor,
+        t.meetings.prepaid,
+      ]),
+    );
+  }
+
+  const showGraph = view !== "table";
+  const showTable = view !== "graph";
+  const deltaColor = (n: number | null) =>
+    n == null || n === 0 ? undefined : n > 0 ? "var(--ok-text)" : "var(--warn-text)";
+
+  return (
+    <CollapsibleCard
+      id="margins.tiers"
+      title="Margins by tier — all active mentees"
+      sectionId="margins.tiers"
+      help={<HelpButton id="margins.tiers" label="Margins by tier" />}
+      actions={
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn btn--sm" onClick={exportCsv} disabled={!report}>
+            Export CSV
+          </button>
+          <ViewSeg view={view} setView={setView} />
+        </div>
+      }
+    >
+      <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+        Every mentee with an <strong>open 4x / 2x / 1x engagement</strong>, run through the same
+        math as the card above and grouped by bracket — the individual view, summed. Only each
+        member's <em>current</em> tier's invoices and meetings count toward that bracket.{" "}
+        <strong>Expected</strong> comes from the prices at the top of the tab.
+      </div>
+
+      {error && <div className="notice notice--warn">{error}</div>}
+      {loading && <div className="loading">Loading…</div>}
+
+      {report && data && !loading && (
+        <>
+          <div className="stat-row" style={{ marginTop: 12 }}>
+            <Tile
+              value={report.activeMentees}
+              label="Active mentees"
+              sub={
+                data.excludedClients > 0
+                  ? `${data.excludedClients} test / placeholder client(s) left out`
+                  : "open 4x / 2x / 1x engagement"
+              }
+            />
+            <Tile
+              value={fmtUsd(report.total.money.hjgCollected)}
+              label={`HJG share collected (${pctLabel(report.hjgShare)})`}
+              sub={`of ${fmtUsd(report.total.money.collected)} collected`}
+            />
+            <Tile
+              value={fmtUsd(report.total.margin.perMeetingPaidFor)}
+              label="Per meeting paid for (all tiers)"
+              sub={`expected ${fmtUsd(report.total.expectedMarginPerMeeting)} at this roster mix · Δ ${fmtSignedUsd(report.total.margin.vsExpected)}`}
+            />
+            <Tile
+              value={fmtUsd(report.total.margin.perMeetingDelivered)}
+              label="Per meeting delivered (all tiers)"
+              sub={`HJG share ÷ ${report.total.meetings.occurred} occurred (cash basis)`}
+            />
+            <Tile
+              value={fmtCount(report.total.meetings.prepaid)}
+              label="Meetings prepaid, not yet delivered"
+              sub={`${fmtUsd(report.total.money.hjgDeferred)} of HJG's share deferred`}
+            />
+            {report.total.meetings.overDelivered > 0 && (
+              <Tile
+                value={fmtCount(report.total.meetings.overDelivered)}
+                label="Delivered beyond paid"
+                sub="unpaid / partial invoices, or extra sessions"
+              />
+            )}
+          </div>
+
+          {report.unassignedMeetings > 0 && (
+            <div className="notice notice--warn">
+              {report.unassignedMeetings} meeting(s) with no known engagement belong to mentees with
+              two open tiers and could not be assigned to a bracket — they are left out of the tier
+              figures.
+            </div>
+          )}
+
+          <GroupTitle>By tier</GroupTitle>
+          <div
+            className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}
+          >
+            {showGraph && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                <MiniChart title="HJG margin per meeting — expected vs actual (paid-for basis)">
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                    <CartesianGrid stroke={ct.grid} vertical={false} />
+                    <XAxis dataKey="tier" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+                    <YAxis
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                      tickFormatter={(v: number) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={TOOLTIP}
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      formatter={(v) => fmtUsd(Number(v))}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Expected" fill={ct.cmp} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Actual (paid for)" fill={ct.accent} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </MiniChart>
+                <MiniChart title="Meetings by tier">
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                    <CartesianGrid stroke={ct.grid} vertical={false} />
+                    <XAxis dataKey="tier" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+                    <YAxis
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                      allowDecimals={false}
+                    />
+                    <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Occurred" fill={ct.accent} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Upcoming" fill={ct.cmp} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </MiniChart>
+                <MiniChart title={`HJG share collected by tier (${pctLabel(report.hjgShare)})`}>
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                    <CartesianGrid stroke={ct.grid} vertical={false} />
+                    <XAxis dataKey="tier" tick={{ fill: ct.axis, fontSize: 11 }} stroke={ct.grid} />
+                    <YAxis
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                      tickFormatter={(v: number) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={TOOLTIP}
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      formatter={(v) => fmtUsd(Number(v))}
+                    />
+                    <Bar dataKey="HJG share" fill={ct.accent} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </MiniChart>
+              </div>
+            )}
+            {showTable && (
+              <div className="table-scroll" style={{ width: "100%" }}>
+                <table className="table table--center">
+                  <thead>
+                    <tr>
+                      <th>Tier</th>
+                      <th>Mentees</th>
+                      <th>Price / mo</th>
+                      <th>Expected $ / mtg</th>
+                      <th>Actual $ / mtg paid for</th>
+                      <th>vs expected</th>
+                      <th>Actual $ / mtg delivered</th>
+                      <th>Avg of mentees</th>
+                      <th>Invoices paid / issued</th>
+                      <th>Avg billed / invoice</th>
+                      <th>Collected</th>
+                      <th>HJG share</th>
+                      <th>Meetings occurred</th>
+                      <th>Upcoming</th>
+                      <th>Paid for</th>
+                      <th>Prepaid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((t) => (
+                      <tr key={t.tier} style={t.tier === "all" ? { fontWeight: 600 } : undefined}>
+                        <td>{TIER_LABEL[t.tier]}</td>
+                        <td className="num">{t.mentees}</td>
+                        <td className="num">{t.price == null ? "—" : fmtUsd(t.price)}</td>
+                        <td className="num">{fmtUsd(t.expectedMarginPerMeeting)}</td>
+                        <td className="num">{fmtUsd(t.margin.perMeetingPaidFor)}</td>
+                        <td className="num" style={{ color: deltaColor(t.margin.vsExpected) }}>
+                          {fmtSignedUsd(t.margin.vsExpected)}
+                        </td>
+                        <td className="num">{fmtUsd(t.margin.perMeetingDelivered)}</td>
+                        <td className="num">{fmtUsd(t.margin.avgMenteePaidFor)}</td>
+                        <td className="num">
+                          {t.invoices.paid} / {t.invoices.issued}
+                        </td>
+                        <td className="num">{fmtUsd(t.avgBilledPerInvoice)}</td>
+                        <td className="num">{fmtUsd(t.money.collected)}</td>
+                        <td className="num">{fmtUsd(t.money.hjgCollected)}</td>
+                        <td className="num">{t.meetings.occurred}</td>
+                        <td className="num">{t.meetings.upcoming}</td>
+                        <td className="num">{fmtCount(t.meetings.paidFor)}</td>
+                        <td className="num">{fmtCount(t.meetings.prepaid)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <p className="view__hint" style={{ marginTop: 10 }}>
+            <strong>$ / meeting paid for</strong> is the pooled figure to compare with{" "}
+            <strong>Expected</strong> (price × HJG share ÷ meetings per month);{" "}
+            <strong>$ / meeting delivered</strong> is the cash-basis figure, inflated wherever
+            mentees have paid ahead. <strong>Avg of mentees</strong> gives each person equal weight
+            (their own paid-for figure averaged) instead of weighting by meetings. The{" "}
+            <strong>All</strong> row's expectation is blended by the roster mix.
+          </p>
+
+          <TierMembersInset report={report} />
+        </>
+      )}
+    </CollapsibleCard>
+  );
+}
+
+function TierMembersInset({ report }: { report: TierMarginReport }) {
+  const rows: Row[] = report.total.members.map((m) => ({
+    name: m.name,
+    tier: m.tier,
+    mentor: m.ownerCoachName,
+    since: m.since,
+    invoicesPaid: m.invoicesPaid,
+    invoicesIssued: m.invoicesIssued,
+    collected: m.collected,
+    hjg: m.hjgCollected,
+    occurred: m.meetingsOccurred,
+    upcoming: m.meetingsUpcoming,
+    paidFor: Math.round(m.meetingsPaidFor * 10) / 10,
+    prepaid: Math.round(m.prepaid * 10) / 10,
+    marginDelivered: m.marginPerMeetingDelivered,
+    marginPaidFor: m.marginPerMeetingPaidFor,
+    nextInvoice: m.scheduled.nextInvoiceDate,
+  }));
+  const usdCol = (key: string, label: string): SortColumn => ({
+    key,
+    label,
+    numeric: true,
+    format: (r) => (r[key] == null ? "—" : fmtUsd(Number(r[key]))),
+  });
+  const dateCol = (key: string, label: string): SortColumn => ({
+    key,
+    label,
+    format: (r) => (
+      <span style={{ whiteSpace: "nowrap" }}>{r[key] == null ? "—" : fmtDate(String(r[key]))}</span>
+    ),
+  });
+  const columns: SortColumn[] = [
+    { key: "name", label: "Mentee" },
+    { key: "tier", label: "Tier" },
+    { key: "mentor", label: "Mentor" },
+    usdCol("marginPaidFor", "$ / mtg paid for"),
+    usdCol("marginDelivered", "$ / mtg delivered"),
+    usdCol("hjg", "HJG share"),
+    usdCol("collected", "Collected"),
+    { key: "invoicesPaid", label: "Invoices paid", numeric: true },
+    { key: "invoicesIssued", label: "Issued", numeric: true },
+    { key: "occurred", label: "Occurred", numeric: true },
+    { key: "upcoming", label: "Upcoming", numeric: true },
+    { key: "paidFor", label: "Paid for", numeric: true },
+    { key: "prepaid", label: "Prepaid", numeric: true },
+    dateCol("since", "Since"),
+    dateCol("nextInvoice", "Next invoice"),
+  ];
+  return (
+    <CollapsibleCard
+      id="margins.tiers.mentees"
+      title={`Per mentee (${report.total.members.length})`}
+      sectionId="margins.tiers.mentees"
+      variant="inset"
+      level={3}
+      style={{ marginTop: 14 }}
+    >
+      <SortableTable
+        columns={columns}
+        rows={rows}
+        exportName="margins-by-tier-mentees"
+        emptyText="No active mentees with an open 4x / 2x / 1x engagement."
+        maxRows={500}
+      />
     </CollapsibleCard>
   );
 }

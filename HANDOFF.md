@@ -1,10 +1,61 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-17 (session 020 — Margins tab rebuilt: "Margins on Mentoring"
-**v0.9.0**, MERGED TO `main`).
+2026-09-17 (session 020 — Margins tab rebuilt; v0.9.0 merged, then
+**v0.10.0 "Margins by tier" ON BRANCH `claude/busy-cray-1g791j`, not merged**).
 
-## ▶ START HERE (2026-09-17, session 020 — v0.9.0, MERGED TO `main`)
+## ▶ START HERE (2026-09-17, session 020 turn 3 — v0.10.0, ON BRANCH, NOT MERGED)
+
+**Second Margins lens shipped on the branch: "Margins by tier — all active
+mentees" (§606)** on the user's "average margin per mentoring bracket … all of
+our active Mentees … like looking at them individually but instead as a group",
+plus their mid-turn ask "on the 602 feature screen, I only want active mentees
+in the dropdown list". Version **0.10.0** (chip must read `v0.10.0` once
+merged + deployed). NOT merged — the user has not said so this time. Gates
+green: `typecheck` + `verify` (**870 checks**; new §29) + `lint` (0 / 14
+pre-existing) + `build` + `prettier --check`; render-checked both themes with
+the harness (deleted; screenshots in chat).
+
+**Assumptions strip (601 screen card).** Mentor share % (default 60 → HJG 40)
+and the monthly price per bracket (**4x $425 · 2x $265 · 1x $145**, the
+user's numbers, `DEFAULT_TIER_PRICES`) are typed there and feed BOTH lenses;
+the strip shows the expected HJG margin per meeting they imply (price × HJG
+share ÷ cadence → **$42.50 / $53.00 / $58.00**). Ephemeral (not saved) —
+persisting them in Company options needs a number control type + seeded
+`app_settings` keys (backlog).
+
+**§606 Margins by tier.** `fetchTierMarginInputs()` (`src/db.ts`): population
+= clients with an OPEN 4x / 2x / 1x engagement (same rule as the JYF card),
+minus `mentees.is_test` and `ca_clients.is_excluded`; pulls their invoices +
+mentoring meetings (chunked `in` lists, paged) + all engagements (9963
+fallback) + names/owner from the mentees source of truth. `computeTierMargins`
+(`lib/margins.ts`) runs `computeMenteeMargin` per member, then buckets by the
+member's OPEN tier(s): only that tier's invoices/meetings count (a 4x → 2x
+mover contributes 2x history to 2x; old 4x months count nowhere); an
+unknown-engagement meeting goes to the member's single open tier, else is
+reported as unassigned; a person with two open tiers is in both brackets and
+once in Active mentees. Per bracket: expected HJG/month + expected $/meeting,
+pooled actual $/meeting paid for (the comparable) and delivered (cash), vs
+expected Δ, avg-of-mentees (equal weight), invoice/meeting/money counts, and
+`members[]`. The **All** row blends expectation by roster mix (Σ mentees ×
+price × share ÷ Σ mentees × cadence); its prepaid / over-delivered are GROSS
+sums across tiers (not netted — asserted in §29). Card: tiles, three
+single-axis charts (expected vs actual by tier · meetings by tier · HJG share
+by tier), the tier table (margin columns first), and a **Per mentee (§607)**
+sortable inset.
+
+**§602 picker: active mentees only.** New `fetchActiveMentoringClientIds()`
+(open 4x/2x/1x, placeholder clients dropped); the view also drops `isTest`
+rows and anyone without a CA client id. Header reads "(N active)".
+
+**Open / next:** (1) user to test §606 on real data — the bracket rule
+(current tier only), collected basis, and whether "Avg of mentees" or the
+pooled figure is their headline; (2) merge to `main` on their word; (3)
+persist the assumptions in Company options; (4) further lenses (per-mentor
+roll-up, JYF, staff cost); (5) migration 9963 + re-sync still pending on the
+user's side for "Scheduled (future)".
+
+## ▶ Earlier in session 020 (v0.9.0 — MERGED TO `main`)
 
 **The Margins tab (601) was wiped and rebuilt from scratch** on the user's
 "delete everything on that tab ... start from scratch". Built on
