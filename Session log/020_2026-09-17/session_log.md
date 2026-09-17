@@ -1,4 +1,4 @@
-# Session 020 — 2026-09-17 — Margins tab rebuilt: "Margins on Mentoring" (v0.9.0)
+# Session 020 — 2026-09-17 — Margins tab rebuilt: "Margins on Mentoring" (v0.9.0) + "Margins by tier" (v0.10.0)
 
 Branch: `claude/busy-cray-1g791j`, **fast-forwarded onto `main`** (turn 2). Version bumped 0.8.0 → **0.9.0**.
 
@@ -82,3 +82,35 @@ fast-forwarded to the branch head and pushed; no merge commit. Chip should read
 `v0.9.0` after the Vercel deploy of `main`. **Still needed from the user for the
 "Scheduled (future)" tile:** apply `9963_ca_engagements_next_invoice.sql` and
 run a sync. Awaiting the user's read of the card on real mentees.
+
+## Turn 3 — "Margins by tier" (v0.10.0, ON BRANCH, not merged)
+
+User: "average margin per mentoring bracket. For 4x we get $425, for 2x we get $265, 1x is
+$145. We get 40% at each turn. I'd want all of our active Mentees to be included … like
+looking at them individually but instead as a group." Mid-turn: "on the 602 feature screen,
+I only want active mentees in the dropdown list."
+
+Shipped — `f07fec2` (+ this wrap commit):
+- `lib/margins.ts` `computeTierMargins` + `DEFAULT_TIER_PRICES`; `src/db.ts`
+  `fetchTierMarginInputs`, `fetchActiveMentoringClientIds`, shared row mappers; new card §606
+  + inset §607 in `MarginsView.tsx`; assumptions strip (mentor share + prices) on the 601
+  screen card feeding both lenses; §602 picker limited to active, non-test mentees; help
+  `margins.tiers` (new) + `margins.tab` / `margins.mentoring` updated; verify §29 (870
+  total); UI_INDEX rows 606/607; backlog; version 0.9.0 → **0.10.0**.
+- Gates green; harness render both themes (charts, tables, picker "(4 active)", price input
+  drives the expected figure); screenshots sent in chat; harness deleted.
+
+Decisions / assumptions (stated to the user):
+- Bracket membership = OPEN 4x/2x/1x engagement; only the current tier's invoices/meetings
+  count in that bracket (a mover's old-tier history counts nowhere). Two open tiers → in
+  both brackets, once in Active mentees. Unknown-engagement meetings → single open tier,
+  else unassigned (reported).
+- Expected $/meeting = price × HJG share ÷ cadence; the All row blends by roster mix.
+- The comparable actual is the POOLED entitlement figure (Σ HJG ÷ Σ meetings paid for);
+  "Avg of mentees" (equal weight) sits beside it. All-row prepaid/over-delivered are gross
+  sums across tiers (a netting bug caught in the harness numbers, fixed, asserted).
+- Assumptions are ephemeral inputs, not Company options (that needs a number control +
+  seeded keys — backlog).
+- Built on the branch; NOT merged (the user did not ask this time).
+
+Next: user tests §606 on real data; merge on their word; persist assumptions; more lenses.
