@@ -13,3 +13,6 @@ When should pay stubs get emailed? = Button only
 How should the stub arrive? = PDF attachment
 Hourly staff only have Approve, with no Payment-sent step. What should they get? = Add a Payment-sent step
 Should I start building once you've answered? = Yes, start building (Recommended)
+
+--- 2026-09-25 (turn 4) ---
+I added a key to Vercel with RESEND_API_KEY
