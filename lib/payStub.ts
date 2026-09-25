@@ -14,6 +14,15 @@ import type { PayMenteeLine, PayLineSource } from "./pay";
 import { daysInMonth } from "./pay";
 import { normalizePieces, pieceAmount, piecesTotal, type PieceEntry } from "./pieceWork";
 import {
+  entryAmount,
+  entryRate,
+  hasCustomRates,
+  hoursTotal,
+  laborTotal,
+  normalizeEntries,
+  type HourlyEntry,
+} from "./hourlyLines";
+import {
   DEFAULT_LINE_STATE,
   effectiveLineTotal,
   excludedInvoiceSet,
@@ -112,11 +121,19 @@ export interface PayStubModel {
   // Flat per-unit pay on top of the mentee lines (e.g. $25 per new mentee × 8).
   pieces: PieceEntry[];
   piecesTotal: number;
+  // Hourly work (hours × rate), paid 100% to the mentor — the split never applies.
+  hours: HourlyEntry[];
+  hourlyRate: number; // the build's default $/h (a line may carry its own rate)
+  hoursTotal: number;
+  hourlyPay: number;
+  hourlyMixedRates: boolean; // ≥1 line priced off the default -> say "rates vary"
   totals: {
     earned: number;
-    payout: number; // the number on the check (mentee lines + piece work)
-    linePayout: number; // mentee lines only
-    enginePayout: number; // before review adjustments
+    payout: number; // the number on the check (mentee lines + piece work + hourly)
+    linePayout: number; // mentee lines only — the revenue share after review
+    enginePayout: number; // the revenue share before review adjustments
+    // Review adjustments to the revenue share (linePayout − enginePayout). Piece
+    // work and hourly are their own lines on the stub, never "adjustments".
     delta: number;
     menteeCount: number; // included lines
     adjustedCount: number;
@@ -137,6 +154,8 @@ export interface PayStubInput {
   monthNote?: string | null;
   reviewedAt?: string | null;
   pieces?: PieceEntry[];
+  hours?: HourlyEntry[];
+  hourlyRate?: number | null;
   generatedOn: string; // YYYY-MM-DD
 }
 
@@ -227,7 +246,10 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
   const linePayout = round2(rows.reduce((t, r) => t + r.payout, 0));
   const pieces = normalizePieces(input.pieces ?? []);
   const pTotal = piecesTotal(pieces);
-  const payout = round2(linePayout + pTotal);
+  const hours = normalizeEntries(input.hours ?? []);
+  const hourlyRate = round2(input.hourlyRate || 0);
+  const hourlyPay = laborTotal(hours, hourlyRate);
+  const payout = round2(linePayout + pTotal + hourlyPay);
   const enginePayout = round2(rows.reduce((t, r) => t + r.enginePayout, 0));
   return {
     coachName: input.coachName,
@@ -245,12 +267,17 @@ export function buildPayStubModel(input: PayStubInput): PayStubModel {
     rows,
     pieces,
     piecesTotal: pTotal,
+    hours,
+    hourlyRate,
+    hoursTotal: hoursTotal(hours),
+    hourlyPay,
+    hourlyMixedRates: hasCustomRates(hours, hourlyRate),
     totals: {
       earned: round2(included.reduce((t, r) => t + r.earned, 0)),
       payout,
       linePayout,
       enginePayout,
-      delta: round2(payout - enginePayout),
+      delta: round2(linePayout - enginePayout),
       menteeCount: included.length,
       adjustedCount: rows.filter((r) => r.adjusted).length,
     },
@@ -272,6 +299,7 @@ const fmtD = (ymd: string) => {
   const [y, m, d] = ymd.slice(0, 10).split("-").map(Number);
   return m && d ? `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}-${y}` : ymd;
 };
+const fmtH = (n: number) => `${round2(n).toLocaleString("en-US", { maximumFractionDigits: 2 })} h`;
 
 const DISPO_TEXT: Record<StubItemDisposition, { label: string; cls: string }> = {
   counted: { label: "counted", cls: "ok" },
@@ -378,10 +406,22 @@ export function payStubHtml(m: PayStubModel): string {
   const pieceRows = m.pieces
     .map(
       (p) =>
-        `<tr><td class="l">${esc(p.label || "—")} <span class="tag tag--good">piece work</span>${p.date ? ` <span class="muted">${fmtD(p.date)}</span>` : ""}</td>` +
+        `<tr><td class="l">${esc(p.label || "—")} <span class="tag tag--good">piece work</span>${p.date ? ` <span class="mut">${fmtD(p.date)}</span>` : ""}</td>` +
         `<td>${round2(p.qty).toLocaleString("en-US", { maximumFractionDigits: 2 })} × ${usd(p.unitRate)}</td>` +
         `<td class="n"></td><td class="n"></td><td class="n"></td><td class="n b">${usd(pieceAmount(p))}</td></tr>`,
     )
+    .join("");
+
+  // Hourly work rides there too: hours × rate, paid in full (no revenue split).
+  const hourRows = m.hours
+    .map((e) => {
+      const r = entryRate(e, m.hourlyRate);
+      return (
+        `<tr><td class="l">${esc(e.label || "—")} <span class="tag tag--good">hourly</span>${e.date ? ` <span class="mut">${fmtD(e.date)}</span>` : ""}</td>` +
+        `<td>${fmtH(e.hours)} × ${usd(r)}/h</td>` +
+        `<td class="n"></td><td class="n"></td><td class="n"></td><td class="n b">${usd(entryAmount(e, m.hourlyRate))}</td></tr>`
+      );
+    })
     .join("");
 
   const breakdown = m.rows
@@ -428,12 +468,41 @@ export function payStubHtml(m: PayStubModel): string {
     })
     .join("");
 
+  // Hero-card breakdown. A plain stub (revenue share only) reads exactly as it
+  // always has; with piece work or hourly, each part gets its own row so neither
+  // reads as a "review adjustment" — delta only ever covers the revenue share.
+  const extras = m.pieces.length > 0 || m.hours.length > 0;
   const delta = m.totals.delta;
-  const deltaRow =
+  const reviewRows =
     Math.abs(delta) >= 0.005
-      ? `<div class="sumrow"><span>Calculated before HJG review</span><span>${usd(m.totals.enginePayout)}</span></div>
+      ? `<div class="sumrow"><span>${extras ? "Revenue share before HJG review" : "Calculated before HJG review"}</span><span>${usd(m.totals.enginePayout)}</span></div>
          <div class="sumrow"><span>Review adjustments</span><span>${delta > 0 ? "+" : "−"}${usd(Math.abs(delta)).slice(1)}</span></div>`
       : "";
+  const deltaRow = extras
+    ? `<div class="sumrow"><span>Revenue share</span><span>${usd(m.totals.linePayout)}</span></div>${reviewRows}` +
+      (m.pieces.length
+        ? `<div class="sumrow"><span>Piece work</span><span>${usd(m.piecesTotal)}</span></div>`
+        : "") +
+      (m.hours.length
+        ? `<div class="sumrow"><span>Hourly work</span><span>${usd(m.hourlyPay)}</span></div>`
+        : "")
+    : reviewRows;
+  // Summary cards for the extras. Both at once share ONE card so the row stays at
+  // four cards — five don't fit the printed page.
+  const pieceCard = `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
+      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>paid per unit</span></div></div>`;
+  const hourCard = `<div class="card"><div class="lab">Hourly work</div><div class="val">${usd(m.hourlyPay)}</div>
+      <div class="sumrow" style="margin-top:4px"><span>${fmtH(m.hoursTotal)}</span><span>${m.hourlyMixedRates ? "rates vary" : `× ${usd(m.hourlyRate)}/h`}</span></div></div>`;
+  const extraCards =
+    m.pieces.length && m.hours.length
+      ? `<div class="card"><div class="lab">Piece work + hourly</div><div class="val">${usd(round2(m.piecesTotal + m.hourlyPay))}</div>
+      <div class="sumrow" style="margin-top:4px"><span>Piece work</span><span>${usd(m.piecesTotal)}</span></div>
+      <div class="sumrow"><span>Hourly · ${fmtH(m.hoursTotal)}</span><span>${usd(m.hourlyPay)}</span></div></div>`
+      : m.pieces.length
+        ? pieceCard
+        : m.hours.length
+          ? hourCard
+          : "";
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><title>${esc(m.coachName)} — ${esc(m.monthLabel)} pay stub</title>
@@ -457,12 +526,7 @@ export function payStubHtml(m: PayStubModel): string {
   <div class="cards">
     <div class="card"><div class="lab">Eligible revenue</div><div class="val">${usd(m.totals.earned)}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.totals.menteeCount} mentee${m.totals.menteeCount === 1 ? "" : "s"}</span><span>× ${pct}</span></div></div>
-    ${
-      m.pieces.length
-        ? `<div class="card"><div class="lab">Piece work</div><div class="val">${usd(m.piecesTotal)}</div>
-      <div class="sumrow" style="margin-top:4px"><span>${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}</span><span>paid per unit</span></div></div>`
-        : ""
-    }
+    ${extraCards}
     <div class="card card--hero"><div class="lab">Total payout</div><div class="val">${usd(m.totals.payout)}</div>${deltaRow}</div>
     <div class="card"><div class="lab">HJG review</div><div class="val">${m.totals.adjustedCount || "—"}</div>
       <div class="sumrow" style="margin-top:4px"><span>${m.totals.adjustedCount === 1 ? "line reviewed / adjusted" : "lines reviewed / adjusted"}</span><span>see breakdown</span></div></div>
@@ -470,7 +534,7 @@ export function payStubHtml(m: PayStubModel): string {
 
   <table>
     <thead><tr><th class="l">Mentee</th><th>Engagement rate</th><th>This month</th><th>Rolled in</th><th>Earned</th><th>Payout</th></tr></thead>
-    <tbody>${summaryRows}${pieceRows}</tbody>
+    <tbody>${summaryRows}${pieceRows}${hourRows}</tbody>
     <tfoot><tr><td class="l">TOTAL</td><td></td><td class="n">${usd(round2(m.rows.filter((r) => !r.excluded).reduce((t, r) => t + r.thisMonth, 0)))}</td><td class="n">${usd(round2(m.rows.filter((r) => !r.excluded).reduce((t, r) => t + r.rolledIn, 0)))}</td><td class="n">${usd(m.totals.earned)}</td><td class="n">${usd(m.totals.payout)}</td></tr></tfoot>
   </table>
 
@@ -482,6 +546,7 @@ export function payStubHtml(m: PayStubModel): string {
     and the rest rolls into the next — so "${esc(m.monthLabel)}" blends ${esc(m.monthLabel)}'s new invoices with ${esc(m.prevMonthLabel)}'s
     rolled-in portion. Non-mentoring charges (JumpStart supervision, setup fees, training) are not part of mentor pay.
     ${m.pieces.length ? `Piece-work items are paid flat per unit on top of that revenue share — quantity × rate each, listed in the summary table above.` : ""}
+    ${m.hours.length ? `Hourly work is paid in full, separately from the revenue share — hours × the hourly rate, listed in the summary table above.` : ""}
     The pages that follow show every invoice and every line item behind each number, including anything HJG adjusted in review.
   </div>
 

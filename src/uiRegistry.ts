@@ -50,6 +50,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "timeclock.entries": 209, // Time clock: my entries + submit-for-payroll card (2026-07-22)
   "build.pieces": 210, // Build payout -> Piece work (flat per-unit pay) card (2026-07-25)
   "pay.hourly.pieces": 211, // Hourly staff -> Piece work (flat per-unit pay) card (2026-07-25)
+  "build.hours": 212, // Build payout -> Hourly work (hours × rate, paid in full) card (2026-09-25)
 
   // 3xx — Raw data
   "raw.screen": 301,
@@ -80,6 +81,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "margins.mentoring.engagements": 605, // …its Engagements inset table (2026-09-17)
   "margins.tiers": 606, // Margins by tier — all active mentees grouped by 4x / 2x / 1x (2026-09-17)
   "margins.tiers.mentees": 607, // …its per-mentee breakdown inset table (2026-09-17)
+  "margins.mentorCost": 608, // Mentor pay cost by month — piece work + hourly as a cost to HJG (2026-09-25)
+  "margins.mentorCost.mentors": 609, // …its per-mentor breakdown inset table (2026-09-25)
   "finevent.screen": 651, // Report financial event tab (2026-07-22)
   "finevent.form": 652, // Report financial event: the entry form card (2026-07-22)
 

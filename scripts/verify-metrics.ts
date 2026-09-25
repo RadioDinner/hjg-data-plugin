@@ -93,12 +93,16 @@ import {
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
+  extraPayCsvRows,
+  standingHourlyRate,
   type BuildLineInput,
   type BuildLineState,
 } from "../lib/payBuild.js";
+import * as hourlyLines from "../lib/hourlyLines.js";
 import {
   computeMenteeMargin,
   computeTierMargins,
+  computeMentorPayCost,
   projectScheduledInvoices,
   invoiceTier,
   invoiceStatus,
@@ -4843,6 +4847,424 @@ console.log("[30] Build payout save on an unmigrated database (lib/schemaFallbac
     new Set(["split_override"]),
   );
   assert("split_override" in mine, "caller's row is not mutated by the retries");
+}
+
+console.log("[31] Hourly work on a mentor build (summary, stub, CSV, standing rate, 9962)");
+{
+  // The line model moved to lib/hourlyLines; lib/hourlyPay re-exports the SAME
+  // functions, so the Hourly staff path is untouched.
+  eq(laborTotal === hourlyLines.laborTotal, true, "hourlyPay re-exports hourlyLines.laborTotal");
+  eq(parseEntries === hourlyLines.parseEntries, true, "hourlyPay re-exports parseEntries");
+
+  // Two engine lines ($300 + $200), 8 new-mentee pieces ($200), and hourly work:
+  // 10 h at the $30 default + 2 h of training at a $45 per-line rate = $390.
+  const lines: BuildLineInput[] = [
+    { clientId: 1, payout: 300, splitPct: 0.6 },
+    { clientId: 2, payout: 200, splitPct: 0.6 },
+  ];
+  const pieces = [{ date: null, label: "New mentee", qty: 8, unitRate: 25 }];
+  const hrs = [
+    { date: "2026-08-04", label: "Admin", hours: 10, rate: null },
+    { date: "2026-08-12", label: "Training delivery", hours: 2, rate: 45 },
+    { date: null, label: "", hours: 0, rate: null }, // blank editor row — ignored
+  ];
+  const sum = summarizeBuild(lines, new Map(), null, pieces, hrs, 30);
+  eq(sum.hourlyPay, 390, "hourly pay = 10 × $30 + 2 × $45");
+  eq(sum.hours, 12, "hours total (blank row ignored)");
+  eq(sum.computedTotal, 500, "engine total never includes hourly (or piece work)");
+  eq(sum.builtTotal, 1090, "built total = 500 lines + 200 pieces + 390 hourly");
+  eq(sum.delta, 590, "review delta = the extras (the engine knows nothing about them)");
+  // The Split % is a REVENUE share — hourly is paid in full whatever it says.
+  const split = summarizeBuild(lines, new Map(), 0.3, pieces, hrs, 30);
+  eq(split.hourlyPay, 390, "a 30% split override leaves hourly pay untouched");
+  const none = summarizeBuild(lines, new Map());
+  eq(none.hourlyPay, 0, "no hourly work by default");
+  eq(none.builtTotal, 500, "no extras → built = engine");
+
+  // Stub model: revenue share + piece work + hourly, each on its own line.
+  const mkSrc = (): import("../lib/pay.js").PayLineSource => ({
+    invoiceId: 1,
+    invoiceNumber: "1",
+    serviceDate: "2026-08-10",
+    serviceMonth: "2026-08",
+    invoiceDay: 10,
+    slice: "this-month",
+    billed: 425,
+    eligibleBilled: 425,
+    collected: 425,
+    elapsedFraction: 1 / 3,
+    recognized: 425 * (2 / 3),
+    tier: "4x",
+    payments: [],
+    lineItems: [
+      {
+        item: "MN Subscription | (4x Month) Zoom Meetings (X) ($425)",
+        amount: 425,
+        status: "included",
+      },
+    ],
+  });
+  const line = {
+    clientId: 1,
+    clientName: "A",
+    coachId: 9,
+    billed: 425,
+    collected: 425,
+    invoiceDay: 10,
+    recognizedThis: round2(425 * (2 / 3)),
+    rolloverPrev: 0,
+    earned: round2(425 * (2 / 3)),
+    splitPct: 0.6,
+    payout: round2(round2(425 * (2 / 3)) * 0.6),
+    tier: "4x",
+    sources: [mkSrc()],
+  } as import("../lib/pay.js").PayMenteeLine;
+  const stub = buildPayStubModel({
+    coachName: "Caleb",
+    ym: "2026-08",
+    splitPct: 0.6,
+    status: "approved",
+    lines: [line],
+    states: new Map(),
+    pieces,
+    hours: hrs,
+    hourlyRate: 30,
+    generatedOn: "2026-09-25",
+  });
+  eq(stub.hourlyPay, 390, "stub carries the hourly total");
+  eq(stub.hoursTotal, 12, "stub carries the hours");
+  eq(stub.hours.length, 2, "stub drops the blank hourly row");
+  eq(stub.hourlyMixedRates, true, "a $45 line on a $30 default → rates vary");
+  eq(
+    stub.totals.payout,
+    round2(stub.totals.linePayout + 200 + 390),
+    "check = revenue share + piece work + hourly",
+  );
+  eq(stub.totals.delta, 0, "delta covers review changes only — extras are not 'adjustments'");
+  // With invoice sources the split DOES reprice the revenue share — hourly stays.
+  const splitStub = buildPayStubModel({
+    coachName: "Caleb",
+    ym: "2026-08",
+    splitPct: 0.6,
+    splitOverride: 0.3,
+    status: "approved",
+    lines: [line],
+    states: new Map(),
+    hours: hrs,
+    hourlyRate: 30,
+    generatedOn: "2026-09-25",
+  });
+  eq(splitStub.hourlyPay, 390, "split override: hourly pay unchanged on the stub");
+  eq(
+    splitStub.totals.linePayout,
+    round2(round2(425 * (2 / 3)) * 0.3),
+    "split override: revenue share repriced at 30%",
+  );
+  const stubHtml = payStubHtml(stub);
+  eq(stubHtml.includes("Training delivery"), true, "hourly line printed on the stub");
+  eq(stubHtml.includes(">hourly</span>"), true, "hourly rows tagged");
+  eq(stubHtml.includes("<span>Hourly work</span>"), true, "hero card lists hourly work");
+  eq(stubHtml.includes("<span>Revenue share</span>"), true, "hero card lists the revenue share");
+  eq(stubHtml.includes("Review adjustments"), false, "no review row when review changed nothing");
+  eq(stubHtml.includes("Hourly work is paid in full"), true, "fine print explains hourly pay");
+  eq(stubHtml.includes("2 h × $45.00/h"), true, "per-line rate shown on its row");
+  eq(stubHtml.includes("<script"), false, "no scripts in the hourly mentor stub");
+  // A plain stub (no extras) reads exactly as before; with an override it shows
+  // the classic two review rows and no component rows.
+  const plainStub = payStubHtml(
+    buildPayStubModel({
+      coachName: "Caleb",
+      ym: "2026-08",
+      splitPct: 0.6,
+      status: "approved",
+      lines: [line],
+      states: new Map([[1, { included: true, override: 100, note: "agreed" }]]),
+      generatedOn: "2026-09-25",
+    }),
+  );
+  eq(plainStub.includes("Calculated before HJG review"), true, "plain stub keeps its review rows");
+  eq(plainStub.includes("<span>Revenue share</span>"), false, "plain stub has no component rows");
+  eq(plainStub.includes("Hourly work"), false, "plain stub never mentions hourly work");
+  // Extras + a review override: the revenue-share review rows are relabeled.
+  const both = buildPayStubModel({
+    coachName: "Caleb",
+    ym: "2026-08",
+    splitPct: 0.6,
+    status: "approved",
+    lines: [line],
+    states: new Map([[1, { included: true, override: 100, note: "agreed" }]]),
+    hours: hrs,
+    hourlyRate: 30,
+    generatedOn: "2026-09-25",
+  });
+  eq(both.totals.delta, round2(100 - line.payout), "delta = the override's change only");
+  eq(
+    payStubHtml(both).includes("Revenue share before HJG review"),
+    true,
+    "with extras, the engine row names the revenue share",
+  );
+
+  // CSV: piece + hourly rows sit in the payout CSV and foot to the TOTAL.
+  const extra = extraPayCsvRows(pieces, hrs, 30);
+  eq(extra.length, 3, "one CSV row per piece line + per hourly line");
+  eq(
+    extra.every((r) => r.length === PAYOUT_DETAIL_CSV_COLUMNS.length),
+    true,
+    "extra rows align to the CSV columns",
+  );
+  const effIdx = PAYOUT_DETAIL_CSV_COLUMNS.indexOf("Effective payout");
+  eq(
+    round2(extra.reduce((t, r) => t + Number(r[effIdx] || 0), 0)),
+    590,
+    "extra rows sum to piece work + hourly",
+  );
+  eq(String(extra[2][0]).startsWith("Hourly work: Training delivery"), true, "hourly row named");
+  eq(extraPayCsvRows([], [], 0).length, 0, "no extras → no extra rows");
+
+  // Standing rate: the latest OTHER month before ym, else the latest after it.
+  const bs = [
+    { coachId: 9, serviceMonth: "2026-06", hourlyRate: 25 },
+    { coachId: 9, serviceMonth: "2026-07", hourlyRate: 30 },
+    { coachId: 9, serviceMonth: "2026-08", hourlyRate: 99 }, // the month being built
+    { coachId: 9, serviceMonth: "2026-10", hourlyRate: 35 },
+    { coachId: 9, serviceMonth: "2026-11", hourlyRate: null },
+    { coachId: 4, serviceMonth: "2026-07", hourlyRate: 50 }, // another mentor
+  ];
+  eq(standingHourlyRate(bs, 9, "2026-08"), 30, "pre-fill = latest earlier month's rate");
+  eq(standingHourlyRate(bs, 9, "2026-05"), 35, "editing an old month → latest later rate");
+  eq(standingHourlyRate(bs, 7, "2026-08"), 0, "a mentor with no rate yet → 0");
+
+  // Saving on a pre-9962 database: hours carry data → names 9962; none → saves.
+  const BASE = ["coach_id", "service_month", "piece_items", "pieces_total", "split_override"];
+  for (const withHours of [false, true]) {
+    const saved: Record<string, unknown>[] = [];
+    let err = "";
+    const droppable = new Set<string>();
+    if (!withHours) droppable.add("hour_items").add("hourly_rate").add("hours_pay_total");
+    try {
+      await saveWithFallback(
+        {
+          coach_id: 9,
+          service_month: "2026-08",
+          piece_items: [],
+          pieces_total: 0,
+          split_override: null,
+          hour_items: withHours ? hrs.slice(0, 2) : [],
+          hourly_rate: 30,
+          hours_pay_total: withHours ? 390 : 0,
+        },
+        (r) => {
+          const missing = Object.keys(r)
+            .sort()
+            .find((k) => !BASE.includes(k));
+          if (missing)
+            return Promise.resolve({
+              error: {
+                message: `Could not find the '${missing}' column of 'payout_builds' in the schema cache`,
+              },
+            });
+          saved.push(r);
+          return Promise.resolve({ error: null });
+        },
+        PAYOUT_BUILD_COLUMN_MIGRATIONS,
+        droppable,
+      );
+    } catch (e) {
+      err = (e as Error).message;
+    }
+    if (withHours) {
+      eq(saved.length, 0, "pre-9962 + hourly work → refuses to save without it");
+      eq(err.includes("9962_payout_build_hours.sql"), true, "…and names 9962");
+    } else {
+      eq(saved.length, 1, "pre-9962 + no hourly work → saves");
+      eq("hour_items" in (saved[0] ?? {}), false, "…without the hourly columns");
+    }
+  }
+}
+
+console.log("[32] Mentor pay cost by month — piece work + hourly as a cost (computeMentorPayCost)");
+{
+  const today = "2026-09-25";
+  const now = "2026-09-25 12:00:00";
+  const FOUR = "MN Subscription | (4x Month) weekly";
+  const TWO = "MN Subscription | (2x Month)";
+  const inv = (id: number, serviceDate: string, amount: number, collected: number, item: string) =>
+    ({
+      id,
+      invoiceNumber: `#${id}`,
+      serviceDate,
+      issuedDate: serviceDate,
+      dueDate: serviceDate,
+      amount,
+      collected,
+      lineItems: [{ item, amount }],
+      payments: collected > 0 ? [{ datePaid: serviceDate, amount: collected, method: "Card" }] : [],
+    }) as MarginInvoiceInput;
+  const mtg = (id: number, startRaw: string, engagementId: number | null) =>
+    ({
+      id,
+      name: "Mentoring Call",
+      isGroup: false,
+      coachName: "Harry",
+      engagementId,
+      startDate: startRaw.slice(0, 10),
+      startRaw,
+      countsInEngagement: 1,
+    }) as MarginMeetingInput;
+  const eng = (id: number, name: string, startDate: string, isComplete = false) =>
+    ({
+      id,
+      name,
+      startDate,
+      endDate: null,
+      isComplete,
+      isCanceled: false,
+      nextInvoiceDate: null,
+    }) as MarginEngagementInput;
+  const members = [
+    {
+      // A: 4x — Jun $425, Aug $425 (Jul unpaid: $0 collected), 4 meetings a month.
+      invoices: [
+        inv(1, "2026-06-01", 425, 425, FOUR),
+        inv(2, "2026-07-01", 425, 0, FOUR),
+        inv(3, "2026-08-01", 425, 425, FOUR),
+      ],
+      meetings: ["06", "07", "08"].flatMap((m, k) =>
+        ["03", "10", "17", "24"].map((d, i) => mtg(100 + k * 10 + i, `2026-${m}-${d} 10:00:00`, 1)),
+      ),
+      engagements: [eng(1, FOUR, "2026-06-01")],
+    },
+    {
+      // B: graduated 2x — Jun + Jul $265 each, 2 meetings a month; still counts.
+      invoices: [inv(10, "2026-06-05", 265, 265, TWO), inv(11, "2026-07-05", 265, 265, TWO)],
+      meetings: [
+        mtg(200, "2026-06-08 10:00:00", 2),
+        mtg(201, "2026-06-22 10:00:00", 2),
+        mtg(202, "2026-07-08 10:00:00", 2),
+        mtg(203, "2026-07-22 10:00:00", 2),
+      ],
+      engagements: [eng(2, TWO, "2026-06-05", true)],
+    },
+  ];
+  const builds = [
+    // Harry, Jun: piece work $200 + 10 h hourly $300 — approved.
+    {
+      coachId: 7,
+      coachName: "Harry",
+      serviceMonth: "2026-06",
+      approved: true,
+      piecesTotal: 200,
+      hourlyPay: 300,
+      hours: 10,
+    },
+    // Harry, Aug: hourly only — still a DRAFT → reported, not counted.
+    {
+      coachId: 7,
+      coachName: "Harry",
+      serviceMonth: "2026-08",
+      approved: false,
+      piecesTotal: 0,
+      hourlyPay: 150,
+      hours: 5,
+    },
+    // Caleb, Aug: hourly $90 (3 h) — approved.
+    {
+      coachId: 8,
+      coachName: "Caleb",
+      serviceMonth: "2026-08",
+      approved: true,
+      piecesTotal: 0,
+      hourlyPay: 90,
+      hours: 3,
+    },
+    // A build with no extras never shows up; one before the range is filtered.
+    {
+      coachId: 8,
+      coachName: "Caleb",
+      serviceMonth: "2026-07",
+      approved: true,
+      piecesTotal: 0,
+      hourlyPay: 0,
+      hours: 0,
+    },
+    {
+      coachId: 8,
+      coachName: "Caleb",
+      serviceMonth: "2026-02",
+      approved: true,
+      piecesTotal: 25,
+      hourlyPay: 0,
+      hours: 0,
+    },
+  ];
+  const rep = computeMentorPayCost({
+    members,
+    builds,
+    today,
+    now,
+    mentorShare: 0.6,
+    fromYm: "2026-05",
+    toYm: "2026-09",
+  });
+  eq(
+    rep.months.map((m) => m.month).join(","),
+    "2026-05,2026-06,2026-07,2026-08,2026-09",
+    "every month in range",
+  );
+  const [may, jun, jul, aug, sep] = rep.months;
+  eq(may.collected + may.meetings + may.extraPay, 0, "an empty month shows as zeros");
+  eq(jun.collected, 690, "Jun collected = 425 + 265 (graduated mentee still counts)");
+  eq(jun.hjgShare, 276, "Jun HJG share = 690 × 40%");
+  eq(jun.pieceWork, 200, "Jun piece work (approved)");
+  eq(jun.hourlyPay, 300, "Jun hourly (approved)");
+  eq(jun.extraPay, 500, "Jun extras = 200 + 300");
+  eq(jun.hjgNet, -224, "Jun HJG net = 276 − 500 (the extras can outrun the share)");
+  eq(jun.meetings, 6, "Jun meetings delivered = 4 + 2");
+  eq(jun.marginPerMeeting, 46, "Jun $/mtg before = 276 ÷ 6");
+  eq(jun.netMarginPerMeeting, -37.33, "Jun $/mtg after = −224 ÷ 6");
+  eq(jul.collected, 265, "Jul collected = the unpaid 4x counts $0 + 265");
+  eq(jul.extraPay, 0, "a build with no extras adds nothing");
+  eq(aug.hourlyPay, 90, "Aug hourly = Caleb's approved 90 only");
+  eq(aug.draftBuilds, 1, "Aug: Harry's draft is reported…");
+  eq(aug.draftExtraPay, 150, "…with its amount…");
+  eq(aug.hjgNet, round2(425 * 0.4 - 90), "…but not taken off HJG's share");
+  eq(sep.inProgress, true, "today's month is flagged in progress");
+  eq(aug.inProgress, false, "earlier months are not");
+  eq(rep.total.pieceWork, 200, "the Feb build is outside the range");
+  eq(
+    rep.total.hjgShare,
+    round2(rep.months.reduce((t, m) => t + m.hjgShare, 0)),
+    "total HJG share foots to the monthly column",
+  );
+  eq(
+    rep.total.hjgNet,
+    round2(rep.months.reduce((t, m) => t + m.hjgNet, 0)),
+    "total HJG net foots to the monthly column",
+  );
+  eq(rep.total.extraPay, 590, "total extras = 500 + 90");
+  eq(rep.total.hours, 13, "total hourly hours = 10 + 3");
+  eq(rep.total.extraShareOfHjg, round2(590 / rep.total.hjgShare), "extras as a share of HJG's");
+  eq(rep.mentors.map((m) => m.coachName).join(","), "Harry,Caleb", "mentors, most extra pay first");
+  eq(rep.mentors[0].months, 1, "Harry: one approved month with extras (the draft is not one)");
+  eq(rep.mentors[1].hourlyPay, 90, "Caleb's hourly");
+  // The share assumption moves HJG's share, never the actual extras.
+  const half = computeMentorPayCost({
+    members,
+    builds,
+    today,
+    now,
+    mentorShare: 0.5,
+    fromYm: "2026-05",
+  });
+  eq(half.months[1].hjgShare, 345, "at 50%: Jun HJG share = 690 × 50%");
+  eq(half.total.extraPay, 590, "…and the extras are unchanged");
+  // "All" starts at the earliest month with any data (the Feb build).
+  const all = computeMentorPayCost({ members, builds, today, now });
+  eq(all.months[0].month, "2026-02", "All starts at the earliest data month");
+  eq(all.total.pieceWork, 225, "All includes the Feb piece work");
+  const empty = computeMentorPayCost({ members: [], builds: [], today, now, fromYm: "2026-09" });
+  eq(empty.months.length, 1, "no data → just the months asked for");
+  eq(empty.total.netMarginPerMeeting, null, "no meetings → no per-meeting figure");
 }
 
 console.log("");

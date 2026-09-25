@@ -6,6 +6,9 @@ import {
   summarizeBuild,
   normalizePieces,
   piecesTotal,
+  normalizeEntries,
+  standingHourlyRate,
+  extraPayCsvRows,
   effectiveLineTotal,
   payoutAfterExclusions,
   buildPayStubModel,
@@ -25,6 +28,7 @@ import {
   type PayMenteeLine,
   type BuildLineState,
   type PieceEntry,
+  type HourlyEntry,
   type BuildStatus,
   type PayoutBuildRecord,
 } from "../db";
@@ -34,6 +38,7 @@ import { fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 import { PieceWorkCard } from "../components/PieceWorkCard";
+import { HourlyWorkCard } from "../components/HourlyWorkCard";
 import { PayoutLineDetailModal } from "../components/PayoutLineDetailModal";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -83,6 +88,9 @@ export function BuildPayoutView({
   const [splitOverride, setSplitOverride] = useState<number | null>(null);
   // Flat per-unit pay for this coach-month, on top of the engine lines.
   const [pieces, setPieces] = useState<PieceEntry[]>([]);
+  // Hourly work for this coach-month (hours × rate, paid in full — no split).
+  const [hours, setHours] = useState<HourlyEntry[]>([]);
+  const [hourlyRate, setHourlyRate] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [status, setStatus] = useState<BuildStatus>("draft");
   const [dirty, setDirty] = useState(false);
@@ -209,6 +217,10 @@ export function BuildPayoutView({
     setLineStates(rec ? { ...rec.lineStates } : {});
     setSplitOverride(rec?.splitOverride ?? null);
     setPieces(rec?.pieces ? rec.pieces.map((x) => ({ ...x })) : []);
+    setHours(rec?.hours ? rec.hours.map((x) => ({ ...x })) : []);
+    // A build with no saved rate pre-fills the mentor's standing rate (their most
+    // recent other build that has one).
+    setHourlyRate(rec?.hourlyRate ?? standingHourlyRate(builds.values(), coach, ym));
     setNotes(rec?.notes ?? "");
     setStatus(rec?.status ?? "draft");
     setDirty(false);
@@ -254,10 +266,15 @@ export function BuildPayoutView({
   // as the drift reference.
   const cleanPieces = useMemo(() => normalizePieces(pieces), [pieces]);
   const pieceTotal = piecesTotal(cleanPieces);
+  const cleanHours = useMemo(() => normalizeEntries(hours), [hours]);
   const summary = useMemo(
-    () => summarizeBuild(lines, stateMap, splitOverride, cleanPieces),
-    [lines, stateMap, splitOverride, cleanPieces],
+    () => summarizeBuild(lines, stateMap, splitOverride, cleanPieces, cleanHours, hourlyRate),
+    [lines, stateMap, splitOverride, cleanPieces, cleanHours, hourlyRate],
   );
+  const hourlyPay = summary.hourlyPay;
+  // Saved with the build when there's hourly work (so the lines reload at the same
+  // rate), or when one was typed (it becomes next month's pre-fill).
+  const rateToSave = cleanHours.length || hourlyRate > 0 ? hourlyRate : null;
 
   const locked = status === "approved";
   const paid = !!savedRec?.paymentSentAt;
@@ -299,6 +316,8 @@ export function BuildPayoutView({
         lineStates,
         splitOverride,
         pieces: cleanPieces,
+        hours: cleanHours,
+        hourlyRate: rateToSave,
         notes: notes.trim() || null,
       });
       const rec: PayoutBuildRecord = {
@@ -310,6 +329,8 @@ export function BuildPayoutView({
         lineStates,
         splitOverride,
         pieces: cleanPieces,
+        hours: cleanHours,
+        hourlyRate: rateToSave,
         notes: notes.trim() || null,
         reviewedBy: user?.id ?? null,
         reviewedAt: new Date().toISOString(),
@@ -434,6 +455,8 @@ export function BuildPayoutView({
       status,
       unsavedChanges: dirty,
       pieces: cleanPieces,
+      hours: cleanHours,
+      hourlyRate,
       lines,
       states: stateMap,
       monthNote: notes.trim() || null,
@@ -483,7 +506,7 @@ export function BuildPayoutView({
             ? summary.builtTotal
             : "",
     );
-    rows.push(total);
+    rows.push(...extraPayCsvRows(cleanPieces, cleanHours, hourlyRate), total);
     downloadCsv(
       `payout-build-${data?.coachName(coach).replace(/\s+/g, "-").toLowerCase() ?? coach}-${ym}`,
       [...PAYOUT_DETAIL_CSV_COLUMNS],
@@ -908,17 +931,17 @@ export function BuildPayoutView({
                       <td className="num muted">
                         {summary.overriddenCount ? `${summary.overriddenCount} ovr` : ""}
                       </td>
-                      <td
-                        className="num"
-                        style={{ fontWeight: 700 }}
-                        title={
-                          pieceTotal !== 0 ? `includes ${fmtUsd(pieceTotal)} piece work` : undefined
-                        }
-                      >
+                      <td className="num" style={{ fontWeight: 700 }}>
                         {fmtUsd(summary.builtTotal)}
-                        {pieceTotal !== 0 && (
+                        {(pieceTotal !== 0 || hourlyPay !== 0) && (
                           <div className="muted" style={{ fontSize: 10, fontWeight: 400 }}>
-                            incl. {fmtUsd(pieceTotal)} piece work
+                            incl.{" "}
+                            {[
+                              pieceTotal !== 0 ? `${fmtUsd(pieceTotal)} piece work` : "",
+                              hourlyPay !== 0 ? `${fmtUsd(hourlyPay)} hourly` : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" + ")}
                           </div>
                         )}
                       </td>
@@ -953,6 +976,24 @@ export function BuildPayoutView({
             />
           </div>
 
+          <div style={{ gridColumn: "1 / -1" }}>
+            <HourlyWorkCard
+              entries={hours}
+              onChange={(next) => {
+                setHours(next);
+                setDirty(true);
+              }}
+              rate={hourlyRate}
+              onRateChange={(r) => {
+                setHourlyRate(r);
+                setDirty(true);
+              }}
+              locked={locked}
+              sectionId="build.hours"
+              hint={`Hours × rate for ${mentor?.coachName ?? "this mentor"}, paid in full on top of the revenue share — the Split % doesn't apply. Prints on the same pay stub; counts as a cost on Margins. Like piece work, it shows up as review delta.`}
+            />
+          </div>
+
           <aside className="builder__side">
             <div className="card">
               <div className="muted" style={{ fontSize: 12 }}>
@@ -972,6 +1013,12 @@ export function BuildPayoutView({
                 <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                   Piece work: <strong>{fmtUsd(pieceTotal)}</strong> (in the built total, not the
                   engine number)
+                </div>
+              )}
+              {hourlyPay !== 0 && (
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                  Hourly work: <strong>{fmtUsd(hourlyPay)}</strong> ({summary.hours} h — in the
+                  built total, not the engine number)
                 </div>
               )}
               <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>

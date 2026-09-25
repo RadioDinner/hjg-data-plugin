@@ -15,6 +15,9 @@ export const PAYOUT_BUILD_COLUMN_MIGRATIONS: Readonly<Record<string, string>> = 
   split_override: "9971_payout_build_split.sql",
   piece_items: "9964_pay_piece_work.sql",
   pieces_total: "9964_pay_piece_work.sql",
+  hour_items: "9962_payout_build_hours.sql",
+  hourly_rate: "9962_payout_build_hours.sql",
+  hours_pay_total: "9962_payout_build_hours.sql",
 };
 
 // The column an error says is missing, or null when it's some other failure.
