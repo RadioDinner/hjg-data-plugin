@@ -4,9 +4,13 @@ A **second session on 2026-09-25**, run in parallel with session 021 (email pay 
 v0.11.0 — see `Session log/021_2026-09-25/`). Both started from `main` @ `2cb5865`. Session 021
 reached `main` first, so this one uses the `b` suffix (standing orders §1). Its work was
 **rebased onto 021's `main`**, giving linear history with no merge commit. `main` was then
-**fast-forwarded**, and branch `claude/determined-einstein-uudngk` was **deleted**, both on
-the user's "merge your changes to main when you're finished and delete the branch". The chip
-must read **`v0.12.0`**.
+**fast-forwarded** (`c12b51e..9a03570`), on the user's "merge your changes to main when
+you're finished and delete the branch". The chip must read **`v0.12.0`**. The branch
+`claude/determined-einstein-uudngk` was deleted **locally**. Deleting it on GitHub failed:
+the session's git proxy answered **HTTP 403** to the ref deletion (`git push origin
+:refs/heads/…`), and the proxy's README says not to retry or route around a 403. The GitHub
+MCP tools have no delete-branch call. **The user deletes it on GitHub's Branches page.** It
+points at the pre-rebase WIP commit `b6f3788`, whose content is all on `main`.
 
 ## What shipped (on `main`)
 
@@ -112,6 +116,8 @@ AskUserQuestion answers: a **new monthly card**, and **piece work counts too**.
 
 ## Open questions / next step
 
+0. **User: delete the remote branch `claude/determined-einstein-uudngk` on GitHub**
+   (Branches page). The session couldn't: HTTP 403.
 1. **User: apply `9961_payout_build_hours.sql`**, then do one real hourly build: approve,
    print, and **email** a stub to themselves, and confirm the PDF shows the hourly lines. Then
    look at Margins §608.

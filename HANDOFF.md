@@ -2,15 +2,17 @@
 
 Working notes for resuming this project in a future session. Last updated
 2026-09-25 (session 021b — **hourly work on mentor payouts + Margins "Mentor pay cost by
-month", v0.12.0, MERGED TO `main`**; branch deleted). Two sessions ran on 2026-09-25 in
+month", v0.12.0, MERGED TO `main`**). Two sessions ran on 2026-09-25 in
 parallel. Read **021b** first, then **021** (email pay stubs, v0.11.0) below it.
 
-## ▶ START HERE (2026-09-25, session 021b — v0.12.0, MERGED TO `main`, branch deleted)
+## ▶ START HERE (2026-09-25, session 021b — v0.12.0, MERGED TO `main`)
 
 **Merged:** on the user's "merge your changes to main when you're finished and delete the
 branch", 021b was **rebased onto session 021's `main`** (linear, no merge commit). `main` was
-then fast-forwarded, and `claude/determined-einstein-uudngk` was deleted. **The chip must read
-`v0.12.0`.**
+then fast-forwarded. **The chip must read `v0.12.0`.** The branch
+`claude/determined-einstein-uudngk` was deleted **locally only**. Deleting it on GitHub was
+refused by the session's git proxy (HTTP 403 on ref deletion), so **the user deletes it on
+GitHub's Branches page.** Its commits are superseded by `main`, so nothing is lost.
 
 **⚠ USER ACTIONS:**
 1. **Apply `9961_payout_build_hours.sql`** (Supabase SQL Editor, re-runnable). It stores
