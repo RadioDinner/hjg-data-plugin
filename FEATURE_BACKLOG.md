@@ -11,6 +11,30 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
+### Time clock → mentor hourly work (Build payout §204) — requested session 021b, 2026-09-25 — PLANNED
+
+**What.** Fill a mentor's **Hourly work** card from the **Time clock** (§208) instead of typing
+it. The user (2026-09-25): *"I currently hand enter them. Eventually they'll clock in and out."*
+
+**Why.** Hourly work on mentor payouts shipped hand-entered (v0.12.0). `time_entries` rows can
+already be "submitted for payroll" (§209), but nothing reads them yet, for mentors or for
+hourly staff.
+
+**Where.** `time_entries` (9966: `user_email`, `clock_in`, `clock_out`, `note`,
+`submitted_at`) → `HourlyEntry` lines (`lib/hourlyLines`: date = clock-in day, hours =
+duration, label = note, rate null). Match mentor → email by `ca_coaches.email` (or the
+Admin **Pay-stub email**, `coach_settings.pay_email`, 9962). Add an **Import from Time clock**
+button on `HourlyWorkCard`, and likely the same on Hourly staff (§206) via the shared
+`TimesheetTable`.
+
+**Open questions for the user.**
+- Import **submitted** entries only, or every closed entry in the month?
+- Should imported lines lock, or stay editable?
+- What should stop an entry being imported into two months or two builds (mark it on
+  import)?
+
+---
+
 ### "Mentees" table — internal source-of-truth for each person — ✅ SHIPPED session 008 (2026-06-24) — requested session 008, 2026-06-24
 
 **What.** A single **`Mentees`** table that is HJG's internal *source of truth* for
@@ -91,6 +115,32 @@ outcome," so the table can't assume it:
 ---
 
 ## Shipped
+
+### Hourly work on mentor payouts + Margins "Mentor pay cost by month" — ✅ SHIPPED session 021b, 2026-09-25 (v0.12.0)
+
+The user: hourly wages on mentors' payouts, **hand-entered** for now, **paid 100%** to the
+mentor like other hourly staff, on the **same pay stub**, and counted as a **cost on
+Margins**, with piece work counted too (AskUserQuestion: a new monthly card).
+
+**Build payout (§204).** A new **Hourly work** card (§212, `HourlyWorkCard` over the shared
+`TimesheetTable`) has date, work, hours, an optional per-line rate and a default rate. The
+default pre-fills from the mentor's latest other build that has one. Hourly work adds to
+`builtTotal`, never `computedTotal`, and the Split % never applies to it. Export CSV gains
+piece and hourly rows. Stored on `payout_builds` (`hour_items`, `hourly_rate`,
+`hours_pay_total`) by migration **`9961_payout_build_hours.sql`**.
+
+**Stub (print + emailed PDF).** Hourly rows, a combined "Piece work + hourly" card, and a
+hero breakdown (revenue share / piece work / hourly). `totals.delta` now covers review
+changes only. The email path carries the hours, because the server checks the stub total
+against `built_total`.
+
+**Margins §608 (+§609 inset).** Per month: HJG share of mentoring revenue (every mentoring
+client) − approved piece work − hourly = HJG net, with margin per meeting before and after.
+Ranges 6 / 12 / 24 months / All; graph + table + CSV; drafts listed but not counted; a
+per-mentor breakdown. The math is `computeMentorPayCost`.
+
+Verified in §32 and §33. **Not built:** the Time clock import (planned above); building a
+month where a mentor has hourly work but no revenue lines.
 
 ### Email pay stubs (PDF) + hourly "Payment sent" — ✅ SHIPPED session 021, 2026-09-25 (v0.11.0) — ON BRANCH
 

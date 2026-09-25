@@ -1,10 +1,76 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-25 (session 021 — **Email pay stubs (PDF) + hourly Payment sent, v0.11.0,
-MERGED TO `main`**).
+2026-09-25 (session 021b — **hourly work on mentor payouts + Margins "Mentor pay cost by
+month", v0.12.0, MERGED TO `main`**; branch deleted). Two sessions ran on 2026-09-25 in
+parallel. Read **021b** first, then **021** (email pay stubs, v0.11.0) below it.
 
-## ▶ START HERE (2026-09-25, session 021 — v0.11.0, MERGED TO `main`)
+## ▶ START HERE (2026-09-25, session 021b — v0.12.0, MERGED TO `main`, branch deleted)
+
+**Merged:** on the user's "merge your changes to main when you're finished and delete the
+branch", 021b was **rebased onto session 021's `main`** (linear, no merge commit). `main` was
+then fast-forwarded, and `claude/determined-einstein-uudngk` was deleted. **The chip must read
+`v0.12.0`.**
+
+**⚠ USER ACTIONS:**
+1. **Apply `9961_payout_build_hours.sql`** (Supabase SQL Editor, re-runnable). It stores
+   hourly work on mentor builds. Until it's applied:
+   - builds without hours save as before;
+   - saving a build **with** hours stops and names 9961;
+   - Margins §608 counts piece work only and shows a notice.
+2. If not done yet, from session 021: apply `9962_paystub_email.sql` (see below).
+3. Confirmed this session: the user re-applied **`9971_payout_build_split.sql`**, and saves
+   with piece work work.
+
+**What shipped (021b):**
+- **`8d2dc50` Save fix (v0.11.1).** The user's "Could not find the 'split_override'
+  column … apply migration 9964" came from a **hard-coded hint**. The column is from
+  **9971**, which was never listed as a user action after session 014. Hints now come from a
+  column→migration map (`lib/schemaFallback.ts`). Builds load with `select("*")`, because the
+  old read ladder hid piece work and Payment-sent marks whenever 9971 alone was missing.
+- **`84d9aae` Hourly work on mentor payouts (v0.12.0).** The user's rules: hand-entered for
+  now, **paid 100%** (the Split % never applies), on the **same stub**, and a **cost on
+  Margins**, together with piece work.
+  - **Build payout:** an **Hourly work** card (§212) with date, work, hours, an optional
+    per-line rate and a default rate. The default pre-fills from the mentor's latest other
+    build that has one. Hourly work goes in `builtTotal`, never `computedTotal`. The CSV gains
+    piece and hourly rows.
+  - **Stub, HTML and emailed PDF:** hourly rows, a combined "Piece work + hourly" card and a
+    hero breakdown. **`totals.delta` now covers review changes to the revenue share only**,
+    so extras never read as "adjustments". The **email path carries the hours**: the server
+    checks the stub total against `built_total`.
+  - **Margins §608 "Mentor pay cost by month"** (+ §609 per mentor): HJG share of mentoring
+    revenue (every mentoring client) − approved piece work − hourly = HJG net, with margin
+    per meeting before and after. Ranges 6 / 12 / 24 months / All; graph + table + CSV.
+    Drafts are listed, not counted.
+  - Hourly staff (§206) now shares the `TimesheetTable` editor. The line model moved to
+    `lib/hourlyLines.ts`, re-exported by `lib/hourlyPay`.
+- **Integration with 021:** 021 took 9962, so this migration was **renumbered 9962 → 9961**.
+  Verify sections run 021's §30, then §31–§33. On narrow screens, card-header actions now
+  wrap and the builder grid can shrink.
+
+**Gates (head):** typecheck ✓ · verify **1,068** ✓ · lint 0 errors / 14 pre-existing ✓ ·
+build ✓ · prettier ✓. Render-checked (harness, light + dark, 390 px). The emailed PDF was
+rasterized and inspected.
+
+**Open / next:**
+1. User: apply 9961, then do one real hourly build (approve → print → email to themselves)
+   and look at §608.
+2. Time clock → hourly import (backlog entry, three questions).
+3. A mentor-month with hourly work but **no revenue lines** can't be built yet.
+4. §608 uses the assumed split. An actual-payout "true net" lens is possible.
+5. Should other hourly staff count in Margins?
+6. Cosmetic (021): on Hourly staff, the "New staff" row overflows at 390 px.
+7. **Next migration number is `9960`.**
+
+**Process rules:**
+- Every migration a session adds stays listed as a user action here until the user
+  confirms it's applied.
+- `git fetch origin main` before any merge, because parallel sessions happen.
+
+Full detail: `Session log/021_2026-09-25b/session_log.md`.
+
+## ▶ Earlier today START HERE (2026-09-25, session 021 [parallel] — v0.11.0, MERGED TO `main`)
 
 **Merged (turn 5):** on the user's "Push to main", `main` was **fast-forwarded** to the
 branch head (no merge commit); the chip must read `v0.11.0` once Vercel deploys
@@ -73,7 +139,7 @@ Harness deleted.
 themselves** (e.g. set their own address as a mentor's Pay-stub email) before real
 staff; (2) ~~merge to `main`~~ DONE (turn 5); (3) not
 built by choice: automatic send on approval/payment, and a mentor-login portal (RLS is
-"any signed-in user reads everything"); (4) **next migration number is `9961`**.
+"any signed-in user reads everything"); (4) ~~next migration number is `9961`~~ — 021b used 9961; **next is `9960`**.
 
 ## ▶ Prior session START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
 
