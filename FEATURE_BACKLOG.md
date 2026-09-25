@@ -11,6 +11,68 @@ it in `HANDOFF.md`). Newest ideas on top.
 
 ---
 
+### Hourly wages on mentor payouts (Build payout §204) — requested session 021, 2026-09-25 — PLANNED, not started
+
+**What.** Let a mentor's monthly payout carry **hourly work** next to the
+revenue-share engine lines and piece work: one build, one total, one pay stub. The
+user's words: *"Long term, I want to be able to add hourly wages to Mentors payouts
+as well."*
+
+**Why.** Hourly pay and mentor pay are two separate builders today:
+- **Build payout (§204)** (`payout_builds`) = CA-invoice revenue share, then review
+  decisions, Split % (9971) and piece work (9964).
+- **Hourly staff (§206)** (`staff_pay_profiles` / `staff_pay_builds`, 9970) =
+  timesheet hours × rate + piece work + adjustment, printed on a separate hourly
+  stub.
+
+A mentor who also works hours would need two payouts and two stubs a month.
+
+**Workaround today (no code).** Pay staff → Hourly staff → add the mentor as a
+person (name + rate) and log their hours there. It works, but it means a second
+payout and a second stub. Nothing ties it to the mentor either: the add form
+doesn't set `staff_pay_profiles.coach_id`.
+
+**Proposed shape.** This mirrors how piece work was added in v0.7.0 (session 016).
+- **Math (pure).** Reuse the `lib/hourlyPay.ts` line model: `HourlyEntry`
+  {date, label, hours, rate|null}, `entryRate`, `entryAmount`, `normalizeEntries`,
+  `parseEntries`, `laborTotal`. `summarizeBuild` (`lib/payBuild.ts`) gains hours +
+  a default rate. Labor adds to `builtTotal` and never to `computedTotal`, so the
+  engine drift reference stays clean (the same rule piece work follows).
+- **DB.** Migration `9962_payout_build_hours.sql` adds three `payout_builds`
+  columns: `hour_items jsonb default '[]'`, `hours_rate numeric` (the default rate
+  used that month) and `hours_pay_total numeric` (cached). Register the columns in
+  `PAYOUT_BUILD_COLUMN_MIGRATIONS` (`lib/schemaFallback.ts`), so saves degrade per
+  column and name 9962 when it's needed. **Don't hand-write another migration
+  hint:** session 021's bug was exactly that.
+- **Standing rate.** Add `coach_settings.hourly_rate` (the 9996 table, one row per
+  coach) as the default the card pre-fills. It stays editable per build.
+- **UI.** An "Hourly work" card on §204 next to Piece work. Pull the timesheet editor
+  out of `src/components/HourlyPayView.tsx` into a shared component, the way
+  `PieceWorkCard` is shared.
+- **Stub.** An "Hourly work" block on the mentor stub (`lib/payStub.ts`), with its
+  total row next to Piece work.
+- **verify.** Cover the summary math (hours add to built, not computed), per-line
+  rate precedence, the stub model and the fallback map.
+
+**Decisions needed from the user before building:**
+1. **Where do the hours come from?** Typed from a timesheet, or pulled from the
+   **Time clock** (§208)? `time_entries` rows can be "submitted for payroll", but
+   nothing reads them yet. A Time-clock import needs to match each mentor to a
+   sign-in email (`ca_coaches.email` exists).
+2. One standing rate per mentor, or rates by kind of work? Per-line rates already
+   exist in the hourly model.
+3. The same payment and stub as the revenue share (recommended), or separate?
+4. Should mentor hourly pay count as a cost in the Margins tab (§601), for example
+   as a staff-cost lens?
+
+**Acceptance.**
+- Approving a build saves revenue share, piece work and hourly work.
+- The stub prints all three, and the totals reconcile.
+- On a pre-9962 database, builds without hours still save, and a build with hours
+  names `9962`.
+
+---
+
 ### "Mentees" table — internal source-of-truth for each person — ✅ SHIPPED session 008 (2026-06-24) — requested session 008, 2026-06-24
 
 **What.** A single **`Mentees`** table that is HJG's internal *source of truth* for

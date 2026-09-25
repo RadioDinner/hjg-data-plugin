@@ -1,10 +1,56 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-17 (session 020 — Margins tab rebuilt: v0.9.0 then v0.10.0
-"Margins by tier", both **MERGED TO `main`**).
+2026-09-25 (session 021: Build payout save fix, v0.10.1, **on branch
+`claude/determined-einstein-uudngk`, NOT merged**). `main` is still v0.10.0.
 
-## ▶ START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
+## ▶ START HERE (2026-09-25, session 021: v0.10.1, ON BRANCH, not merged)
+
+**The user hit this when approving a mentor build with piece work:** "Save failed: Could not
+find the 'split_override' column of 'payout_builds' in the schema cache — if this mentions
+piece_items, apply migration 9964_pay_piece_work.sql". They had applied 9964 twice.
+
+**⚠ USER ACTION, the actual fix: apply `9971_payout_build_split.sql`** (Supabase SQL Editor,
+re-runnable). It adds `split_override`, and **it was never listed as a user action** after
+it shipped in session 014 (2026-07-20). 9964 did apply: PostgREST reports the
+alphabetically-first missing payload column, and `piece_items` sorts before
+`split_override`. After applying, check the columns:
+`select column_name from information_schema.columns where table_schema='public' and
+table_name='payout_builds' order by ordinal_position;`. Expect `split_override`,
+`payment_sent_at`, `payment_ref`, `piece_items` and `pieces_total`. Apply `9969` if the
+`payment_*` columns are missing. Still erroring after 9971? Run
+`NOTIFY pgrst, 'reload schema';`.
+
+**Code fix (`e78d4f5`, v0.10.1, on the branch):** a new pure module,
+`lib/schemaFallback.ts`.
+- `missingColumnFromError` and `PAYOUT_BUILD_COLUMN_MIGRATIONS` (split_override→9971,
+  piece_items/pieces_total→9964) feed `saveWithFallback`. It drops a missing column only
+  while it holds its default, else stops and names the migration for THAT column. Other
+  errors pass through.
+- `savePayoutBuild` uses it.
+- `fetchPayoutBuilds` now reads `select("*")`. The old fixed-order retry ladder fell back to
+  the base columns whenever 9971 alone was missing, which **hid saved piece work and
+  "Payment sent" marks**.
+- verify §30 (+43 checks, **913 total**).
+
+Gates green: `typecheck` + `verify` + `lint` (0 / 14 pre-existing) + `build` +
+`prettier --check`. It has not been tested against live Supabase. Merge when the user says
+so; the chip then reads `v0.10.1`.
+
+**New backlog entry: hourly wages on mentor payouts** (the user: "Long term, I want to be
+able to add hourly wages to Mentors payouts as well"). **Scoped, not built.** See the top of
+`FEATURE_BACKLOG.md` for the proposed shape: migration `9962`, a
+`coach_settings.hourly_rate` default, the timesheet editor shared from `HourlyPayView`, and a
+stub block. It also lists **four decisions for the user**: where the hours come from
+(typed vs the Time clock, whose "submitted for payroll" entries nothing reads yet), rate
+model, same stub or separate, and whether it counts in Margins. The workaround today is to
+add the mentor as a person under Hourly staff (§206), which gives a separate stub.
+
+**Process rule going forward:** every migration a session adds must be listed as a user
+action in START HERE until the user confirms it's applied. **Next new migration is
+`9962_…`.** Full detail: `Session log/021_2026-09-25/session_log.md`.
+
+## ▶ Prior session START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
 
 **Second Margins lens shipped on the branch: "Margins by tier — all active
 mentees" (§606)** on the user's "average margin per mentoring bracket … all of

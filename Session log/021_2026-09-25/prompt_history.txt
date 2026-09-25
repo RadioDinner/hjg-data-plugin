@@ -1,0 +1,7 @@
+--- 2026-09-25 (session start) ---
+I am trying to add Piece work to a mentor and when I click approve, I get this message "Save failed: Error: Could not find the 'split_override' column of 'payout_builds' in the schema cache — if this mentions piece_items, apply migration 9964_pay_piece_work.sql" 
+
+I have applied that migration twice now.
+
+--- 2026-09-25 (session start, mid-turn) ---
+Long term, I want to be able to add hourly wages to Mentors payouts as well
