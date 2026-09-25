@@ -176,6 +176,12 @@ import {
 import { mentorStubPdfDoc, hourlyStubPdfDoc, pdfUsd } from "../lib/payStubPdf.js";
 import pdfmake from "pdfmake";
 import { fileURLToPath } from "node:url";
+import {
+  PAYOUT_BUILD_COLUMN_MIGRATIONS,
+  missingColumnFromError,
+  saveFallback,
+  saveWithFallback,
+} from "../lib/schemaFallback.js";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -4941,6 +4947,161 @@ console.log("[30] Pay stubs by email — recipient rules, email content, PDF lay
   const bBytes = await pdfmake.createPdf(mentorStubPdfDoc(big)).getBuffer();
   assert(pages(bBytes) >= 4, `40-mentee stub flows across pages (got ${pages(bBytes)})`);
   assert(bBytes.length < 400_000, `40-mentee PDF stays small for email (${bBytes.length} bytes)`);
+}
+
+console.log("[31] Build payout save on an unmigrated database (lib/schemaFallback)");
+{
+  // The exact PostgREST message the user hit (piece work + approve, 9971 unapplied).
+  const userMsg =
+    "Could not find the 'split_override' column of 'payout_builds' in the schema cache";
+  eq(missingColumnFromError(userMsg), "split_override", "PGRST204 names the missing column");
+  eq(
+    missingColumnFromError('column "piece_items" of relation "payout_builds" does not exist'),
+    "piece_items",
+    "Postgres 42703 (write) names the column",
+  );
+  eq(
+    missingColumnFromError("column payout_builds.payment_ref does not exist"),
+    "payment_ref",
+    "Postgres 42703 (read) names the column",
+  );
+  eq(
+    missingColumnFromError('new row violates row-level security policy for table "payout_builds"'),
+    null,
+    "an RLS failure is not a missing column",
+  );
+
+  const row = { coach_id: 7, service_month: "2026-08", split_override: null, piece_items: [] };
+  // The user's case: piece work, no split override → drop the empty column, retry.
+  const dropSplit = saveFallback(
+    userMsg,
+    row,
+    PAYOUT_BUILD_COLUMN_MIGRATIONS,
+    new Set(["split_override"]),
+  );
+  eq("drop" in dropSplit ? dropSplit.drop : "error", "split_override", "null split → dropped");
+  // A split override set → the hint names 9971, never 9964 (the original bug).
+  const needSplit = saveFallback(userMsg, row, PAYOUT_BUILD_COLUMN_MIGRATIONS, new Set());
+  const needSplitMsg = "error" in needSplit ? needSplit.error : "";
+  assert(needSplitMsg.includes("9971_payout_build_split.sql"), "split set → names 9971");
+  assert(!needSplitMsg.includes("9964"), "split set → does not blame 9964");
+  assert(needSplitMsg.startsWith(userMsg), "the database's own message is kept first");
+  // Piece work on a pre-9964 database → names 9964.
+  const piecesMsg =
+    "Could not find the 'piece_items' column of 'payout_builds' in the schema cache";
+  const needPieces = saveFallback(piecesMsg, row, PAYOUT_BUILD_COLUMN_MIGRATIONS, new Set());
+  assert(
+    "error" in needPieces && needPieces.error.includes("9964_pay_piece_work.sql"),
+    "piece work on a pre-9964 database → names 9964",
+  );
+  // Anything the map doesn't own, or a column already dropped, passes through.
+  const rls = 'new row violates row-level security policy for table "payout_builds"';
+  const other = saveFallback(rls, row, PAYOUT_BUILD_COLUMN_MIGRATIONS, new Set(["split_override"]));
+  eq("error" in other ? other.error : "", rls, "non-schema error passes through unchanged");
+  const unowned = saveFallback(
+    "Could not find the 'notes' column of 'payout_builds' in the schema cache",
+    row,
+    PAYOUT_BUILD_COLUMN_MIGRATIONS,
+    new Set(["notes"]),
+  );
+  assert("error" in unowned, "a column no migration here owns is never dropped");
+  const gone = saveFallback(
+    userMsg,
+    { coach_id: 7 },
+    PAYOUT_BUILD_COLUMN_MIGRATIONS,
+    new Set(["split_override"]),
+  );
+  assert("error" in gone, "a column already dropped stops the loop (termination)");
+  const inherited = saveFallback(
+    "Could not find the 'constructor' column of 'payout_builds' in the schema cache",
+    row,
+    PAYOUT_BUILD_COLUMN_MIGRATIONS,
+    new Set(["constructor"]),
+  );
+  assert("error" in inherited, "an inherited object key is never treated as an owned column");
+
+  // Every mix of applied migrations × what the build carries, through the real
+  // retry loop against a fake PostgREST that — like Plan.hs (S.toList over a Set
+  // of payload keys) — rejects the ALPHABETICALLY-FIRST missing column.
+  const BASE = ["coach_id", "service_month", "status", "built_total", "computed_total"];
+  const fakeSave = (cols: Set<string>, saved: Record<string, unknown>[]) => {
+    return (r: Record<string, unknown>) => {
+      const missing = Object.keys(r)
+        .sort()
+        .find((k) => !cols.has(k));
+      if (missing) {
+        return Promise.resolve({
+          error: {
+            message: `Could not find the '${missing}' column of 'payout_builds' in the schema cache`,
+          },
+        });
+      }
+      saved.push({ ...r });
+      return Promise.resolve({ error: null });
+    };
+  };
+  for (const has9964 of [false, true]) {
+    for (const has9971 of [false, true]) {
+      for (const withPieces of [false, true]) {
+        for (const withSplit of [false, true]) {
+          const cols = new Set(BASE);
+          if (has9964) cols.add("piece_items").add("pieces_total");
+          if (has9971) cols.add("split_override");
+          const pieces = withPieces
+            ? [{ date: null, label: "New mentee", qty: 8, unitRate: 25 }]
+            : [];
+          const build = {
+            coach_id: 7,
+            service_month: "2026-08",
+            status: "approved",
+            built_total: 1200,
+            computed_total: 1000,
+            split_override: withSplit ? 0.5 : null,
+            piece_items: pieces,
+            pieces_total: withPieces ? 200 : 0,
+          };
+          const droppable = new Set<string>();
+          if (!withSplit) droppable.add("split_override");
+          if (!withPieces) droppable.add("piece_items").add("pieces_total");
+          const saved: Record<string, unknown>[] = [];
+          let err = "";
+          try {
+            await saveWithFallback(
+              build,
+              fakeSave(cols, saved),
+              PAYOUT_BUILD_COLUMN_MIGRATIONS,
+              droppable,
+            );
+          } catch (e) {
+            err = (e as Error).message;
+          }
+          const tag = `9964 ${has9964 ? "on" : "off"}, 9971 ${has9971 ? "on" : "off"}, pieces ${withPieces ? "yes" : "no"}, split ${withSplit ? "yes" : "no"}`;
+          const blocked9964 = withPieces && !has9964;
+          const blocked9971 = withSplit && !has9971;
+          if (!blocked9964 && !blocked9971) {
+            eq(saved.length, 1, `${tag}: saves`);
+            const s = saved[0] ?? {};
+            if (withPieces) eq(s.pieces_total, 200, `${tag}: piece work persisted`);
+            if (withSplit) eq(s.split_override, 0.5, `${tag}: split override persisted`);
+          } else {
+            eq(saved.length, 0, `${tag}: refuses to save without the data`);
+            // PostgREST reports piece_items before split_override, so 9964 first.
+            const want = blocked9964 ? "9964_pay_piece_work.sql" : "9971_payout_build_split.sql";
+            assert(err.includes(want), `${tag}: error names ${want}`);
+          }
+        }
+      }
+    }
+  }
+  // saveWithFallback retries on a copy: the caller's row keeps every column.
+  const mine = { coach_id: 7, service_month: "2026-08", split_override: null };
+  await saveWithFallback(
+    mine,
+    fakeSave(new Set(["coach_id", "service_month"]), []),
+    PAYOUT_BUILD_COLUMN_MIGRATIONS,
+    new Set(["split_override"]),
+  );
+  assert("split_override" in mine, "caller's row is not mutated by the retries");
 }
 
 console.log("");

@@ -187,6 +187,8 @@ import {
 import type { PieceEntry } from "../lib/pieceWork";
 export { normalizePieces, pieceAmount, piecesTotal, piecesQty, parsePieces, emptyPiece };
 export type { PieceEntry };
+// Unmigrated-database save fallback (which migration owns a missing column).
+import { PAYOUT_BUILD_COLUMN_MIGRATIONS, saveWithFallback } from "../lib/schemaFallback";
 export type {
   PayStubModel,
   PayStubInput,
@@ -1945,20 +1947,12 @@ export { buildKey as payoutBuildKey };
 // All saved builds, indexed by `${coachId}|${serviceMonth}`. The table is small
 // (one row per reviewed coach-month), so a single fetch backs the whole view.
 export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord>> {
-  const cols =
-    "coach_id,service_month,status,built_total,computed_total,line_states,notes,reviewed_by,updated_at";
-  // payment_sent_at/payment_ref need 9969, split_override needs 9971 — retry
-  // without the newer columns so the screen still loads (those features just
-  // won't persist) on an un-migrated database.
-  let res = await supabase
-    .from("payout_builds")
-    .select(`${cols},split_override,payment_sent_at,payment_ref,piece_items`);
-  if (res.error)
-    res = await supabase
-      .from("payout_builds")
-      .select(`${cols},split_override,payment_sent_at,payment_ref`);
-  if (res.error) res = await supabase.from("payout_builds").select(`${cols},split_override`);
-  if (res.error) res = await supabase.from("payout_builds").select(cols);
+  // select("*"), not a column list: the newer columns (split_override 9971,
+  // payment_sent_at/payment_ref 9969, piece_items 9964) are read when present and
+  // default when absent, so ANY subset of those migrations loads. The old
+  // fixed-order retry ladder fell back to the base columns whenever 9971 alone was
+  // missing — silently hiding saved piece work and "Payment sent" marks.
+  const res = await supabase.from("payout_builds").select("*");
   if (res.error) throw new Error(res.error.message);
   const out = new Map<string, PayoutBuildRecord>();
   for (const r of (res.data ?? []) as {
@@ -2056,34 +2050,19 @@ export async function savePayoutBuild(
     piece_items: pieces,
     pieces_total: piecesTotal(pieces),
   };
-  let { error } = await supabase
-    .from("payout_builds")
-    .upsert(row, { onConflict: "coach_id,service_month" });
-  if (error && pieces.length > 0) {
-    throw new Error(
-      `${error.message} — if this mentions piece_items, apply migration 9964_pay_piece_work.sql`,
-    );
-  }
-  if (error) {
-    // Pre-9964 database: retry without the piece-work columns.
-    delete row.piece_items;
-    delete row.pieces_total;
-    ({ error } = await supabase
-      .from("payout_builds")
-      .upsert(row, { onConflict: "coach_id,service_month" }));
-  }
-  if (error && rec.splitOverride == null) {
-    // Pre-9971 database: retry without the column so ordinary saves still work.
-    delete row.split_override;
-    ({ error } = await supabase
-      .from("payout_builds")
-      .upsert(row, { onConflict: "coach_id,service_month" }));
-  } else if (error && rec.splitOverride != null) {
-    throw new Error(
-      `${error.message} — if this mentions split_override, apply migration 9971_payout_build_split.sql`,
-    );
-  }
-  if (error) throw new Error(error.message);
+  // An unmigrated database rejects the save naming ONE missing column at a time.
+  // Drop it and retry while it only holds its default (no split override / no
+  // piece work), else stop and name the migration that adds THAT column
+  // (lib/schemaFallback) — so ordinary saves work on any subset of 9964/9971.
+  const droppable = new Set<string>();
+  if (rec.splitOverride == null) droppable.add("split_override");
+  if (!pieces.length) droppable.add("piece_items").add("pieces_total");
+  await saveWithFallback(
+    row,
+    (r) => supabase.from("payout_builds").upsert(r, { onConflict: "coach_id,service_month" }),
+    PAYOUT_BUILD_COLUMN_MIGRATIONS,
+    droppable,
+  );
 }
 
 // Discard a saved review (RLS lets a reviewer delete only their own records).
