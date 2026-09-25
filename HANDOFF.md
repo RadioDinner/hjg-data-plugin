@@ -2,9 +2,16 @@
 
 Working notes for resuming this project in a future session. Last updated
 2026-09-25 (session 021 — **Email pay stubs (PDF) + hourly Payment sent, v0.11.0,
-ON BRANCH `claude/wizardly-planck-9vzspj`, NOT merged to `main`**).
+MERGED TO `main`**).
 
-## ▶ START HERE (2026-09-25, session 021 — v0.11.0 on the branch, not merged)
+## ▶ START HERE (2026-09-25, session 021 — v0.11.0, MERGED TO `main`)
+
+**Merged (turn 5):** on the user's "Push to main", `main` was **fast-forwarded** to the
+branch head (no merge commit); the chip must read `v0.11.0` once Vercel deploys
+`main`. The user reports **all three env vars are added** in Vercel and the **sending
+domain is verified** in Resend. **Migration 9962 was NOT confirmed** — until it's
+applied, archiving an emailed stub fails with a "apply migration 9962" message (every
+other screen keeps working). Next: the user's **first real send, to themselves**.
 
 **What shipped (branch only):** emailing pay stubs as a **PDF attachment**, on the
 user's answers: **button only** (never automatic), **PDF**, and **add a Payment-sent
@@ -62,9 +69,9 @@ views with a stubbed data layer: 20 UI checks, including a **real PDF rendered i
 Chromium** through the lazy chunk for both stub kinds, plus light/dark screenshots.
 Harness deleted.
 
-**Open / next:** (1) user does the 4 actions above, then sends a **test email to
+**Open / next:** (1) user applies 9962 (if not yet) and sends a **test email to
 themselves** (e.g. set their own address as a mentor's Pay-stub email) before real
-staff; (2) merge to `main` on the user's word (chip must read `v0.11.0`); (3) not
+staff; (2) ~~merge to `main`~~ DONE (turn 5); (3) not
 built by choice: automatic send on approval/payment, and a mentor-login portal (RLS is
 "any signed-in user reads everything"); (4) **next migration number is `9961`**.
 

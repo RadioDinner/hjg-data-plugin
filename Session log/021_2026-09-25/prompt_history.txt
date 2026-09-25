@@ -16,3 +16,6 @@ Should I start building once you've answered? = Yes, start building (Recommended
 
 --- 2026-09-25 (turn 4) ---
 I added a key to Vercel with RESEND_API_KEY
+
+--- 2026-09-25 (turn 5) ---
+I have all the environment variables added now. Push to main. Address is verified

@@ -8,7 +8,9 @@ waits on the user's word.
 
 - `52ac018` — turn 1: Q&A on emailing pay stubs; session folder, log, HANDOFF note.
 - `ec558d6` — turn 2: Resend account advice; corrected the free-plan domain count.
-- (this commit) — turn 3: **the feature** (v0.11.0), see "Turn 3" below.
+- `b1d570b` — turn 3: **the feature** (v0.11.0), see "Turn 3" below.
+- `2b8f683` — turn 4: prompt log (the user added `RESEND_API_KEY` in Vercel).
+- (this commit) — turn 5: merged-to-main note; **`main` fast-forwarded** to it.
 
 ## The question
 
@@ -151,6 +153,27 @@ were blocked by the egress policy; the REST field names were confirmed from the
 - REST `POST /emails` takes `reply_to` and `attachments[{filename, content (base64),
   content_type}]`.
 - Errors come back as `{statusCode, message, name}`.
+
+## Turn 4: "I added a key to Vercel with RESEND_API_KEY"
+
+Told them that one of three vars is not enough: `PAYSTUB_FROM` is required (the server
+answers "Email isn't set up yet" without it) and `PAYSTUB_REPLY_TO` is recommended.
+Also:
+- Scope the vars to **Preview + Production**, since previews read only Preview vars.
+- Redeploy, because variable changes apply only to new deployments.
+- Apply 9962.
+- Test on the branch preview first.
+
+Sources: Vercel's environment-variables docs.
+
+## Turn 5: "I have all the environment variables added now. Push to main. Address is verified"
+
+The gates were re-run on the head (typecheck, verify 941, lint 0 errors, build,
+prettier), then **`main` was fast-forwarded** to the branch (no merge commit; `main`
+had not moved from `2cb5865`). The production deploy of `main` picks up the vars.
+The user did **not** confirm migration 9962, so they were reminded that it's needed
+before the first send. There's no CI on the repo (no `.github/workflows`), so the
+Vercel deploy is the only post-push check.
 
 ## Open questions / next step (awaiting the user)
 
