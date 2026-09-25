@@ -13,7 +13,7 @@
 
 import type { PayStubModel, StubInvoice, StubMenteeRow } from "./payStub";
 import { DISPO_TEXT } from "./payStub";
-import type { HourlyStubModel } from "./hourlyPay";
+import type { HourlyEntry, HourlyStubModel } from "./hourlyPay";
 import { entryAmount, entryRate } from "./hourlyPay";
 import { pieceAmount, type PieceEntry } from "./pieceWork";
 
@@ -335,6 +335,20 @@ function pieceSummaryRow(p: PieceEntry): PdfNode[] {
   ];
 }
 
+// Hourly work on a MENTOR stub: hours × rate, paid in full (no revenue split).
+function hourSummaryRow(e: HourlyEntry, defaultRate: number): PdfNode[] {
+  const label: PdfNode[] = [safe(e.label || "—"), "  ", tag("hourly", "good")];
+  if (e.date) label.push({ text: `  ${fmtD(e.date)}`, color: MUT });
+  return [
+    { text: label },
+    { text: `${fmtH(e.hours)} × ${pdfUsd(entryRate(e, defaultRate))}/h`, alignment: "right" },
+    "",
+    "",
+    "",
+    num(pdfUsd(entryAmount(e, defaultRate)), true),
+  ];
+}
+
 function invoiceBlock(inv: StubInvoice, m: PayStubModel): PdfNode {
   const slice =
     inv.slice === "this-month"
@@ -471,23 +485,45 @@ export function mentorStubPdfDoc(m: PayStubModel): PdfDocDefinition {
     ],
   };
 
+  // Same breakdown as the HTML stub: the review delta only ever covers the revenue
+  // share; with piece work or hourly, each part gets its own row.
+  const extras = m.pieces.length > 0 || m.hours.length > 0;
   const heroRows: [string, string][] = [];
+  if (extras) heroRows.push(["Revenue share", pdfUsd(m.totals.linePayout)]);
   if (Math.abs(m.totals.delta) >= 0.005) {
-    heroRows.push(["Before HJG review", pdfUsd(m.totals.enginePayout)]);
+    heroRows.push([
+      extras ? "Share before review" : "Before HJG review",
+      pdfUsd(m.totals.enginePayout),
+    ]);
     heroRows.push([
       "HJG adjustments",
       `${m.totals.delta > 0 ? "+" : "−"}${pdfUsd(Math.abs(m.totals.delta))}`,
     ]);
   }
+  if (m.pieces.length) heroRows.push(["Piece work", pdfUsd(m.piecesTotal)]);
+  if (m.hours.length) heroRows.push(["Hourly work", pdfUsd(m.hourlyPay)]);
   const cards: PdfNode[] = [
     card("Eligible revenue", pdfUsd(m.totals.earned), [
       [`${m.totals.menteeCount} mentee${m.totals.menteeCount === 1 ? "" : "s"}`, `× ${pct}`],
     ]),
   ];
-  if (m.pieces.length)
+  if (m.pieces.length && m.hours.length)
+    cards.push(
+      card("Piece work + hourly", pdfUsd(round2(m.piecesTotal + m.hourlyPay)), [
+        ["Piece work", pdfUsd(m.piecesTotal)],
+        [`Hourly · ${fmtH(m.hoursTotal)}`, pdfUsd(m.hourlyPay)],
+      ]),
+    );
+  else if (m.pieces.length)
     cards.push(
       card("Piece work", pdfUsd(m.piecesTotal), [
         [`${m.pieces.length} item${m.pieces.length === 1 ? "" : "s"}`, "paid per unit"],
+      ]),
+    );
+  else if (m.hours.length)
+    cards.push(
+      card("Hourly work", pdfUsd(m.hourlyPay), [
+        [fmtH(m.hoursTotal), m.hourlyMixedRates ? "rates vary" : `× ${pdfUsd(m.hourlyRate)}/h`],
       ]),
     );
   cards.push(card("Total payout", pdfUsd(m.totals.payout), heroRows, true));
@@ -515,6 +551,7 @@ export function mentorStubPdfDoc(m: PayStubModel): PdfDocDefinition {
       num(pdfUsd(r.payout), true),
     ]),
     ...m.pieces.map(pieceSummaryRow),
+    ...m.hours.map((e) => hourSummaryRow(e, m.hourlyRate)),
   ];
   const totalRow = summaryBody.length;
   summaryBody.push(
@@ -556,6 +593,11 @@ export function mentorStubPdfDoc(m: PayStubModel): PdfDocDefinition {
       ...(m.pieces.length
         ? [
             "Piece-work items are paid flat per unit on top of that revenue share — quantity × rate each, listed in the summary table above. ",
+          ]
+        : []),
+      ...(m.hours.length
+        ? [
+            "Hourly work is paid in full, separately from the revenue share — hours × the hourly rate, listed in the summary table above. ",
           ]
         : []),
       "The pages that follow show every invoice and every line item behind each number, including anything HJG adjusted in review.",

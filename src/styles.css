@@ -805,6 +805,20 @@ body {
   gap: 8px;
   flex: 0 0 auto;
 }
+/* Narrow screens: a card's header actions (range pickers, Export, Graph/Table)
+   drop under the title and wrap instead of pushing the page sideways. */
+@media (max-width: 760px) {
+  .collapsible__head {
+    flex-wrap: wrap;
+  }
+  .collapsible__extras {
+    flex-wrap: wrap;
+    flex: 1 1 100%;
+  }
+  .collapsible__extras > * {
+    flex-wrap: wrap;
+  }
+}
 .collapsible__body {
   margin-top: 14px;
 }
@@ -999,7 +1013,9 @@ body {
 }
 @media (max-width: 900px) {
   .builder {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): let the column shrink so wide tables scroll inside their
+       .table-scroll box instead of widening the page on a phone. */
+    grid-template-columns: minmax(0, 1fr);
   }
   .builder__side {
     position: static;

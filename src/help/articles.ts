@@ -159,8 +159,16 @@ Pure math lives in \`lib/compare.ts\`.`,
 - It's added to the **built (signed-off) total** but **never to the engine total**, so it deliberately reads as **review delta** — the engine knows nothing about piece work.
 - Piece-work lines print on the pay stub in the summary table, so the mentor sees them alongside their revenue share. Needs migration \`9964_pay_piece_work.sql\`.
 
+### Hourly work (hours × rate, paid in full)
+- The **Hourly work** card is for time a mentor is paid by the hour, like admin, training or events. Enter the date, the work, the hours and, optionally, a **per-line rate**. Leave the rate blank to use the card's **default rate**.
+- It's paid **100% to the mentor**: the **Split % never applies**, the same as for other hourly staff. Like piece work, it adds to the **built total**, never the engine total.
+- The default rate **pre-fills from the mentor's most recent build that has one**, and saves with this build.
+- It prints on the **same pay stub** in the summary table, with its own *Hourly work* card. The stub's total row lists revenue share, piece work and hourly separately, so neither extra reads as a "review adjustment".
+- It counts as a **cost on the Margins tab**, together with piece work: see *Mentor pay cost by month (§608)*. Needs migration \`9961_payout_build_hours.sql\`.
+- Today you type the hours in by hand. Pulling them from the **Time clock** is the planned next step.
+
 ### Export
-- **Export CSV** downloads the **data used to build the payout** — one row per contributing invoice (this-month + rolled-in slices), with the dates each was paid — not just the on-screen per-mentee summary.
+- **Export CSV** downloads the **data used to build the payout** — one row per contributing invoice (this-month + rolled-in slices), with the dates each was paid — not just the on-screen per-mentee summary. Piece-work and hourly lines get their own rows, so the rows add up to the **TOTAL**.
 
 ### Saving
 - **Save draft** to come back later; **Approve** to sign the month off; **Reopen** to edit an approved month again. **Discard** removes the saved review.
@@ -503,6 +511,7 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 ### Lenses
 - **Margins on Mentoring** (§602) — pick one mentee and see what HJG keeps **per meeting** on their ongoing 4x / 2x / 1x mentoring, with the invoice and meeting counts that make the number trustworthy.
 - **Margins by tier** (§606) — every **active** mentee, run through the same math and grouped by the bracket they are in (4x / 2x / 1x), with expected vs actual margin per meeting and a per-mentee breakdown.
+- **Mentor pay cost by month** (§608) — HJG's share of mentoring revenue each month, minus what mentors are paid on top of it (**piece work + hourly** from approved Build-payout reviews), with the margin per meeting before and after.
 - Open each card's own **?** for its method.`,
   },
 
@@ -558,6 +567,30 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 
 ### Source
 - Same tables as *Margins on Mentoring* (\`ca_invoices\`, \`ca_appointments\`, \`ca_engagements\`), plus \`mentees\` (names, owner, \`is_test\`) and \`ca_clients.is_excluded\`. Pure math in \`lib/margins.ts\` (\`computeTierMargins\`, verified in \`scripts/verify-metrics.ts\` §29).`,
+  },
+  "margins.mentorCost": {
+    title: "Mentor pay cost by month — piece work + hourly",
+    body: `**What mentors are paid ON TOP of their revenue share, taken off HJG's share of mentoring revenue, month by month.** Piece work (e.g. $25 per new mentee) and hourly work (hours × rate) are costs the revenue-share math on the other two cards doesn't see. This card counts them.
+
+### The numbers
+- **HJG share** = mentoring revenue **collected** that month × HJG's share (the **Mentor share %** assumption at the top of the tab). Revenue sits in each invoice's **service month**. It covers **every mentoring client**, including mentees who have since graduated or left, so past months keep their revenue.
+- **Piece work** and **Hourly** = the actual amounts on **approved** Build-payout reviews (§204) for that service month. **Draft** builds are listed but **not counted** until they're approved, so an unfinished review can't move the number.
+- **HJG net** = HJG share − piece work − hourly.
+- **$ / meeting before** = HJG share ÷ mentoring meetings delivered that month, the §602 cash-basis figure summed over every mentee. **After** takes the piece work and hourly off first.
+- The **current month** is marked *in progress*: its revenue, meetings and reviews are still coming in.
+
+### Reading it
+- Three small charts share one month axis: HJG share vs HJG net; what was paid to mentors on top of the revenue share (hourly + piece work, stacked); and margin per meeting before vs after.
+- The table has the exact numbers, a **Total** row that adds up the columns, and **Export CSV**.
+- **Per mentor** (§609) shows who the extras went to: piece work, hours, hourly pay, and each mentor's share of the total.
+- Pick **6 / 12 / 24 months** or **All** at the top of the card. Months with nothing in them show as zeros rather than being skipped.
+
+### Caveats
+- The HJG share uses the **assumed** split, not each mentor's actual tenure-ramp split or a build's Split % override. The extras are **actual** amounts.
+- Hourly work needs migration \`9961_payout_build_hours.sql\`. The card warns you until it's applied.
+
+### Source
+- \`ca_invoices\`, \`ca_appointments\` and \`ca_engagements\` (the same rules as *Margins on Mentoring*), plus \`payout_builds\` (\`piece_items\`, \`hour_items\`, \`hourly_rate\`, \`status\`). The math is \`computeMentorPayCost\` in \`lib/margins.ts\`, verified in \`scripts/verify-metrics.ts\` §33.`,
   },
   "general.coachAttribution": {
     title: "How clients are matched to coaches",

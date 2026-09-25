@@ -12,7 +12,15 @@
 // supabase/migrations/9989_payout_builds.sql; the access layer is src/db.ts.
 
 import type { PayLineSource } from "./pay";
-import { piecesTotal, type PieceEntry } from "./pieceWork";
+import { normalizePieces, pieceAmount, piecesTotal, type PieceEntry } from "./pieceWork";
+import {
+  entryAmount,
+  entryRate,
+  hoursTotal,
+  laborTotal,
+  normalizeEntries,
+  type HourlyEntry,
+} from "./hourlyLines";
 
 // Per-line review decision, keyed by clientId within a build. A line with no
 // stored state is treated as DEFAULT_LINE_STATE (included, no override, no note).
@@ -248,12 +256,16 @@ export function effectiveLineTotal(
 // (included lines with overrides applied), the drift between them, and counts.
 export interface BuildSummary {
   computedTotal: number; // Σ engine payout over ALL lines — the automated number
-  builtTotal: number; // Σ effective payout over included lines + piece work — signed off
+  builtTotal: number; // Σ effective payout over included lines + piece work + hourly — signed off
   delta: number; // builtTotal - computedTotal (how far review moved the number)
   // Flat per-unit pay added on top of the engine lines (e.g. $25 × 8 new mentees).
   // Included in builtTotal but NEVER in computedTotal — the engine knows nothing
   // about it, so it reads as review drift, which is exactly what it is.
   piecesTotal: number;
+  // Hourly work (hand-entered hours × rate), paid 100% to the mentor — the Split %
+  // never touches it. Same rule as piece work: in builtTotal, never computedTotal.
+  hourlyPay: number;
+  hours: number; // Σ hours behind hourlyPay
   lineCount: number;
   includedCount: number;
   excludedCount: number;
@@ -433,11 +445,73 @@ export function payoutDetailCsvRows(
   return rows;
 }
 
+// Piece-work and hourly lines as rows of the same CSV, so the rows foot to the
+// TOTAL (the built total includes them). Each goes in the "Effective payout"
+// column; "Line items" carries the math. Neither is in the engine payout.
+export function extraPayCsvRows(
+  pieces: PieceEntry[],
+  hours: HourlyEntry[],
+  hourlyRate: number,
+): (string | number)[][] {
+  const col = (label: (typeof PAYOUT_DETAIL_CSV_COLUMNS)[number]) =>
+    PAYOUT_DETAIL_CSV_COLUMNS.indexOf(label);
+  const row = (mentee: string, math: string, amount: number, note: string) => {
+    const r: (string | number)[] = PAYOUT_DETAIL_CSV_COLUMNS.map(() => "");
+    r[col("Mentee")] = mentee;
+    r[col("Line items")] = math;
+    r[col("Effective payout")] = amount;
+    r[col("Note")] = note;
+    return r;
+  };
+  const when = (d: string | null) => (d ? ` (${d})` : "");
+  return [
+    ...normalizePieces(pieces).map((p) =>
+      row(
+        `Piece work: ${p.label || "—"}${when(p.date)}`,
+        `${p.qty} × $${round2(p.unitRate)}`,
+        pieceAmount(p),
+        "piece work — not in the engine payout",
+      ),
+    ),
+    ...normalizeEntries(hours).map((e) =>
+      row(
+        `Hourly work: ${e.label || "—"}${when(e.date)}`,
+        `${e.hours} h × $${round2(entryRate(e, hourlyRate))}/h`,
+        entryAmount(e, hourlyRate),
+        "hourly work — paid in full, not in the engine payout",
+      ),
+    ),
+  ];
+}
+
+// The rate to pre-fill for a build with none saved: the mentor's most recent OTHER
+// build that has one — preferring the latest month before `ym`, else the latest
+// after it (editing an old month). 0 when the mentor has never had one.
+export function standingHourlyRate(
+  builds: Iterable<{ coachId: number; serviceMonth: string; hourlyRate: number | null }>,
+  coachId: number,
+  ym: string,
+): number {
+  let before: { m: string; r: number } | null = null;
+  let after: { m: string; r: number } | null = null;
+  for (const b of builds) {
+    if (b.coachId !== coachId || b.serviceMonth === ym || b.hourlyRate == null) continue;
+    if (b.serviceMonth < ym) {
+      if (!before || b.serviceMonth > before.m) before = { m: b.serviceMonth, r: b.hourlyRate };
+    } else if (!after || b.serviceMonth > after.m) {
+      after = { m: b.serviceMonth, r: b.hourlyRate };
+    }
+  }
+  return (before ?? after)?.r ?? 0;
+}
+
 export function summarizeBuild(
   lines: BuildLineInput[],
   states: Map<number, BuildLineState>,
   splitOverride?: number | null,
   pieces: PieceEntry[] = [],
+  hours: HourlyEntry[] = [],
+  hourlyRate = 0,
 ): BuildSummary {
   let computedTotal = 0;
   let builtTotal = 0;
@@ -464,12 +538,16 @@ export function summarizeBuild(
     }
   }
   const pTotal = piecesTotal(pieces);
-  builtTotal += pTotal;
+  // Hourly work: hours × rate, paid in full — the Split % never applies to it.
+  const hPay = laborTotal(hours, hourlyRate);
+  builtTotal += pTotal + hPay;
   return {
     computedTotal: round2(computedTotal),
     builtTotal: round2(builtTotal),
     delta: round2(builtTotal - computedTotal),
     piecesTotal: pTotal,
+    hourlyPay: hPay,
+    hours: hoursTotal(normalizeEntries(hours)),
     lineCount: lines.length,
     includedCount,
     excludedCount,

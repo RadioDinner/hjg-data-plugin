@@ -918,3 +918,220 @@ function finalizeRow(
   row.margin.avgMenteeDelivered = mean(a.memberDelivered);
   row.margin.avgMenteePaidFor = mean(a.memberPaidFor);
 }
+
+// ============================================================================
+// Mentor pay cost by month (§608) — what HJG pays mentors ON TOP of their revenue
+// share (piece work + hourly work, from APPROVED Build-payout reviews), set
+// against HJG's share of mentoring revenue each month. The user (2026-09-25):
+// hourly "should count as a cost on the margins tab", piece work too.
+//
+// Revenue side: every mentoring client run through computeMenteeMargin (so the
+// invoice/meeting rules are exactly §602's) and summed by month — invoices by
+// SERVICE month, meetings by the month they happen. The HJG share uses the same
+// mentor-share ASSUMPTION as the rest of the tab; the piece work and hourly are
+// the ACTUAL signed-off amounts. Draft builds are counted separately (not in the
+// cost) so an unfinished review can't move the number.
+// ============================================================================
+
+export interface MentorPayBuildInput {
+  coachId: number;
+  coachName: string;
+  serviceMonth: string; // YYYY-MM (the payout build's service month)
+  approved: boolean;
+  piecesTotal: number;
+  hourlyPay: number;
+  hours: number;
+}
+
+export interface MentorPayCostInputs {
+  members: {
+    invoices: MarginInvoiceInput[];
+    meetings: MarginMeetingInput[];
+    engagements: MarginEngagementInput[];
+  }[];
+  builds: MentorPayBuildInput[];
+  today: string; // YYYY-MM-DD
+  now?: string;
+  mentorShare?: number;
+  fromYm?: string | null; // first month shown (inclusive); null = the earliest with data
+  toYm?: string | null; // last month shown (inclusive); default = today's month
+}
+
+export interface MentorPayCostMonth {
+  month: string; // YYYY-MM
+  collected: number; // mentoring revenue collected (service month)
+  hjgShare: number; // collected × HJG share (the assumption)
+  pieceWork: number; // approved piece work paid to mentors
+  hourlyPay: number; // approved hourly work paid to mentors
+  hours: number;
+  extraPay: number; // pieceWork + hourlyPay
+  hjgNet: number; // hjgShare − extraPay
+  meetings: number; // mentoring meetings delivered (occurred)
+  marginPerMeeting: number | null; // hjgShare ÷ meetings — before the extras
+  netMarginPerMeeting: number | null; // hjgNet ÷ meetings — after them
+  draftBuilds: number; // builds carrying extras that aren't approved yet (not counted)
+  draftExtraPay: number;
+  inProgress: boolean; // today's month — revenue, meetings and reviews still coming
+}
+
+export interface MentorPayCostMentor {
+  coachId: number;
+  coachName: string;
+  months: number; // approved months with piece work or hourly in range
+  pieceWork: number;
+  hourlyPay: number;
+  hours: number;
+  extraPay: number;
+}
+
+export interface MentorPayCostReport {
+  mentorShare: number;
+  hjgShare: number;
+  months: MentorPayCostMonth[]; // oldest → newest, every calendar month in range
+  total: Omit<MentorPayCostMonth, "month" | "inProgress"> & {
+    extraShareOfHjg: number | null; // extraPay ÷ hjgShare — how much of HJG's share the extras eat
+  };
+  mentors: MentorPayCostMentor[]; // most extra pay first
+}
+
+function ymOf(date: string): string {
+  return date.slice(0, 7);
+}
+function nextYm(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+export function computeMentorPayCost(input: MentorPayCostInputs): MentorPayCostReport {
+  const mentorShare = clampShare(input.mentorShare ?? DEFAULT_MENTOR_SHARE);
+  const hjgShare = 1 - mentorShare;
+  const curYm = ymOf(input.today);
+  const toYm = input.toYm ?? curYm;
+  const inRange = (ym: string) => ym <= toYm && (input.fromYm == null || ym >= input.fromYm);
+
+  // Revenue + meetings, summed over every member's per-month rows.
+  const collected = new Map<string, number>();
+  const meetings = new Map<string, number>();
+  for (const mem of input.members) {
+    const rep = computeMenteeMargin({
+      invoices: mem.invoices,
+      meetings: mem.meetings,
+      engagements: mem.engagements,
+      today: input.today,
+      now: input.now,
+      mentorShare,
+    });
+    for (const r of rep.byMonth) {
+      if (!inRange(r.month)) continue;
+      collected.set(r.month, (collected.get(r.month) ?? 0) + r.collected);
+      meetings.set(r.month, (meetings.get(r.month) ?? 0) + r.meetingsOccurred);
+    }
+  }
+
+  // Extras from the payout builds: approved → cost; draft → reported, not counted.
+  const approved = new Map<string, { piece: number; hourly: number; hours: number }>();
+  const drafts = new Map<string, { n: number; pay: number }>();
+  const byMentor = new Map<number, MentorPayCostMentor>();
+  for (const b of input.builds) {
+    const extra = (b.piecesTotal || 0) + (b.hourlyPay || 0);
+    if (!inRange(b.serviceMonth) || Math.abs(extra) < 0.005) continue;
+    if (!b.approved) {
+      const d = drafts.get(b.serviceMonth) ?? { n: 0, pay: 0 };
+      d.n++;
+      d.pay += extra;
+      drafts.set(b.serviceMonth, d);
+      continue;
+    }
+    const a = approved.get(b.serviceMonth) ?? { piece: 0, hourly: 0, hours: 0 };
+    a.piece += b.piecesTotal || 0;
+    a.hourly += b.hourlyPay || 0;
+    a.hours += b.hours || 0;
+    approved.set(b.serviceMonth, a);
+    let m = byMentor.get(b.coachId);
+    if (!m) {
+      m = {
+        coachId: b.coachId,
+        coachName: b.coachName,
+        months: 0,
+        pieceWork: 0,
+        hourlyPay: 0,
+        hours: 0,
+        extraPay: 0,
+      };
+      byMentor.set(b.coachId, m);
+    }
+    m.months++;
+    m.pieceWork += b.piecesTotal || 0;
+    m.hourlyPay += b.hourlyPay || 0;
+    m.hours += b.hours || 0;
+    m.extraPay += extra;
+  }
+
+  // Every calendar month in range (gaps shown as zeros, not hidden).
+  const seen = [...collected.keys(), ...meetings.keys(), ...approved.keys(), ...drafts.keys()];
+  const first = input.fromYm ?? (seen.length ? seen.reduce((a, b) => (a < b ? a : b)) : toYm);
+  const months: MentorPayCostMonth[] = [];
+  for (let ym = first; ym <= toYm; ym = nextYm(ym)) {
+    const col = round2(collected.get(ym) ?? 0);
+    const hjg = round2(col * hjgShare);
+    const a = approved.get(ym) ?? { piece: 0, hourly: 0, hours: 0 };
+    const d = drafts.get(ym) ?? { n: 0, pay: 0 };
+    const extraPay = round2(a.piece + a.hourly);
+    const net = round2(hjg - extraPay);
+    const mtg = meetings.get(ym) ?? 0;
+    months.push({
+      month: ym,
+      collected: col,
+      hjgShare: hjg,
+      pieceWork: round2(a.piece),
+      hourlyPay: round2(a.hourly),
+      hours: round2(a.hours),
+      extraPay,
+      hjgNet: net,
+      meetings: mtg,
+      marginPerMeeting: mtg > 0 ? round2(hjg / mtg) : null,
+      netMarginPerMeeting: mtg > 0 ? round2(net / mtg) : null,
+      draftBuilds: d.n,
+      draftExtraPay: round2(d.pay),
+      inProgress: ym === curYm,
+    });
+  }
+
+  const sum = (f: (m: MentorPayCostMonth) => number) =>
+    round2(months.reduce((t, m) => t + f(m), 0));
+  // Totals FOOT: each is the sum of its (already rounded) monthly column.
+  const tCollected = sum((m) => m.collected);
+  const tHjg = sum((m) => m.hjgShare);
+  const tExtra = sum((m) => m.extraPay);
+  const tNet = sum((m) => m.hjgNet);
+  const tMeetings = months.reduce((t, m) => t + m.meetings, 0);
+  return {
+    mentorShare,
+    hjgShare,
+    months,
+    total: {
+      collected: tCollected,
+      hjgShare: tHjg,
+      pieceWork: sum((m) => m.pieceWork),
+      hourlyPay: sum((m) => m.hourlyPay),
+      hours: sum((m) => m.hours),
+      extraPay: tExtra,
+      hjgNet: tNet,
+      meetings: tMeetings,
+      marginPerMeeting: tMeetings > 0 ? round2(tHjg / tMeetings) : null,
+      netMarginPerMeeting: tMeetings > 0 ? round2(tNet / tMeetings) : null,
+      draftBuilds: months.reduce((t, m) => t + m.draftBuilds, 0),
+      draftExtraPay: sum((m) => m.draftExtraPay),
+      extraShareOfHjg: tHjg > 0 ? round2(tExtra / tHjg) : null,
+    },
+    mentors: [...byMentor.values()]
+      .map((m) => ({
+        ...m,
+        pieceWork: round2(m.pieceWork),
+        hourlyPay: round2(m.hourlyPay),
+        hours: round2(m.hours),
+        extraPay: round2(m.extraPay),
+      }))
+      .sort((a, b) => b.extraPay - a.extraPay || a.coachName.localeCompare(b.coachName)),
+  };
+}

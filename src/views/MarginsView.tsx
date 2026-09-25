@@ -23,8 +23,10 @@ import {
   fetchMenteeMarginInputs,
   fetchTierMarginInputs,
   fetchActiveMentoringClientIds,
+  fetchMentorCostInputs,
   computeMenteeMargin,
   computeTierMargins,
+  computeMentorPayCost,
   clampShare,
   DEFAULT_MENTOR_SHARE,
   DEFAULT_TIER_PRICES,
@@ -36,15 +38,21 @@ import {
   type TierMarginData,
   type TierMarginReport,
   type TierMarginRow,
+  type MentorCostData,
+  type MentorPayCostReport,
+  type MentorPayCostMonth,
 } from "../db";
 
-// Margins tab, rebuilt from scratch (session 020). Two lenses so far:
+// Margins tab, rebuilt from scratch (session 020). Three lenses so far:
 //  • Margins on Mentoring (§602): pick ONE mentee and see, for their ongoing
 //    4x / 2x / 1x mentoring, the invoices (issued / paid / scheduled), the
 //    meetings (occurred / upcoming / paid for) and HJG's margin PER MEETING —
 //    computed two ways so a prepaid month can't quietly inflate the number.
 //  • Margins by tier (§606): every ACTIVE mentee run through the same math and
 //    grouped by bracket, with the expected margin from the configured prices.
+//  • Mentor pay cost by month (§608, session 021): HJG's share of mentoring
+//    revenue minus what mentors are paid on top of it — piece work + hourly work
+//    from approved Build-payout reviews — and the margin per meeting after it.
 // The assumptions (mentor share, price per bracket) live on the screen card and
 // feed both. Pure math: lib/margins.ts (verify §17 / §29).
 
@@ -161,8 +169,9 @@ export function MarginsView() {
         <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
           Several ways to look at HJG's margins, each in its own card.{" "}
           <strong>Margins on Mentoring</strong> is one mentee at a time;{" "}
-          <strong>Margins by tier</strong> is every active mentee grouped by bracket. Both use the
-          assumptions below.
+          <strong>Margins by tier</strong> is every active mentee grouped by bracket;{" "}
+          <strong>Mentor pay cost by month</strong> takes mentors' piece work and hourly pay off
+          HJG's share. All three use the assumptions below.
         </div>
         <div
           className="filter-bar"
@@ -211,6 +220,7 @@ export function MarginsView() {
 
       <MentoringMarginsCard mentorShare={mentorShare} />
       <TierMarginsCard mentorShare={mentorShare} prices={prices} />
+      <MentorPayCostCard mentorShare={mentorShare} />
     </div>
   );
 }
@@ -1238,6 +1248,437 @@ function TierMembersInset({ report }: { report: TierMarginReport }) {
         exportName="margins-by-tier-mentees"
         emptyText="No active mentees with an open 4x / 2x / 1x engagement."
         maxRows={500}
+      />
+    </CollapsibleCard>
+  );
+}
+
+// ============================================================================
+// §608 — Mentor pay cost by month (piece work + hourly, as a cost to HJG)
+// ============================================================================
+
+type CostRange = "6" | "12" | "24" | "all";
+const COST_RANGES: { key: CostRange; label: string }[] = [
+  { key: "6", label: "6 mo" },
+  { key: "12", label: "12 mo" },
+  { key: "24", label: "24 mo" },
+  { key: "all", label: "All" },
+];
+function shiftYm(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const o = y * 12 + (m - 1) + n;
+  return `${Math.floor(o / 12)}-${String((o % 12) + 1).padStart(2, "0")}`;
+}
+
+function MentorPayCostCard({ mentorShare }: { mentorShare: number }) {
+  const ct = useChartTokens();
+  const TOOLTIP = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.tooltipText,
+  } as const;
+
+  const [data, setData] = useState<MentorCostData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"graph" | "table" | "both">("both");
+  const [range, setRange] = useState<CostRange>("12");
+
+  useEffect(() => {
+    let live = true;
+    fetchMentorCostInputs()
+      .then((d) => {
+        if (!live) return;
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => live && setError(String(e)))
+      .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const report: MentorPayCostReport | null = useMemo(() => {
+    if (!data) return null;
+    const today = todayYmd();
+    const curYm = today.slice(0, 7);
+    return computeMentorPayCost({
+      members: data.members,
+      builds: data.builds,
+      today,
+      now: localNowRaw(),
+      mentorShare,
+      fromYm: range === "all" ? null : shiftYm(curYm, -(Number(range) - 1)),
+      toYm: curYm,
+    });
+  }, [data, mentorShare, range]);
+
+  const chartData = useMemo(
+    () =>
+      (report?.months ?? []).map((m) => ({
+        month: monthLabel(m.month),
+        "HJG share": m.hjgShare,
+        "HJG net": m.hjgNet,
+        "Piece work": m.pieceWork,
+        Hourly: m.hourlyPay,
+        Before: m.marginPerMeeting,
+        After: m.netMarginPerMeeting,
+      })),
+    [report],
+  );
+  const newestFirst: MentorPayCostMonth[] = report ? [...report.months].reverse() : [];
+
+  function exportCsv() {
+    if (!report) return;
+    const row = (label: string, m: Omit<MentorPayCostMonth, "month" | "inProgress">) => [
+      label,
+      m.collected,
+      m.hjgShare,
+      m.pieceWork,
+      m.hours,
+      m.hourlyPay,
+      m.extraPay,
+      m.hjgNet,
+      m.meetings,
+      m.marginPerMeeting ?? "",
+      m.netMarginPerMeeting ?? "",
+      m.draftBuilds,
+      m.draftExtraPay,
+    ];
+    downloadCsv(
+      "margins-mentor-pay-cost",
+      [
+        "Month",
+        "Collected",
+        `HJG share (${pctLabel(report.hjgShare)})`,
+        "Piece work",
+        "Hourly hours",
+        "Hourly pay",
+        "Piece work + hourly",
+        "HJG net",
+        "Meetings delivered",
+        "$ / meeting before",
+        "$ / meeting after",
+        "Draft builds (not counted)",
+        "Draft extras (not counted)",
+      ],
+      [...newestFirst.map((m) => row(m.month, m)), row("TOTAL", report.total)],
+    );
+  }
+
+  const showGraph = view !== "table";
+  const showTable = view !== "graph";
+  const money = (v: unknown) => fmtUsd(Number(v));
+
+  return (
+    <CollapsibleCard
+      id="margins.mentorCost"
+      title="Mentor pay cost by month — piece work + hourly"
+      sectionId="margins.mentorCost"
+      help={<HelpButton id="margins.mentorCost" label="Mentor pay cost by month" />}
+      actions={
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="seg" role="tablist" aria-label="Months shown">
+            {COST_RANGES.map((r) => (
+              <button
+                key={r.key}
+                role="tab"
+                aria-selected={range === r.key}
+                className={`seg__btn ${range === r.key ? "seg__btn--active" : ""}`}
+                onClick={() => setRange(r.key)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn--sm" onClick={exportCsv} disabled={!report}>
+            Export CSV
+          </button>
+          <ViewSeg view={view} setView={setView} />
+        </div>
+      }
+    >
+      <div className="muted" style={{ fontSize: 13, marginTop: -2 }}>
+        HJG's share of mentoring revenue each month, minus what mentors are paid{" "}
+        <strong>on top of their revenue share</strong>: <strong>piece work</strong> and{" "}
+        <strong>hourly work</strong> from <em>approved</em> Build-payout reviews. The HJG share uses
+        the mentor-share assumption above; piece work and hourly are the actual signed-off amounts.
+        Revenue is by invoice service month, collected basis, for every mentoring client, including
+        mentees who have since left.
+      </div>
+
+      {error && <div className="notice notice--warn">{error}</div>}
+      {loading && <div className="loading">Loading…</div>}
+
+      {report && data && !loading && (
+        <>
+          {!data.hourlyColumn && (
+            <div className="notice notice--warn" style={{ marginTop: 10 }}>
+              Hourly work isn't in the database yet. Apply migration{" "}
+              <code>9961_payout_build_hours.sql</code> (Supabase SQL Editor) so Build payout can
+              save it. Until then this card counts piece work only.
+            </div>
+          )}
+          {report.total.draftBuilds > 0 && (
+            <div className="notice notice--info" style={{ marginTop: 10 }}>
+              {report.total.draftBuilds} draft build{report.total.draftBuilds === 1 ? "" : "s"} in
+              this range carr{report.total.draftBuilds === 1 ? "ies" : "y"}{" "}
+              {fmtUsd(report.total.draftExtraPay)} of piece work / hourly that isn't counted until
+              it's approved.
+            </div>
+          )}
+
+          <div className="stat-row" style={{ marginTop: 12 }}>
+            <Tile
+              value={fmtUsd(report.total.hjgShare)}
+              label={`HJG share (${pctLabel(report.hjgShare)})`}
+              sub={`of ${fmtUsd(report.total.collected)} collected`}
+            />
+            <Tile
+              value={fmtUsd(report.total.extraPay)}
+              label="Mentor piece work + hourly"
+              sub={
+                report.total.extraShareOfHjg == null
+                  ? `${fmtUsd(report.total.pieceWork)} piece · ${fmtUsd(report.total.hourlyPay)} hourly`
+                  : `${pctLabel(report.total.extraShareOfHjg)} of HJG's share · ${fmtUsd(report.total.hourlyPay)} hourly`
+              }
+            />
+            <Tile
+              value={fmtUsd(report.total.hjgNet)}
+              label="HJG net"
+              sub="HJG share − piece work − hourly"
+            />
+            <Tile
+              value={fmtUsd(report.total.netMarginPerMeeting)}
+              label="Net margin per meeting delivered"
+              sub={`${fmtUsd(report.total.marginPerMeeting)} before the extras · ${report.total.meetings} meetings`}
+            />
+            <Tile
+              value={`${fmtCount(report.total.hours)} h`}
+              label="Hourly hours paid"
+              sub={`${fmtUsd(report.total.hourlyPay)} to mentors`}
+            />
+          </div>
+
+          <GroupTitle>By month</GroupTitle>
+          <div
+            className={`chart-card__split ${showGraph && showTable ? "chart-card__split--both" : ""}`}
+          >
+            {showGraph && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                <MiniChart title={`HJG share vs HJG net, after piece work + hourly`}>
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                    <CartesianGrid stroke={ct.grid} vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                    />
+                    <YAxis
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                      tickFormatter={(v: number) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={TOOLTIP}
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      formatter={money}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="HJG share" fill={ct.cmp} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="HJG net" fill={ct.accent} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </MiniChart>
+                <MiniChart title="Paid to mentors on top of the revenue share">
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                    <CartesianGrid stroke={ct.grid} vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                    />
+                    <YAxis
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                      tickFormatter={(v: number) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={TOOLTIP}
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      formatter={money}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Hourly" stackId="extra" fill={ct.accent} />
+                    <Bar dataKey="Piece work" stackId="extra" fill={ct.cmp} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </MiniChart>
+                <MiniChart title="HJG margin per meeting delivered — before vs after the extras">
+                  <BarChart data={chartData} margin={{ left: 4, right: 8 }}>
+                    <CartesianGrid stroke={ct.grid} vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                    />
+                    <YAxis
+                      tick={{ fill: ct.axis, fontSize: 11 }}
+                      stroke={ct.grid}
+                      tickFormatter={(v: number) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={TOOLTIP}
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      formatter={money}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Before" fill={ct.cmp} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="After" fill={ct.accent} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </MiniChart>
+              </div>
+            )}
+            {showTable && (
+              <div className="table-scroll" style={{ width: "100%" }}>
+                <table className="table table--center">
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Collected</th>
+                      <th>HJG share</th>
+                      <th>Piece work</th>
+                      <th>Hourly (h)</th>
+                      <th>Hourly $</th>
+                      <th>Piece + hourly</th>
+                      <th>HJG net</th>
+                      <th>Meetings</th>
+                      <th>$ / mtg before</th>
+                      <th>$ / mtg after</th>
+                      <th>Drafts (not counted)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {newestFirst.map((m) => (
+                      <tr key={m.month}>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          {monthLabel(m.month)}
+                          {m.inProgress && (
+                            <span className="muted" style={{ fontSize: 11 }}>
+                              {" "}
+                              · in progress
+                            </span>
+                          )}
+                        </td>
+                        <td className="num">{fmtUsd(m.collected)}</td>
+                        <td className="num">{fmtUsd(m.hjgShare)}</td>
+                        <td className="num">{fmtUsd(m.pieceWork)}</td>
+                        <td className="num">{fmtCount(m.hours)}</td>
+                        <td className="num">{fmtUsd(m.hourlyPay)}</td>
+                        <td className="num">{fmtUsd(m.extraPay)}</td>
+                        <td className="num" style={{ fontWeight: 600 }}>
+                          {fmtUsd(m.hjgNet)}
+                        </td>
+                        <td className="num">{m.meetings}</td>
+                        <td className="num">{fmtUsd(m.marginPerMeeting)}</td>
+                        <td className="num">{fmtUsd(m.netMarginPerMeeting)}</td>
+                        <td className="num">
+                          {m.draftBuilds ? `${m.draftBuilds} · ${fmtUsd(m.draftExtraPay)}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ fontWeight: 600 }}>
+                      <td>Total</td>
+                      <td className="num">{fmtUsd(report.total.collected)}</td>
+                      <td className="num">{fmtUsd(report.total.hjgShare)}</td>
+                      <td className="num">{fmtUsd(report.total.pieceWork)}</td>
+                      <td className="num">{fmtCount(report.total.hours)}</td>
+                      <td className="num">{fmtUsd(report.total.hourlyPay)}</td>
+                      <td className="num">{fmtUsd(report.total.extraPay)}</td>
+                      <td className="num">{fmtUsd(report.total.hjgNet)}</td>
+                      <td className="num">{report.total.meetings}</td>
+                      <td className="num">{fmtUsd(report.total.marginPerMeeting)}</td>
+                      <td className="num">{fmtUsd(report.total.netMarginPerMeeting)}</td>
+                      <td className="num">
+                        {report.total.draftBuilds
+                          ? `${report.total.draftBuilds} · ${fmtUsd(report.total.draftExtraPay)}`
+                          : "—"}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+          <p className="view__hint" style={{ marginTop: 10 }}>
+            <strong>HJG net</strong> = HJG share − piece work − hourly.{" "}
+            <strong>$ / mtg before</strong> is the HJG share ÷ meetings delivered that month (the
+            §602 cash-basis figure, summed over every mentee); <strong>after</strong> takes the
+            extras off first. The current month is in progress: its revenue, meetings and reviews
+            are still coming in. A month's extras count once its build is <strong>approved</strong>.
+          </p>
+
+          <MentorCostInset report={report} />
+        </>
+      )}
+    </CollapsibleCard>
+  );
+}
+
+function MentorCostInset({ report }: { report: MentorPayCostReport }) {
+  const total = report.total.extraPay;
+  const rows: Row[] = report.mentors.map((m) => ({
+    mentor: m.coachName,
+    months: m.months,
+    pieceWork: m.pieceWork,
+    hours: m.hours,
+    hourlyPay: m.hourlyPay,
+    extraPay: m.extraPay,
+    share: total > 0 ? Math.round((m.extraPay / total) * 1000) / 10 : null,
+  }));
+  const usdCol = (key: string, label: string): SortColumn => ({
+    key,
+    label,
+    numeric: true,
+    format: (r) => (r[key] == null ? "—" : fmtUsd(Number(r[key]))),
+  });
+  const columns: SortColumn[] = [
+    { key: "mentor", label: "Mentor" },
+    usdCol("extraPay", "Piece + hourly"),
+    usdCol("hourlyPay", "Hourly $"),
+    { key: "hours", label: "Hours", numeric: true },
+    usdCol("pieceWork", "Piece work"),
+    { key: "months", label: "Months", numeric: true },
+    {
+      key: "share",
+      label: "Share of total",
+      numeric: true,
+      format: (r) => (r.share == null ? "—" : `${r.share}%`),
+    },
+  ];
+  return (
+    <CollapsibleCard
+      id="margins.mentorCost.mentors"
+      title={`Per mentor (${report.mentors.length})`}
+      sectionId="margins.mentorCost.mentors"
+      variant="inset"
+      level={3}
+      style={{ marginTop: 14 }}
+    >
+      <SortableTable
+        columns={columns}
+        rows={rows}
+        exportName="margins-mentor-pay-cost-mentors"
+        emptyText="No approved piece work or hourly work in this range."
+        maxRows={200}
       />
     </CollapsibleCard>
   );

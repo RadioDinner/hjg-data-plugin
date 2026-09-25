@@ -104,6 +104,8 @@ import {
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
+  extraPayCsvRows,
+  standingHourlyRate,
 } from "../lib/payBuild";
 import type {
   BuildLineState,
@@ -132,6 +134,8 @@ export {
   DEFAULT_LINE_STATE,
   payoutDetailCsvRows,
   PAYOUT_DETAIL_CSV_COLUMNS,
+  extraPayCsvRows,
+  standingHourlyRate,
 };
 export type { BuildLineState, BuildLineInput, BuildSummary, BuildStatus, BuildDetailLine };
 
@@ -304,10 +308,12 @@ import {
   type MarginMeetingInput,
   type MarginEngagementInput,
   type TierMemberInput,
+  type MentorPayBuildInput,
 } from "../lib/margins";
 export {
   computeMenteeMargin,
   computeTierMargins,
+  computeMentorPayCost,
   DEFAULT_TIER_PRICES,
   projectScheduledInvoices,
   invoiceTier,
@@ -336,6 +342,11 @@ export type {
   TierMarginReport,
   TierMarginRow,
   TierMemberRow,
+  MentorPayBuildInput,
+  MentorPayCostInputs,
+  MentorPayCostMonth,
+  MentorPayCostMentor,
+  MentorPayCostReport,
 } from "../lib/margins";
 
 // Pure "Meetings to Freedom!" metric (1-on-1 sessions JumpStart-end → graduation).
@@ -1929,6 +1940,11 @@ export interface PayoutBuildRecord {
   // Flat per-unit pay added on top of the engine lines (migration 9964; reads
   // degrade gracefully when unapplied).
   pieces: PieceEntry[];
+  // Hourly work — hand-entered hours × rate, paid 100% to the mentor (migration
+  // 9961; reads degrade gracefully when unapplied). hourlyRate = the default $/h
+  // saved with the build (null = never set).
+  hours: HourlyEntry[];
+  hourlyRate: number | null;
   notes: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null; // updated_at
@@ -1948,8 +1964,9 @@ export { buildKey as payoutBuildKey };
 // (one row per reviewed coach-month), so a single fetch backs the whole view.
 export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord>> {
   // select("*"), not a column list: the newer columns (split_override 9971,
-  // payment_sent_at/payment_ref 9969, piece_items 9964) are read when present and
-  // default when absent, so ANY subset of those migrations loads. The old
+  // payment_sent_at/payment_ref 9969, piece_items 9964, hour_items/hourly_rate
+  // 9961) are read when present and default when absent, so ANY subset of those
+  // migrations loads. The old
   // fixed-order retry ladder fell back to the base columns whenever 9971 alone was
   // missing — silently hiding saved piece work and "Payment sent" marks.
   const res = await supabase.from("payout_builds").select("*");
@@ -1966,6 +1983,8 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
     payment_sent_at?: string | null;
     payment_ref?: string | null;
     piece_items?: unknown;
+    hour_items?: unknown;
+    hourly_rate?: number | string | null;
     notes: string | null;
     reviewed_by: string | null;
     updated_at: string | null;
@@ -1973,6 +1992,7 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
     const lineStates: Record<number, BuildLineState> = {};
     for (const [k, v] of Object.entries(r.line_states ?? {})) lineStates[Number(k)] = v;
     const so = r.split_override != null ? Number(r.split_override) : null;
+    const hr = r.hourly_rate != null ? Number(r.hourly_rate) : null;
     out.set(buildKey(r.coach_id, r.service_month), {
       coachId: r.coach_id,
       serviceMonth: r.service_month,
@@ -1982,6 +2002,8 @@ export async function fetchPayoutBuilds(): Promise<Map<string, PayoutBuildRecord
       lineStates,
       splitOverride: Number.isFinite(so as number) ? (so as number) : null,
       pieces: parsePieces(r.piece_items),
+      hours: parseEntries(r.hour_items),
+      hourlyRate: Number.isFinite(hr as number) && (hr as number) >= 0 ? (hr as number) : null,
       notes: r.notes,
       reviewedBy: r.reviewed_by,
       reviewedAt: r.updated_at,
@@ -2029,6 +2051,8 @@ export async function savePayoutBuild(
     lineStates: Record<number, BuildLineState>;
     splitOverride?: number | null;
     pieces?: PieceEntry[];
+    hours?: HourlyEntry[];
+    hourlyRate?: number | null;
     notes: string | null;
   },
 ): Promise<void> {
@@ -2037,6 +2061,7 @@ export async function savePayoutBuild(
     if (!isDefaultLineState(v)) compact[k] = v;
   }
   const pieces = normalizePieces(rec.pieces ?? []);
+  const hours = normalizeEntries(rec.hours ?? []);
   const row: Record<string, unknown> = {
     coach_id: rec.coachId,
     service_month: rec.serviceMonth,
@@ -2049,14 +2074,19 @@ export async function savePayoutBuild(
     split_override: rec.splitOverride ?? null,
     piece_items: pieces,
     pieces_total: piecesTotal(pieces),
+    hour_items: hours,
+    hourly_rate: rec.hourlyRate ?? null,
+    hours_pay_total: laborTotal(hours, rec.hourlyRate ?? 0),
   };
   // An unmigrated database rejects the save naming ONE missing column at a time.
   // Drop it and retry while it only holds its default (no split override / no
-  // piece work), else stop and name the migration that adds THAT column
-  // (lib/schemaFallback) — so ordinary saves work on any subset of 9964/9971.
+  // piece work / no hourly work), else stop and name the migration that adds THAT
+  // column (lib/schemaFallback) — so ordinary saves work on any subset of
+  // 9961/9964/9971.
   const droppable = new Set<string>();
   if (rec.splitOverride == null) droppable.add("split_override");
   if (!pieces.length) droppable.add("piece_items").add("pieces_total");
+  if (!hours.length) droppable.add("hour_items").add("hourly_rate").add("hours_pay_total");
   await saveWithFallback(
     row,
     (r) => supabase.from("payout_builds").upsert(r, { onConflict: "coach_id,service_month" }),
@@ -2295,6 +2325,13 @@ export interface TierMarginData {
 // placeholder/group clients (ca_clients.is_excluded). Names and owner come from
 // the mentees source of truth when the client is on it, else ca_clients.
 export async function fetchTierMarginInputs(): Promise<TierMarginData> {
+  return fetchMarginMembers("active");
+}
+
+// "active" = an OPEN 4x / 2x / 1x engagement right now (§606). "all" = ANY 4x /
+// 2x / 1x engagement, open or not (§608 — past months need the revenue of mentees
+// who have since graduated or left). Same exclusions either way.
+async function fetchMarginMembers(scope: "active" | "all"): Promise<TierMarginData> {
   const today = todayYmd();
   const [menteeRows, clientsRes, coachName, engs] = await Promise.all([
     fetchMentees(),
@@ -2322,10 +2359,11 @@ export async function fetchTierMarginInputs(): Promise<TierMarginData> {
     if (m.isTest) excluded.add(r.client_id);
   }
 
-  // Active = an open mentoring engagement right now.
+  // Active = an open mentoring engagement right now ("all": any mentoring engagement).
   const active = new Set<number>();
   for (const e of engs.rows) {
-    if (e.client_id == null || e.is_complete || e.is_canceled) continue;
+    if (e.client_id == null) continue;
+    if (scope === "active" && (e.is_complete || e.is_canceled)) continue;
     if (isMentoringTier(engagementTier(e.name))) active.add(e.client_id);
   }
   let excludedClients = 0;
@@ -2374,6 +2412,39 @@ export async function fetchTierMarginInputs(): Promise<TierMarginData> {
     };
   });
   return { members, excludedClients, nextInvoiceColumn: engs.nextInvoiceColumn };
+}
+
+export interface MentorCostData {
+  members: TierMemberInput[]; // every mentoring client (any 4x/2x/1x engagement), exclusions applied
+  excludedClients: number;
+  builds: MentorPayBuildInput[]; // every saved payout build, with its piece-work + hourly totals
+  hourlyColumn: boolean; // false = migration 9961 not applied (hourly work can't be saved yet)
+}
+
+// Mentor pay cost by month (§608): every mentoring client's rows (so past months
+// keep the revenue of mentees who have since left) + every saved payout build's
+// extras. The builds' coach names come from the CA coach mirror.
+export async function fetchMentorCostInputs(): Promise<MentorCostData> {
+  const [members, builds, coachName, probe] = await Promise.all([
+    fetchMarginMembers("all"),
+    fetchPayoutBuilds(),
+    fetchCoachNameMap(),
+    supabase.from("payout_builds").select("hour_items").limit(1),
+  ]);
+  return {
+    members: members.members,
+    excludedClients: members.excludedClients,
+    builds: [...builds.values()].map((b) => ({
+      coachId: b.coachId,
+      coachName: coachName.get(b.coachId) ?? `#${b.coachId}`,
+      serviceMonth: b.serviceMonth,
+      approved: b.status === "approved",
+      piecesTotal: piecesTotal(b.pieces),
+      hourlyPay: laborTotal(b.hours, b.hourlyRate ?? 0),
+      hours: hoursTotal(normalizeEntries(b.hours)),
+    })),
+    hourlyColumn: !probe.error,
+  };
 }
 
 // --- User permissions (Admin §405, bones) ---

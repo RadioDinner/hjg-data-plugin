@@ -12,7 +12,6 @@ import {
   hoursTotal,
   hourlyTotal,
   laborTotal,
-  entryAmount,
   normalizePieces,
   piecesTotal,
   buildHourlyStubModel,
@@ -40,6 +39,7 @@ import { HelpButton } from "./HelpDrawer";
 import { SectionId } from "./SectionId";
 import { PieceWorkCard } from "./PieceWorkCard";
 import { EmailStubModal } from "./EmailStubModal";
+import { TimesheetTable } from "./TimesheetTable";
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtUsd = (n: number) => usd.format(n || 0);
@@ -182,11 +182,6 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
     setDirty(true);
     setFlash(null);
   };
-
-  function patchEntry(i: number, patch: Partial<HourlyEntry>) {
-    setEntries((arr) => arr.map((e, j) => (j === i ? { ...e, ...patch } : e)));
-    touch();
-  }
 
   async function addStaff() {
     const name = newName.trim();
@@ -676,148 +671,15 @@ export function HourlyPayView({ onBack }: { onBack?: () => void }) {
               </div>
             </div>
 
-            <div className="table-scroll">
-              <table className="table table--center">
-                <thead>
-                  <tr>
-                    <th style={{ width: 150 }}>Date</th>
-                    <th style={{ textAlign: "left" }}>Work (from the time sheet)</th>
-                    <th style={{ width: 90 }}>Hours</th>
-                    <th
-                      style={{ width: 110 }}
-                      title="Leave blank to pay this line at the default rate above"
-                    >
-                      Rate ($/h)
-                    </th>
-                    <th style={{ width: 110 }}>Amount</th>
-                    <th style={{ width: 40 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((e, i) => (
-                    <tr key={i}>
-                      <td>
-                        <input
-                          className="cell-edit"
-                          type="date"
-                          value={e.date ?? ""}
-                          disabled={locked}
-                          onChange={(ev) => patchEntry(i, { date: ev.target.value || null })}
-                          aria-label={`Date for line ${i + 1}`}
-                        />
-                      </td>
-                      <td style={{ textAlign: "left" }}>
-                        <input
-                          className="cell-edit"
-                          type="text"
-                          style={{ width: "100%" }}
-                          placeholder="what they worked on…"
-                          value={e.label}
-                          disabled={locked}
-                          onChange={(ev) => patchEntry(i, { label: ev.target.value })}
-                          aria-label={`Work description for line ${i + 1}`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="cell-edit"
-                          type="number"
-                          min="0"
-                          step="0.25"
-                          style={{ width: 70 }}
-                          value={e.hours === 0 ? "" : String(e.hours)}
-                          placeholder="0"
-                          disabled={locked}
-                          onChange={(ev) => {
-                            const n = Number(ev.target.value);
-                            patchEntry(i, { hours: Number.isFinite(n) && n >= 0 ? n : 0 });
-                          }}
-                          aria-label={`Hours for line ${i + 1}`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="cell-edit"
-                          type="number"
-                          min="0"
-                          step="0.5"
-                          style={{ width: 90 }}
-                          value={e.rate == null ? "" : String(e.rate)}
-                          placeholder={rate ? String(rate) : "0"}
-                          disabled={locked}
-                          onChange={(ev) => {
-                            const raw = ev.target.value;
-                            if (raw === "") return patchEntry(i, { rate: null });
-                            const n = Number(raw);
-                            patchEntry(i, { rate: Number.isFinite(n) && n >= 0 ? n : null });
-                          }}
-                          title="Rate for THIS line only. Blank = the default rate for the period."
-                          aria-label={`Hourly rate for line ${i + 1}`}
-                        />
-                      </td>
-                      <td
-                        className="num"
-                        style={{
-                          fontWeight: e.rate != null && e.rate !== rate ? 700 : undefined,
-                          color: e.rate != null && e.rate !== rate ? "var(--accent)" : undefined,
-                        }}
-                      >
-                        {fmtUsd(entryAmount(e, rate))}
-                      </td>
-                      <td>
-                        <button
-                          className="linkbtn"
-                          disabled={locked}
-                          onClick={() => {
-                            setEntries((arr) => arr.filter((_, j) => j !== i));
-                            touch();
-                          }}
-                          title="Remove this line"
-                          aria-label={`Remove line ${i + 1}`}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {entries.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="muted">
-                        No timesheet lines yet — add the first one below.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={2} style={{ textAlign: "right", fontWeight: 600 }}>
-                      Labor totals
-                    </td>
-                    <td className="num" style={{ fontWeight: 700 }}>
-                      {hours} h
-                    </td>
-                    <td />
-                    <td className="num" style={{ fontWeight: 700 }}>
-                      {fmtUsd(labor)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {!locked && (
-              <button
-                className="btn btn--sm"
-                style={{ marginTop: 8 }}
-                onClick={() => {
-                  setEntries((arr) => [...arr, { date: null, label: "", hours: 0, rate: null }]);
-                  touch();
-                }}
-              >
-                + Add line
-              </button>
-            )}
+            <TimesheetTable
+              entries={entries}
+              onChange={(next) => {
+                setEntries(next);
+                touch();
+              }}
+              defaultRate={rate}
+              locked={locked}
+            />
           </section>
 
           <div style={{ gridColumn: "1 / -1" }}>

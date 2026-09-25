@@ -44,6 +44,7 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 209 | `timeclock.entries` | Time clock — my entries + submit for payroll | `TimeClockView` card |
 | 210 | `build.pieces` | Build payout — piece work (flat per-unit pay) | `PieceWorkCard` in `BuildPayoutView` |
 | 211 | `pay.hourly.pieces` | Hourly staff — piece work (flat per-unit pay) | `PieceWorkCard` in `HourlyPayView` |
+| 212 | `build.hours` | Build payout — hourly work (hours × rate, paid in full, no split) | `HourlyWorkCard` in `BuildPayoutView` |
 | 301 | `raw.screen` | Raw data (screen) | nav tab |
 | 400 | `admin.screen` | Admin (screen) | nav tab |
 | 401 | `admin.sync` | Sync | `AdminView` card |
@@ -66,6 +67,8 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 605 | `margins.mentoring.engagements` | Margins on Mentoring — Engagements inset | `MarginsView` inset table |
 | 606 | `margins.tiers` | Margins by tier — all active mentees by 4x / 2x / 1x | `MarginsView` card |
 | 607 | `margins.tiers.mentees` | Margins by tier — per-mentee breakdown inset | `MarginsView` inset table |
+| 608 | `margins.mentorCost` | Mentor pay cost by month — piece work + hourly as a cost to HJG | `MarginsView` card |
+| 609 | `margins.mentorCost.mentors` | Mentor pay cost — per-mentor breakdown inset | `MarginsView` inset table |
 | 651 | `finevent.screen` | Report financial event (screen) | nav tab |
 | 652 | `finevent.form` | Report financial event — entry form | `FinancialEventView` card |
 | 701 | `discovery.screen` | Discovery calls (screen) | nav tab |
