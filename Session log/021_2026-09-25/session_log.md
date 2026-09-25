@@ -53,15 +53,42 @@ Recommendations given:
 - Format: stub **in the email body** (recommended). A PDF attachment is the hardest option
   (headless Chromium in a Vercel function, 250 MB limit), so it's deferred. An `.html`
   attachment was rejected because HTML attachments are a top phishing format.
-- Provider: **Resend** (free plan 3,000/mo, 100/day, 1 domain; DNS SPF/DKIM, subdomain
+- Provider: **Resend** (free plan 3,000/mo, 100/day; DNS SPF/DKIM, subdomain
   recommended). Postmark free = 100/mo then $15/mo. SendGrid dropped its permanent free
-  plan in 2025.
+  plan in 2025. **Correction (turn 2):** turn 1 said the free plan allows 1 domain, based
+  on a stale Resend knowledge-base page. Resend's changelog says free teams now get **3**.
 - Side note: letting mentors log in to see their own stubs instead is a much bigger job,
   because every table's RLS is "any signed-in user reads everything".
 
 Sources could not be fetched directly (egress policy blocked resend.com, caniemail.com,
 support.google.com). Facts came from web-search summaries, and the user was told to
 re-check pricing on the vendor page.
+
+## Turn 2: reuse the Plain Exchange Resend account, or make a new one?
+
+The user already has a Resend account (GitHub login) that they use to send email for
+The Plain Exchange.
+
+**Recommendation:** a separate Resend account for HJG, signed up with an HJG-owned email
+address. Reasons:
+- Resend keeps sent-email data for 30 days. Mentor stubs include mentee names and
+  invoice amounts, so anyone on the Plain Exchange team could read them.
+- The bounce (<4%) and spam (<0.08%) limits apply account-wide, so a problem on either
+  side pauses the other's sending.
+- The 100/day and 3,000/month quota is shared.
+- HJG's payroll email shouldn't hang on a personal GitHub login tied to another business.
+
+Options laid out:
+1. Same team: free now that free teams get 3 domains. Must use a sending-only key
+   restricted to HJG's domain.
+2. Same login, new team: new teams must start on a paid plan (Pro $20/mo). Poor value at
+   HJG's volume.
+3. New account (recommended): Resend's AUP forbids multiple accounts meant to get around
+   quotas. A separate org account isn't that, since HJG's volume fits the existing
+   quota, but the user was told to confirm with Resend support if they want certainty.
+
+Either way: HJG gets its own sending-only, domain-restricted API key, stored only in
+HJG's Vercel project.
 
 ## Open questions / next step (awaiting the user)
 

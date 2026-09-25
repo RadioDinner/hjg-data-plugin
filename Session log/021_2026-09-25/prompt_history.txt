@@ -1,2 +1,5 @@
 --- 2026-09-25 (session start) ---
 How hard would it be to make so that I could put an email address on file with each staff member and mentor, and it would automatically email them their paystub when I mark it as complete? Or to click a button to send them the pay stubs
+
+--- 2026-09-25 (turn 2) ---
+I have a resend account with github account that I use for the plain exchange and sending emails through there. Should I create a new resend account for this or would it be better to use the same one

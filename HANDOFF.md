@@ -25,6 +25,14 @@ Next migration number is **9962**.
 checkbox; (2) email body vs PDF; (3) hourly staff: button only or a new Payment-sent
 step; (4) provider (Resend proposed) + sending domain + who controls DNS.
 
+**Resend account (turn 2).** The user already uses a Resend account (GitHub login) for
+The Plain Exchange. Advised: a **separate Resend account owned by an HJG email**. Reasons:
+payroll content sits in Resend's 30-day logs; account-wide bounce/spam pauses and the
+100/day quota are shared; HJG shouldn't depend on a personal login. Reusing the same
+team is free (free teams now get 3 domains, not 1 as turn 1 said). A second team under
+the same login must be paid (Pro $20/mo). Either way, HJG needs a sending-only API key
+restricted to HJG's domain.
+
 ## ▶ Prior session START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
 
 **Second Margins lens shipped on the branch: "Margins by tier — all active
