@@ -13,6 +13,7 @@ import {
   listSyncRuns,
   updateSetting,
   upsertCoachSettings,
+  isValidEmail,
   upsertManualMetric,
   type CoachWithSettings,
   type ManualMetricRow,
@@ -59,7 +60,14 @@ export function AdminView() {
   const [mcEdits, setMcEdits] = useState<
     Record<
       number,
-      { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }
+      {
+        isMentor: boolean;
+        capacity: string;
+        notes: string;
+        payStart: string;
+        payRamp: string;
+        payEmail: string;
+      }
     >
   >({});
   const [mcDirty, setMcDirty] = useState<Set<number>>(new Set());
@@ -85,7 +93,14 @@ export function AdminView() {
     setCoaches(all);
     const edits: Record<
       number,
-      { isMentor: boolean; capacity: string; notes: string; payStart: string; payRamp: string }
+      {
+        isMentor: boolean;
+        capacity: string;
+        notes: string;
+        payStart: string;
+        payRamp: string;
+        payEmail: string;
+      }
     > = {};
     for (const c of all) {
       edits[c.coachId] = {
@@ -94,6 +109,7 @@ export function AdminView() {
         notes: c.notes ?? "",
         payStart: c.payStartMonth ?? "",
         payRamp: c.payRamp ?? "",
+        payEmail: c.payEmail ?? "",
       };
     }
     setMcEdits(edits);
@@ -113,6 +129,15 @@ export function AdminView() {
       setMcMsg("Nothing changed.");
       return;
     }
+    const badEmail = [...mcDirty].find((id) => {
+      const v = mcEdits[id]?.payEmail.trim() ?? "";
+      return v !== "" && !isValidEmail(v);
+    });
+    if (badEmail != null) {
+      const who = coaches.find((c) => c.coachId === badEmail)?.name ?? `#${badEmail}`;
+      setMcMsg(`Not saved — ${who}'s pay-stub email isn't a valid address.`);
+      return;
+    }
     setMcSaving(true);
     setMcMsg(null);
     setError(null);
@@ -129,6 +154,7 @@ export function AdminView() {
             notes: e.notes.trim() === "" ? null : e.notes.trim(),
             payStartMonth: e.payStart.trim() === "" ? null : e.payStart.trim(),
             payRamp: e.payRamp.trim() === "" ? null : e.payRamp.trim(),
+            payEmail: e.payEmail.trim() === "" ? null : e.payEmail.trim(),
           });
         }),
       );
@@ -407,8 +433,9 @@ export function AdminView() {
           mentor&apos;s true first month of work — leave it blank to infer from their earliest
           engagement. <strong>Pay ramp</strong> sets a mentor&apos;s revenue-share ramp by tenure
           month (e.g. <code>50/60/60</code> for a fast-tracked mentor); blank = the default{" "}
-          <code>35/50/60</code>. The Metrics tab&apos;s Mentors metric is filtered to flagged
-          mentors once any are set, and the
+          <code>35/50/60</code>. <strong>Pay-stub email</strong> is where their emailed pay stubs go
+          — leave it blank to use their CoachAccountable email (shown faintly in the box). The
+          Metrics tab&apos;s Mentors metric is filtered to flagged mentors once any are set, and the
           <strong> Mentor capacity utilization </strong>card reads these capacities. Saves write to
           the HJG-owned
           <code> coach_settings</code> table, untouched by CA sync.
@@ -422,6 +449,7 @@ export function AdminView() {
                 <th className="num">Capacity</th>
                 <th>Pay start</th>
                 <th>Pay ramp</th>
+                <th>Pay-stub email</th>
                 <th>Notes</th>
               </tr>
             </thead>
@@ -435,6 +463,7 @@ export function AdminView() {
                     notes: "",
                     payStart: "",
                     payRamp: "",
+                    payEmail: "",
                   };
                   return (
                     <tr key={c.coachId}>
@@ -505,6 +534,29 @@ export function AdminView() {
                       </td>
                       <td>
                         <input
+                          type="email"
+                          value={e.payEmail}
+                          placeholder={c.caEmail ?? "—"}
+                          title="Where this mentor's emailed pay stubs go. Blank = their CoachAccountable email (the faint address)."
+                          aria-label={`Pay-stub email for ${c.name}`}
+                          style={{
+                            width: 200,
+                            borderColor:
+                              e.payEmail.trim() && !isValidEmail(e.payEmail)
+                                ? "var(--warn-line)"
+                                : undefined,
+                          }}
+                          onChange={(ev) => {
+                            setMcEdits((prev) => ({
+                              ...prev,
+                              [c.coachId]: { ...e, payEmail: ev.target.value },
+                            }));
+                            markDirty(c.coachId);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
                           type="text"
                           value={e.notes}
                           placeholder=""
@@ -523,7 +575,7 @@ export function AdminView() {
                 })}
               {coaches.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={7} className="muted">
                     No coaches synced yet. Run a sync first.
                   </td>
                 </tr>

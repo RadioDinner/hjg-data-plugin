@@ -171,6 +171,12 @@ Pure math lives in \`lib/compare.ts\`.`,
 - The **Payments completed** strip on the picker card shows, per month, how many mentors are paid (**✓ paid** = everyone) — the at-a-glance "which months are done".
 - Click **Payment sent ✓** again to edit the reference or clear the mark (e.g. a payment that bounced).
 
+### Email stub (send it to the mentor)
+- Once a build is **approved and saved**, **Email stub…** sends the pay stub to the mentor as a **PDF attachment**. A dialog shows exactly which address it goes to first.
+- The address is the mentor's **Pay-stub email** (Admin → Mentor capacity) or, when that's blank, their **CoachAccountable email**.
+- It's a button, never automatic — nothing is emailed until you click **Send email**. The button reads **Email stub ✓** once one has gone out; clicking it again sends a second copy.
+- Disabled while the build is a draft, has unsaved changes, or the engine's numbers have drifted since approval — the emailed stub always matches the signed-off total. See **Emailing pay stubs** for the setup.
+
 ### Important
 - This **never changes the engine's numbers** — overrides and exclusions live only in the review record (\`payout_builds\`). It's read-only toward CoachAccountable; the engine stays the source of truth.`,
   },
@@ -187,10 +193,12 @@ Pure math lives in \`lib/compare.ts\`.`,
 5. Add an optional **adjustment** ($ + or −, with a reason) and a **pay stub note**.
 6. **Save draft** while checking; **Approve** to lock it (the logged payout amount is stored with the build).
 7. **Print** — a draft prints a watermarked *REVIEW COPY*, an approved build prints the final *PAY STUB*. Every print is **archived to History** automatically.
+8. **Email stub…** (approved + saved only) sends the stub as a **PDF** to the person's **Pay-stub email** — the box under their rate (saved when you leave it; blank = their linked coach's email, if they have one). A dialog shows the address before anything is sent.
+9. **Payment sent…** records that the approved payout was actually paid, with the **Melio payment number** as the reference — same as mentor payouts. A paid month shows **paid ✓** and the print button becomes **Reprint pay stub**.
 
 **Total = Σ (each line's hours × its rate) + piece work + adjustment.**
 
-Needs migrations \`9970_staff_hourly_pay.sql\` and \`9964_pay_piece_work.sql\`.`,
+Needs migrations \`9970_staff_hourly_pay.sql\` and \`9964_pay_piece_work.sql\`; emails and Payment sent need \`9962_paystub_email.sql\`.`,
   },
 
   "pay.history": {
@@ -199,9 +207,38 @@ Needs migrations \`9970_staff_hourly_pay.sql\` and \`9964_pay_piece_work.sql\`.`
 
 - Each stub is stored as the **exact HTML document that was generated**, so opening one shows precisely what was sent — even if invoices re-synced or reviews changed since.
 - **view** opens the stub in a new window (print from there to re-send); **delete** removes an archived stub (only ones you archived).
-- Stubs are archived automatically whenever you print from **Build payout** or **Hourly staff** — review copies and approved stubs both, labeled with the status at print time.
+- Stubs are archived automatically whenever you print or email from **Build payout** or **Hourly staff** — review copies and approved stubs both, labeled with the status at print time.
+- **Emailed stubs** also keep the **exact PDF that was attached** — **pdf** opens it. The **Emailed** column shows when and to which address it went (or **failed**, with the reason on hover).
+- **email** resends that PDF — allowed only while it still matches the **approved** build; if the build was reopened or its total changed, email a fresh stub from Build payout / Hourly staff instead.
 
-Needs migration \`9970_staff_hourly_pay.sql\`.`,
+Needs migration \`9970_staff_hourly_pay.sql\` (and \`9962_paystub_email.sql\` for PDFs + the email log).`,
+  },
+
+  "pay.email": {
+    title: "Emailing pay stubs",
+    body: `Send an **approved** pay stub to the person it belongs to as a **PDF attachment** — from **Build payout** (mentors), **Hourly staff**, or **History** (resend).
+
+### Who it goes to
+- **Mentors:** their **Pay-stub email** (Admin → Mentor capacity), else their **CoachAccountable email** (synced from CA).
+- **Hourly staff:** the **Pay-stub email** on their Hourly staff profile, else their linked coach's address.
+- The dialog shows the address and where it came from **before** anything is sent. Nothing is emailed automatically.
+
+### What they get
+- A short email: *"Your <month> pay stub from HJG"*, naming the month only. **Amounts are never in the subject or body** (they'd show on a phone's lock screen) — the numbers are in the attached PDF.
+- The PDF is the same statement as the printed stub — summary, mentee/timesheet lines, and for mentors every invoice behind each number.
+- Replies go to the reply-to address configured for the app, so questions reach HJG.
+
+### Safety checks (enforced on the server, not just the screen)
+- Only **approved** stubs, and only while the stub's total still **matches the approved build**. Reopen or change a build and the old stub can't be sent.
+- The server looks up the recipient itself; the browser can't choose an address.
+- Your account needs access to the **Pay staff** tab.
+- The same stub can't be emailed to the same address twice within **2 minutes** (double-click guard).
+- Every attempt — sent or failed — is logged (\`paystub_emails\`), and the exact PDF is archived to History.
+
+### One-time setup
+- Apply migration \`9962_paystub_email.sql\` (Supabase SQL Editor).
+- In **Resend**: verify the sending domain (DNS records) and create an API key with **Sending access** restricted to that domain.
+- In **Vercel** → Environment Variables: \`RESEND_API_KEY\`, \`PAYSTUB_FROM\` (e.g. *HJG Pay <pay@send.yourdomain.org>*, on the verified domain) and \`PAYSTUB_REPLY_TO\` (the inbox replies should reach). Redeploy after adding them.`,
   },
 
   "pay.reconcile": {

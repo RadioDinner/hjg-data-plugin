@@ -1,11 +1,14 @@
-# Session 021 — 2026-09-25 — Q&A: emailing pay stubs (no code)
+# Session 021 — 2026-09-25 — Email pay stubs (PDF) + hourly Payment sent (v0.11.0)
 
-Branch: `claude/wizardly-planck-9vzspj` (started at `main` = `2cb5865`, v0.10.0). No app
-code changed; version stays **0.10.0**.
+Branch: `claude/wizardly-planck-9vzspj` (started at `main` = `2cb5865`, v0.10.0).
+Version bumped **0.10.0 → 0.11.0** on the branch. **Not merged to `main`**; that
+waits on the user's word.
 
 ## What shipped
 
-- (this commit) — session folder, prompt history, this log, HANDOFF note.
+- `52ac018` — turn 1: Q&A on emailing pay stubs; session folder, log, HANDOFF note.
+- `ec558d6` — turn 2: Resend account advice; corrected the free-plan domain count.
+- (this commit) — turn 3: **the feature** (v0.11.0), see "Turn 3" below.
 
 ## The question
 
@@ -90,18 +93,73 @@ Options laid out:
 Either way: HJG gets its own sending-only, domain-restricted API key, stored only in
 HJG's Vercel project.
 
+## Turn 3: "I made a new account, which one of these do you need" (+ build)
+
+The user made a **new Resend account** (following turn 2's advice) and asked which
+language snippet on Resend's onboarding screen I need. **Answer:** none. I write the
+code, and the server calls Resend's REST API directly (what the cURL tab shows), so no
+SDK or snippet is needed. I also warned them **not to paste the snippet or "Copy for
+AI" output**, since it can contain the live `re_…` key; the key belongs only in Vercel env
+vars. Setup steps given: verify the domain (subdomain), create a Sending-access key
+restricted to it, and add `RESEND_API_KEY` in Vercel (Production + Preview), then
+redeploy.
+
+**Decisions (AskUserQuestion):** trigger = **Button only** · format = **PDF
+attachment** · hourly staff = **Add a Payment-sent step** · **Yes, start building**.
+Note: they chose PDF over the recommended email-body option, and button-only over the
+recommended Payment-sent checkbox. Both were built as chosen.
+
+**Built** (details in HANDOFF START HERE):
+- Migration `9962_paystub_email.sql`: `coach_settings.pay_email`,
+  `staff_pay_profiles.email`, `staff_pay_builds.payment_sent_at/_ref`,
+  `paystubs.profile_id/pdf_base64/has_pdf` (generated), and `paystub_emails` (log,
+  service-role writes only).
+- `lib/paystubEmail.ts` (pure leaf: address rules, validation, totals match, resend
+  guard, email content with no amounts, filename).
+- `lib/payStubPdf.ts` (pure pdfmake layouts for mentor + hourly stubs from the
+  existing stub models).
+- `src/pdf.ts` (lazy browser renderer) and `api/send-paystub.ts` (server checks +
+  Resend + log).
+- UI:
+  - `EmailStubModal` (§908)
+  - Build payout Email stub
+  - Hourly: email box, New staff email, Email stub, Payment sent (§909)
+  - History: pdf / email / Emailed column
+  - Admin → Mentor capacity: Pay-stub email column
+- Help: new `pay.email` article, plus updates to `pay.build`, `pay.hourly` and
+  `pay.history`. Registry 908/909 + UI_INDEX. `.env.example`: `RESEND_API_KEY`,
+  `PAYSTUB_FROM`, `PAYSTUB_REPLY_TO`. `pdfmake@0.3.11` added.
+- Fix riding along: Hourly staff wiped unsaved timesheet lines when the Rate box
+  (or now the email box) saved to the profile. The reset is now keyed on the profile id.
+
+**Verification:** typecheck ✓ · verify **941** (new §30: address rules, email content,
+PDF layout, and real pdfmake renders incl. a 40-mentee multi-page stub) ✓ · lint 0
+errors / 14 pre-existing ✓ · build ✓ (pdfmake + fonts in lazy chunks; main +38 KB) ·
+prettier ✓. Scratchpad-only, not committed:
+- The real endpoint against a fetch-level fake of Supabase + Resend: **37/37**.
+- A Playwright harness over the real views: **20/20**, including a real PDF rendered
+  in Chromium for both stub kinds, and light/dark screenshots.
+
+The first harness run failed on my own stub bug (a spread overwrote the capture key),
+not on the app. Visual PDF review surfaced two fixes that were then made: the hero-card
+wrap, and ligatures copying "flat" as "fat". The harness is deleted.
+
+**Research facts used** (web search summaries of resend.com, because direct fetches
+were blocked by the egress policy; the REST field names were confirmed from the
+`resend` npm package source):
+- Resend testing domain `resend.dev` only sends to the account's own address.
+- REST `POST /emails` takes `reply_to` and `attachments[{filename, content (base64),
+  content_type}]`.
+- Errors come back as `{statusCode, message, name}`.
+
 ## Open questions / next step (awaiting the user)
 
-1. Trigger: button only, or button + Payment-sent checkbox (recommended)?
-2. Format: email body (recommended) or PDF?
-3. Hourly staff: button only, or add a Payment-sent step to hourly pay?
-4. Provider/domain: Resend OK? Which sending domain, and does the user control its DNS?
-
-If they say build it, the planned pieces are:
-- migration 9962: `coach_settings.pay_email`, `staff_pay_profiles.email`,
-  `paystubs.profile_id`, and a `paystub_emails` send log
-- email renderers for the mentor + hourly stubs, with verify checks
-- `api/send-paystub.ts`
-- UI: an email button + confirm dialog, email fields in Admin (mentors) and the hourly
-  profile editor, and a sent status in History
-- help text and a minor version bump (0.11.0)
+1. The user does the setup:
+   - apply 9962
+   - Resend domain + restricted key
+   - Vercel `RESEND_API_KEY`, `PAYSTUB_FROM`, `PAYSTUB_REPLY_TO`, then redeploy
+   - hourly staff emails
+2. Then a **test send to themselves** before real staff.
+3. Merge to `main` on their word (chip `v0.11.0`).
+4. Not built (by choice): auto-send; a mentor-login portal.
+5. Next migration: **9961**.

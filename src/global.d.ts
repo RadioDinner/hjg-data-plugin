@@ -5,3 +5,17 @@
 declare const __APP_SEMVER__: string;
 declare const __APP_VERSION__: string;
 declare const __BUILD_AT__: string;
+
+// pdfmake 0.3 ships no types; these cover the browser build src/pdf.ts loads.
+declare module "pdfmake/build/pdfmake" {
+  const pdfMake: {
+    addVirtualFileSystem(vfs: Record<string, string>): void;
+    setUrlAccessPolicy(cb: (url: string) => boolean): void;
+    createPdf(doc: unknown): { getBase64(): Promise<string> };
+  };
+  export default pdfMake;
+}
+declare module "pdfmake/build/vfs_fonts" {
+  const vfs: Record<string, string>;
+  export default vfs;
+}

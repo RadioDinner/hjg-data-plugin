@@ -160,6 +160,22 @@ import {
   serializeTransitionOptions,
   DEFAULT_TRANSITION_OPTIONS,
 } from "../lib/transitionOptions.js";
+import {
+  isValidEmail,
+  normalizeEmail,
+  resolveMentorPayEmail,
+  resolveHourlyPayEmail,
+  totalsMatch,
+  sentRecently,
+  RESEND_GUARD_MS,
+  paystubPdfFilename,
+  paystubEmailContent,
+  periodLabel,
+  firstNameOf,
+} from "../lib/paystubEmail.js";
+import { mentorStubPdfDoc, hourlyStubPdfDoc, pdfUsd } from "../lib/payStubPdf.js";
+import pdfmake from "pdfmake";
+import { fileURLToPath } from "node:url";
 import type { CAAppointment, CAClient, CAOfferingSubmission } from "../lib/types.js";
 
 let failures = 0;
@@ -4682,6 +4698,249 @@ console.log("[29] Margins by tier — all active mentees grouped by bracket (com
   eq(bad.prices["1x"], 145, "a negative price override is ignored");
   eq(bad.activeMentees, 0, "no members → empty report");
   eq(bad.total.expectedMarginPerMeeting, null, "no members → no blended expectation");
+}
+
+console.log("[30] Pay stubs by email — recipient rules, email content, PDF layout + render");
+{
+  // --- addresses: one plain address, nothing a header could be split on ---
+  for (const ok of ["harry@example.com", "a.b+pay@sub.example.org", "  X@Y.CO  "])
+    assert(isValidEmail(ok), `valid: ${JSON.stringify(ok)}`);
+  for (const bad of [
+    "",
+    "harry",
+    "harry@",
+    "@example.com",
+    "harry@example",
+    "harry@@example.com",
+    "a@b@example.com",
+    "Harry <harry@example.com>",
+    "a@example.com, b@example.com",
+    "a@example.com;b@example.com",
+    "harry shenk@example.com",
+    "harry@example.com\nBcc: x@evil.com",
+    "harry@.example.com",
+    "harry@example..com",
+  ])
+    assert(!isValidEmail(bad), `invalid: ${JSON.stringify(bad)}`);
+  eq(normalizeEmail("  Harry@Example.COM "), "harry@example.com", "normalize trims + lowercases");
+  eq(normalizeEmail("   "), null, "blank normalizes to null");
+
+  // --- who a MENTOR's stub goes to ---
+  const m1 = resolveMentorPayEmail({ payEmail: "Pay@X.org", caEmail: "ca@x.org" });
+  eq(m1?.email, "pay@x.org", "mentor: pay-stub email wins over the CA email");
+  eq(m1?.source, "pay-email", "mentor: source = pay-email");
+  const m2 = resolveMentorPayEmail({ payEmail: "  ", caEmail: "ca@x.org" });
+  eq(m2?.email, "ca@x.org", "mentor: blank override falls back to CoachAccountable");
+  eq(m2?.source, "coachaccountable", "mentor: source = coachaccountable");
+  eq(resolveMentorPayEmail({}), null, "mentor: nothing on file -> null");
+  const m3 = resolveMentorPayEmail({ payEmail: "not-an-email", caEmail: "ca@x.org" });
+  eq(m3?.email, "not-an-email", "mentor: a typed override wins even when malformed…");
+  eq(m3?.valid, false, "…and is reported invalid (never a silent fallback to another address)");
+
+  // --- who an HOURLY stub goes to ---
+  const h1 = resolveHourlyPayEmail({
+    profileEmail: "ruth@x.org",
+    linkedCoach: { payEmail: "p@x.org", caEmail: "c@x.org" },
+  });
+  eq(h1?.email, "ruth@x.org", "hourly: the profile email wins");
+  eq(h1?.source, "staff-profile", "hourly: source = staff-profile");
+  const h2 = resolveHourlyPayEmail({
+    profileEmail: null,
+    linkedCoach: { payEmail: null, caEmail: "c@x.org" },
+  });
+  eq(h2?.email, "c@x.org", "hourly: blank profile -> the linked coach's CA email");
+  eq(h2?.source, "coachaccountable", "hourly: linked-coach source kept");
+  eq(
+    resolveHourlyPayEmail({ profileEmail: "", linkedCoach: null }),
+    null,
+    "hourly: nothing on file -> null",
+  );
+
+  // --- a stub is sendable only while it matches its approved build ---
+  assert(totalsMatch(707.64, 707.64), "totals match exactly");
+  assert(totalsMatch(707.64, 707.65), "totals within a cent match (float/rounding slack)");
+  assert(!totalsMatch(707.64, 707.66), "two cents apart -> stale stub");
+  assert(!totalsMatch(707.64, 590.29), "a changed build -> stale stub");
+
+  // --- double-send guard ---
+  const now = Date.parse("2026-09-25T15:00:00Z");
+  const at = (msAgo: number) => new Date(now - msAgo).toISOString();
+  const log = [
+    { to_email: "Harry@X.org", status: "sent", created_at: at(30_000) },
+    { to_email: "old@x.org", status: "sent", created_at: at(RESEND_GUARD_MS + 1000) },
+    { to_email: "fail@x.org", status: "failed", created_at: at(10_000) },
+  ];
+  assert(sentRecently(log, "harry@x.org", now), "guard: same address 30s ago (case-insensitive)");
+  assert(!sentRecently(log, "old@x.org", now), "guard: outside the 2-minute window -> allowed");
+  assert(!sentRecently(log, "fail@x.org", now), "guard: a FAILED attempt never blocks a retry");
+  assert(!sentRecently(log, "new@x.org", now), "guard: a different address -> allowed");
+
+  // --- the email itself: month only, never an amount ---
+  eq(periodLabel("2026-06"), "June 2026", "period label");
+  eq(firstNameOf("Harry Shenk"), "Harry", "first name");
+  eq(firstNameOf("  "), "there", "no name -> 'there'");
+  eq(
+    paystubPdfFilename("Zoë O'Brien-Yoder", "2026-06"),
+    "HJG-pay-stub-Zoe-O-Brien-Yoder-2026-06.pdf",
+    "PDF filename is ASCII-safe",
+  );
+  eq(paystubPdfFilename("", "junk"), "HJG-pay-stub-staff-period.pdf", "filename fallbacks");
+  const em = paystubEmailContent({ staffName: "Harry Shenk", ym: "2026-06", kind: "mentor" });
+  eq(em.subject, "Your June 2026 pay stub from HJG", "subject names the month");
+  assert(!/\$/.test(em.subject + em.text + em.html), "no dollar amounts in subject / text / html");
+  assert(em.html.includes("Hi Harry,") && !em.html.includes("Shenk"), "greets by first name only");
+  const hostile = paystubEmailContent({
+    staffName: "<img/src=x>Eve Doe",
+    ym: "2026-06",
+    kind: "mentor",
+  });
+  assert(
+    hostile.html.includes("Hi &lt;img/src=x&gt;Eve,") && !hostile.html.includes("<img"),
+    "names are HTML-escaped (no injected markup)",
+  );
+  assert(em.text.includes("mentor payment statement"), "mentor wording");
+  assert(
+    !/<style|var\(|display:\s*flex/i.test(em.html),
+    "email HTML is client-safe (no <style>, var(), flex)",
+  );
+  const eh = paystubEmailContent({ staffName: "Ruth Beiler", ym: "2026-06", kind: "hourly" });
+  assert(
+    eh.text.includes("Hi Ruth,") && eh.text.includes("pay stub for June 2026"),
+    "hourly wording",
+  );
+
+  // --- PDF layout from the SAME models the printed stubs use ---
+  const srcA = {
+    invoiceId: 4135,
+    invoiceNumber: "4135",
+    serviceDate: "2026-06-10",
+    serviceMonth: "2026-06",
+    invoiceDay: 10,
+    slice: "this-month" as const,
+    billed: 425,
+    eligibleBilled: 425,
+    collected: 425,
+    elapsedFraction: 1 / 3,
+    recognized: 425 * (2 / 3),
+    tier: "4x",
+    payments: [],
+    lineItems: [
+      { item: "MN Subscription | (4x Month) ($425)", amount: 425, status: "included" as const },
+    ],
+  } as import("../lib/pay.js").PayLineSource;
+  const mkMentee = (i: number): import("../lib/pay.js").PayMenteeLine => ({
+    clientId: i,
+    clientName: `Mentee ${i} → test`,
+    coachId: 900,
+    billed: 425,
+    collected: 425,
+    invoiceDay: 10,
+    recognizedThis: round2(425 * (2 / 3)),
+    rolloverPrev: 0,
+    earned: round2(425 * (2 / 3)),
+    splitPct: 0.6,
+    payout: round2(round2(425 * (2 / 3)) * 0.6),
+    tier: "4x",
+    sources: [{ ...srcA, invoiceId: 4000 + i, invoiceNumber: String(4000 + i) }],
+  });
+  const lines = [1, 2, 3].map(mkMentee);
+  const approved = buildPayStubModel({
+    coachName: "Harry Shenk",
+    ym: "2026-06",
+    splitPct: 0.6,
+    status: "approved",
+    lines,
+    states: new Map([[2, { included: false, override: null, note: "left" }]]),
+    pieces: [{ date: null, label: "New mentee onboarded", qty: 2, unitRate: 25 }],
+    monthNote: "Thanks → great month ✓",
+    generatedOn: "2026-07-17",
+  });
+  const doc = mentorStubPdfDoc(approved);
+  eq(doc.pageSize, "LETTER", "PDF page size");
+  eq(doc.watermark, undefined, "approved stub: no REVIEW COPY watermark");
+  const table = (doc.content[2] as { table: { body: unknown[][] } }).table;
+  eq(table.body.length, 1 + 3 + 1 + 1, "summary rows = header + 3 mentees + 1 piece + TOTAL");
+  const totalRow = table.body[table.body.length - 1] as { text?: string }[];
+  eq(totalRow[5]?.text, pdfUsd(approved.totals.payout), "PDF TOTAL payout = the model's payout");
+  eq(totalRow[4]?.text, pdfUsd(approved.totals.earned), "PDF TOTAL earned = the model's earned");
+  const docJson = JSON.stringify(doc.content);
+  assert(!docJson.includes("→") && !docJson.includes("✓"), "no glyphs Roboto can't draw (→, ✓)");
+  assert(docJson.includes("Thanks -> great month"), "typed arrows become '->'");
+  assert(docJson.includes('"pageBreak":"before"'), "breakdown starts on a new page");
+  eq(pdfUsd(-15), "−$15.00", "negative money uses the minus sign like the printed stub");
+  const draft = mentorStubPdfDoc({ ...approved, approved: false });
+  eq((draft.watermark as { text?: string } | undefined)?.text, "REVIEW COPY", "draft: watermark");
+
+  const hourlyMixed = buildHourlyStubModel({
+    staffName: "Dave Troyer",
+    ym: "2026-06",
+    rate: 22,
+    entries: [
+      { date: "2026-06-03", label: "Intake", hours: 6.5, rate: null },
+      { date: "2026-06-10", label: "Training", hours: 4, rate: 40 },
+    ],
+    pieces: [{ date: null, label: "New mentee", qty: 8, unitRate: 25 }],
+    adjustment: -15,
+    status: "approved",
+    generatedOn: "2026-07-17",
+  });
+  const hdoc = hourlyStubPdfDoc(hourlyMixed);
+  const ht = (hdoc.content[2] as { table: { body: unknown[][]; widths: unknown[] } }).table;
+  eq(ht.widths.length, 5, "hourly: a Rate column appears when rates vary");
+  eq(
+    ht.body.length,
+    1 + 2 + 1 + 1 + 1 + 1,
+    "hourly rows = head + 2 lines + piece head + piece + adj + TOTAL",
+  );
+  const hTotal = ht.body[ht.body.length - 1] as { text?: string }[];
+  eq(hTotal[4]?.text, pdfUsd(hourlyMixed.total), "hourly PDF TOTAL = the model's total");
+  const hplain = hourlyStubPdfDoc(
+    buildHourlyStubModel({
+      staffName: "Ruth Beiler",
+      ym: "2026-06",
+      rate: 20,
+      entries: [{ date: "2026-06-02", label: "Books", hours: 10, rate: null }],
+      status: "approved",
+      generatedOn: "2026-07-17",
+    }),
+  );
+  eq(
+    (hplain.content[2] as { table: { widths: unknown[] } }).table.widths.length,
+    4,
+    "hourly: no Rate column on a single-rate sheet",
+  );
+
+  // --- real bytes: pdfmake renders both layouts, incl. a long multi-page stub ---
+  const fontDir = fileURLToPath(new URL("../node_modules/pdfmake/fonts/Roboto/", import.meta.url));
+  pdfmake.setFonts({
+    Roboto: {
+      normal: fontDir + "Roboto-Regular.ttf",
+      bold: fontDir + "Roboto-Medium.ttf",
+      italics: fontDir + "Roboto-Italic.ttf",
+      bolditalics: fontDir + "Roboto-MediumItalic.ttf",
+    },
+  });
+  pdfmake.setUrlAccessPolicy(() => false);
+  pdfmake.setLocalAccessPolicy((path) => path.startsWith(fontDir));
+  const pages = (b: Buffer) => (b.toString("latin1").match(/\/Type \/Page[^s]/g) ?? []).length;
+  const mBytes = await pdfmake.createPdf(doc).getBuffer();
+  assert(mBytes.subarray(0, 5).toString() === "%PDF-", "mentor stub renders to a real PDF");
+  eq(pages(mBytes), 2, "mentor stub = summary page + breakdown page");
+  const hBytes = await pdfmake.createPdf(hdoc).getBuffer();
+  assert(hBytes.subarray(0, 5).toString() === "%PDF-", "hourly stub renders to a real PDF");
+  eq(pages(hBytes), 1, "hourly stub fits one page");
+  const big = buildPayStubModel({
+    coachName: "Big Roster",
+    ym: "2026-06",
+    splitPct: 0.6,
+    status: "approved",
+    lines: Array.from({ length: 40 }, (_, i) => mkMentee(i + 1)),
+    states: new Map(),
+    generatedOn: "2026-07-17",
+  });
+  const bBytes = await pdfmake.createPdf(mentorStubPdfDoc(big)).getBuffer();
+  assert(pages(bBytes) >= 4, `40-mentee stub flows across pages (got ${pages(bBytes)})`);
+  assert(bBytes.length < 400_000, `40-mentee PDF stays small for email (${bBytes.length} bytes)`);
 }
 
 console.log("");

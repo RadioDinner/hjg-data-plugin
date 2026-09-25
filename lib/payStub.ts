@@ -273,7 +273,7 @@ const fmtD = (ymd: string) => {
   return m && d ? `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}-${y}` : ymd;
 };
 
-const DISPO_TEXT: Record<StubItemDisposition, { label: string; cls: string }> = {
+export const DISPO_TEXT: Record<StubItemDisposition, { label: string; cls: string }> = {
   counted: { label: "counted", cls: "ok" },
   "credit-counted": { label: "credit — reduces the pay basis", cls: "warn" },
   "credit-out": { label: "credit reviewed by HJG — does not reduce your pay", cls: "good" },

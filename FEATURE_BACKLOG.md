@@ -92,6 +92,25 @@ outcome," so the table can't assume it:
 
 ## Shipped
 
+### Email pay stubs (PDF) + hourly "Payment sent" — ✅ SHIPPED session 021, 2026-09-25 (v0.11.0) — ON BRANCH
+
+The user asked for an email address on file per staff member / mentor and a way to send each
+their pay stub. Decisions (AskUserQuestion): **button only** (never automatic), **PDF
+attachment**, and **add a Payment-sent step to hourly pay**. Built: **Email stub…** on Build
+payout (§204) and Hourly staff (§206), plus resend + **pdf** + an **Emailed** column in History
+(§207); one confirm dialog **§908** shows the exact address first. Addresses: mentors = Admin →
+Mentor capacity **Pay-stub email**, else their CoachAccountable email; hourly = the profile's
+**Pay-stub email**, else the linked coach's. The PDF is rendered **in the browser** (pdfmake,
+lazy-loaded chunk) from the same stub models as the printed stub (`lib/payStubPdf.ts`),
+archived with the stub, and sent by **`api/send-paystub.ts`** via Resend — the server picks
+the recipient, re-checks the stub against the **approved** build (total to the cent), checks
+Pay-staff access, blocks a 2-minute double send, and logs every attempt (`paystub_emails`).
+Email text names the month only (no amounts). Hourly **Payment sent** (§909) mirrors mentors
+(Melio ref, paid ✓, Reprint). Migration `9962_paystub_email.sql`; env `RESEND_API_KEY`,
+`PAYSTUB_FROM`, `PAYSTUB_REPLY_TO`. Verify §30. **Not built:** automatic send on approval /
+payment (the user chose button only); a mentor-login portal (RLS is "any signed-in user reads
+everything" — a much bigger job).
+
 ### Unique 3-digit identifier on every card / modal / screen — ✅ SHIPPED session 009, 2026-06-24
 
 Every addressable UI section now shows a stable 3-digit id badge. Central registry

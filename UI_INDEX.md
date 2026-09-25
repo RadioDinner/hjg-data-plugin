@@ -77,3 +77,5 @@ Ranges are mnemonic: `0xx` Metrics · `1xx` Journeys · `2xx` Pay/Build · `3xx`
 | 905 | `modal.payoutLineDetail` | Build payout — per-mentee invoice/payment drill-down | `PayoutLineDetailModal` |
 | 906 | `modal.paymentSent` | Payment sent — Melio reference dialog (§204) | `BuildPayoutView` modal |
 | 907 | `drawer.notifications` | Notifications bell + feed (topbar) | `NotificationsBell` |
+| 908 | `modal.emailStub` | Email pay stub — confirm + send (PDF) | `EmailStubModal` (Build payout, Hourly staff, History) |
+| 909 | `modal.hourlyPaymentSent` | Payment sent — Melio reference dialog (§206) | `HourlyPayView` modal |

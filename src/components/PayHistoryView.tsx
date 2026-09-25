@@ -1,8 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchPaystubs, fetchPaystubHtml, deletePaystub, type PaystubListItem } from "../db";
+import {
+  fetchPaystubs,
+  fetchPaystubHtml,
+  fetchPaystubPdf,
+  deletePaystub,
+  fetchPaystubEmailLog,
+  fetchCoachesWithSettings,
+  fetchStaffPayProfiles,
+  lastSentPaystubEmail,
+  periodLabel,
+  resolveHourlyPayEmail,
+  resolveMentorPayEmail,
+  type PaystubEmailRecord,
+  type PaystubListItem,
+  type ResolvedPayEmail,
+} from "../db";
+import { sendPaystubEmail } from "../api";
+import { showPdfInWindow } from "../pdf";
 import { fmtDateTime } from "../format";
 import { HelpButton } from "./HelpDrawer";
 import { SectionId } from "./SectionId";
+import { EmailStubModal } from "./EmailStubModal";
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtUsd = (n: number) => usd.format(n || 0);
@@ -10,7 +28,8 @@ const fmtUsd = (n: number) => usd.format(n || 0);
 // Pay staff → HISTORY (207): the archive of every printed pay stub — mentor
 // engine stubs and hourly timesheet stubs — stored as the exact HTML document
 // that was generated. Open one to review (or re-print) precisely what was sent,
-// even if the underlying data has changed since.
+// even if the underlying data has changed since. Emailed stubs also keep the
+// exact PDF that was attached, plus when / to whom it went (§908 email log).
 export function PayHistoryView({ onBack }: { onBack?: () => void }) {
   const [stubs, setStubs] = useState<PaystubListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,9 +37,55 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [emailLog, setEmailLog] = useState<PaystubEmailRecord[]>([]);
+  // Address book for the resend dialog (best effort — the server decides anyway).
+  const [coachEmails, setCoachEmails] = useState<
+    Map<number, { caEmail: string | null; payEmail: string | null }>
+  >(new Map());
+  const [profileEmails, setProfileEmails] = useState<
+    Map<string, { email: string | null; coachId: number | null }>
+  >(new Map());
+  const [emailFor, setEmailFor] = useState<PaystubListItem | null>(null);
 
   async function reload() {
-    setStubs(await fetchPaystubs());
+    const [list, log] = await Promise.all([fetchPaystubs(), fetchPaystubEmailLog()]);
+    setStubs(list);
+    setEmailLog(log);
+  }
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([
+      fetchCoachesWithSettings().catch(() => []),
+      fetchStaffPayProfiles().catch(() => []),
+    ]).then(([cs, ps]) => {
+      if (!live) return;
+      setCoachEmails(
+        new Map(cs.map((c) => [c.coachId, { caEmail: c.caEmail, payEmail: c.payEmail }])),
+      );
+      setProfileEmails(new Map(ps.map((x) => [x.id, { email: x.email, coachId: x.coachId }])));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Latest email attempt per archived stub (the log is newest-first).
+  const emailByStub = useMemo(() => {
+    const m = new Map<string, PaystubEmailRecord>();
+    for (const r of emailLog) if (r.paystubId && !m.has(r.paystubId)) m.set(r.paystubId, r);
+    return m;
+  }, [emailLog]);
+
+  function recipientFor(s: PaystubListItem): ResolvedPayEmail | null {
+    if (s.kind === "mentor")
+      return s.coachId != null ? resolveMentorPayEmail(coachEmails.get(s.coachId) ?? {}) : null;
+    const prof = s.profileId ? profileEmails.get(s.profileId) : undefined;
+    if (!prof) return null;
+    return resolveHourlyPayEmail({
+      profileEmail: prof.email,
+      linkedCoach: prof.coachId != null ? (coachEmails.get(prof.coachId) ?? null) : null,
+    });
   }
 
   useEffect(() => {
@@ -64,6 +129,27 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
     }
   }
 
+  // Open the archived PDF (emailed stubs). The window opens on the click itself
+  // so popup blockers allow it; the PDF streams in once fetched.
+  async function openPdf(s: PaystubListItem) {
+    const w = window.open("", "_blank");
+    if (!w) {
+      setFlash("Popup blocked — allow popups for this site to view the PDF.");
+      return;
+    }
+    setBusyId(s.id);
+    try {
+      const b64 = await fetchPaystubPdf(s.id);
+      if (!b64) throw new Error("no PDF stored for this stub");
+      showPdfInWindow(w, b64);
+    } catch (e) {
+      w.close();
+      setFlash(`Open failed: ${String(e)}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function remove(s: PaystubListItem) {
     if (
       !confirm(
@@ -93,10 +179,12 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
               <SectionId id="pay.history" />
             </h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Every printed pay stub, archived as the{" "}
+              Every printed or emailed pay stub, archived as the{" "}
               <strong>exact document that was generated</strong> — open one to review or re-print
-              precisely what was sent, even if the data behind it has changed since. Stubs are
-              archived automatically when you print from Build payout or Hourly staff.
+              precisely what was sent, even if the data behind it has changed since. Emailed stubs
+              keep the <strong>PDF that was attached</strong> and show when and to whom it went.
+              Stubs are archived automatically when you print or email from Build payout or Hourly
+              staff.
             </div>
           </div>
           {onBack && (
@@ -147,6 +235,7 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
                   <th>Period</th>
                   <th>Status when printed</th>
                   <th>Total</th>
+                  <th>Emailed</th>
                   <th />
                 </tr>
               </thead>
@@ -173,6 +262,26 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
                     <td className="num" style={{ fontWeight: 600 }}>
                       {fmtUsd(s.total)}
                     </td>
+                    <td style={{ fontSize: 12 }}>
+                      {(() => {
+                        const e = emailByStub.get(s.id);
+                        if (!e) return <span className="muted">—</span>;
+                        return e.status === "sent" ? (
+                          <span
+                            title={`Sent to ${e.toEmail}${e.sentByEmail ? ` by ${e.sentByEmail}` : ""}`}
+                          >
+                            ✓ {fmtDateTime(e.createdAt)}
+                            <div className="muted" style={{ fontSize: 11 }}>
+                              {e.toEmail}
+                            </div>
+                          </span>
+                        ) : (
+                          <span className="pill pill--error" title={e.error ?? undefined}>
+                            failed
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td>
                       <span style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                         <button
@@ -183,6 +292,26 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
                         >
                           view
                         </button>
+                        {s.hasPdf && (
+                          <button
+                            className="linkbtn"
+                            onClick={() => openPdf(s)}
+                            disabled={busyId === s.id}
+                            title="Open the exact PDF that was emailed"
+                          >
+                            pdf
+                          </button>
+                        )}
+                        {s.hasPdf && s.status === "approved" && (
+                          <button
+                            className="linkbtn"
+                            onClick={() => setEmailFor(s)}
+                            disabled={busyId === s.id}
+                            title="Email this PDF again — only while it still matches the approved build"
+                          >
+                            email
+                          </button>
+                        )}
                         <button
                           className="linkbtn"
                           onClick={() => remove(s)}
@@ -197,7 +326,7 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted">
+                    <td colSpan={8} className="muted">
                       No archived stubs
                       {q
                         ? " match the search"
@@ -211,6 +340,40 @@ export function PayHistoryView({ onBack }: { onBack?: () => void }) {
           </div>
         )}
       </section>
+
+      {emailFor && (
+        <EmailStubModal
+          title={`${emailFor.staffName} · ${periodLabel(emailFor.periodMonth)}`}
+          recipient={recipientFor(emailFor)}
+          total={emailFor.total}
+          fixHint={
+            emailFor.kind === "mentor"
+              ? "Admin → Mentor capacity"
+              : "the Pay-stub email box on Hourly staff"
+          }
+          lastSent={
+            emailFor.kind === "mentor" && emailFor.coachId != null
+              ? lastSentPaystubEmail(
+                  emailLog,
+                  { kind: "mentor", coachId: emailFor.coachId },
+                  emailFor.periodMonth,
+                )
+              : emailFor.kind === "hourly" && emailFor.profileId
+                ? lastSentPaystubEmail(
+                    emailLog,
+                    { kind: "hourly", profileId: emailFor.profileId },
+                    emailFor.periodMonth,
+                  )
+                : null
+          }
+          onSend={async () => {
+            const r = await sendPaystubEmail(emailFor.id);
+            setEmailLog(await fetchPaystubEmailLog());
+            setFlash(`Emailed ${emailFor.staffName}'s ${emailFor.periodMonth} stub to ${r.to}.`);
+          }}
+          onClose={() => setEmailFor(null)}
+        />
+      )}
     </div>
   );
 }

@@ -97,6 +97,8 @@ export const UI_SECTIONS: Record<string, number> = {
   "modal.payoutLineDetail": 905, // per-mentee invoice/payment drill-down on Build payout (2026-07-09)
   "modal.paymentSent": 906, // Payment sent — Melio reference dialog on Build payout §204 (2026-07-22)
   "drawer.notifications": 907, // Topbar notifications bell + feed (2026-07-22)
+  "modal.emailStub": 908, // Email pay stub — confirm + send (Build payout / Hourly staff / History) (2026-09-25)
+  "modal.hourlyPaymentSent": 909, // Payment sent — Melio reference dialog on Hourly staff §206 (2026-09-25)
 };
 
 // 3-digit, zero-padded string for a key (e.g. "104"); "" if the key is unknown.

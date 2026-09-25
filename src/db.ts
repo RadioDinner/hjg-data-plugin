@@ -196,6 +196,19 @@ export type {
   StubItemDisposition,
 };
 
+// Pay stubs by email (session 021): the PDF layout (lib/payStubPdf) and the
+// recipient rules the server also enforces (lib/paystubEmail).
+export { mentorStubPdfDoc, hourlyStubPdfDoc } from "../lib/payStubPdf";
+export type { PdfDocDefinition } from "../lib/payStubPdf";
+export {
+  resolveMentorPayEmail,
+  resolveHourlyPayEmail,
+  isValidEmail,
+  periodLabel,
+  PAY_EMAIL_SOURCE_LABEL,
+} from "../lib/paystubEmail";
+export type { ResolvedPayEmail, PayEmailSource } from "../lib/paystubEmail";
+
 // Payment groups (engagement templates × staff groups; Company options §451).
 import {
   parsePayGroupsConfig,
@@ -982,18 +995,23 @@ export interface CoachWithSettings {
   notes: string | null;
   payStartMonth: string | null; // 'YYYY-MM' override for the pay-ramp start; null = derived
   payRamp: string | null; // per-mentor ramp, e.g. '50/60/60'; null = default 35/50/60
+  caEmail: string | null; // their CoachAccountable email (ca_coaches.email, synced)
+  payEmail: string | null; // pay-stub email override (coach_settings.pay_email, 9962)
 }
 
 // Every coach from ca_coaches with their HJG-owned mentor flag + capacity
 // (left-join). Coaches with no coach_settings row come back as
 // is_mentor=false, capacity=null, notes=null, payStartMonth=null.
 export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
-  const [coachesRes, settingsRes] = await Promise.all([
-    supabase.from("ca_coaches").select("id,name").order("name", { ascending: true }),
-    supabase
-      .from("coach_settings")
-      .select("coach_id,is_mentor,capacity,notes,pay_start_month,pay_ramp"),
+  const settingsCols = "coach_id,is_mentor,capacity,notes,pay_start_month,pay_ramp";
+  const [coachesRes, settingsFirst] = await Promise.all([
+    supabase.from("ca_coaches").select("id,name,email").order("name", { ascending: true }),
+    supabase.from("coach_settings").select(`${settingsCols},pay_email`),
   ]);
+  // pay_email needs 9962 — retry without it so the roster still loads.
+  const settingsRes = settingsFirst.error
+    ? await supabase.from("coach_settings").select(settingsCols)
+    : settingsFirst;
   if (coachesRes.error) throw new Error(coachesRes.error.message);
   if (settingsRes.error) throw new Error(settingsRes.error.message);
   const settings = new Map<
@@ -1004,6 +1022,7 @@ export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
       notes: string | null;
       pay_start_month: string | null;
       pay_ramp: string | null;
+      pay_email: string | null;
     }
   >();
   for (const s of (settingsRes.data ?? []) as {
@@ -1013,6 +1032,7 @@ export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
     notes: string | null;
     pay_start_month: string | null;
     pay_ramp: string | null;
+    pay_email?: string | null;
   }[]) {
     settings.set(s.coach_id, {
       is_mentor: s.is_mentor,
@@ -1020,9 +1040,12 @@ export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
       notes: s.notes,
       pay_start_month: s.pay_start_month,
       pay_ramp: s.pay_ramp,
+      pay_email: s.pay_email ?? null,
     });
   }
-  return ((coachesRes.data ?? []) as { id: number; name: string | null }[]).map((c) => {
+  return (
+    (coachesRes.data ?? []) as { id: number; name: string | null; email: string | null }[]
+  ).map((c) => {
     const s = settings.get(c.id);
     return {
       coachId: c.id,
@@ -1032,6 +1055,8 @@ export async function fetchCoachesWithSettings(): Promise<CoachWithSettings[]> {
       notes: s?.notes ?? null,
       payStartMonth: s?.pay_start_month ?? null,
       payRamp: s?.pay_ramp ?? null,
+      caEmail: c.email ?? null,
+      payEmail: s?.pay_email ?? null,
     };
   });
 }
@@ -1056,23 +1081,33 @@ export async function upsertCoachSettings(
     notes: string | null;
     payStartMonth: string | null;
     payRamp: string | null;
+    payEmail?: string | null; // pay-stub email override (9962); omitted = leave as is
   },
 ): Promise<void> {
   const createdBy = (await supabase.auth.getUser()).data.user?.id ?? null;
-  const { error } = await supabase.from("coach_settings").upsert(
-    {
-      coach_id: coachId,
-      is_mentor: patch.isMentor,
-      capacity: patch.capacity,
-      notes: patch.notes,
-      pay_start_month: patch.payStartMonth,
-      pay_ramp: patch.payRamp,
-      created_by: createdBy,
-      updated_by: createdBy,
-    },
-    { onConflict: "coach_id" },
-  );
-  if (error) throw new Error(error.message);
+  const row: Record<string, unknown> = {
+    coach_id: coachId,
+    is_mentor: patch.isMentor,
+    capacity: patch.capacity,
+    notes: patch.notes,
+    pay_start_month: patch.payStartMonth,
+    pay_ramp: patch.payRamp,
+    created_by: createdBy,
+    updated_by: createdBy,
+  };
+  if ("payEmail" in patch) row.pay_email = patch.payEmail?.trim() || null;
+  let { error } = await supabase.from("coach_settings").upsert(row, { onConflict: "coach_id" });
+  if (error && /pay_email/.test(error.message) && row.pay_email == null) {
+    // Pre-9962 database and no email typed: save everything else.
+    delete row.pay_email;
+    ({ error } = await supabase.from("coach_settings").upsert(row, { onConflict: "coach_id" }));
+  }
+  if (error)
+    throw new Error(
+      /pay_email/.test(error.message)
+        ? `${error.message} — apply migration 9962_paystub_email.sql to save pay-stub emails`
+        : error.message,
+    );
 }
 
 // Page every active mentoring appointment across all history (the pipeline spans
@@ -2981,6 +3016,10 @@ export async function savePayGroupsConfig(cfg: PayGroupsConfig): Promise<void> {
 // one timesheet build per profile+month. paystubs: the archive of every printed
 // stub (mentor + hourly) as the exact HTML document that was generated.
 
+// A select result with the row shape left open — for the "retry without the
+// newer columns" fallbacks, where the two selects infer different row types.
+type LooseSelect = { data: unknown[] | null; error: { message: string } | null };
+
 export interface StaffPayProfile {
   id: string;
   name: string;
@@ -2988,13 +3027,19 @@ export interface StaffPayProfile {
   hourlyRate: number;
   active: boolean;
   notes: string | null;
+  email: string | null; // where their pay stubs are emailed (9962)
 }
 
 export async function fetchStaffPayProfiles(): Promise<StaffPayProfile[]> {
-  const { data, error } = await supabase
+  const cols = "id,name,coach_id,hourly_rate,active,notes";
+  // email needs 9962 — retry without it so the screen still loads.
+  let res: LooseSelect = await supabase
     .from("staff_pay_profiles")
-    .select("id,name,coach_id,hourly_rate,active,notes")
+    .select(`${cols},email`)
     .order("name", { ascending: true });
+  if (res.error)
+    res = await supabase.from("staff_pay_profiles").select(cols).order("name", { ascending: true });
+  const { data, error } = res;
   if (error) throw new Error(error.message);
   return (
     (data ?? []) as {
@@ -3004,6 +3049,7 @@ export async function fetchStaffPayProfiles(): Promise<StaffPayProfile[]> {
       hourly_rate: number | string | null;
       active: boolean | null;
       notes: string | null;
+      email?: string | null;
     }[]
   ).map((r) => ({
     id: r.id,
@@ -3012,33 +3058,54 @@ export async function fetchStaffPayProfiles(): Promise<StaffPayProfile[]> {
     hourlyRate: Number(r.hourly_rate) || 0,
     active: r.active ?? true,
     notes: r.notes,
+    email: r.email ?? null,
   }));
 }
 
 export async function createStaffPayProfile(
   createdBy: string,
-  p: { name: string; hourlyRate: number; coachId?: number | null },
+  p: { name: string; hourlyRate: number; coachId?: number | null; email?: string | null },
 ): Promise<void> {
-  const { error } = await supabase.from("staff_pay_profiles").insert({
+  const row: Record<string, unknown> = {
     name: p.name,
     hourly_rate: p.hourlyRate,
     coach_id: p.coachId ?? null,
     created_by: createdBy || null,
-  });
-  if (error) throw new Error(error.message);
+  };
+  const email = p.email?.trim() || null;
+  if (email) row.email = email;
+  const { error } = await supabase.from("staff_pay_profiles").insert(row);
+  if (error)
+    throw new Error(
+      /email/.test(error.message)
+        ? `${error.message} — apply migration 9962_paystub_email.sql to save staff emails`
+        : error.message,
+    );
 }
 
 export async function updateStaffPayProfile(
   id: string,
-  patch: { name?: string; hourlyRate?: number; active?: boolean; notes?: string | null },
+  patch: {
+    name?: string;
+    hourlyRate?: number;
+    active?: boolean;
+    notes?: string | null;
+    email?: string | null;
+  },
 ): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.name != null) row.name = patch.name;
   if (patch.hourlyRate != null) row.hourly_rate = patch.hourlyRate;
   if (patch.active != null) row.active = patch.active;
   if ("notes" in patch) row.notes = patch.notes;
+  if ("email" in patch) row.email = patch.email?.trim() || null;
   const { error } = await supabase.from("staff_pay_profiles").update(row).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error)
+    throw new Error(
+      /email/.test(error.message)
+        ? `${error.message} — apply migration 9962_paystub_email.sql to save staff emails`
+        : error.message,
+    );
 }
 
 export interface StaffPayBuildRecord {
@@ -3054,6 +3121,10 @@ export interface StaffPayBuildRecord {
   total: number;
   status: BuildStatus;
   updatedAt: string | null;
+  // "Payment sent" mark (9962 — reads degrade gracefully when unapplied): when
+  // the approved timesheet was actually paid + the Melio payment number.
+  paymentSentAt: string | null;
+  paymentRef: string | null;
 }
 
 export function staffPayBuildKey(profileId: string, periodMonth: string): string {
@@ -3065,7 +3136,11 @@ export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRe
   // work just won't persist) on an un-migrated database.
   const cols =
     "profile_id,period_month,rate,entries,hours_total,adjustment,adjustment_note,notes,total,status,updated_at";
-  let res = await supabase.from("staff_pay_builds").select(`${cols},piece_items`);
+  // payment_sent_at/payment_ref need 9962 — retry without them first.
+  let res = await supabase
+    .from("staff_pay_builds")
+    .select(`${cols},piece_items,payment_sent_at,payment_ref`);
+  if (res.error) res = await supabase.from("staff_pay_builds").select(`${cols},piece_items`);
   if (res.error) res = await supabase.from("staff_pay_builds").select(cols);
   const { data, error } = res;
   if (error) throw new Error(error.message);
@@ -3083,6 +3158,8 @@ export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRe
     total: number | string | null;
     status: BuildStatus;
     updated_at: string | null;
+    payment_sent_at?: string | null;
+    payment_ref?: string | null;
   }[]) {
     out.set(staffPayBuildKey(r.profile_id, r.period_month), {
       profileId: r.profile_id,
@@ -3097,9 +3174,34 @@ export async function fetchStaffPayBuilds(): Promise<Map<string, StaffPayBuildRe
       total: Number(r.total) || 0,
       status: r.status,
       updatedAt: r.updated_at,
+      paymentSentAt: r.payment_sent_at ?? null,
+      paymentRef: r.payment_ref ?? null,
     });
   }
   return out;
+}
+
+// Mark (or clear) an approved timesheet as actually PAID, with the Melio payment
+// number as the reference — the hourly twin of setPayoutPaymentSent. Only the
+// two payment columns change; saveStaffPayBuild's upsert never touches them, so
+// a mark survives re-saves. Needs migration 9962_paystub_email.sql.
+export async function setStaffPayPaymentSent(
+  profileId: string,
+  periodMonth: string,
+  sent: { sentAt: string; ref: string | null } | null,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("staff_pay_builds")
+    .update({ payment_sent_at: sent?.sentAt ?? null, payment_ref: sent?.ref ?? null })
+    .eq("profile_id", profileId)
+    .eq("period_month", periodMonth)
+    .select("profile_id");
+  if (error)
+    throw new Error(
+      `${error.message} — if this mentions payment_sent_at, apply migration 9962_paystub_email.sql`,
+    );
+  if (!data || data.length === 0)
+    throw new Error("No saved timesheet for this person and month — save/approve it first.");
 }
 
 export async function saveStaffPayBuild(
@@ -3166,27 +3268,33 @@ export interface PaystubListItem {
   kind: "mentor" | "hourly";
   staffName: string;
   coachId: number | null;
+  profileId: string | null; // hourly stubs (9962)
   periodMonth: string;
   status: BuildStatus;
   total: number;
   createdAt: string | null;
+  hasPdf: boolean; // a PDF was archived with it (emailed stubs, 9962)
 }
 
-// Archive a printed stub — the exact document, so History reviews what was
-// actually sent, not a re-derivation from data that may have changed since.
+// Archive a printed (or emailed) stub — the exact document, so History reviews
+// what was actually sent, not a re-derivation from data that may have changed
+// since. Emailed stubs also store the exact PDF that was attached. Returns the
+// new row's id (the send endpoint takes it).
 export async function savePaystub(
   createdBy: string,
   rec: {
     kind: "mentor" | "hourly";
     staffName: string;
     coachId?: number | null;
+    profileId?: string | null;
     periodMonth: string;
     status: BuildStatus;
     total: number;
     html: string;
+    pdfBase64?: string | null;
   },
-): Promise<void> {
-  const { error } = await supabase.from("paystubs").insert({
+): Promise<string> {
+  const row: Record<string, unknown> = {
     kind: rec.kind,
     staff_name: rec.staffName,
     coach_id: rec.coachId ?? null,
@@ -3195,17 +3303,40 @@ export async function savePaystub(
     total: rec.total,
     html: rec.html,
     created_by: createdBy || null,
-  });
-  if (error) throw new Error(error.message);
+    profile_id: rec.profileId ?? null,
+    pdf_base64: rec.pdfBase64 ?? null,
+  };
+  let { data, error } = await supabase.from("paystubs").insert(row).select("id").single();
+  if (error && !rec.pdfBase64 && /profile_id|pdf_base64/.test(error.message)) {
+    // Pre-9962 database and nothing new to store: archive as before.
+    delete row.profile_id;
+    delete row.pdf_base64;
+    ({ data, error } = await supabase.from("paystubs").insert(row).select("id").single());
+  }
+  if (error)
+    throw new Error(
+      /profile_id|pdf_base64/.test(error.message)
+        ? `${error.message} — apply migration 9962_paystub_email.sql`
+        : error.message,
+    );
+  return String((data as { id?: unknown } | null)?.id ?? "");
 }
 
-// The listing intentionally omits the (large) html column.
+// The listing intentionally omits the (large) html + pdf columns.
 export async function fetchPaystubs(): Promise<PaystubListItem[]> {
-  const { data, error } = await supabase
+  const cols = "id,kind,staff_name,coach_id,period_month,status,total,created_at";
+  let res: LooseSelect = await supabase
     .from("paystubs")
-    .select("id,kind,staff_name,coach_id,period_month,status,total,created_at")
+    .select(`${cols},profile_id,has_pdf`)
     .order("created_at", { ascending: false })
     .limit(500);
+  if (res.error)
+    res = await supabase
+      .from("paystubs")
+      .select(cols)
+      .order("created_at", { ascending: false })
+      .limit(500);
+  const { data, error } = res;
   if (error) throw new Error(error.message);
   return (
     (data ?? []) as {
@@ -3213,20 +3344,24 @@ export async function fetchPaystubs(): Promise<PaystubListItem[]> {
       kind: "mentor" | "hourly";
       staff_name: string;
       coach_id: number | null;
+      profile_id?: string | null;
       period_month: string;
       status: BuildStatus;
       total: number | string | null;
       created_at: string | null;
+      has_pdf?: boolean | null;
     }[]
   ).map((r) => ({
     id: r.id,
     kind: r.kind,
     staffName: r.staff_name,
     coachId: r.coach_id,
+    profileId: r.profile_id ?? null,
     periodMonth: r.period_month,
     status: r.status,
     total: Number(r.total) || 0,
     createdAt: r.created_at,
+    hasPdf: !!r.has_pdf,
   }));
 }
 
@@ -3234,6 +3369,79 @@ export async function fetchPaystubHtml(id: string): Promise<string> {
   const { data, error } = await supabase.from("paystubs").select("html").eq("id", id).single();
   if (error) throw new Error(error.message);
   return String((data as { html?: unknown } | null)?.html ?? "");
+}
+
+// The archived PDF (base64) of an emailed stub, or "" when none was stored.
+export async function fetchPaystubPdf(id: string): Promise<string> {
+  const { data, error } = await supabase
+    .from("paystubs")
+    .select("pdf_base64")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return String((data as { pdf_base64?: unknown } | null)?.pdf_base64 ?? "");
+}
+
+// --- Pay stub email log (paystub_emails, 9962) ---
+// Written only by the server (/api/send-paystub); staff read it to see what was
+// emailed, when, and to which address.
+export interface PaystubEmailRecord {
+  id: string;
+  paystubId: string | null;
+  kind: "mentor" | "hourly";
+  coachId: number | null;
+  profileId: string | null;
+  staffName: string;
+  periodMonth: string;
+  toEmail: string;
+  status: "sent" | "failed";
+  error: string | null;
+  sentByEmail: string | null;
+  createdAt: string;
+}
+
+// Newest first. Empty (never throws) when the table doesn't exist yet, so the
+// pay screens keep working before 9962 is applied.
+export async function fetchPaystubEmailLog(): Promise<PaystubEmailRecord[]> {
+  const { data, error } = await supabase
+    .from("paystub_emails")
+    .select(
+      "id,paystub_id,kind,coach_id,profile_id,staff_name,period_month,to_email,status,error,sent_by_email,created_at",
+    )
+    .order("created_at", { ascending: false })
+    .limit(1000);
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    paystubId: (r.paystub_id as string | null) ?? null,
+    kind: r.kind === "hourly" ? "hourly" : "mentor",
+    coachId: r.coach_id != null ? Number(r.coach_id) : null,
+    profileId: (r.profile_id as string | null) ?? null,
+    staffName: String(r.staff_name ?? ""),
+    periodMonth: String(r.period_month ?? ""),
+    toEmail: String(r.to_email ?? ""),
+    status: r.status === "failed" ? "failed" : "sent",
+    error: (r.error as string | null) ?? null,
+    sentByEmail: (r.sent_by_email as string | null) ?? null,
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+// The latest SENT email for one person + period (log is newest-first).
+export function lastSentPaystubEmail(
+  log: PaystubEmailRecord[],
+  who: { kind: "mentor"; coachId: number } | { kind: "hourly"; profileId: string },
+  periodMonth: string,
+): PaystubEmailRecord | null {
+  return (
+    log.find(
+      (r) =>
+        r.status === "sent" &&
+        r.kind === who.kind &&
+        r.periodMonth === periodMonth &&
+        (who.kind === "mentor" ? r.coachId === who.coachId : r.profileId === who.profileId),
+    ) ?? null
+  );
 }
 
 export async function deletePaystub(id: string): Promise<void> {

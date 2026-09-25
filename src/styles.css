@@ -2107,3 +2107,9 @@ button.version-chip {
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
+
+/* Pay-stub action buttons (Print / Email / Payment sent / Export): when the row
+   runs out of room, wrap whole buttons instead of breaking their labels. */
+.stub-actions > .btn {
+  white-space: nowrap;
+}

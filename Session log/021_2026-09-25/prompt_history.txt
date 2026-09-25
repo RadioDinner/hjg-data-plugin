@@ -3,3 +3,13 @@ How hard would it be to make so that I could put an email address on file with e
 
 --- 2026-09-25 (turn 2) ---
 I have a resend account with github account that I use for the plain exchange and sending emails through there. Should I create a new resend account for this or would it be better to use the same one
+
+--- 2026-09-25 (turn 3) ---
+[image attached: Resend onboarding code-snippet tabs — Node.js, PHP, Python, Ruby, Go, Rust, Elixir, Java, .NET, cURL, "Copy for AI"]
+I made a new account, which one of these do you need
+
+--- 2026-09-25 (turn 3, AskUserQuestion answers) ---
+When should pay stubs get emailed? = Button only
+How should the stub arrive? = PDF attachment
+Hourly staff only have Approve, with no Payment-sent step. What should they get? = Add a Payment-sent step
+Should I start building once you've answered? = Yes, start building (Recommended)

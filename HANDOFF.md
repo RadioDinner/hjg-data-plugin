@@ -1,37 +1,72 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-25 (session 021 — Q&A only: how hard is emailing pay stubs; no code,
-still v0.10.0 on `main`).
+2026-09-25 (session 021 — **Email pay stubs (PDF) + hourly Payment sent, v0.11.0,
+ON BRANCH `claude/wizardly-planck-9vzspj`, NOT merged to `main`**).
 
-## ▶ START HERE (2026-09-25, session 021 — question only, no code; v0.10.0 on `main`)
+## ▶ START HERE (2026-09-25, session 021 — v0.11.0 on the branch, not merged)
 
-The user asked how hard it would be to store an email per staff member / mentor and
-email each their pay stub, automatically when a payout is marked complete, or from a
-button. **Answered, nothing built; awaiting their decisions.** Full answer + plan:
-`Session log/021_2026-09-25/session_log.md`.
+**What shipped (branch only):** emailing pay stubs as a **PDF attachment**, on the
+user's answers: **button only** (never automatic), **PDF**, and **add a Payment-sent
+step to hourly pay**. The user created a **new Resend account** for HJG (turn 3), which
+is what we advised in turn 2: separate from The Plain Exchange's account.
 
-The short version: moderate, about one session for the button version. Mentor emails
-already exist (`ca_coaches.email` from CA `Coach.getAll`), and every stub is archived
-as HTML in `paystubs`. Missing: an email provider plus the user's DNS setup, an email
-column for hourly staff, an email-safe stub renderer (the print CSS uses `var()` and
-flexbox, which break in Gmail/Outlook), and a send endpoint that resolves recipients
-server-side and checks roles server-side (`withApi` only checks for a session).
-Recommended trigger: a pre-checked "email the stub" box in the **Payment sent** dialog,
-not auto-send on Approve (approved builds can be reopened, and email can't be recalled).
-Next migration number is **9962**.
+- **Where:** **Email stub…** on Build payout (§204, approved + saved + no engine drift)
+  and Hourly staff (§206, approved + saved). History (§207) gains **pdf** (the exact PDF
+  that was emailed), **email** (resend, only while it still matches the approved build)
+  and an **Emailed** column (date + address, or **failed** with the reason). One confirm
+  dialog **§908** (`EmailStubModal`) shows the address + its source before sending.
+- **Addresses:** mentors: Admin → Mentor capacity **Pay-stub email**
+  (`coach_settings.pay_email`), else their CoachAccountable email (`ca_coaches.email`).
+  Hourly staff: the **Pay-stub email** box on Hourly staff (`staff_pay_profiles.email`,
+  also on the New staff form), else their linked coach's address by the mentor rule.
+  Malformed addresses are refused at save.
+- **PDF:** `lib/payStubPdf.ts` (pure pdfmake doc definitions built from the SAME
+  `buildPayStubModel` / `buildHourlyStubModel` as the printed stub; olive + cream look;
+  ligatures off so copied text is right; Roboto lacks → and ✓, so they're not used).
+  Rendered **in the browser** by `src/pdf.ts` (pdfmake + fonts in lazy chunks, about
+  1.9 MB, loaded on first email only; main bundle +38 KB). Archived with the stub
+  (`paystubs.pdf_base64`).
+- **Send:** `api/send-paystub.ts` → Resend REST (`POST https://api.resend.com/emails`,
+  field names confirmed from Resend's own SDK `resend@6.29.0`). The browser only names an
+  archived stub id; the server checks: signed in + Pay-staff tab access (app_users via
+  `lib/permissions`, fail-open like the browser), stub approved + has a PDF, the build is
+  still **approved** with the **same total to the cent**, the recipient is resolved
+  server-side, no same-address resend within 2 minutes. Logs every attempt to
+  `paystub_emails` (service-role writes only). Email text names the month only, with
+  **no amounts** (lock-screen previews). `lib/http.ts` now exposes `requestUser(req)`.
+- **Hourly Payment sent (§909):** mirrors mentors: Melio ref dialog, paid ✓ pill,
+  Reprint label, reopen/discard warnings (`staff_pay_builds.payment_sent_at/_ref`).
+- **Fix riding along:** Hourly staff reset its working timesheet whenever the profile
+  object changed, so blurring the **Rate** box (or now the email box) on a month with
+  unsaved lines **wiped them**. The reset is now keyed on the profile id.
 
-**Decisions pending from the user:** (1) button only vs button + Payment-sent
-checkbox; (2) email body vs PDF; (3) hourly staff: button only or a new Payment-sent
-step; (4) provider (Resend proposed) + sending domain + who controls DNS.
+**⚠ USER ACTIONS before it works (none needed for anything else to keep working):**
+1. Apply migration **`9962_paystub_email.sql`** (Supabase SQL Editor; re-runnable).
+2. Resend: verify the sending domain (DNS records, ideally a subdomain like
+   `send.<domain>`) and create an API key with **Sending access restricted to that
+   domain**. Never paste the key into chat.
+3. Vercel → Environment Variables (Production + Preview): `RESEND_API_KEY`,
+   `PAYSTUB_FROM` (e.g. `HJG Pay <pay@send.<domain>>`, on the verified domain),
+   `PAYSTUB_REPLY_TO` (a monitored HJG inbox). Redeploy.
+4. Enter hourly staff emails; spot-check mentor emails in Admin → Mentor capacity.
+Until then: the email button reports "Email isn't set up yet", and everything else
+degrades gracefully (reads retry without the new columns).
 
-**Resend account (turn 2).** The user already uses a Resend account (GitHub login) for
-The Plain Exchange. Advised: a **separate Resend account owned by an HJG email**. Reasons:
-payroll content sits in Resend's 30-day logs; account-wide bounce/spam pauses and the
-100/day quota are shared; HJG shouldn't depend on a personal login. Reusing the same
-team is free (free teams now get 3 domains, not 1 as turn 1 said). A second team under
-the same login must be paid (Pro $20/mo). Either way, HJG needs a sending-only API key
-restricted to HJG's domain.
+**Gates (branch head):** typecheck ✓ · verify **941 checks** (new §30) ✓ · lint 0 errors
+/ 14 pre-existing warnings ✓ · build ✓ · prettier ✓. Also, in the scratchpad (not
+committed): the REAL endpoint handler run against a fetch-level fake of Supabase + Resend
+(37 scenarios: happy paths, every refusal, Resend 4xx + network failure, retry after a
+failure, 401/403/404/400/503, pre-9962 fallback); and a Playwright harness over the real
+views with a stubbed data layer: 20 UI checks, including a **real PDF rendered in
+Chromium** through the lazy chunk for both stub kinds, plus light/dark screenshots.
+Harness deleted.
+
+**Open / next:** (1) user does the 4 actions above, then sends a **test email to
+themselves** (e.g. set their own address as a mentor's Pay-stub email) before real
+staff; (2) merge to `main` on the user's word (chip must read `v0.11.0`); (3) not
+built by choice: automatic send on approval/payment, and a mentor-login portal (RLS is
+"any signed-in user reads everything"); (4) **next migration number is `9961`**.
 
 ## ▶ Prior session START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
 
@@ -1688,10 +1723,11 @@ Mirror (sync-written, all-authenticated read): `ca_coaches`, `ca_clients`,
 
 ## Environment variables
 
-(unchanged — set in Vercel, documented in `.env.example`) `SUPABASE_URL`,
+(set in Vercel, documented in `.env.example`) `SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
 `CA_API_ID`, `CA_API_KEY`, `CA_PLAN_DAILY_LIMIT`, `HJG_DAILY_CAP_PCT`,
-`BUDGET_TZ`, `SYNC_YEARS`, `HJG_CORS_ALLOWED_ORIGINS`, `SYNC_CRON_SECRET`.
+`BUDGET_TZ`, `SYNC_YEARS`, `HJG_CORS_ALLOWED_ORIGINS`, `SYNC_CRON_SECRET`, and
+(session 021, pay-stub email) `RESEND_API_KEY`, `PAYSTUB_FROM`, `PAYSTUB_REPLY_TO`.
 
 ## Conventions / gotchas
 

@@ -27,6 +27,18 @@ function bearer(req: VercelRequest): string | undefined {
   return undefined;
 }
 
+// The verified caller of an `auth: "user"` request, for handlers that need to
+// know WHO asked (e.g. to log it). Keyed by the request object, so it lives
+// exactly as long as the request.
+export interface RequestUser {
+  id: string;
+  email: string | null;
+}
+const verifiedUsers = new WeakMap<VercelRequest, RequestUser>();
+export function requestUser(req: VercelRequest): RequestUser | null {
+  return verifiedUsers.get(req) ?? null;
+}
+
 // Verifies the caller is a signed-in Supabase user. Returns null when authorized,
 // or an error to send.
 async function checkUser(req: VercelRequest): Promise<{ status: number; message: string } | null> {
@@ -34,6 +46,7 @@ async function checkUser(req: VercelRequest): Promise<{ status: number; message:
   if (!token) return { status: 401, message: "Sign in required" };
   const { data, error } = await getAdminClient().auth.getUser(token);
   if (error || !data.user) return { status: 401, message: "Invalid or expired session" };
+  verifiedUsers.set(req, { id: data.user.id, email: data.user.email ?? null });
   return null;
 }
 

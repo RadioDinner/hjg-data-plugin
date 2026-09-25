@@ -21,6 +21,12 @@ import {
   payoutBuildKey,
   defaultServiceMonth,
   monthPayProgress,
+  fetchCoachesWithSettings,
+  fetchPaystubEmailLog,
+  lastSentPaystubEmail,
+  mentorStubPdfDoc,
+  resolveMentorPayEmail,
+  type PaystubEmailRecord,
   type PayData,
   type PayMenteeLine,
   type BuildLineState,
@@ -29,12 +35,15 @@ import {
   type PayoutBuildRecord,
 } from "../db";
 import { useAuth } from "../auth";
+import { sendPaystubEmail } from "../api";
+import { renderPdfBase64 } from "../pdf";
 import { downloadCsv } from "../csv";
 import { fmtDateTime } from "../format";
 import { HelpButton } from "../components/HelpDrawer";
 import { SectionId } from "../components/SectionId";
 import { PieceWorkCard } from "../components/PieceWorkCard";
 import { PayoutLineDetailModal } from "../components/PayoutLineDetailModal";
+import { EmailStubModal } from "../components/EmailStubModal";
 
 const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -94,6 +103,13 @@ export function BuildPayoutView({
   const [payModal, setPayModal] = useState(false);
   const [payRef, setPayRef] = useState("");
   const [payErr, setPayErr] = useState<string | null>(null);
+  // "Email stub" (§908): each coach's addresses + the send log (both optional —
+  // before migration 9962 they just come back without pay-stub emails / empty).
+  const [coachEmails, setCoachEmails] = useState<
+    Map<number, { caEmail: string | null; payEmail: string | null }>
+  >(new Map());
+  const [emailLog, setEmailLog] = useState<PaystubEmailRecord[]>([]);
+  const [emailModal, setEmailModal] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -107,6 +123,22 @@ export function BuildPayoutView({
       })
       .catch((e) => live && setError(String(e)))
       .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([fetchCoachesWithSettings().catch(() => []), fetchPaystubEmailLog()]).then(
+      ([cs, log]) => {
+        if (!live) return;
+        setCoachEmails(
+          new Map(cs.map((c) => [c.coachId, { caEmail: c.caEmail, payEmail: c.payEmail }])),
+        );
+        setEmailLog(log);
+      },
+    );
     return () => {
       live = false;
     };
@@ -261,6 +293,15 @@ export function BuildPayoutView({
 
   const locked = status === "approved";
   const paid = !!savedRec?.paymentSentAt;
+  // The engine's numbers moved since sign-off (re-sync, Payment groups change):
+  // the stub would no longer show the approved total, so it can't be emailed.
+  const drifted = !!savedRec && Math.abs(summary.builtTotal - savedRec.builtTotal) > 0.005;
+  const canEmail = locked && !dirty && !drifted && lines.length > 0;
+  const recipient = coach != null ? resolveMentorPayEmail(coachEmails.get(coach) ?? {}) : null;
+  const lastEmail =
+    coach != null && ym
+      ? lastSentPaystubEmail(emailLog, { kind: "mentor", coachId: coach }, ym)
+      : null;
   const stateFor = (clientId: number): BuildLineState => lineStates[clientId] ?? DEFAULT_LINE_STATE;
 
   // Per-month payment completion across the mentor group — the at-a-glance
@@ -467,6 +508,45 @@ export function BuildPayoutView({
         `Stub printed, but archiving failed: ${String(e)} — apply migration 9970_staff_hourly_pay.sql`,
       );
     }
+  }
+
+  // Email the APPROVED stub (§908): render the PDF from the signed-off review,
+  // archive it (HTML + PDF) to History, then ask the server to send that archived
+  // copy. The server re-checks it against the approved build and picks the
+  // recipient itself. Throws on failure (the dialog shows the message).
+  async function emailStub(): Promise<void> {
+    if (coach == null || !ym || !mentor || !lines.length)
+      throw new Error("Pick a mentor and a month with payout lines first.");
+    if (!canEmail)
+      throw new Error("Approve and save the build first — only the signed-off stub is emailed.");
+    const model = buildPayStubModel({
+      coachName: mentor.coachName,
+      ym,
+      splitPct: mentor.splitPct,
+      splitOverride,
+      status,
+      unsavedChanges: false,
+      pieces: cleanPieces,
+      lines,
+      states: stateMap,
+      monthNote: notes.trim() || null,
+      reviewedAt: savedRec?.reviewedAt ?? null,
+      generatedOn: new Date().toISOString().slice(0, 10),
+    });
+    const pdfBase64 = await renderPdfBase64(mentorStubPdfDoc(model));
+    const id = await savePaystub(user?.id ?? "", {
+      kind: "mentor",
+      staffName: model.coachName,
+      coachId: coach,
+      periodMonth: ym,
+      status,
+      total: model.totals.payout,
+      html: payStubHtml(model),
+      pdfBase64,
+    });
+    const r = await sendPaystubEmail(id);
+    setEmailLog(await fetchPaystubEmailLog());
+    setFlash(`Pay stub emailed to ${r.to} — the PDF is archived in History.`);
   }
 
   function exportCsv() {
@@ -705,7 +785,10 @@ export function BuildPayoutView({
                   )}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div
+                className="stub-actions"
+                style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
+              >
                 <button
                   className={`btn btn--sm ${locked && !paid ? "btn--primary" : ""}`}
                   onClick={printStub}
@@ -719,6 +802,26 @@ export function BuildPayoutView({
                   }
                 >
                   {locked ? (paid ? "Reprint pay stub" : "Print pay stub") : "Print review stub"}
+                </button>
+                <button
+                  className="btn btn--sm"
+                  onClick={() => setEmailModal(true)}
+                  disabled={!canEmail}
+                  title={
+                    !lines.length
+                      ? "No payout lines this month"
+                      : !locked
+                        ? "Approve (and save) the build first — only the signed-off pay stub can be emailed"
+                        : dirty
+                          ? "Save your changes first — the emailed stub must match the saved build"
+                          : drifted
+                            ? "The engine's numbers changed since this build was approved — reopen, re-review and approve again before emailing"
+                            : lastEmail
+                              ? `Emailed ${fmtDateTime(lastEmail.createdAt)} to ${lastEmail.toEmail} — click to send it again`
+                              : "Email the approved pay stub as a PDF to this mentor"
+                  }
+                >
+                  {lastEmail ? "Email stub ✓" : "Email stub…"}
                 </button>
                 <button
                   className={`btn btn--sm ${locked && !paid ? "btn--primary" : ""}`}
@@ -1076,6 +1179,12 @@ export function BuildPayoutView({
                   ) : null}
                 </div>
               )}
+              {lastEmail && (
+                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  Stub emailed {fmtDateTime(lastEmail.createdAt)} to{" "}
+                  <strong>{lastEmail.toEmail}</strong>
+                </div>
+              )}
               {savedRec && !dirty && Math.abs(summary.builtTotal - savedRec.builtTotal) > 0.005 && (
                 <div className="notice notice--warn" style={{ fontSize: 12, marginTop: 8 }}>
                   Heads up — the engine's numbers have{" "}
@@ -1163,6 +1272,18 @@ export function BuildPayoutView({
             </div>
           </div>
         </div>
+      )}
+
+      {emailModal && coach != null && ym && (
+        <EmailStubModal
+          title={`${mentor?.coachName ?? data?.coachName(coach) ?? ""} · ${monthLabel(ym)}`}
+          recipient={recipient}
+          total={summary.builtTotal}
+          fixHint="Admin → Mentor capacity"
+          lastSent={lastEmail}
+          onSend={emailStub}
+          onClose={() => setEmailModal(false)}
+        />
       )}
 
       {detail && coach != null && (
