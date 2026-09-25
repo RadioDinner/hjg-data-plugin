@@ -1,0 +1,2 @@
+--- 2026-09-25 (session start) ---
+How hard would it be to make so that I could put an email address on file with each staff member and mentor, and it would automatically email them their paystub when I mark it as complete? Or to click a button to send them the pay stubs

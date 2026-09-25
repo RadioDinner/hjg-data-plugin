@@ -1,10 +1,31 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-09-17 (session 020 — Margins tab rebuilt: v0.9.0 then v0.10.0
-"Margins by tier", both **MERGED TO `main`**).
+2026-09-25 (session 021 — Q&A only: how hard is emailing pay stubs; no code,
+still v0.10.0 on `main`).
 
-## ▶ START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
+## ▶ START HERE (2026-09-25, session 021 — question only, no code; v0.10.0 on `main`)
+
+The user asked how hard it would be to store an email per staff member / mentor and
+email each their pay stub, automatically when a payout is marked complete, or from a
+button. **Answered, nothing built; awaiting their decisions.** Full answer + plan:
+`Session log/021_2026-09-25/session_log.md`.
+
+The short version: moderate, about one session for the button version. Mentor emails
+already exist (`ca_coaches.email` from CA `Coach.getAll`), and every stub is archived
+as HTML in `paystubs`. Missing: an email provider plus the user's DNS setup, an email
+column for hourly staff, an email-safe stub renderer (the print CSS uses `var()` and
+flexbox, which break in Gmail/Outlook), and a send endpoint that resolves recipients
+server-side and checks roles server-side (`withApi` only checks for a session).
+Recommended trigger: a pre-checked "email the stub" box in the **Payment sent** dialog,
+not auto-send on Approve (approved builds can be reopened, and email can't be recalled).
+Next migration number is **9962**.
+
+**Decisions pending from the user:** (1) button only vs button + Payment-sent
+checkbox; (2) email body vs PDF; (3) hourly staff: button only or a new Payment-sent
+step; (4) provider (Resend proposed) + sending domain + who controls DNS.
+
+## ▶ Prior session START HERE (2026-09-17, session 020 turn 3 — v0.10.0, MERGED TO `main`)
 
 **Second Margins lens shipped on the branch: "Margins by tier — all active
 mentees" (§606)** on the user's "average margin per mentoring bracket … all of
