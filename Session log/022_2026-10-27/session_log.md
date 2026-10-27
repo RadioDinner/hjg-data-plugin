@@ -12,6 +12,8 @@
   - Verify §15 extended (roster counts = tile counts, ordering, names, as-of roster).
   - Help article "metrics.jyfVsMentoring" documents the export.
 
+- Merged to `main` by fast-forward on the user's "merge to main".
+
 ## Directional decisions
 - The export replaces the 6-row summary for §005 (the on-screen table already shows that).
 - A person in two tiers appears once per tier, matching the tiles. "Total in pipeline" is the
