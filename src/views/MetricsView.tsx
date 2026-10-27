@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import {
   Bar,
   BarChart,
@@ -19,6 +19,8 @@ import {
   MANUAL_METRICS,
   asOfDate,
   computeJyfVsMentoring,
+  jyfVsMentoringRoster,
+  JYF_COHORT_LABELS,
   computeJyfVsMentoringAsOf,
   derivePeriodB,
   delta,
@@ -307,6 +309,7 @@ function ChartCard({
   onExplore,
   helpId,
   sectionId,
+  exportCsv,
 }: {
   title: string;
   children: ReactElement;
@@ -315,6 +318,9 @@ function ChartCard({
   onExplore?: () => void;
   helpId?: string;
   sectionId?: string;
+  // Replaces the default "export the visible table" behaviour: the card calls
+  // this instead (e.g. §005 exports the people behind the counts).
+  exportCsv?: { onClick: () => void; title: string };
 }) {
   const storageKey = `hjg.chartcard.view:${title}`;
   const [view, setView] = useState<ChartCardView>(() => {
@@ -338,11 +344,15 @@ function ChartCard({
       help={helpId ? <HelpButton id={helpId} label={title} /> : undefined}
       actions={
         <>
-          {table && (
+          {(table || exportCsv) && (
             <button
               className="btn btn--sm"
-              onClick={() => downloadCsv(title, table.columns, table.rows)}
-              title="Download the per-month aggregated table as CSV"
+              onClick={
+                exportCsv
+                  ? exportCsv.onClick
+                  : () => downloadCsv(title, table!.columns, table!.rows)
+              }
+              title={exportCsv?.title ?? "Download the per-month aggregated table as CSV"}
             >
               Export CSV
             </button>
@@ -1178,6 +1188,40 @@ export function MetricsView() {
       ],
     };
   }, [jyfVsMentoring, jyfThen, today]);
+
+  // §005 "Export CSV": the PEOPLE behind the card, one row per cohort × person
+  // (lib/cohort.ts jyfVsMentoringRoster) — the JYF rows number the JYF tile,
+  // the 4x rows the 4x tile, etc. With compare on, the earlier day's roster is
+  // appended with a Snapshot column, so the Δ can be traced to named people.
+  const exportJyfRoster = useCallback(() => {
+    if (!jyfInputs) return;
+    const columns = [
+      "Cohort",
+      "Client",
+      "Client ID",
+      "Open engagement(s)",
+      "Engagement start",
+      "Added to CA",
+    ];
+    const rowsFor = (asOf?: string): (string | number)[][] =>
+      jyfVsMentoringRoster(jyfInputs, asOf).map((r) => [
+        JYF_COHORT_LABELS[r.cohort],
+        r.clientName ?? `(client ${r.clientId})`,
+        r.clientId,
+        r.engagements,
+        r.startDate ?? "",
+        r.dateAdded ?? "",
+      ]);
+    if (!jyfThen) {
+      downloadCsv("JYF vs Active Mentoring — people", columns, rowsFor());
+      return;
+    }
+    const rows = [
+      ...rowsFor().map((r) => [`Today (${today})`, ...r]),
+      ...rowsFor(jyfThen.asOf).map((r) => [`As of ${jyfThen.asOf}`, ...r]),
+    ];
+    downloadCsv("JYF vs Active Mentoring — people", ["Snapshot", ...columns], rows);
+  }, [jyfInputs, jyfThen, today]);
 
   // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
   // per-chart Period-B overlay datasets (aligned to A by month index), and
@@ -2024,6 +2068,11 @@ export function MetricsView() {
               helpId="metrics.jyfVsMentoring"
               sectionId="metrics.jyfVsMentoring"
               table={jyfThen ? jyfCompareTable : jyfTable}
+              exportCsv={{
+                onClick: exportJyfRoster,
+                title:
+                  "Download the people behind these counts — one row per cohort and person (JYF, 4x, 2x, 1x)",
+              }}
               extra={
                 <>
                   <div className="jyf-compare">

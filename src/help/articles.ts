@@ -495,8 +495,12 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 - Test/placeholder mentees you've excluded (and group/placeholder clients) are left out.
 - **All-time snapshot** — *not* affected by the date range at the top of the page.
 
+### Export CSV — the people behind the numbers
+- **Export CSV** downloads **who** is in each cohort, one row per cohort and person: **Cohort** (JumpStart (JYF) / Active Mentoring — 4x / 2x / 1x), **Client**, **Client ID**, the person's **open engagement(s)** in that cohort, the earliest **engagement start** and the earliest **added-to-CA** date. Filter the Cohort column and the row counts match the tiles exactly (the JYF rows = "In JumpStart", the 4x rows = the 4x tile, and so on); a person in two tiers appears once per tier, as on the card.
+- With **Compare** on, the file gains a leading **Snapshot** column and lists today's roster followed by the roster **as of** the earlier day, so a Δ can be traced to named people.
+
 ### Source
-- \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`; the compare tool also reads \`date_added\`, \`date_closed\`, \`start_date\`, \`end_date\`). Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`, \`computeJyfVsMentoringAsOf\`) and \`lib/compare.ts\` (\`ASOF_PRESETS\`, \`asOfDate\`).`,
+- \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`; the compare tool also reads \`date_added\`, \`date_closed\`, \`start_date\`, \`end_date\`). Names from \`ca_clients\`. Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`, \`computeJyfVsMentoringAsOf\`, \`jyfVsMentoringRoster\`) and \`lib/compare.ts\` (\`ASOF_PRESETS\`, \`asOfDate\`).`,
   },
 
   "margins.tab": {

@@ -5,7 +5,22 @@ Working notes for resuming this project in a future session. Last updated
 month", v0.12.0, MERGED TO `main`**). Two sessions ran on 2026-09-25 in
 parallel. Read **021b** first, then **021** (email pay stubs, v0.11.0) below it.
 
-## ▶ START HERE (2026-09-25, session 021b — v0.12.0, MERGED TO `main`)
+## ▶ START HERE (2026-10-27, session 022 — v0.13.0, on branch `claude/ecstatic-lovelace-x6e0kv`, NOT merged)
+
+**What shipped:** §005 "JYF vs Active Mentoring" **Export CSV now downloads the people** behind
+the counts: one row per cohort × person (JYF / 4x / 2x / 1x) with name, client ID, open
+engagement name(s), earliest start and added-to-CA dates. With Compare on, the file has a
+Snapshot column and lists today's roster then the as-of roster. Roster logic is pure in
+`lib/cohort.ts` (`jyfVsMentoringRoster`) and covered by verify §15.
+
+**Gates:** typecheck ✓ · verify ✓ · lint 0 errors / 14 pre-existing ✓ · prettier ✓ · build ✓.
+Not checked against live data (no Supabase access from the session).
+
+**Next:** user exports on the live app and checks the counts match the tiles; merge to `main`
+when happy (chip should then read `v0.13.0`). No new migration; next number is still `9960`.
+Session 021b's user actions below (apply 9961, 9962) still stand.
+
+## ▶ Previous START HERE (2026-09-25, session 021b — v0.12.0, MERGED TO `main`)
 
 **Merged:** on the user's "merge your changes to main when you're finished and delete the
 branch", 021b was **rebased onto session 021's `main`** (linear, no merge commit). `main` was

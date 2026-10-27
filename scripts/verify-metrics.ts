@@ -24,6 +24,8 @@ import {
   computeJyfVsMentoring,
   computeJyfVsMentoringAsOf,
   engagementStateAsOf,
+  jyfVsMentoringRoster,
+  JYF_COHORT_LABELS,
   type CohortEngagementInput,
   type CohortEngagementAsOfInput,
 } from "../lib/cohort.js";
@@ -3177,6 +3179,54 @@ console.log("[15] JYF vs Active Mentoring cohort (open engagements by phase, dis
   eq(empty.jyf, 0, "empty -> jyf 0");
   eq(empty.mentoring, 0, "empty -> mentoring 0");
   eq(empty.total, 0, "empty -> total 0");
+
+  // Roster (Export CSV): the same rows, with names, one row per cohort × person.
+  const named = (id: number) => ({ clientName: `Person ${id}`, dateClosed: null, endDate: null });
+  const asOfEngs: CohortEngagementAsOfInput[] = engs.map((e, i) => ({
+    ...e,
+    ...named(e.clientId),
+    startDate: `2026-01-${String(i + 1).padStart(2, "0")}`,
+    dateAdded: `2025-12-${String(i + 1).padStart(2, "0")}`,
+  }));
+  const roster = jyfVsMentoringRoster(asOfEngs);
+  const byCohort = (k: "jyf" | "4x" | "2x" | "1x") => roster.filter((r) => r.cohort === k);
+  eq(byCohort("jyf").length, c.jyf, "roster JYF rows = JYF tile");
+  eq(byCohort("4x").length, c.byTier["4x"], "roster 4x rows = 4x tile");
+  eq(byCohort("2x").length, c.byTier["2x"], "roster 2x rows = 2x tile");
+  eq(byCohort("1x").length, c.byTier["1x"], "roster 1x rows = 1x tile");
+  eq(
+    new Set(roster.map((r) => r.clientId)).size,
+    c.total,
+    "distinct people across roster rows = pipeline total",
+  );
+  eq(
+    roster.map((r) => r.cohort).join(","),
+    "jyf,jyf,4x,4x,2x,1x",
+    "roster ordered JYF, 4x, 2x, 1x (then by name)",
+  );
+  eq(byCohort("jyf")[0].clientName, "Person 1", "roster carries the person's name");
+  const five = byCohort("4x").find((r) => r.clientId === 5)!;
+  eq(
+    five.engagements,
+    "MN Subscription | (4x Month) ... / Every 4 appointments",
+    "two open engagements in one tier -> one row listing both",
+  );
+  eq(five.startDate, "2026-01-06", "roster start = earliest start across the person's engagements");
+  eq(five.dateAdded, "2025-12-06", "roster added = earliest date_added across them");
+  eq(JYF_COHORT_LABELS.jyf, "JumpStart (JYF)", "cohort label for the CSV");
+  // As-of roster: a day before client 5's second 4x was created still lists them once.
+  const then = jyfVsMentoringRoster(asOfEngs, "2025-12-08");
+  eq(then.filter((r) => r.cohort === "4x").length, 2, "as-of roster: 4x people on that day");
+  eq(
+    then.find((r) => r.clientId === 5)!.engagements,
+    "MN Subscription | (4x Month) ...",
+    "as-of roster lists only the engagements that existed that day",
+  );
+  eq(
+    jyfVsMentoringRoster(asOfEngs, "2025-11-01").length,
+    0,
+    "as-of before anything existed -> empty",
+  );
 }
 
 console.log("[16] Journeys per-stage colors (gradient interpolation + config resolution)");

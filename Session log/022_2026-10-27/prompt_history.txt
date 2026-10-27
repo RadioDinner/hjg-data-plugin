@@ -1,0 +1,5 @@
+--- 2026-10-27 ---
+for feature 005 (JYF vs Active Mentoring) I want the "Export CSV" button to export the data used to build the screen. This is what the screen currently looks like. The export should contain the names of the 17 people in JumpStart (JYF), the 29 people in active 4x mentoring, etc
+[Image: screenshot of the 005 JYF vs Active Mentoring section — graph + table, Export CSV button]
+--- 2026-10-27 ---
+Try again

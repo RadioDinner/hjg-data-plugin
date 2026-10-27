@@ -27,6 +27,9 @@ export interface CohortEngagementInput {
   name: string | null;
   isComplete: boolean | null;
   isCanceled: boolean | null;
+  // The person's display name (ca_clients). Only the CSV export reads it; the
+  // counts never do, so it is optional and older callers/tests still compile.
+  clientName?: string | null;
 }
 
 export type MentoringTier = "4x" | "2x" | "1x";
@@ -136,4 +139,89 @@ export function computeJyfVsMentoringAsOf(
     }
   }
   return { ...computeJyfVsMentoring(open), asOf, unknownClose };
+}
+
+// ---------------------------------------------------------------------------
+// Roster ("Export CSV"): WHO is behind each number on the card.
+//
+// One row per (cohort, person) — the same distinct-people rule as the counts,
+// so filtering the rows by cohort reproduces the tiles exactly: the JYF rows
+// number `jyf`, the 4x rows `byTier["4x"]`, and so on. A person with two open
+// engagements in the same tier is one row listing both engagement names; a
+// person in two different cohorts is one row per cohort (like the tiles).
+// With `asOf`, membership is decided by engagementStateAsOf (the compare
+// tool's reconstruction); without it, by today's open/closed flags.
+// ---------------------------------------------------------------------------
+
+export type JyfCohortKey = "jyf" | "4x" | "2x" | "1x";
+
+export const JYF_COHORT_LABELS: Record<JyfCohortKey, string> = {
+  jyf: "JumpStart (JYF)",
+  "4x": "Active Mentoring — 4x",
+  "2x": "Active Mentoring — 2x",
+  "1x": "Active Mentoring — 1x",
+};
+
+const JYF_COHORT_ORDER: readonly JyfCohortKey[] = ["jyf", "4x", "2x", "1x"];
+
+export interface JyfRosterRow {
+  cohort: JyfCohortKey;
+  clientId: number;
+  clientName: string | null;
+  engagements: string; // open engagement name(s) in this cohort, " / "-joined
+  startDate: string | null; // earliest start_date across those engagements
+  dateAdded: string | null; // earliest date_added across those engagements
+}
+
+function minDate(a: string | null, b: string | null): string | null {
+  if (a == null) return b;
+  if (b == null) return a;
+  return a < b ? a : b;
+}
+
+export function jyfVsMentoringRoster(
+  engagements: CohortEngagementAsOfInput[],
+  asOf?: string,
+): JyfRosterRow[] {
+  const byKey = new Map<string, JyfRosterRow & { names: Set<string> }>();
+  for (const e of engagements) {
+    if (e.clientId == null) continue;
+    const open = asOf ? engagementStateAsOf(e, asOf) === "open" : !e.isComplete && !e.isCanceled;
+    if (!open) continue;
+    const tier = engagementTier(e.name);
+    const cohort: JyfCohortKey | null =
+      tier === "jumpstart" ? "jyf" : MENTORING_TIERS.has(tier) ? (tier as MentoringTier) : null;
+    if (!cohort) continue;
+    const key = `${cohort}:${e.clientId}`;
+    let row = byKey.get(key);
+    if (!row) {
+      row = {
+        cohort,
+        clientId: e.clientId,
+        clientName: e.clientName ?? null,
+        engagements: "",
+        startDate: null,
+        dateAdded: null,
+        names: new Set<string>(),
+      };
+      byKey.set(key, row);
+    }
+    if (e.name) row.names.add(e.name);
+    if (!row.clientName && e.clientName) row.clientName = e.clientName;
+    row.startDate = minDate(row.startDate, e.startDate);
+    row.dateAdded = minDate(row.dateAdded, e.dateAdded);
+  }
+  const rows: JyfRosterRow[] = [...byKey.values()].map(({ names, ...r }) => ({
+    ...r,
+    engagements: [...names].join(" / "),
+  }));
+  rows.sort((a, b) => {
+    const c = JYF_COHORT_ORDER.indexOf(a.cohort) - JYF_COHORT_ORDER.indexOf(b.cohort);
+    if (c !== 0) return c;
+    const an = (a.clientName ?? "").toLowerCase();
+    const bn = (b.clientName ?? "").toLowerCase();
+    if (an !== bn) return an < bn ? -1 : 1;
+    return a.clientId - b.clientId;
+  });
+  return rows;
 }

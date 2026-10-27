@@ -357,6 +357,7 @@ export type { FreedomMenteeInput, FreedomRow, FreedomReport } from "../lib/freed
 // computeJyfVsMentoring / the input + result types are imported at the top (used
 // by fetchJyfVsMentoring below) and re-exported here for the view.
 export { computeJyfVsMentoring, computeJyfVsMentoringAsOf, engagementStateAsOf };
+export { jyfVsMentoringRoster, JYF_COHORT_LABELS } from "../lib/cohort";
 export type {
   CohortEngagementInput,
   CohortEngagementAsOfInput,
@@ -364,7 +365,7 @@ export type {
   JyfVsMentoringAsOf,
   AsOfState,
 };
-export type { MentoringTier } from "../lib/cohort";
+export type { MentoringTier, JyfCohortKey, JyfRosterRow } from "../lib/cohort";
 
 // Pure Journeys per-stage color logic (gradient interpolation + config resolution).
 export {
@@ -1218,12 +1219,23 @@ export async function fetchJyfCohortInputs(): Promise<CohortEngagementAsOfInput[
   const [engagements, excludedSet, clientsRes] = await Promise.all([
     fetchAllEngagements(),
     fetchTestClientIds(),
-    supabase.from("ca_clients").select("id,is_excluded"),
+    supabase.from("ca_clients").select("id,name,first_name,last_name,is_excluded"),
   ]);
   if (clientsRes.error) throw new Error(clientsRes.error.message);
   const isExcluded = new Map<number, boolean>();
-  for (const c of (clientsRes.data ?? []) as { id: number; is_excluded: boolean }[])
+  // Display name for the roster export (the counts never read it).
+  const clientName = new Map<number, string | null>();
+  for (const c of (clientsRes.data ?? []) as {
+    id: number;
+    name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    is_excluded: boolean;
+  }[]) {
     isExcluded.set(c.id, c.is_excluded);
+    const full = [c.first_name, c.last_name].filter(Boolean).join(" ").trim();
+    clientName.set(c.id, c.name?.trim() || full || null);
+  }
 
   const inputs: CohortEngagementAsOfInput[] = [];
   for (const e of engagements) {
@@ -1232,6 +1244,7 @@ export async function fetchJyfCohortInputs(): Promise<CohortEngagementAsOfInput[
     inputs.push({
       clientId: e.client_id,
       name: e.name,
+      clientName: clientName.get(e.client_id) ?? null,
       isComplete: e.is_complete,
       isCanceled: e.is_canceled,
       dateAdded: e.date_added,
