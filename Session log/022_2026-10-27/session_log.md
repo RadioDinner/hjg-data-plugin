@@ -14,11 +14,28 @@
 
 - Merged to `main` by fast-forward on the user's "merge to main".
 
+- **§005 cohort drill-down (v0.14.0, branch only, not merged).** Each row of the §005 table has a
+  ▸ toggle that opens the list of people in that cohort (name, open engagement(s), engagement
+  start). Active Mentoring and Total list each person once with a Cohort(s) column. With
+  Compare on, people new since the earlier day get a green "new" tag and a "Left since …" line
+  names who dropped out.
+  - `lib/cohort.ts` `jyfGroupMembers` (six groups; sizes = tiles) and `diffMembers`.
+  - `ChartCardTable` gained an optional `details` array; `ChartDataTable` renders expandable
+    rows (zebra by data-row index; open state keyed by row label, survives compare toggles).
+  - Verify §15 extended; help article updated.
+  - Render-checked with a temporary headless Chromium harness and stubbed Supabase responses
+    (light, dark, 390 px, compare on). The harness was deleted afterwards.
+
 ## Directional decisions
 - The export replaces the 6-row summary for §005 (the on-screen table already shows that).
 - A person in two tiers appears once per tier, matching the tiles. "Total in pipeline" is the
   count of distinct Client IDs in the file.
 
+- Drill-down lives inside the table (not the Explore modal), per the north star of graph +
+  table visible together.
+- Compare mode shows churn behind a flat Δ (e.g. 4x Δ 0 can hide one join and one leave).
+
 ## Open / next
+- User: try the drill-down on the live app once merged; say "merge to main" to ship v0.14.0.
 - User: export on the live app and confirm the row counts match the tiles (17 / 29 / 16 / 4).
 - No migration this session. Next migration number is still `9960`.

@@ -485,6 +485,80 @@ body {
   text-align: center;
 }
 
+/* Expandable rows (ChartCard table `details`, e.g. §005 people per cohort).
+   Detail rows are extra <tr>s, so zebra striping follows the data-row index
+   (.is-even) instead of :nth-child. */
+.table--expandable tbody tr:nth-child(even) td {
+  background: none;
+}
+.table--expandable tbody tr.is-even td {
+  background: var(--panel-2);
+}
+.table--expandable tbody tr.row--expandable:hover td {
+  background: var(--row-hover, rgba(127, 127, 127, 0.1));
+}
+.row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+.row-toggle:hover {
+  color: var(--accent);
+}
+.row-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-control);
+}
+.row-toggle__chev {
+  display: inline-block;
+  width: 1em;
+  color: var(--muted);
+}
+.table .row-detail > td {
+  padding: 8px 10px 12px;
+  text-align: left;
+}
+.cohort-people {
+  max-height: 420px;
+  /* Scroll inside the list instead of widening the outer table on phones. */
+  max-width: calc(100vw - 72px);
+  overflow: auto;
+}
+.cohort-people__table {
+  font-size: 13px;
+  background: var(--panel);
+}
+.cohort-people__table th,
+.cohort-people__table td {
+  text-align: left;
+}
+.cohort-people__table .num {
+  text-align: right;
+  width: 3em;
+}
+.cohort-people__new {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--ok-line);
+  border-radius: var(--r-pill);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  font-size: 11px;
+}
+.cohort-people__left {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .footer {
   margin-top: 28px;
   padding-top: 14px;

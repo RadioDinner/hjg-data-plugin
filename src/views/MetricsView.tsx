@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   Bar,
   BarChart,
@@ -20,6 +28,8 @@ import {
   asOfDate,
   computeJyfVsMentoring,
   jyfVsMentoringRoster,
+  jyfGroupMembers,
+  diffMembers,
   JYF_COHORT_LABELS,
   computeJyfVsMentoringAsOf,
   derivePeriodB,
@@ -52,6 +62,7 @@ import {
   type ResolvedOutcome,
   type TrendCall,
   type TrendWindow,
+  type JyfMember,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
 import { HelpButton } from "../components/HelpDrawer";
@@ -63,7 +74,14 @@ import { downloadCsv } from "../csv";
 import { num, pct, signed, signedPct, signedPp, fmtDate, fmtDateTime } from "../format";
 
 type ChartCardCell = string | number;
-type ChartCardTable = { columns: string[]; rows: ChartCardCell[][] };
+// `details` (optional, aligned with `rows`): a row with details gets a ▸ toggle
+// and opens into that content underneath (e.g. §005's people per cohort). The
+// CSV export ignores it.
+type ChartCardTable = {
+  columns: string[];
+  rows: ChartCardCell[][];
+  details?: (ReactNode | null | undefined)[];
+};
 type ChartCardView = "graph" | "table" | "both";
 
 const C = {
@@ -393,7 +411,7 @@ function ChartCard({
         )}
         {showTable && table && (
           <div className="table-scroll" style={{ width: "100%" }}>
-            <ChartDataTable columns={table.columns} rows={table.rows} />
+            <ChartDataTable columns={table.columns} rows={table.rows} details={table.details} />
           </div>
         )}
       </div>
@@ -401,9 +419,20 @@ function ChartCard({
   );
 }
 
-function ChartDataTable({ columns, rows }: ChartCardTable) {
+function ChartDataTable({ columns, rows, details }: ChartCardTable) {
+  // Which rows are open. Keyed by the row's first cell (its label), so a row
+  // stays open when the numbers refresh or the compare preset changes.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const expandable = !!details?.some((d) => d != null);
+  const toggle = (key: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   return (
-    <table className="table table--center">
+    <table className={`table table--center ${expandable ? "table--expandable" : ""}`}>
       <thead>
         <tr>
           {columns.map((c) => (
@@ -412,15 +441,45 @@ function ChartDataTable({ columns, rows }: ChartCardTable) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row, i) => (
-          <tr key={i}>
-            {row.map((cell, j) => (
-              <td key={j} className={typeof cell === "number" ? "num" : ""}>
-                {cell}
-              </td>
-            ))}
-          </tr>
-        ))}
+        {rows.map((row, i) => {
+          const detail = details?.[i];
+          const key = String(row[0] ?? i);
+          const isOpen = detail != null && open.has(key);
+          const zebra = i % 2 === 1 ? "is-even" : "";
+          return (
+            <Fragment key={i}>
+              <tr className={`${zebra} ${detail != null ? "row--expandable" : ""}`}>
+                {row.map((cell, j) => (
+                  <td key={j} className={typeof cell === "number" ? "num" : ""}>
+                    {j === 0 && detail != null ? (
+                      <button
+                        type="button"
+                        className="row-toggle"
+                        aria-expanded={isOpen}
+                        onClick={() => toggle(key)}
+                        title={
+                          isOpen ? "Hide the people in this cohort" : "Show who is in this cohort"
+                        }
+                      >
+                        <span className="row-toggle__chev" aria-hidden="true">
+                          {isOpen ? "▾" : "▸"}
+                        </span>
+                        {cell}
+                      </button>
+                    ) : (
+                      cell
+                    )}
+                  </td>
+                ))}
+              </tr>
+              {isOpen && (
+                <tr className={`row-detail ${zebra}`}>
+                  <td colSpan={columns.length}>{detail}</td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        })}
         {rows.length === 0 && (
           <tr>
             <td colSpan={columns.length} className="muted">
@@ -430,6 +489,78 @@ function ChartDataTable({ columns, rows }: ChartCardTable) {
         )}
       </tbody>
     </table>
+  );
+}
+
+// §005 table rows, top to bottom, as drill-down groups (lib/cohort.ts jyfGroupMembers).
+const JYF_GROUP_ORDER = ["jyf", "mentoring", "4x", "2x", "1x", "total"] as const;
+
+// §005 drill-down: the people behind one cohort row. `showCohorts` adds a
+// column naming each person's cohort(s) — used for the multi-cohort rows
+// (Active Mentoring, Total). In compare mode `joined` marks people who are new
+// since the earlier day and `left` lists people who were there then but not now.
+function JyfPeopleList({
+  members,
+  showCohorts,
+  joined,
+  left,
+  thenLabel,
+}: {
+  members: JyfMember[];
+  showCohorts: boolean;
+  joined?: Set<number>;
+  left?: JyfMember[];
+  thenLabel?: string;
+}) {
+  const cohortsOf = (m: JyfMember) => m.cohorts.map((c) => (c === "jyf" ? "JYF" : c)).join(", ");
+  const nameOf = (m: JyfMember) => m.clientName ?? `(client ${m.clientId})`;
+  return (
+    <div className="cohort-people">
+      {members.length === 0 ? (
+        <p className="muted">Nobody in this cohort.</p>
+      ) : (
+        <table className="table cohort-people__table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Person</th>
+              {showCohorts && <th>Cohort(s)</th>}
+              <th>Open engagement(s)</th>
+              <th>Engagement start</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m, i) => (
+              <tr key={m.clientId}>
+                <td className="num">{i + 1}</td>
+                <td>
+                  {nameOf(m)}
+                  {joined?.has(m.clientId) && (
+                    <span
+                      className="cohort-people__new"
+                      title={`Not in this cohort ${thenLabel ?? ""}`}
+                    >
+                      new
+                    </span>
+                  )}
+                </td>
+                {showCohorts && <td>{cohortsOf(m)}</td>}
+                <td>{m.engagements || "—"}</td>
+                <td>{m.startDate ? fmtDate(m.startDate) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {left && (
+        <p className="cohort-people__left">
+          <strong>
+            Left since {thenLabel} ({left.length}):
+          </strong>{" "}
+          {left.length === 0 ? "nobody" : left.map(nameOf).join(", ")}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1133,9 +1264,29 @@ export function MetricsView() {
         : [],
     [jyfVsMentoring],
   );
+  // §005 drill-down: who is in each of the six table rows (today, and on the
+  // compare day when Compare is on). Group sizes equal the row counts.
+  const jyfGroupsNow = useMemo(
+    () => (jyfInputs ? jyfGroupMembers(jyfVsMentoringRoster(jyfInputs)) : null),
+    [jyfInputs],
+  );
+  const jyfGroupsThen = useMemo(
+    () =>
+      jyfInputs && jyfThen ? jyfGroupMembers(jyfVsMentoringRoster(jyfInputs, jyfThen.asOf)) : null,
+    [jyfInputs, jyfThen],
+  );
   const jyfTable = useMemo<ChartCardTable>(
     () => ({
       columns: ["Cohort", "People"],
+      details: jyfGroupsNow
+        ? JYF_GROUP_ORDER.map((g) => (
+            <JyfPeopleList
+              key={g}
+              members={jyfGroupsNow[g]}
+              showCohorts={g === "mentoring" || g === "total"}
+            />
+          ))
+        : undefined,
       rows: jyfVsMentoring
         ? [
             ["JumpStart (JYF) — open", jyfVsMentoring.jyf],
@@ -1147,7 +1298,7 @@ export function MetricsView() {
           ]
         : [],
     }),
-    [jyfVsMentoring],
+    [jyfVsMentoring, jyfGroupsNow],
   );
   // §005 compare mode: five grouped "before vs now" categories (the two headline
   // cohorts + the three tiers) and a Δ table against the earlier day. `before`
@@ -1176,8 +1327,25 @@ export function MetricsView() {
       const d = delta(now, before);
       return [label, now, before, signed(d.abs), signedPct(d.pct)];
     };
+    const thenLabel = fmtDate(jyfThen.asOf);
     return {
-      columns: ["Cohort", `Today (${fmtDate(today)})`, `As of ${fmtDate(jyfThen.asOf)}`, "Δ", "Δ%"],
+      columns: ["Cohort", `Today (${fmtDate(today)})`, `As of ${thenLabel}`, "Δ", "Δ%"],
+      details:
+        jyfGroupsNow && jyfGroupsThen
+          ? JYF_GROUP_ORDER.map((g) => {
+              const d = diffMembers(jyfGroupsNow[g], jyfGroupsThen[g]);
+              return (
+                <JyfPeopleList
+                  key={g}
+                  members={jyfGroupsNow[g]}
+                  showCohorts={g === "mentoring" || g === "total"}
+                  joined={d.joined}
+                  left={d.left}
+                  thenLabel={thenLabel}
+                />
+              );
+            })
+          : undefined,
       rows: [
         row("JumpStart (JYF) — open", jyfVsMentoring.jyf, jyfThen.jyf),
         row("Active Mentoring (4x + 2x + 1x) — open", jyfVsMentoring.mentoring, jyfThen.mentoring),
@@ -1187,7 +1355,7 @@ export function MetricsView() {
         row("Total in pipeline (distinct)", jyfVsMentoring.total, jyfThen.total),
       ],
     };
-  }, [jyfVsMentoring, jyfThen, today]);
+  }, [jyfVsMentoring, jyfThen, today, jyfGroupsNow, jyfGroupsThen]);
 
   // §005 "Export CSV": the PEOPLE behind the card, one row per cohort × person
   // (lib/cohort.ts jyfVsMentoringRoster) — the JYF rows number the JYF tile,

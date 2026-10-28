@@ -25,6 +25,8 @@ import {
   computeJyfVsMentoringAsOf,
   engagementStateAsOf,
   jyfVsMentoringRoster,
+  jyfGroupMembers,
+  diffMembers,
   JYF_COHORT_LABELS,
   type CohortEngagementInput,
   type CohortEngagementAsOfInput,
@@ -3227,6 +3229,56 @@ console.log("[15] JYF vs Active Mentoring cohort (open engagements by phase, dis
     0,
     "as-of before anything existed -> empty",
   );
+
+  // Drill-down groups (table rows open into people): sizes equal the tiles.
+  const g = jyfGroupMembers(roster);
+  eq(g.jyf.length, c.jyf, "drill-down JYF people = JYF tile");
+  eq(g.mentoring.length, c.mentoring, "drill-down Active Mentoring people = distinct headline");
+  eq(g["4x"].length, c.byTier["4x"], "drill-down 4x people = 4x tile");
+  eq(g["2x"].length, c.byTier["2x"], "drill-down 2x people = 2x tile");
+  eq(g["1x"].length, c.byTier["1x"], "drill-down 1x people = 1x tile");
+  eq(g.total.length, c.total, "drill-down Total people = pipeline total");
+  eq(
+    g.mentoring.map((m) => m.clientName).join(","),
+    "Person 3,Person 5,Person 6,Person 7",
+    "drill-down members sorted by name",
+  );
+  // A person in two cohorts is one member of Total, listing both cohorts.
+  const twoCohorts = jyfGroupMembers([
+    {
+      cohort: "jyf",
+      clientId: 1,
+      clientName: "A",
+      engagements: "JYF",
+      startDate: "2026-02-01",
+      dateAdded: null,
+    },
+    {
+      cohort: "4x",
+      clientId: 1,
+      clientName: "A",
+      engagements: "4x plan",
+      startDate: "2026-01-01",
+      dateAdded: null,
+    },
+  ]);
+  eq(twoCohorts.total.length, 1, "person in JYF and 4x -> one Total member");
+  eq(
+    twoCohorts.total[0].cohorts.join(","),
+    "jyf,4x",
+    "their cohorts are both listed, in card order",
+  );
+  eq(twoCohorts.total[0].engagements, "JYF / 4x plan", "their engagements are both listed");
+  eq(twoCohorts.total[0].startDate, "2026-01-01", "Total member start = earliest across cohorts");
+  // Compare: joined / left by client ID.
+  const dm = diffMembers(g["4x"], jyfGroupMembers(then)["4x"]);
+  eq(dm.joined.size, 0, "no new 4x people between 2025-12-08 and today in the fixture");
+  eq(
+    diffMembers(g.jyf, []).joined.size,
+    g.jyf.length,
+    "everyone is new against an empty earlier day",
+  );
+  eq(diffMembers([], g.jyf).left.length, g.jyf.length, "everyone left against an empty today");
 }
 
 console.log("[16] Journeys per-stage colors (gradient interpolation + config resolution)");

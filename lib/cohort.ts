@@ -225,3 +225,85 @@ export function jyfVsMentoringRoster(
   });
   return rows;
 }
+
+// ---------------------------------------------------------------------------
+// Drill-down ("who makes up each cohort"): the card's table rows open into the
+// people behind them. Six groups, matching the six table rows:
+//   jyf / 4x / 2x / 1x — one member per roster row of that cohort;
+//   mentoring          — distinct people across 4x/2x/1x (= the headline);
+//   total              — distinct people across all four (= "Total in pipeline").
+// A person in several cohorts is ONE member of `mentoring` / `total`, with
+// every cohort they're in listed in `cohorts`. Group sizes equal the tiles.
+// ---------------------------------------------------------------------------
+
+export type JyfGroupKey = "jyf" | "mentoring" | "4x" | "2x" | "1x" | "total";
+
+export interface JyfMember {
+  clientId: number;
+  clientName: string | null;
+  cohorts: JyfCohortKey[]; // in JYF, 4x, 2x, 1x order
+  engagements: string; // open engagement name(s) across those cohorts, " / "-joined
+  startDate: string | null; // earliest engagement start across them
+}
+
+function byName(a: JyfMember, b: JyfMember): number {
+  const an = (a.clientName ?? "").toLowerCase();
+  const bn = (b.clientName ?? "").toLowerCase();
+  if (an !== bn) return an < bn ? -1 : 1;
+  return a.clientId - b.clientId;
+}
+
+function mergeMembers(rows: JyfRosterRow[]): JyfMember[] {
+  const m = new Map<number, JyfMember & { names: string[] }>();
+  for (const r of rows) {
+    let x = m.get(r.clientId);
+    if (!x) {
+      x = {
+        clientId: r.clientId,
+        clientName: r.clientName,
+        cohorts: [],
+        engagements: "",
+        startDate: null,
+        names: [],
+      };
+      m.set(r.clientId, x);
+    }
+    if (!x.cohorts.includes(r.cohort)) x.cohorts.push(r.cohort);
+    for (const n of r.engagements.split(" / ")) if (n && !x.names.includes(n)) x.names.push(n);
+    if (!x.clientName && r.clientName) x.clientName = r.clientName;
+    x.startDate = minDate(x.startDate, r.startDate);
+  }
+  return [...m.values()]
+    .map(({ names, ...x }) => ({
+      ...x,
+      cohorts: JYF_COHORT_ORDER.filter((k) => x.cohorts.includes(k)),
+      engagements: names.join(" / "),
+    }))
+    .sort(byName);
+}
+
+export function jyfGroupMembers(roster: JyfRosterRow[]): Record<JyfGroupKey, JyfMember[]> {
+  const of = (keys: JyfCohortKey[]) => mergeMembers(roster.filter((r) => keys.includes(r.cohort)));
+  return {
+    jyf: of(["jyf"]),
+    mentoring: of(["4x", "2x", "1x"]),
+    "4x": of(["4x"]),
+    "2x": of(["2x"]),
+    "1x": of(["1x"]),
+    total: of(["jyf", "4x", "2x", "1x"]),
+  };
+}
+
+// Compare mode: who is in a group today but wasn't on the earlier day
+// (`joined`), and who was then but isn't now (`left`). By client ID.
+export function diffMembers(
+  now: JyfMember[],
+  then: JyfMember[],
+): { joined: Set<number>; left: JyfMember[] } {
+  const nowIds = new Set(now.map((m) => m.clientId));
+  const thenIds = new Set(then.map((m) => m.clientId));
+  return {
+    joined: new Set(now.filter((m) => !thenIds.has(m.clientId)).map((m) => m.clientId)),
+    left: then.filter((m) => !nowIds.has(m.clientId)),
+  };
+}

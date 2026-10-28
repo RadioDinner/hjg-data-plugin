@@ -495,6 +495,11 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 - Test/placeholder mentees you've excluded (and group/placeholder clients) are left out.
 - **All-time snapshot** — *not* affected by the date range at the top of the page.
 
+### See who is in each cohort
+- In the table, every cohort row has a **▸** — click the row name to open the **list of people** in it (name, open engagement(s), engagement start). Click again to close. The list's length always equals the row's number.
+- **Active Mentoring** and **Total in pipeline** list each person **once**, with a **Cohort(s)** column showing every tier they're in.
+- With **Compare** on, people who **weren't in that cohort on the earlier day** get a green **new** tag, and a **Left since …** line names the people who were in it then but aren't now.
+
 ### Export CSV — the people behind the numbers
 - **Export CSV** downloads **who** is in each cohort, one row per cohort and person: **Cohort** (JumpStart (JYF) / Active Mentoring — 4x / 2x / 1x), **Client**, **Client ID**, the person's **open engagement(s)** in that cohort, the earliest **engagement start** and the earliest **added-to-CA** date. Filter the Cohort column and the row counts match the tiles exactly (the JYF rows = "In JumpStart", the 4x rows = the 4x tile, and so on); a person in two tiers appears once per tier, as on the card.
 - With **Compare** on, the file gains a leading **Snapshot** column and lists today's roster followed by the roster **as of** the earlier day, so a Δ can be traced to named people.

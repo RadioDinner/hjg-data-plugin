@@ -5,3 +5,5 @@ for feature 005 (JYF vs Active Mentoring) I want the "Export CSV" button to expo
 Try again
 --- 2026-10-27 ---
 merge to main
+--- 2026-10-27 ---
+I want a drop down on the Cohorts where I click them down and see who makes up each cohort

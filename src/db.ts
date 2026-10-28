@@ -357,7 +357,12 @@ export type { FreedomMenteeInput, FreedomRow, FreedomReport } from "../lib/freed
 // computeJyfVsMentoring / the input + result types are imported at the top (used
 // by fetchJyfVsMentoring below) and re-exported here for the view.
 export { computeJyfVsMentoring, computeJyfVsMentoringAsOf, engagementStateAsOf };
-export { jyfVsMentoringRoster, JYF_COHORT_LABELS } from "../lib/cohort";
+export {
+  jyfVsMentoringRoster,
+  jyfGroupMembers,
+  diffMembers,
+  JYF_COHORT_LABELS,
+} from "../lib/cohort";
 export type {
   CohortEngagementInput,
   CohortEngagementAsOfInput,
@@ -365,7 +370,13 @@ export type {
   JyfVsMentoringAsOf,
   AsOfState,
 };
-export type { MentoringTier, JyfCohortKey, JyfRosterRow } from "../lib/cohort";
+export type {
+  MentoringTier,
+  JyfCohortKey,
+  JyfRosterRow,
+  JyfGroupKey,
+  JyfMember,
+} from "../lib/cohort";
 
 // Pure Journeys per-stage color logic (gradient interpolation + config resolution).
 export {
