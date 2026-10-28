@@ -21,6 +21,7 @@
 // No I/O, no React — unit-tested in scripts/verify-metrics.ts §15.
 
 import { engagementTier } from "./config";
+import { normalizeTemplateName } from "./payGroups";
 
 export interface CohortEngagementInput {
   clientId: number;
@@ -43,7 +44,177 @@ export interface JyfVsMentoring {
 
 const MENTORING_TIERS: ReadonlySet<string> = new Set<MentoringTier>(["4x", "2x", "1x"]);
 
-export function computeJyfVsMentoring(engagements: CohortEngagementInput[]): JyfVsMentoring {
+// ---------------------------------------------------------------------------
+// Cohort settings (the ⚙ in the corner of the card): which engagement NAMES
+// fall into which cohort. By default a name's cohort comes from engagementTier()
+// ("auto"): JumpStart / 0x / JYF names → JYF, 4x / 2x / 1x names → that tier,
+// everything else → not counted. An override pins one name to a cohort, or
+// switches it off ("not counted") — e.g. an "IMN Subscription" that reads as
+// JYF by name but shouldn't be in the JYF count. Keyed by the normalized name
+// (whitespace collapsed, lowercased) so incidental drift in CA never splits a
+// setting. Org-wide: stored as a JSON string in app_settings under
+// `jyf_cohort_overrides` (migration 9960), edited on the card itself.
+// ---------------------------------------------------------------------------
+
+export type JyfCohortKey = "jyf" | "4x" | "2x" | "1x";
+
+// What a name counts as when overridden: a cohort, or "off" (not counted).
+export type JyfCohortAssignment = JyfCohortKey | "off";
+
+export interface JyfCohortOverrides {
+  // normalized engagement name → assignment. Only names that differ from auto
+  // need an entry, but an entry equal to auto is harmless (it is "pinned").
+  byName: Record<string, JyfCohortAssignment>;
+}
+
+export const JYF_COHORT_OVERRIDES_KEY = "jyf_cohort_overrides";
+
+export const DEFAULT_JYF_COHORT_OVERRIDES: JyfCohortOverrides = { byName: {} };
+
+const ASSIGNMENTS: ReadonlySet<string> = new Set<JyfCohortAssignment>([
+  "jyf",
+  "4x",
+  "2x",
+  "1x",
+  "off",
+]);
+
+export function isJyfCohortAssignment(x: unknown): x is JyfCohortAssignment {
+  return typeof x === "string" && ASSIGNMENTS.has(x);
+}
+
+// The cohort a name gets with NO overrides (from its wording alone).
+export function autoJyfCohort(name: string | null | undefined): JyfCohortKey | null {
+  const tier = engagementTier(name);
+  if (tier === "jumpstart") return "jyf";
+  return MENTORING_TIERS.has(tier) ? (tier as MentoringTier) : null;
+}
+
+// The override for a name, if any (null when the name is on auto).
+export function jyfOverrideFor(
+  name: string | null | undefined,
+  overrides: JyfCohortOverrides | undefined,
+): JyfCohortAssignment | null {
+  if (!overrides) return null;
+  const v = overrides.byName[normalizeTemplateName(name)];
+  return isJyfCohortAssignment(v) ? v : null;
+}
+
+// The cohort a name counts toward on the card: its override when it has one
+// ("off" → null, i.e. not counted), else the auto cohort.
+export function resolveJyfCohort(
+  name: string | null | undefined,
+  overrides?: JyfCohortOverrides,
+): JyfCohortKey | null {
+  const o = jyfOverrideFor(name, overrides);
+  if (o) return o === "off" ? null : o;
+  return autoJyfCohort(name);
+}
+
+// Set (or clear, with null) the override for one name. Returns a new object;
+// an override equal to the name's auto cohort is dropped, so the stored config
+// only ever lists real deviations.
+export function setJyfOverride(
+  overrides: JyfCohortOverrides,
+  name: string,
+  assignment: JyfCohortAssignment | null,
+): JyfCohortOverrides {
+  const key = normalizeTemplateName(name);
+  const byName = { ...overrides.byName };
+  const auto = autoJyfCohort(name) ?? "off";
+  if (!key || assignment == null || assignment === auto) delete byName[key];
+  else byName[key] = assignment;
+  return { byName };
+}
+
+export function countJyfOverrides(overrides: JyfCohortOverrides | undefined): number {
+  return overrides ? Object.keys(overrides.byName).length : 0;
+}
+
+// Stored form: a JSON string (app_settings rides string values). Unknown keys
+// and bad assignments are dropped on parse; malformed JSON → no overrides.
+export function parseJyfCohortOverrides(raw: string | null | undefined): JyfCohortOverrides {
+  if (!raw) return { byName: {} };
+  try {
+    const v = JSON.parse(raw) as { byName?: unknown } | null;
+    const src =
+      v && typeof v === "object" && v.byName && typeof v.byName === "object" ? v.byName : {};
+    const byName: Record<string, JyfCohortAssignment> = {};
+    for (const [k, a] of Object.entries(src as Record<string, unknown>)) {
+      const key = normalizeTemplateName(k);
+      if (key && isJyfCohortAssignment(a)) byName[key] = a;
+    }
+    return { byName };
+  } catch {
+    return { byName: {} };
+  }
+}
+
+export function serializeJyfCohortOverrides(overrides: JyfCohortOverrides): string {
+  const keys = Object.keys(overrides.byName).sort();
+  const byName: Record<string, JyfCohortAssignment> = {};
+  for (const k of keys) byName[k] = overrides.byName[k];
+  return JSON.stringify({ byName });
+}
+
+// One row of the settings dialog: an engagement name as it appears in CA, what
+// it counts as automatically, its override (if any), the cohort it ends up in,
+// and how many distinct people hold it (open today / ever). Names are merged
+// by normalized key; the first spelling seen is the display name.
+export interface JyfEngagementNameRow {
+  key: string; // normalized name
+  name: string; // display spelling
+  auto: JyfCohortKey | null;
+  override: JyfCohortAssignment | null;
+  effective: JyfCohortKey | null;
+  openPeople: number; // distinct clients with this engagement open today
+  allPeople: number; // distinct clients that ever had it
+}
+
+export function jyfEngagementNames(
+  engagements: CohortEngagementInput[],
+  overrides?: JyfCohortOverrides,
+): JyfEngagementNameRow[] {
+  const m = new Map<string, { name: string; open: Set<number>; all: Set<number> }>();
+  for (const e of engagements) {
+    if (e.clientId == null) continue;
+    const key = normalizeTemplateName(e.name);
+    if (!key) continue;
+    let x = m.get(key);
+    if (!x) {
+      x = { name: (e.name ?? "").replace(/\s+/g, " ").trim(), open: new Set(), all: new Set() };
+      m.set(key, x);
+    }
+    x.all.add(e.clientId);
+    if (!e.isComplete && !e.isCanceled) x.open.add(e.clientId);
+  }
+  // Overridden names with no engagement rows (e.g. a template renamed in CA)
+  // still show, so a stale setting can be seen and cleared.
+  for (const key of Object.keys(overrides?.byName ?? {})) {
+    if (!m.has(key)) m.set(key, { name: key, open: new Set(), all: new Set() });
+  }
+  const rows: JyfEngagementNameRow[] = [...m.entries()].map(([key, x]) => ({
+    key,
+    name: x.name,
+    auto: autoJyfCohort(x.name),
+    override: jyfOverrideFor(x.name, overrides),
+    effective: resolveJyfCohort(x.name, overrides),
+    openPeople: x.open.size,
+    allPeople: x.all.size,
+  }));
+  rows.sort(
+    (a, b) =>
+      b.openPeople - a.openPeople ||
+      b.allPeople - a.allPeople ||
+      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  );
+  return rows;
+}
+
+export function computeJyfVsMentoring(
+  engagements: CohortEngagementInput[],
+  overrides?: JyfCohortOverrides,
+): JyfVsMentoring {
   const jyfClients = new Set<number>();
   const mentoringClients = new Set<number>();
   const tierClients: Record<MentoringTier, Set<number>> = {
@@ -54,12 +225,12 @@ export function computeJyfVsMentoring(engagements: CohortEngagementInput[]): Jyf
   for (const e of engagements) {
     if (e.clientId == null) continue;
     if (e.isComplete || e.isCanceled) continue; // only open / active engagements
-    const tier = engagementTier(e.name);
-    if (tier === "jumpstart") {
+    const cohort = resolveJyfCohort(e.name, overrides);
+    if (cohort === "jyf") {
       jyfClients.add(e.clientId);
-    } else if (MENTORING_TIERS.has(tier)) {
+    } else if (cohort) {
       mentoringClients.add(e.clientId);
-      tierClients[tier as MentoringTier].add(e.clientId);
+      tierClients[cohort].add(e.clientId);
     }
   }
   return {
@@ -125,6 +296,7 @@ export interface JyfVsMentoringAsOf extends JyfVsMentoring {
 export function computeJyfVsMentoringAsOf(
   engagements: CohortEngagementAsOfInput[],
   asOf: string,
+  overrides?: JyfCohortOverrides,
 ): JyfVsMentoringAsOf {
   const open: CohortEngagementInput[] = [];
   let unknownClose = 0;
@@ -134,11 +306,10 @@ export function computeJyfVsMentoringAsOf(
     if (state === "open") {
       open.push({ clientId: e.clientId, name: e.name, isComplete: false, isCanceled: false });
     } else if (state === "unknown_close") {
-      const tier = engagementTier(e.name);
-      if (tier === "jumpstart" || MENTORING_TIERS.has(tier)) unknownClose++;
+      if (resolveJyfCohort(e.name, overrides)) unknownClose++;
     }
   }
-  return { ...computeJyfVsMentoring(open), asOf, unknownClose };
+  return { ...computeJyfVsMentoring(open, overrides), asOf, unknownClose };
 }
 
 // ---------------------------------------------------------------------------
@@ -153,13 +324,17 @@ export function computeJyfVsMentoringAsOf(
 // tool's reconstruction); without it, by today's open/closed flags.
 // ---------------------------------------------------------------------------
 
-export type JyfCohortKey = "jyf" | "4x" | "2x" | "1x";
-
 export const JYF_COHORT_LABELS: Record<JyfCohortKey, string> = {
   jyf: "JumpStart (JYF)",
   "4x": "Active Mentoring — 4x",
   "2x": "Active Mentoring — 2x",
   "1x": "Active Mentoring — 1x",
+};
+
+// Labels for the settings dialog's "Counts as" choices (the cohorts + "off").
+export const JYF_ASSIGNMENT_LABELS: Record<JyfCohortAssignment, string> = {
+  ...JYF_COHORT_LABELS,
+  off: "Not counted",
 };
 
 const JYF_COHORT_ORDER: readonly JyfCohortKey[] = ["jyf", "4x", "2x", "1x"];
@@ -182,15 +357,14 @@ function minDate(a: string | null, b: string | null): string | null {
 export function jyfVsMentoringRoster(
   engagements: CohortEngagementAsOfInput[],
   asOf?: string,
+  overrides?: JyfCohortOverrides,
 ): JyfRosterRow[] {
   const byKey = new Map<string, JyfRosterRow & { names: Set<string> }>();
   for (const e of engagements) {
     if (e.clientId == null) continue;
     const open = asOf ? engagementStateAsOf(e, asOf) === "open" : !e.isComplete && !e.isCanceled;
     if (!open) continue;
-    const tier = engagementTier(e.name);
-    const cohort: JyfCohortKey | null =
-      tier === "jumpstart" ? "jyf" : MENTORING_TIERS.has(tier) ? (tier as MentoringTier) : null;
+    const cohort = resolveJyfCohort(e.name, overrides);
     if (!cohort) continue;
     const key = `${cohort}:${e.clientId}`;
     let row = byKey.get(key);

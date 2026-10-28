@@ -30,6 +30,15 @@ import {
   JYF_COHORT_LABELS,
   type CohortEngagementInput,
   type CohortEngagementAsOfInput,
+  parseJyfCohortOverrides,
+  serializeJyfCohortOverrides,
+  resolveJyfCohort,
+  autoJyfCohort,
+  setJyfOverride,
+  countJyfOverrides,
+  jyfEngagementNames,
+  JYF_ASSIGNMENT_LABELS,
+  type JyfCohortOverrides,
 } from "../lib/cohort.js";
 import {
   monthsAgoYmd,
@@ -3279,6 +3288,142 @@ console.log("[15] JYF vs Active Mentoring cohort (open engagements by phase, dis
     "everyone is new against an empty earlier day",
   );
   eq(diffMembers([], g.jyf).left.length, g.jyf.length, "everyone left against an empty today");
+}
+
+console.log("[15b] JYF cohort settings — per-engagement-name overrides (the ⚙ on §005)");
+{
+  // Auto (no overrides) reads the wording, exactly like before.
+  eq(autoJyfCohort("MN Subscription | (0x Month) JYF"), "jyf", "auto: 0x / JYF wording -> JYF");
+  eq(
+    autoJyfCohort("IMN Subscription | JYF intro"),
+    "jyf",
+    "auto: an IMN name with JYF wording reads as JYF",
+  );
+  eq(autoJyfCohort("MN Subscription | (4x Month) ..."), "4x", "auto: 4x");
+  eq(autoJyfCohort("Every 2 appointments"), "2x", "auto: 2x");
+  eq(autoJyfCohort("After Graduation Care"), null, "auto: non-pipeline -> not counted");
+  eq(resolveJyfCohort("IMN Subscription | JYF intro"), "jyf", "resolve with no overrides = auto");
+
+  // Parse / serialize round-trip; keys normalize; junk is dropped.
+  const parsed = parseJyfCohortOverrides(
+    '{"byName":{"  IMN Subscription |  JYF intro ":"off","Weird Plan":"4x","Bad":"nope","":"jyf"}}',
+  );
+  eq(countJyfOverrides(parsed), 2, "parse keeps only valid assignments with a non-empty name");
+  eq(parsed.byName["imn subscription | jyf intro"], "off", "parse normalizes the name key");
+  eq(parsed.byName["weird plan"], "4x", "parse keeps a cohort override");
+  eq(
+    serializeJyfCohortOverrides(parsed),
+    '{"byName":{"imn subscription | jyf intro":"off","weird plan":"4x"}}',
+    "serialize is sorted, normalized JSON",
+  );
+  eq(countJyfOverrides(parseJyfCohortOverrides("not json")), 0, "malformed JSON -> no overrides");
+  eq(countJyfOverrides(parseJyfCohortOverrides(null)), 0, "missing value -> no overrides");
+  eq(countJyfOverrides(undefined), 0, "undefined overrides -> 0");
+
+  // resolve: "off" takes a name off the card; a cohort override moves it.
+  eq(resolveJyfCohort("IMN Subscription | JYF Intro", parsed), null, "override off -> not counted");
+  eq(resolveJyfCohort("Weird  Plan", parsed), "4x", "override 4x -> 4x (whitespace-insensitive)");
+  eq(
+    resolveJyfCohort("MN Subscription | (2x Month) ...", parsed),
+    "2x",
+    "untouched names stay auto",
+  );
+
+  // setJyfOverride: returns a new object; auto-equal overrides are dropped; null clears.
+  let o: JyfCohortOverrides = { byName: {} };
+  o = setJyfOverride(o, "IMN Subscription | JYF intro", "off");
+  eq(countJyfOverrides(o), 1, "set off -> one override");
+  const o2 = setJyfOverride(o, "IMN Subscription | JYF intro", "jyf");
+  eq(countJyfOverrides(o2), 0, "setting a name to its auto cohort drops the override");
+  eq(countJyfOverrides(o), 1, "setJyfOverride does not mutate its input");
+  o = setJyfOverride(o, "After Graduation Care", "off");
+  eq(countJyfOverrides(o), 1, "'off' on a name that is auto-off is a no-op");
+  o = setJyfOverride(o, "After Graduation Care", "1x");
+  eq(countJyfOverrides(o), 2, "a non-pipeline name can be pulled into a tier");
+  o = setJyfOverride(o, "After Graduation Care", null);
+  eq(countJyfOverrides(o), 1, "null clears an override");
+
+  // The card's math honors the overrides end to end (counts, as-of, roster, groups).
+  const engs: CohortEngagementAsOfInput[] = [
+    { clientId: 1, name: "JumpStart Your Freedom", isComplete: false, isCanceled: false },
+    { clientId: 2, name: "IMN Subscription | JYF intro", isComplete: false, isCanceled: false },
+    { clientId: 3, name: "IMN Subscription | JYF intro", isComplete: false, isCanceled: false },
+    { clientId: 3, name: "MN Subscription | (4x Month) ...", isComplete: false, isCanceled: false },
+    { clientId: 4, name: "After Graduation Care", isComplete: false, isCanceled: false },
+    { clientId: 5, name: "IMN Subscription | JYF intro", isComplete: true, isCanceled: false },
+  ].map((e, i) => ({
+    ...e,
+    clientName: `Person ${e.clientId}`,
+    dateAdded: `2026-01-0${i + 1}`,
+    startDate: null,
+    dateClosed: e.isComplete ? "2026-03-01" : null,
+    endDate: null,
+  }));
+  const before = computeJyfVsMentoring(engs);
+  eq(before.jyf, 3, "no overrides: the IMN people count as JYF (1,2,3)");
+  eq(before.total, 3, "no overrides: total 3");
+  const off = setJyfOverride({ byName: {} }, "IMN Subscription | JYF intro", "off");
+  const after = computeJyfVsMentoring(engs, off);
+  eq(after.jyf, 1, "IMN switched off: JYF = 1 (only the real JumpStart)");
+  eq(after.mentoring, 1, "IMN switched off: mentoring unchanged (client 3's 4x)");
+  eq(after.total, 2, "IMN switched off: total = clients 1 and 3");
+  const moved = setJyfOverride({ byName: {} }, "IMN Subscription | JYF intro", "2x");
+  const m2 = computeJyfVsMentoring(engs, moved);
+  eq(m2.jyf, 1, "IMN moved to 2x: JYF = 1");
+  eq(m2.byTier["2x"], 2, "IMN moved to 2x: 2x = clients 2 and 3");
+  eq(m2.mentoring, 2, "IMN moved to 2x: mentoring = distinct 2,3");
+  const pulled = setJyfOverride({ byName: {} }, "After Graduation Care", "1x");
+  eq(
+    computeJyfVsMentoring(engs, pulled).byTier["1x"],
+    1,
+    "a non-pipeline name pulled into 1x counts",
+  );
+  // As-of: same overrides on the earlier day, and unknownClose only counts names on the card.
+  const asOf = computeJyfVsMentoringAsOf(engs, "2026-02-15", off);
+  eq(asOf.jyf, 1, "as-of honors the override too");
+  const noClose = engs.map((e) => ({ ...e, dateClosed: null }));
+  eq(
+    computeJyfVsMentoringAsOf(noClose, "2026-02-15").unknownClose,
+    1,
+    "auto: a closed IMN with no close date is 'unknown'",
+  );
+  eq(
+    computeJyfVsMentoringAsOf(noClose, "2026-02-15", off).unknownClose,
+    0,
+    "IMN off: it is no longer an unknown-close on the card",
+  );
+  // Roster + drill-down follow the same resolution, so the lists still equal the tiles.
+  const roster = jyfVsMentoringRoster(engs, undefined, off);
+  eq(
+    roster.filter((r) => r.cohort === "jyf").length,
+    after.jyf,
+    "roster JYF rows = JYF tile with overrides",
+  );
+  eq(jyfGroupMembers(roster).total.length, after.total, "drill-down total = tile with overrides");
+  eq(
+    roster.some((r) => r.engagements.includes("IMN")),
+    false,
+    "the switched-off engagement is not in the roster",
+  );
+
+  // Settings-dialog rows: one per normalized name, grouped by effective cohort, people counts.
+  const rows = jyfEngagementNames(engs, off);
+  eq(rows.length, 4, "one row per distinct engagement name");
+  const imn = rows.find((r) => r.key === "imn subscription | jyf intro")!;
+  eq(imn.name, "IMN Subscription | JYF intro", "row keeps the display spelling");
+  eq(imn.auto, "jyf", "row shows what auto would be");
+  eq(imn.override, "off", "row shows its override");
+  eq(imn.effective, null, "row's effective cohort = not counted");
+  eq(imn.openPeople, 2, "open people = distinct clients with it open (2,3; 5 is complete)");
+  eq(imn.allPeople, 3, "ever = distinct clients that ever had it (2,3,5)");
+  eq(rows[0].key, imn.key, "rows sort by open people, most first");
+  const stale = jyfEngagementNames(engs, setJyfOverride({ byName: {} }, "Renamed Plan", "4x"));
+  eq(
+    stale.some((r) => r.key === "renamed plan" && r.allPeople === 0),
+    true,
+    "an override with no rows still shows (so it can be cleared)",
+  );
+  eq(JYF_ASSIGNMENT_LABELS.off, "Not counted", "assignment label for 'off'");
 }
 
 console.log("[16] Journeys per-stage colors (gradient interpolation + config resolution)");

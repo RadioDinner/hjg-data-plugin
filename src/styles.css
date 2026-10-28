@@ -2198,6 +2198,77 @@ button.version-chip {
   margin-bottom: 10px;
 }
 
+/* --- §005 cohort settings dialog (§910) + the ⚙ button in the card corner --- */
+.btn--settings {
+  white-space: nowrap;
+}
+.btn__badge {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+.jyf-settings__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.jyf-settings__actions .btn,
+.jyf-settings__actions .muted {
+  white-space: nowrap;
+}
+.jyf-settings__group {
+  margin: 14px 0 6px;
+}
+.jyf-settings__title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.jyf-settings__table td,
+.jyf-settings__table th {
+  vertical-align: middle;
+}
+.jyf-settings__table td:first-child {
+  max-width: 520px;
+}
+.jyf-settings__row--set td:first-child {
+  font-weight: 600;
+}
+.jyf-settings__tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.jyf-settings__select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  padding: 5px 8px;
+  font-size: 13px;
+  max-width: 100%;
+}
+.jyf-settings__select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 /* Pay-stub action buttons (Print / Email / Payment sent / Export): when the row
    runs out of room, wrap whole buttons instead of breaking their labels. */
 .stub-actions > .btn {

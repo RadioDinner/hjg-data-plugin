@@ -1,0 +1,2 @@
+--- 2026-10-28 (session start) ---
+in 005 JYF vs Active Mentoring, I want a way to change the settings of what engagements fall into different cohorts. For instance, there is an IMN Subscription being counted with JYF, and I want to be able to "toggle" that off. Put the settings in the corner of the card

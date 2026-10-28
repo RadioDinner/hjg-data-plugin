@@ -500,12 +500,19 @@ Pure logic in \`lib/journey.ts\` (stage dates) and \`lib/cohortCompare.ts\` (coh
 - **Active Mentoring** and **Total in pipeline** list each person **once**, with a **Cohort(s)** column showing every tier they're in.
 - With **Compare** on, people who **weren't in that cohort on the earlier day** get a green **new** tag, and a **Left since …** line names the people who were in it then but aren't now.
 
+### ⚙ Settings — which engagement names count as what
+- Each person's cohort comes from the **name of their open engagement**: JumpStart / 0x / JYF wording → **JYF**; 4x / 2x / 1x wording → that tier; anything else (groups, mentor training, after-graduation care…) → **not counted**. That reading is **Auto**.
+- When a name reads wrong — e.g. an **IMN Subscription** that is counted with JYF because of its wording — open **⚙ Settings** in the corner of the card. Every engagement name in the mirror is listed, grouped by the cohort it currently counts toward, with how many people have it **open** today and how many **ever** had it. Set a name's **Counts as** to a cohort to move it, or to **Not counted** to take it off the card entirely; pick **Auto** to go back to the wording.
+- Changes apply **at once** to the tiles, chart, table, drill-downs and the CSV — and to the earlier-day **Compare** snapshots, which use the same settings. They are saved **org-wide** (everyone sees the same card). The button shows a badge with the number of names overridden, and the card says so above the Compare control.
+- Names match case-insensitively with whitespace collapsed; a template **renamed** in CA shows up as a new row on Auto (the old setting stays listed with 0 people so it can be cleared). **Reset all** puts every name back on Auto.
+- Saving needs migration \`9960_jyf_cohort_overrides.sql\` applied once; until then the dialog says so and the change holds only until the page reloads.
+
 ### Export CSV — the people behind the numbers
 - **Export CSV** downloads **who** is in each cohort, one row per cohort and person: **Cohort** (JumpStart (JYF) / Active Mentoring — 4x / 2x / 1x), **Client**, **Client ID**, the person's **open engagement(s)** in that cohort, the earliest **engagement start** and the earliest **added-to-CA** date. Filter the Cohort column and the row counts match the tiles exactly (the JYF rows = "In JumpStart", the 4x rows = the 4x tile, and so on); a person in two tiers appears once per tier, as on the card.
 - With **Compare** on, the file gains a leading **Snapshot** column and lists today's roster followed by the roster **as of** the earlier day, so a Δ can be traced to named people.
 
 ### Source
-- \`ca_engagements\` (name → tier via \`engagementTier\`, plus \`is_complete\` / \`is_canceled\`; the compare tool also reads \`date_added\`, \`date_closed\`, \`start_date\`, \`end_date\`). Names from \`ca_clients\`. Pure math in \`lib/cohort.ts\` (\`computeJyfVsMentoring\`, \`computeJyfVsMentoringAsOf\`, \`jyfVsMentoringRoster\`) and \`lib/compare.ts\` (\`ASOF_PRESETS\`, \`asOfDate\`).`,
+- \`ca_engagements\` (name → tier via \`engagementTier\`, overridden per name by the ⚙ settings in \`app_settings.jyf_cohort_overrides\`, plus \`is_complete\` / \`is_canceled\`; the compare tool also reads \`date_added\`, \`date_closed\`, \`start_date\`, \`end_date\`). Names from \`ca_clients\`. Pure math in \`lib/cohort.ts\` (\`resolveJyfCohort\`, \`computeJyfVsMentoring\`, \`computeJyfVsMentoringAsOf\`, \`jyfVsMentoringRoster\`, \`jyfEngagementNames\`) and \`lib/compare.ts\` (\`ASOF_PRESETS\`, \`asOfDate\`).`,
   },
 
   "margins.tab": {

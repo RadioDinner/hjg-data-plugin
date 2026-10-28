@@ -102,6 +102,7 @@ export const UI_SECTIONS: Record<string, number> = {
   "drawer.notifications": 907, // Topbar notifications bell + feed (2026-07-22)
   "modal.emailStub": 908, // Email pay stub — confirm + send (Build payout / Hourly staff / History) (2026-09-25)
   "modal.hourlyPaymentSent": 909, // Payment sent — Melio reference dialog on Hourly staff §206 (2026-09-25)
+  "metrics.jyfCohortSettings": 910, // §005 cohort settings — which engagement names count as JYF / 4x / 2x / 1x (2026-10-28)
 };
 
 // 3-digit, zero-padded string for a key (e.g. "104"); "" if the key is unknown.

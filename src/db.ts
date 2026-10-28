@@ -18,6 +18,10 @@ import {
   type JyfVsMentoring,
   type JyfVsMentoringAsOf,
   type AsOfState,
+  parseJyfCohortOverrides,
+  serializeJyfCohortOverrides,
+  JYF_COHORT_OVERRIDES_KEY as JYF_OVERRIDES_KEY,
+  type JyfCohortOverrides,
 } from "../lib/cohort";
 
 export { PIPELINE_TIERS, engagementTier };
@@ -362,7 +366,16 @@ export {
   jyfGroupMembers,
   diffMembers,
   JYF_COHORT_LABELS,
+  JYF_ASSIGNMENT_LABELS,
+  JYF_COHORT_OVERRIDES_KEY,
+  DEFAULT_JYF_COHORT_OVERRIDES,
+  jyfEngagementNames,
+  setJyfOverride,
+  countJyfOverrides,
+  resolveJyfCohort,
+  autoJyfCohort,
 } from "../lib/cohort";
+export type { JyfCohortOverrides, JyfCohortAssignment, JyfEngagementNameRow } from "../lib/cohort";
 export type {
   CohortEngagementInput,
   CohortEngagementAsOfInput,
@@ -1267,11 +1280,35 @@ export async function fetchJyfCohortInputs(): Promise<CohortEngagementAsOfInput[
   return inputs;
 }
 
+// §005 cohort settings (the ⚙ on the card): which engagement names count as
+// JYF / 4x / 2x / 1x / not counted. Org-wide, in app_settings under
+// `jyf_cohort_overrides` as a JSON string (migration 9960). A missing row
+// (migration not applied yet) reads as "no overrides" so the card still loads;
+// saving then fails with the standard "apply its migration" message.
+export async function fetchJyfCohortOverrides(): Promise<JyfCohortOverrides> {
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", JYF_OVERRIDES_KEY)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const value = (data as { value?: unknown } | null)?.value;
+  return parseJyfCohortOverrides(typeof value === "string" ? value : null);
+}
+
+export async function saveJyfCohortOverrides(overrides: JyfCohortOverrides): Promise<void> {
+  await setCompanyOption(JYF_OVERRIDES_KEY, serializeJyfCohortOverrides(overrides));
+}
+
 // The card's live (current-state) snapshot: distinct people with an OPEN
 // JumpStart engagement vs an open 4x/2x/1x engagement. Pure math in
-// lib/cohort.ts; not date-range scoped.
+// lib/cohort.ts; not date-range scoped. Honors the saved cohort settings.
 export async function fetchJyfVsMentoring(): Promise<JyfVsMentoring> {
-  return computeJyfVsMentoring(await fetchJyfCohortInputs());
+  const [inputs, overrides] = await Promise.all([
+    fetchJyfCohortInputs(),
+    fetchJyfCohortOverrides(),
+  ]);
+  return computeJyfVsMentoring(inputs, overrides);
 }
 
 // ============================================================================

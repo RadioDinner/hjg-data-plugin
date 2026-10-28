@@ -39,6 +39,9 @@ import {
   fetchLastSyncedAt,
   fetchFreedomReport,
   fetchJyfCohortInputs,
+  fetchJyfCohortOverrides,
+  countJyfOverrides,
+  DEFAULT_JYF_COHORT_OVERRIDES,
   fetchManualMetrics,
   fetchMentorCoachIds,
   fetchRangeAppointments,
@@ -63,8 +66,10 @@ import {
   type TrendCall,
   type TrendWindow,
   type JyfMember,
+  type JyfCohortOverrides,
 } from "../db";
 import { ExploreModal } from "../components/ExploreModal";
+import { JyfCohortSettingsModal } from "../components/JyfCohortSettingsModal";
 import { HelpButton } from "../components/HelpDrawer";
 import { CollapsibleCard } from "../components/Collapsible";
 import { PipelineTimingCard } from "../components/PipelineTimingCard";
@@ -328,6 +333,7 @@ function ChartCard({
   helpId,
   sectionId,
   exportCsv,
+  settings,
 }: {
   title: string;
   children: ReactElement;
@@ -339,6 +345,10 @@ function ChartCard({
   // Replaces the default "export the visible table" behaviour: the card calls
   // this instead (e.g. §005 exports the people behind the counts).
   exportCsv?: { onClick: () => void; title: string };
+  // A ⚙ button in the card's corner (first in the actions row) that opens the
+  // card's own settings (e.g. §005's cohort settings). `badge` shows how many
+  // settings are in effect, so a tweaked card is recognizable at a glance.
+  settings?: { onClick: () => void; title: string; badge?: number };
 }) {
   const storageKey = `hjg.chartcard.view:${title}`;
   const [view, setView] = useState<ChartCardView>(() => {
@@ -362,6 +372,17 @@ function ChartCard({
       help={helpId ? <HelpButton id={helpId} label={title} /> : undefined}
       actions={
         <>
+          {settings && (
+            <button
+              className="btn btn--sm btn--settings"
+              onClick={settings.onClick}
+              title={settings.title}
+              aria-label={settings.title}
+            >
+              <span aria-hidden="true">⚙</span> Settings
+              {settings.badge ? <span className="btn__badge">{settings.badge}</span> : null}
+            </button>
+          )}
           {(table || exportCsv) && (
             <button
               className="btn btn--sm"
@@ -599,6 +620,13 @@ export function MetricsView() {
   const [jyfInputs, setJyfInputs] = useState<CohortEngagementAsOfInput[] | null>(null);
   // §005 point-in-time compare: off, or one of the three "Today vs …" presets.
   const [jyfCompare, setJyfCompare] = useState<AsOfKey | "off">("off");
+  // §005 cohort settings (the ⚙ in the card corner): which engagement names
+  // count as JYF / 4x / 2x / 1x / not counted. Org-wide (app_settings), loaded
+  // once; edits apply at once and save from the dialog (§910).
+  const [jyfOverrides, setJyfOverrides] = useState<JyfCohortOverrides>(
+    DEFAULT_JYF_COHORT_OVERRIDES,
+  );
+  const [jyfSettingsOpen, setJyfSettingsOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -714,6 +742,13 @@ export function MetricsView() {
       .catch((e) => {
         if (!cancelled) setError(String(e));
       });
+    // The saved cohort settings. A read failure (e.g. app_settings unreadable)
+    // leaves the card on auto rather than blanking it.
+    fetchJyfCohortOverrides()
+      .then((o) => {
+        if (!cancelled) setJyfOverrides(o);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -1231,14 +1266,16 @@ export function MetricsView() {
   // and the card rebuilt as of that day (lib/cohort.ts computeJyfVsMentoringAsOf).
   // `today` is the browser's local date, like the range presets above.
   const jyfVsMentoring = useMemo<JyfVsMentoring | null>(
-    () => (jyfInputs ? computeJyfVsMentoring(jyfInputs) : null),
-    [jyfInputs],
+    () => (jyfInputs ? computeJyfVsMentoring(jyfInputs, jyfOverrides) : null),
+    [jyfInputs, jyfOverrides],
   );
+  const jyfOverrideCount = countJyfOverrides(jyfOverrides);
   const today = useMemo(() => ymd(new Date()), []);
   const jyfAsOf = jyfCompare === "off" ? null : asOfDate(today, jyfCompare);
   const jyfThen = useMemo(
-    () => (jyfInputs && jyfAsOf ? computeJyfVsMentoringAsOf(jyfInputs, jyfAsOf) : null),
-    [jyfInputs, jyfAsOf],
+    () =>
+      jyfInputs && jyfAsOf ? computeJyfVsMentoringAsOf(jyfInputs, jyfAsOf, jyfOverrides) : null,
+    [jyfInputs, jyfAsOf, jyfOverrides],
   );
 
   // "JYF vs Active Mentoring" — two bars (distinct people per phase). The table
@@ -1267,13 +1304,16 @@ export function MetricsView() {
   // §005 drill-down: who is in each of the six table rows (today, and on the
   // compare day when Compare is on). Group sizes equal the row counts.
   const jyfGroupsNow = useMemo(
-    () => (jyfInputs ? jyfGroupMembers(jyfVsMentoringRoster(jyfInputs)) : null),
-    [jyfInputs],
+    () =>
+      jyfInputs ? jyfGroupMembers(jyfVsMentoringRoster(jyfInputs, undefined, jyfOverrides)) : null,
+    [jyfInputs, jyfOverrides],
   );
   const jyfGroupsThen = useMemo(
     () =>
-      jyfInputs && jyfThen ? jyfGroupMembers(jyfVsMentoringRoster(jyfInputs, jyfThen.asOf)) : null,
-    [jyfInputs, jyfThen],
+      jyfInputs && jyfThen
+        ? jyfGroupMembers(jyfVsMentoringRoster(jyfInputs, jyfThen.asOf, jyfOverrides))
+        : null,
+    [jyfInputs, jyfThen, jyfOverrides],
   );
   const jyfTable = useMemo<ChartCardTable>(
     () => ({
@@ -1372,7 +1412,7 @@ export function MetricsView() {
       "Added to CA",
     ];
     const rowsFor = (asOf?: string): (string | number)[][] =>
-      jyfVsMentoringRoster(jyfInputs, asOf).map((r) => [
+      jyfVsMentoringRoster(jyfInputs, asOf, jyfOverrides).map((r) => [
         JYF_COHORT_LABELS[r.cohort],
         r.clientName ?? `(client ${r.clientId})`,
         r.clientId,
@@ -1389,7 +1429,7 @@ export function MetricsView() {
       ...rowsFor(jyfThen.asOf).map((r) => [`As of ${jyfThen.asOf}`, ...r]),
     ];
     downloadCsv("JYF vs Active Mentoring — people", ["Snapshot", ...columns], rows);
-  }, [jyfInputs, jyfThen, today]);
+  }, [jyfInputs, jyfThen, today, jyfOverrides]);
 
   // --- Compare-mode derived views: a board scorecard (all KPIs A vs B with Δ),
   // per-chart Period-B overlay datasets (aligned to A by month index), and
@@ -2241,8 +2281,24 @@ export function MetricsView() {
                 title:
                   "Download the people behind these counts — one row per cohort and person (JYF, 4x, 2x, 1x)",
               }}
+              settings={{
+                onClick: () => setJyfSettingsOpen(true),
+                title:
+                  "Cohort settings — choose which engagement names count as JYF, 4x, 2x, 1x or not at all",
+                badge: jyfOverrideCount,
+              }}
               extra={
                 <>
+                  {jyfOverrideCount > 0 && (
+                    <p className="view__hint">
+                      <strong>
+                        {num(jyfOverrideCount)} cohort setting{jyfOverrideCount === 1 ? "" : "s"} in
+                        effect
+                      </strong>{" "}
+                      — some engagement names are counted differently from what their wording says.
+                      Open <strong>⚙ Settings</strong> in the card corner to review.
+                    </p>
+                  )}
                   <div className="jyf-compare">
                     <span className="stat__label">Compare:</span>
                     <div
@@ -2659,6 +2715,14 @@ export function MetricsView() {
       )}
 
       {explore && <ExploreModal {...explore} onClose={() => setExplore(null)} />}
+      {jyfSettingsOpen && jyfInputs && (
+        <JyfCohortSettingsModal
+          engagements={jyfInputs}
+          overrides={jyfOverrides}
+          onChange={setJyfOverrides}
+          onClose={() => setJyfSettingsOpen(false)}
+        />
+      )}
     </section>
   );
 }
