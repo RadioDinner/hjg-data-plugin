@@ -36,6 +36,7 @@
 - Compare mode shows churn behind a flat Δ (e.g. 4x Δ 0 can hide one join and one leave).
 
 ## Open / next
-- User: try the drill-down on the live app once merged; say "merge to main" to ship v0.14.0.
+- v0.14.0 merged to `main` (fast-forward) on the user's "merge it my guy".
+- User: try the drill-down on the live app with real data.
 - User: export on the live app and confirm the row counts match the tiles (17 / 29 / 16 / 4).
 - No migration this session. Next migration number is still `9960`.

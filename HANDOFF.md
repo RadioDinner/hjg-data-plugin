@@ -5,14 +5,17 @@ Working notes for resuming this project in a future session. Last updated
 month", v0.12.0, MERGED TO `main`**). Two sessions ran on 2026-09-25 in
 parallel. Read **021b** first, then **021** (email pay stubs, v0.11.0) below it.
 
-## ▶ START HERE (2026-10-28, session 022 — v0.14.0 on branch `claude/ecstatic-lovelace-x6e0kv`, NOT merged)
+## ▶ START HERE (2026-10-28, session 022 — v0.14.0, MERGED TO `main`)
+
+**Merged:** on the user's "merge it my guy", `main` was fast-forwarded to the branch head (no
+merge commit). The chip must read `v0.14.0` once Vercel deploys `main`.
 
 **Latest (v0.14.0, branch only):** the §005 table's cohort rows now open with a ▸ into the
 **people in that cohort**. Active Mentoring and Total list each person once with their
 cohort(s). With Compare on, "new" tags and a "Left since …" line show who joined and left.
 Pure logic in `lib/cohort.ts` (`jyfGroupMembers`, `diffMembers`); `ChartCardTable` has a new
 optional `details` slot any card can use. Gates all green; render-checked with stubbed data.
-**Next:** user tries it, then "merge to main" (fast-forward; chip → `v0.14.0`).
+**Next:** user tries the drill-down on the live app with real data.
 
 ### Earlier this session (v0.13.0, MERGED TO `main`)
 
