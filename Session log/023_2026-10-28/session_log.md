@@ -42,6 +42,7 @@
 - `fetchJyfVsMentoring` (db.ts, unused by the view) now also honors the overrides.
 
 ## Open / next
+- v0.15.0 merged to `main` (fast-forward) on the user's "merge it brother".
 - **User: apply `9960_jyf_cohort_overrides.sql`** in the Supabase SQL Editor (re-runnable), then
   open ⚙ Settings on §005 and switch the IMN Subscription to "Not counted".
 - Not checked against live data (no Supabase access from the session).

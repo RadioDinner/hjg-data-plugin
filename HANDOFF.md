@@ -1,10 +1,13 @@
 # HJG Data Hub — Handoff
 
 Working notes for resuming this project in a future session. Last updated
-2026-10-28 (session 023 — **§005 cohort settings, v0.15.0, branch only**). Read **023**
+2026-10-28 (session 023 — **§005 cohort settings, v0.15.0, MERGED TO `main`**). Read **023**
 first; 022 (§005 export + drill-down) and 021b / 021 (pay stubs) follow below it.
 
-## ▶ START HERE (2026-10-28, session 023 — v0.15.0, branch `claude/gracious-hawking-u8aadf`, NOT merged)
+## ▶ START HERE (2026-10-28, session 023 — v0.15.0, MERGED TO `main`)
+
+**Merged:** on the user's "merge it brother", `main` was fast-forwarded to the branch head (no
+merge commit). The chip must read `v0.15.0` once Vercel deploys `main`.
 
 **What shipped:** §005 "JYF vs Active Mentoring" has a **⚙ Settings** button in the card corner
 (before Export CSV). It opens a dialog (§910) listing every engagement name in the mirror,
@@ -27,8 +30,8 @@ Help article updated.
 Render-checked (headless Chromium, stubbed Supabase: light, dark, 390 px). Not checked against
 live data.
 
-**Next:** user applies 9960, switches the IMN Subscription off, confirms the JYF tile; then says
-whether to merge to `main`. **Next migration number is `9959`.** Session 021b's user actions
+**Next:** user applies 9960, then switches the IMN Subscription off on the live app and confirms
+the JYF tile. **Next migration number is `9959`.** Session 021b's user actions
 (9961, 9962) still stand if not yet confirmed.
 
 Full detail: `Session log/023_2026-10-28/session_log.md`.
